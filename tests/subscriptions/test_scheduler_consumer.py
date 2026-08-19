@@ -4,9 +4,10 @@ import json
 import logging
 import time
 import uuid
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Mapping, Optional
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -51,7 +52,7 @@ from snuba.utils.streams.configuration_builder import (
 from snuba.utils.streams.topics import Topic as SnubaTopic
 from snuba.web.rpc.v1.create_subscription import CreateSubscriptionRequest
 from tests.assertions import assert_changes
-from tests.backends.metrics import TestingMetricsBackend
+from tests.backends.metrics import Increment, TestingMetricsBackend
 
 commit_codec = CommitCodec()
 
@@ -378,7 +379,7 @@ def test_tick_time_shift() -> None:
         pytest.param(timedelta(minutes=-5), id="with time shift"),
     ],
 )
-def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
+def test_tick_consumer(time_shift: timedelta | None) -> None:
     clock = MockedClock()
     broker: Broker[KafkaPayload] = Broker(MemoryMessageStorage(), clock)
 
@@ -633,6 +634,45 @@ def test_tick_consumer_non_monotonic() -> None:
             3,
             epoch + timedelta(seconds=2),
         )
+
+
+def test_tick_consumer_falls_back_when_received_p99_missing() -> None:
+    clock = MockedClock()
+    broker: Broker[KafkaPayload] = Broker(MemoryMessageStorage(), clock)
+    epoch = datetime.fromtimestamp(clock.time())
+    topic = Topic("messages")
+    followed_consumer_group = "events"
+    partition = Partition(topic, 0)
+    broker.create_topic(topic, partitions=1)
+    producer = broker.get_producer()
+    metrics = TestingMetricsBackend()
+
+    consumer = CommitLogTickConsumer(
+        broker.get_consumer("group"),
+        followed_consumer_group,
+        metrics,
+        "received_p99",
+    )
+    consumer.subscribe([topic])
+
+    for offset, ts in ((0, epoch.timestamp()), (1, epoch.timestamp() + 1)):
+        producer.produce(
+            partition,
+            commit_codec.encode(Commit(followed_consumer_group, partition, offset, ts, None)),
+        ).result()
+        if offset == 0:
+            clock.sleep(1)
+
+    assert consumer.poll() is None
+
+    tick_message = consumer.poll()
+    assert tick_message is not None
+    assert tick_message.payload == Tick(
+        0,
+        offsets=Interval(0, 1),
+        timestamps=Interval(epoch.timestamp(), epoch.timestamp() + 1),
+    )
+    assert metrics.calls.count(Increment("subscriptions.scheduler.sync_ts_fallback", 1, None)) == 2
 
 
 def test_invalid_commit_log_message(caplog: Any) -> None:

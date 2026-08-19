@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Mapping, Union
+from collections.abc import Mapping
 
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.plans.entity_processing import run_entity_processing_executor
@@ -38,11 +38,12 @@ def _pre_entity_query_processing(query: CompositeQuery[Entity]) -> None:
     if isinstance(from_clause, JoinClause):
         nodes = from_clause.get_alias_node_map()
         for node in nodes.values():
-            if isinstance(node.data_source, Entity):
-                if not node.data_source.key.value.startswith(
-                    "generic_metrics"
-                ) and not node.data_source.key.value.startswith("metrics"):
-                    is_gen_metrics_join_query = False
+            if (
+                isinstance(node.data_source, Entity)
+                and not node.data_source.key.value.startswith("generic_metrics")
+                and not node.data_source.key.value.startswith("metrics")
+            ):
+                is_gen_metrics_join_query = False
     else:
         is_gen_metrics_join_query = False
 
@@ -81,11 +82,7 @@ def _translate_logical_composite_query(
 
 class CompositeDataSourceTransformer(
     DataSourceVisitor[
-        Union[
-            ProcessableQuery[Table],
-            CompositeQuery[Table],
-            JoinClause[Table],
-        ],
+        ProcessableQuery[Table] | CompositeQuery[Table] | JoinClause[Table],
         Entity,
     ]
 ):
@@ -103,7 +100,7 @@ class CompositeDataSourceTransformer(
 
     def _visit_join(
         self, data_source: JoinClause[Entity]
-    ) -> Union[ProcessableQuery[Table], CompositeQuery[Table], JoinClause[Table]]:
+    ) -> ProcessableQuery[Table] | CompositeQuery[Table] | JoinClause[Table]:
         alias_to_query_mappings = data_source.accept(JoinQueryVisitor(self.__settings))
         check_sub_query_storage_sets(alias_to_query_mappings)
 
@@ -114,7 +111,7 @@ class CompositeDataSourceTransformer(
 
     def _visit_simple_query(
         self, data_source: ProcessableQuery[Entity]
-    ) -> Union[ProcessableQuery[Table], CompositeQuery[Table], JoinClause[Table]]:
+    ) -> ProcessableQuery[Table] | CompositeQuery[Table] | JoinClause[Table]:
         assert isinstance(data_source, LogicalQuery), (
             f"Only subqueries are allowed at query planning stage. {type(data_source)} found."
         )
@@ -123,7 +120,7 @@ class CompositeDataSourceTransformer(
 
     def _visit_composite_query(
         self, data_source: CompositeQuery[Entity]
-    ) -> Union[ProcessableQuery[Table], CompositeQuery[Table], JoinClause[Table]]:
+    ) -> ProcessableQuery[Table] | CompositeQuery[Table] | JoinClause[Table]:
         return _translate_logical_composite_query(data_source, self.__settings)
 
 
@@ -150,9 +147,7 @@ class JoinQueryVisitor(JoinVisitor[Mapping[str, ClickhouseQuery], Entity]):
         }
 
 
-class JoinDataSourceTransformer(
-    JoinVisitor[Union[JoinClause[Table], IndividualNode[Table]], Entity]
-):
+class JoinDataSourceTransformer(JoinVisitor[JoinClause[Table] | IndividualNode[Table], Entity]):
     """
     A visitor class responsible for producing a join data source.
     """
@@ -167,7 +162,7 @@ class JoinDataSourceTransformer(
 
     def visit_individual_node(
         self, node: IndividualNode[Entity]
-    ) -> Union[JoinClause[Table], IndividualNode[Table]]:
+    ) -> JoinClause[Table] | IndividualNode[Table]:
         assert isinstance(node.data_source, ProcessableQuery), (
             "Invalid composite query. All nodes must be subqueries."
         )
@@ -177,7 +172,7 @@ class JoinDataSourceTransformer(
 
     def visit_join_clause(
         self, node: JoinClause[Entity]
-    ) -> Union[JoinClause[Table], IndividualNode[Table]]:
+    ) -> JoinClause[Table] | IndividualNode[Table]:
         left_node = node.left_node.accept(self)
         right_node = self.visit_individual_node(node.right_node)
 

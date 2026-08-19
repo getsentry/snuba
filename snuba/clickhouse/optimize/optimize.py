@@ -5,21 +5,22 @@ import os
 import threading
 import time
 from collections import deque
+from collections.abc import Mapping, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any
 
 import structlog
 from structlog.types import EventDict, WrappedLogger
 
 from snuba import environment, util
-from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.optimize.optimize_scheduler import OptimizeScheduler
 from snuba.clickhouse.optimize.optimize_tracker import (
     NoOptimizedStateException,
     OptimizedPartitionTracker,
 )
 from snuba.clickhouse.optimize.util import MergeInfo, get_num_threads
+from snuba.clickhouse.pool import ClickhousePool
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.settings import (
@@ -46,7 +47,7 @@ logger = structlog.wrap_logger(logger, processors=[thread_info_processor])
 metrics = MetricsWrapper(environment.metrics, "optimize")
 
 
-def _get_metrics_tags(table: str, clickhouse_host: Optional[str]) -> Mapping[str, str]:
+def _get_metrics_tags(table: str, clickhouse_host: str | None) -> Mapping[str, str]:
     return {"table": table, "host": clickhouse_host} if clickhouse_host else {"table": table}
 
 
@@ -54,7 +55,7 @@ def run_optimize(
     clickhouse: ClickhousePool,
     storage: ReadableTableStorage,
     database: str,
-    before: Optional[datetime] = None,
+    before: datetime | None = None,
 ) -> int:
     """
     The most basic form of running an optimize final on a storage.
@@ -87,7 +88,7 @@ def run_optimize_cron_job(
     default_parallel_threads: int,
     clickhouse_host: str,
     tracker: OptimizedPartitionTracker,
-    before: Optional[datetime] = None,
+    before: datetime | None = None,
     divide_partitions_count: int = 1,
 ) -> int:
     """
@@ -164,7 +165,7 @@ def get_partitions_from_clickhouse(
     storage: ReadableTableStorage,
     database: str,
     table: str,
-    before: Optional[datetime] = None,
+    before: datetime | None = None,
 ) -> Sequence[util.Part]:
     """
     Get the partitions from ClickHouse that are active and would benefit from OPTIMIZE
@@ -203,8 +204,7 @@ def get_partitions_from_clickhouse(
 
     if not response.results:
         logger.warning(
-            "Table %s.%s doesn't exist on %s:%s"
-            % (database, table, clickhouse.host, clickhouse.port)
+            f"Table {database}.{table} doesn't exist on {clickhouse.host}:{clickhouse.port}"
         )
         return []
 
@@ -313,9 +313,9 @@ def optimize_partition_runner(
     raise an exception which would be propagated to the caller.
 
     Details of execution flow:
-    1. start by reading configured_num_threads from the Snuba Admin runtime config
+    1. start by reading configured_num_threads from the optimize_parallel_threads sentry-option
     2. dispatches configured_num_threads threads to optimize configured_num_threads partitions (1 partition per thread)
-    3. as soon as one thread finishes, check configured_num_threads from runtime config again
+    3. as soon as one thread finishes, check configured_num_threads from the option again
     4. if configured_num_threads > number of currently active threads, dispatch more threads
     """
     scheduler = OptimizeScheduler(default_parallel_threads=default_parallel_threads)
@@ -363,9 +363,9 @@ def optimize_partitions(
     database: str,
     table: str,
     partitions: Sequence[str],
-    cutoff_time: Optional[datetime] = None,
-    tracker: Optional[OptimizedPartitionTracker] = None,
-    clickhouse_host: Optional[str] = None,
+    cutoff_time: datetime | None = None,
+    tracker: OptimizedPartitionTracker | None = None,
+    clickhouse_host: str | None = None,
 ) -> None:
     query_template = f"""\
         OPTIMIZE TABLE {database}.{table}
@@ -397,7 +397,7 @@ def optimize_partitions(
             tracker.update_completed_partitions(partition)
 
         start = time.time()
-        clickhouse.execute(query_template, args, retryable=False)
+        clickhouse.command(query_template, args)
         duration = time.time() - start
         metrics.timing(
             "optimized_part",
@@ -433,7 +433,7 @@ def _hash_partition(partition_name: str) -> int:
     return int(sha1.hexdigest(), 16)
 
 
-def _days_since_epoch(current_time: Optional[datetime] = None) -> int:
+def _days_since_epoch(current_time: datetime | None = None) -> int:
     if current_time is None:
         current_time = datetime.now(UTC)
     return int(current_time.timestamp() / 86400)

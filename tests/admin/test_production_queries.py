@@ -13,7 +13,6 @@ def test_validate_projects_with_subquery() -> None:
     prod_queries._validate_projects_in_query(
         body={"query": query, "dataset": "events"},
         dataset=get_dataset("events"),
-        is_mql=False,
     )
 
 
@@ -24,7 +23,6 @@ def test_disallowed_project_ids() -> None:
         prod_queries._validate_projects_in_query(
             body={"query": query, "dataset": "events"},
             dataset=get_dataset("events"),
-            is_mql=False,
         )
 
 
@@ -33,7 +31,6 @@ def test_with_joins() -> None:
     prod_queries._validate_projects_in_query(
         body={"query": query, "dataset": "events"},
         dataset=get_dataset("events"),
-        is_mql=False,
     )
 
 
@@ -43,5 +40,21 @@ def test_fail_with_joins() -> None:
         prod_queries._validate_projects_in_query(
             body={"query": query, "dataset": "events"},
             dataset=get_dataset("events"),
-            is_mql=False,
         )
+
+
+def test_or_branch_without_project_id() -> None:
+    query = """MATCH (events) SELECT time, group_id, count() AS event_count BY time, group_id WHERE timestamp >= toDateTime('2023-11-20T16:02:34.565803') AND timestamp < toDateTime('2023-11-27T16:02:34.565803') AND (project_id = 1 OR platform = 'x') HAVING event_count > 1 ORDER BY time ASC GRANULARITY 3600"""
+    with pytest.raises(InvalidQueryException, match="Every OR branch must constrain project_id"):
+        prod_queries._validate_projects_in_query(
+            body={"query": query, "dataset": "events"},
+            dataset=get_dataset("events"),
+        )
+
+
+def test_or_branch_with_allowed_project_ids() -> None:
+    query = """MATCH (events) SELECT time, group_id, count() AS event_count BY time, group_id WHERE timestamp >= toDateTime('2023-11-20T16:02:34.565803') AND timestamp < toDateTime('2023-11-27T16:02:34.565803') AND (project_id = 1 OR project_id = 11276) HAVING event_count > 1 ORDER BY time ASC GRANULARITY 3600"""
+    prod_queries._validate_projects_in_query(
+        body={"query": query, "dataset": "events"},
+        dataset=get_dataset("events"),
+    )

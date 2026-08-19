@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 REGISTERED_ENTITY_KEYS: dict[str, str] = {}
 
 
 class _EntityKey(type):
-    def __getattr__(cls, attr: str) -> "EntityKey":
+    def __getattr__(cls, attr: str) -> EntityKey:
         if attr not in REGISTERED_ENTITY_KEYS:
             raise AttributeError(attr)
 

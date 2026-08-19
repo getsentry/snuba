@@ -350,30 +350,11 @@ query_processors:
       settings:
         max_rows_to_group_by: 1000000
         group_by_overflow_mode: any
+  - processor: ClickhouseSettingsOverride
+    args:
+      overwrite_existing: false
+      settings:
+        max_execution_time: 25
+        timeout_before_checking_execution_speed: 0
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer
-allocation_policies:
-  - name: ConcurrentRateLimitAllocationPolicy
-    args:
-      required_tenant_types:
-        - organization_id
-        - referrer
-        - project_id
-      default_config_overrides:
-        is_enforced: 0
-  - name: BytesScannedWindowAllocationPolicy
-    args:
-      required_tenant_types:
-        - organization_id
-        - referrer
-      default_config_overrides:
-        is_enforced: 1
-        throttled_thread_number: 1
-        org_limit_bytes_scanned: 100000
-  - name: ReferrerGuardRailPolicy
-    args:
-      required_tenant_types:
-        - referrer
-      default_config_overrides:
-        is_enforced: 0
-        is_active: 0

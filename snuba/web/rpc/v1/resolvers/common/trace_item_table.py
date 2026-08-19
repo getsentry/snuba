@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import re
 from collections import defaultdict
-from typing import Any, Callable, Dict, Iterable
+from collections.abc import Callable, Iterable
+from typing import Any
 
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     Column,
@@ -14,28 +17,42 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     Reliability,
 )
 
+from snuba.protos.common import ARRAY_TYPES, PROTO_ARRAY_TYPE_TO_COLUMN
+from snuba.web.rpc.common.common import merge_typed_array_subcolumns
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.v1.resolvers.common.aggregation import ExtrapolationContext
+from snuba.web.rpc.v1.endpoint_get_trace import convert_to_attribute_value
+from snuba.web.rpc.v1.resolvers.common.aggregation import (
+    ExtrapolationContext,
+)
+
+
+def _array_raw_to_attribute_value(raw: Any) -> AttributeValue:
+    """Array columns are read natively (typed array map columns), so the value is a list
+    of native elements (or, for a deprecated untyped ``TYPE_ARRAY``, the merged list)."""
+    if isinstance(raw, (list, tuple)):
+        return convert_to_attribute_value(list(raw))
+    return convert_to_attribute_value(raw)
 
 
 def _get_converter_for_type(
-    key_type: "AttributeKey.Type.ValueType",
+    key_type: AttributeKey.Type.ValueType,
 ) -> Callable[[Any], AttributeValue]:
     """Returns a converter function for the given attribute type."""
     if key_type == AttributeKey.TYPE_BOOLEAN:
         return lambda x: AttributeValue(val_bool=bool(x))
-    elif key_type == AttributeKey.TYPE_STRING:
+    if key_type == AttributeKey.TYPE_STRING:
         return lambda x: AttributeValue(val_str=str(x))
-    elif key_type == AttributeKey.TYPE_INT:
+    if key_type == AttributeKey.TYPE_INT:
         return lambda x: AttributeValue(val_int=int(x))
-    elif key_type == AttributeKey.TYPE_FLOAT:
+    if key_type == AttributeKey.TYPE_FLOAT:
         return lambda x: AttributeValue(val_float=float(x))
-    elif key_type == AttributeKey.TYPE_DOUBLE:
+    if key_type == AttributeKey.TYPE_DOUBLE:
         return lambda x: AttributeValue(val_double=float(x))
-    else:
-        raise BadSnubaRPCRequestException(
-            f"unknown attribute type: {AttributeKey.Type.Name(key_type)}"
-        )
+    if key_type in ARRAY_TYPES:
+        # Native list: an element-typed array key reads one typed column; a deprecated
+        # untyped TYPE_ARRAY reads four typed sub-columns merged in convert_results.
+        return _array_raw_to_attribute_value
+    raise BadSnubaRPCRequestException(f"unknown attribute type: {AttributeKey.Type.Name(key_type)}")
 
 
 def _get_double_converter() -> Callable[[Any], AttributeValue]:
@@ -43,26 +60,33 @@ def _get_double_converter() -> Callable[[Any], AttributeValue]:
     return lambda x: AttributeValue(val_double=float(x))
 
 
-def _add_converter(column: Column, converters: Dict[str, Callable[[Any], AttributeValue]]) -> None:
+def _get_aggregate_converter(
+    aggregate: Function.ValueType,
+    key_type: AttributeKey.Type.ValueType,
+) -> Callable[[Any], AttributeValue]:
+    """Returns a converter that properly converts aggregations."""
+    match aggregate:
+        case Function.FUNCTION_COLLECT_UNIQUE:
+            return _array_raw_to_attribute_value
+        case Function.FUNCTION_ANY | Function.FUNCTION_FIRST | Function.FUNCTION_LAST:
+            return _get_converter_for_type(key_type)
+
+    return _get_double_converter()
+
+
+def _add_converter(column: Column, converters: dict[str, Callable[[Any], AttributeValue]]) -> None:
     if column.HasField("key"):
         converters[column.label] = _get_converter_for_type(column.key.type)
     elif column.HasField("aggregation"):
-        # For FUNCTION_ANY, the result type matches the key type since it returns actual values
-        if column.aggregation.aggregate == Function.FUNCTION_ANY:
-            converters[column.label] = _get_converter_for_type(column.aggregation.key.type)
-        else:
-            # Other aggregation functions return numeric values
-            converters[column.label] = _get_double_converter()
+        converters[column.label] = _get_aggregate_converter(
+            column.aggregation.aggregate, column.aggregation.key.type
+        )
     elif column.HasField("conditional_aggregation"):
-        # For FUNCTION_ANY, the result type matches the key type since it returns actual values
         # Note: AggregationToConditionalAggregationVisitor converts aggregation -> conditional_aggregation
-        if column.conditional_aggregation.aggregate == Function.FUNCTION_ANY:
-            converters[column.label] = _get_converter_for_type(
-                column.conditional_aggregation.key.type
-            )
-        else:
-            # Other aggregation functions return numeric values
-            converters[column.label] = _get_double_converter()
+        converters[column.label] = _get_aggregate_converter(
+            column.conditional_aggregation.aggregate,
+            column.conditional_aggregation.key.type,
+        )
     elif column.HasField("formula"):
         converters[column.label] = _get_double_converter()
         _add_converter(column.formula.left, converters)
@@ -74,7 +98,7 @@ def _add_converter(column: Column, converters: Dict[str, Callable[[Any], Attribu
             _add_converter(conditional.condition.left, converters)
             _add_converter(conditional.condition.right, converters)
         if conditional.HasField("match"):
-            _add_converter(getattr(conditional, "match"), converters)
+            _add_converter(conditional.match, converters)
         if conditional.HasField("default"):
             _add_converter(conditional.default, converters)
     elif column.HasField("literal"):
@@ -87,12 +111,12 @@ def _add_converter(column: Column, converters: Dict[str, Callable[[Any], Attribu
 
 def get_converters_for_columns(
     columns: Iterable[Column],
-) -> Dict[str, Callable[[Any], AttributeValue]]:
+) -> dict[str, Callable[[Any], AttributeValue]]:
     """
     Returns a dictionary of column labels to their corresponding converters.
     Converters are functions that convert a value returned by a clickhouse query to an AttributeValue.
     """
-    converters: Dict[str, Callable[[Any], AttributeValue]] = {}
+    converters: dict[str, Callable[[Any], AttributeValue]] = {}
     for column in columns:
         _add_converter(column, converters)
     return converters
@@ -108,7 +132,7 @@ def _is_sub_column(result_column_name: str, column: Column) -> bool:
 
 
 def _get_reliabilities_for_formula(
-    column: Column, res: Dict[str, TraceItemColumnValues]
+    column: Column, res: dict[str, TraceItemColumnValues]
 ) -> list[Reliability.ValueType]:
     """
     Compute and return the reliabilities for the given formula column,
@@ -155,14 +179,41 @@ def _get_reliabilities_for_formula(
 
 
 def convert_results(
-    request: TraceItemTableRequest, data: Iterable[Dict[str, Any]]
+    request: TraceItemTableRequest, data: Iterable[dict[str, Any]]
 ) -> list[TraceItemColumnValues]:
     converters = get_converters_for_columns(request.columns)
 
+    # A deprecated untyped TYPE_ARRAY column is selected as four typed sub-columns; collapse
+    # them back into the column label so its converter sees one native list. Element-typed
+    # array keys read a single native column, so they need no merge — but both kinds must
+    # map an empty read to NULL below.
+    deprecated_array_labels = [
+        column.label
+        for column in request.columns
+        if column.HasField("key") and column.key.type == AttributeKey.TYPE_ARRAY
+    ]
+    typed_array_labels = [
+        column.label
+        for column in request.columns
+        if column.HasField("key") and column.key.type in PROTO_ARRAY_TYPE_TO_COLUMN
+    ]
+
     res: defaultdict[str, TraceItemColumnValues] = defaultdict(TraceItemColumnValues)
     for row in data:
+        for label, elements in merge_typed_array_subcolumns(row, deprecated_array_labels):
+            # An absent array attribute reads as four empty typed sub-columns; surface it as
+            # NULL (like a missing scalar attribute) rather than an empty array. Keep the
+            # label in the row so every requested column stays aligned across rows. The typed
+            # columns can't tell an absent array from a stored-empty one, so both map to NULL.
+            row[label] = elements if elements else None
+        for label in typed_array_labels:
+            # An element-typed array reads its single column as a native list; an absent (or
+            # stored-empty) attribute reads as an empty array, which we also surface as NULL
+            # for the same missing-attribute semantics as scalars and untyped arrays.
+            if not row.get(label):
+                row[label] = None
         for column_name, value in row.items():
-            if column_name in converters.keys():
+            if column_name in converters:
                 extrapolation_context = ExtrapolationContext.from_row(column_name, row)
                 res[column_name].attribute_name = column_name
                 if value is None:
@@ -186,14 +237,11 @@ def convert_results(
                 res[column.label].reliabilities.append(e)
 
     # remove any columns that were not explicitly requested by the user in the request
-    requested_column_labels = set(e.label for e in request.columns)
+    requested_column_labels = {e.label for e in request.columns}
     to_delete = list(filter(lambda k: k not in requested_column_labels, res.keys()))
     for name in to_delete:
         del res[name]
 
     column_ordering = {column.label: i for i, column in enumerate(request.columns)}
 
-    return list(
-        # we return the columns in the order they were requested
-        sorted(res.values(), key=lambda c: column_ordering.__getitem__(c.attribute_name))
-    )
+    return sorted(res.values(), key=lambda c: column_ordering.__getitem__(c.attribute_name))

@@ -1,11 +1,12 @@
 import random
 import uuid
+from collections.abc import Mapping
 from datetime import datetime, timedelta
-from typing import Any, Mapping
+from typing import Any
 
 import pytest
 
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.manual_jobs import JobSpec
 from snuba.manual_jobs.job_status import JobStatus
@@ -99,14 +100,14 @@ def test_extract_span_data() -> None:
         minutes=180
     )
     organization_ids = [0, 1]
-    spans_storage = get_storage(StorageKey("eap_spans"))
+    spans_storage = get_writable_storage(StorageKey("eap_spans"))
     messages = [
         _gen_message(BASE_TIME - timedelta(minutes=i), organization_id)
         for organization_id in organization_ids
         for i in range(20)
     ]
 
-    write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
+    write_raw_unprocessed_events(spans_storage, messages)
 
     assert (
         run_job(

@@ -14,7 +14,7 @@ snuba admin
 
 The server should be running on http://127.0.0.1:1219
 
-note: please ensure that sentry devservices are up via `devservices up --exclude=snuba` from within the sentry repository
+note: from the Snuba repository, run `devservices up` to start Snuba's dependencies (ClickHouse, Redis, Kafka) before `snuba admin`.
 
 # Developing the Javascript
 

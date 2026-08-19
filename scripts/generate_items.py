@@ -1,10 +1,9 @@
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Optional
 
+from confluent_kafka import KafkaError, Producer
 from confluent_kafka import Message as KafkaMessage
-from confluent_kafka import Producer
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, TraceItem
@@ -15,12 +14,12 @@ kafka_config = {"bootstrap.servers": "localhost:9092", "client.id": "items_produ
 producer = Producer(kafka_config)
 
 
-def delivery_report(err: Optional[Exception], msg: KafkaMessage) -> None:
+def delivery_report(err: KafkaError | None, msg: KafkaMessage) -> None:
     if err is not None:
         print(f"Message delivery failed: {err}")
 
 
-def generate_item_message(start_timestamp: Optional[datetime] = None) -> bytes:
+def generate_item_message(start_timestamp: datetime | None = None) -> bytes:
     if start_timestamp is None:
         start_timestamp = datetime.now(tz=UTC)
 

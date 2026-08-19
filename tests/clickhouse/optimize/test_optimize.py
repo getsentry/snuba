@@ -1,6 +1,6 @@
 import uuid
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime, timedelta
-from typing import Callable, Mapping
 from unittest.mock import Mock, patch
 
 import pytest
@@ -259,21 +259,23 @@ class TestOptimizeError:
             expire_time=datetime.now() + timedelta(minutes=10),
         )
 
-        with time_machine.travel(current_time, tick=False):
-            with patch(
+        with (
+            time_machine.travel(current_time, tick=False),
+            patch(
                 "snuba.clickhouse.optimize.optimize.optimize_partitions",
                 side_effect=ClickhouseError(),
-            ):
-                with pytest.raises(ClickhouseError):
-                    optimize.optimize_partition_runner(
-                        clickhouse=clickhouse,
-                        database=database,
-                        table=table,
-                        partitions=["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"],
-                        default_parallel_threads=3,
-                        tracker=tracker,
-                        clickhouse_host="some-hostname.domain.com",
-                    )
+            ),
+            pytest.raises(ClickhouseError),
+        ):
+            optimize.optimize_partition_runner(
+                clickhouse=clickhouse,
+                database=database,
+                table=table,
+                partitions=["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"],
+                default_parallel_threads=3,
+                tracker=tracker,
+                clickhouse_host="some-hostname.domain.com",
+            )
 
         # For ClickHouse 23.3 and 23.8 parts from previous test runs
         # interfere with following tests, so best to drop the tables
@@ -351,20 +353,24 @@ def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
     dummy_partition = "(90,'2022-03-28')"
     tracker.update_all_partitions([dummy_partition])
 
-    with time_machine.travel(
-        last_midnight + timedelta(hours=settings.OPTIMIZE_JOB_CUTOFF_TIME) + timedelta(minutes=15),
-        tick=False,
+    with (
+        time_machine.travel(
+            last_midnight
+            + timedelta(hours=settings.OPTIMIZE_JOB_CUTOFF_TIME)
+            + timedelta(minutes=15),
+            tick=False,
+        ),
+        pytest.raises(OptimizedSchedulerTimeout),
     ):
-        with pytest.raises(OptimizedSchedulerTimeout):
-            optimize_partition_runner(
-                clickhouse=clickhouse_pool,
-                database=database,
-                table=table,
-                partitions=[dummy_partition],
-                default_parallel_threads=2,
-                tracker=tracker,
-                clickhouse_host="some-hostname.domain.com",
-            )
+        optimize_partition_runner(
+            clickhouse=clickhouse_pool,
+            database=database,
+            table=table,
+            partitions=[dummy_partition],
+            default_parallel_threads=2,
+            tracker=tracker,
+            clickhouse_host="some-hostname.domain.com",
+        )
 
     tracker.delete_all_states()
     settings.OPTIMIZE_JOB_CUTOFF_TIME = prev_job_cutoff_time

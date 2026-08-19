@@ -1,4 +1,4 @@
-from typing import Generator
+from collections.abc import Generator
 
 import pytest
 
@@ -750,7 +750,7 @@ TEST_CASES = [
 def test_branch_cutter(
     expression: Expression, expected: SubExpression, main_expr: MainQueryExpression
 ) -> None:
-    def alias_generator() -> Generator[str, None, None]:
+    def alias_generator() -> Generator[str]:
         i = 0
         while True:
             i += 1

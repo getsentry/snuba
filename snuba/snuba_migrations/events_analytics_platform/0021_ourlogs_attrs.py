@@ -1,4 +1,4 @@
-from typing import List, Sequence
+from collections.abc import Sequence
 
 from snuba.clickhouse.columns import UUID, Column, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
@@ -11,7 +11,7 @@ storage_set = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
 local_table_name = "ourlogs_2_local"
 dist_table_name = "ourlogs_2_dist"
 
-columns: List[Column[Modifiers]] = [
+columns: list[Column[Modifiers]] = [
     Column("organization_id", UInt(64)),
     Column("project_id", UInt(64)),
     Column("trace_id", UUID()),  # optional

@@ -1,10 +1,10 @@
 import uuid
+from collections.abc import Callable, Collection
 from datetime import datetime, timedelta
-from typing import Callable, Collection, Optional, Tuple
 
 import pytest
+from sentry_options.testing import override_options
 
-from snuba import state
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.redis import RedisClientKey, get_redis_client
@@ -54,7 +54,7 @@ class TestSubscriptionScheduler:
             ),
         )
 
-    def sort_key(self, task: ScheduledSubscriptionTask) -> Tuple[datetime, uuid.UUID]:
+    def sort_key(self, task: ScheduledSubscriptionTask) -> tuple[datetime, uuid.UUID]:
         return task.timestamp, task.task.subscription.identifier.uuid
 
     def run_test(
@@ -63,9 +63,7 @@ class TestSubscriptionScheduler:
         start: timedelta,
         end: timedelta,
         expected: Collection[ScheduledSubscriptionTask],
-        sort_key: Optional[
-            Callable[[ScheduledSubscriptionTask], Tuple[datetime, uuid.UUID]]
-        ] = None,
+        sort_key: Callable[[ScheduledSubscriptionTask], tuple[datetime, uuid.UUID]] | None = None,
         entity_key: EntityKey = EntityKey.EVENTS,
     ) -> None:
         tick = self.build_tick(start, end)
@@ -93,8 +91,8 @@ class TestSubscriptionScheduler:
         assert result == expected
 
     @pytest.mark.redis_db
+    @override_options("snuba", {"subscription_primary_task_builder": "immediate"})
     def test_simple(self) -> None:
-        state.set_config("subscription_primary_task_builder", "immediate")
         subscription = self.build_subscription(timedelta(minutes=1))
         start = timedelta(minutes=-10)
         end = timedelta(minutes=0)
@@ -169,8 +167,8 @@ class TestSubscriptionScheduler:
         )
 
     @pytest.mark.redis_db
+    @override_options("snuba", {"subscription_primary_task_builder": "immediate"})
     def test_subscription_resolution_larger_than_tiny_interval(self) -> None:
-        state.set_config("subscription_primary_task_builder", "immediate")
         subscription = self.build_subscription(timedelta(minutes=1))
         start = timedelta(seconds=-1)
         end = timedelta(seconds=1)
@@ -228,16 +226,16 @@ class TestSubscriptionScheduler:
         )
 
     @pytest.mark.redis_db
-    def test_generic_metrics_gauges_does_not_error(self) -> None:
-        state.set_config("subscription_primary_task_builder", "immediate")
+    @override_options("snuba", {"subscription_primary_task_builder": "immediate"})
+    def test_generic_metrics_counters_does_not_error(self) -> None:
         subscription = Subscription(
             SubscriptionIdentifier(self.partition_id, uuid.uuid4()),
             SnQLSubscriptionData(
                 project_id=1,
-                query="MATCH (generic_metrics_gauges) SELECT max(value) AS value BY project_id, tags[3] WHERE org_id = 1 AND project_id = 1 AND metric_id = 7 AND tags[3] IN array(6,7)",
+                query="MATCH (generic_metrics_counters) SELECT sum(value) AS value BY project_id, tags[3] WHERE org_id = 1 AND project_id = 1 AND metric_id = 7 AND tags[3] IN array(6,7)",
                 time_window_sec=60,
                 resolution_sec=int(timedelta(minutes=1).total_seconds()),
-                entity=get_entity(EntityKey.GENERIC_METRICS_GAUGES),
+                entity=get_entity(EntityKey.GENERIC_METRICS_COUNTERS),
                 metadata={"organization": 1},
             ),
         )
@@ -251,12 +249,12 @@ class TestSubscriptionScheduler:
                 ScheduledSubscriptionTask(
                     self.now + timedelta(minutes=-10 + i),
                     SubscriptionWithMetadata(
-                        EntityKey.GENERIC_METRICS_GAUGES,
+                        EntityKey.GENERIC_METRICS_COUNTERS,
                         subscription,
                         self.build_tick(start, end).offsets.upper,
                     ),
                 )
                 for i in range(10)
             ],
-            entity_key=EntityKey.GENERIC_METRICS_GAUGES,
+            entity_key=EntityKey.GENERIC_METRICS_COUNTERS,
         )

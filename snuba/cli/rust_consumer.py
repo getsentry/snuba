@@ -1,7 +1,7 @@
 import json
 import sys
+from collections.abc import Sequence
 from dataclasses import asdict
-from typing import Optional, Sequence
 
 import click
 
@@ -119,7 +119,13 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     "--group-instance-id",
     type=str,
     default=None,
-    help="Kafka group instance id. passing a value here will run kafka with static membership.",
+    help=(
+        "Kafka group.instance.id (KIP-345 static membership). When set, this "
+        "member keeps its partition assignment across restarts as long as it "
+        "rejoins within session.timeout.ms. Must be unique per live member of "
+        "the consumer group (e.g. one id per single-replica Deployment). "
+        "Tune session.timeout.ms via Kafka broker/topic consumer config."
+    ),
 )
 @click.option(
     "--python-max-queue-depth",
@@ -193,6 +199,17 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     help="Use RowBinary format for ClickHouse inserts instead of JSONEachRow. Currently only supported for EAPItemsProcessor.",
 )
 @click.option(
+    "--skip-write/--no-skip-write",
+    "skip_write",
+    is_flag=True,
+    default=False,
+    help=(
+        "Skip ClickHouse inserts, commit-log produce, replacements produce, "
+        "COGS, and DLQ produce. Still consumes Kafka and commits offsets. Use "
+        "for shadow / soak consumers that must not write production tables."
+    ),
+)
+@click.option(
     "--consumer-version",
     default="v2",
     type=click.Choice(["v1", "v2"]),
@@ -206,9 +223,9 @@ def rust_consumer(
     no_strict_offset_reset: bool,
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
-    raw_events_topic: Optional[str],
-    commit_log_topic: Optional[str],
-    replacements_topic: Optional[str],
+    raw_events_topic: str | None,
+    commit_log_topic: str | None,
+    replacements_topic: str | None,
     bootstrap_servers: Sequence[str],
     commit_log_bootstrap_servers: Sequence[str],
     replacement_bootstrap_servers: Sequence[str],
@@ -216,23 +233,24 @@ def rust_consumer(
     max_batch_size_calculation: str,
     max_batch_time_ms: int,
     log_level: str,
-    concurrency: Optional[int],
-    clickhouse_concurrency: Optional[int],
+    concurrency: int | None,
+    clickhouse_concurrency: int | None,
     use_rust_processor: bool,
-    group_instance_id: Optional[str],
+    group_instance_id: str | None,
     max_poll_interval_ms: int,
     async_inserts: bool,
     health_check: str,
-    python_max_queue_depth: Optional[int],
-    health_check_file: Optional[str],
+    python_max_queue_depth: int | None,
+    health_check_file: str | None,
     enforce_schema: bool,
-    stop_at_timestamp: Optional[int],
-    batch_write_timeout_ms: Optional[int],
-    max_dlq_buffer_length: Optional[int],
-    quantized_rebalance_consumer_group_delay_secs: Optional[int],
-    join_timeout_ms: Optional[int],
+    stop_at_timestamp: int | None,
+    batch_write_timeout_ms: int | None,
+    max_dlq_buffer_length: int | None,
+    quantized_rebalance_consumer_group_delay_secs: int | None,
+    join_timeout_ms: int | None,
     use_row_binary: bool,
-    consumer_version: Optional[str],
+    skip_write: bool,
+    consumer_version: str | None,
 ) -> None:
     """
     Experimental alternative to `snuba consumer`
@@ -270,7 +288,7 @@ def rust_consumer(
         # the number of inserts/sec on clickhouse
         clickhouse_concurrency = 2
 
-    exitcode = rust_snuba.consumer(  # type: ignore
+    exitcode = rust_snuba.consumer(  # type: ignore[attr-defined]
         consumer_group,
         auto_offset_reset,
         no_strict_offset_reset,
@@ -289,6 +307,7 @@ def rust_consumer(
         max_dlq_buffer_length,
         join_timeout_ms,
         use_row_binary,
+        skip_write,
     )
 
     sys.exit(exitcode)

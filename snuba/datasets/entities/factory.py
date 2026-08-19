@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from glob import glob
-from typing import Optional, Sequence, Type
 
-import sentry_sdk
+from sentry_sdk import traces
 
 from snuba import settings
 from snuba.datasets.configuration.entity_builder import build_entity_from_config
@@ -13,15 +13,16 @@ from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.datasets.storages.factory import initialize_storage_factory
 from snuba.datasets.table_storage import TableWriter
 from snuba.utils.config_component_factory import ConfigComponentFactory
+from snuba.utils.sentry import SENTRY_OP
 from snuba.utils.serializable_exception import SerializableException
 
 
 class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
     def __init__(self) -> None:
-        with sentry_sdk.start_span(op="initialize", description="Entity Factory"):
+        with traces.start_span(name="Entity Factory", attributes={SENTRY_OP: "initialize"}):
             initialize_storage_factory()
             self._entity_map: dict[EntityKey, PluggableEntity] = {}
-            self._name_map: dict[Type[Entity], EntityKey] = {}
+            self._name_map: dict[type[Entity], EntityKey] = {}
             self.__initialize()
 
     def __initialize(self) -> None:
@@ -41,7 +42,7 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
         self._name_map = {v.__class__: k for k, v in self._entity_map.items()}
 
     def all_names(self) -> Sequence[EntityKey]:
-        return [name for name in self._entity_map.keys()]
+        return list(self._entity_map.keys())
 
     def get(self, name: EntityKey) -> Entity:
         try:
@@ -63,7 +64,7 @@ class InvalidEntityError(SerializableException):
     """Exception raised on invalid entity access."""
 
 
-_ENT_FACTORY: Optional[_EntityFactory] = None
+_ENT_FACTORY: _EntityFactory | None = None
 
 
 def _ent_factory() -> _EntityFactory:

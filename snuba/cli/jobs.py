@@ -1,4 +1,5 @@
-from typing import Any, MutableMapping, Tuple
+from collections.abc import MutableMapping
+from typing import Any
 
 import click
 
@@ -36,21 +37,21 @@ def _run_job_and_echo_status(job_spec: JobSpec) -> None:
 @click.option("--job_id")
 def run_from_manifest(*, json_manifest: str, job_id: str) -> None:
     job_specs = list_job_specs(json_manifest)
-    if job_id not in job_specs.keys():
+    if job_id not in job_specs:
         raise click.ClickException("Provide a valid job id")
 
     _run_job_and_echo_status(job_specs[job_id])
 
 
-def _parse_params(pairs: Tuple[str, ...]) -> MutableMapping[Any, Any]:
-    return {k: v for k, v in (pair.split("=") for pair in pairs)}
+def _parse_params(pairs: tuple[str, ...]) -> MutableMapping[Any, Any]:
+    return dict(pair.split("=") for pair in pairs)
 
 
 @jobs.command()
 @click.option("--job_type")
 @click.option("--job_id")
 @click.argument("pairs", nargs=-1)
-def run(*, job_type: str, job_id: str, pairs: Tuple[str, ...]) -> None:
+def run(*, job_type: str, job_id: str, pairs: tuple[str, ...]) -> None:
     if not job_type or not job_id:
         raise click.ClickException(JOB_SPECIFICATION_ERROR_MSG)
     job_spec = JobSpec(job_id=job_id, job_type=job_type, params=_parse_params(pairs))

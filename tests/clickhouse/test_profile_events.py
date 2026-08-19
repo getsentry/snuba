@@ -1,123 +1,232 @@
 from unittest.mock import MagicMock, patch
 
-from flask import g, json
+from flask import json
 
 from snuba.admin.clickhouse.profile_events import (
+    _profile_event_query_ids,
     gather_profile_events,
-    hostname_resolves,
-    parse_trace_for_query_ids,
 )
-from snuba.admin.clickhouse.tracing import QueryTraceData
+from snuba.clickhouse.pool import ClickhouseProfile, ClickhouseResult
 
 
-def test_hostname_resolves() -> None:
-    assert hostname_resolves("localhost") == True
-    assert hostname_resolves("invalid-hostname-that-doesnt-exist-123.local") == False
-
-
-def test_parse_trace_for_query_ids() -> None:
+def test_profile_event_query_ids_from_summaries_and_root() -> None:
     trace_output = MagicMock()
     trace_output.summarized_trace_output.query_summaries = {
         "host1": MagicMock(query_id="query1"),
         "host2": MagicMock(query_id="query2"),
     }
+    trace_output.query_id = "root-query-id"
 
-    with patch("snuba.admin.clickhouse.profile_events.hostname_resolves") as mock_resolve:
-        mock_resolve.return_value = True
-        result = parse_trace_for_query_ids(trace_output)
-
-        assert len(result) == 2
-        assert result[0] == QueryTraceData(
-            host="host1", port=9000, query_id="query1", node_name="host1"
-        )
-        assert result[1] == QueryTraceData(
-            host="host2", port=9000, query_id="query2", node_name="host2"
-        )
-
-        mock_resolve.return_value = False
-        result = parse_trace_for_query_ids(trace_output)
-
-        assert len(result) == 2
-        assert result[0] == QueryTraceData(
-            host="127.0.0.1", port=9000, query_id="query1", node_name="host1"
-        )
-        assert result[1] == QueryTraceData(
-            host="127.0.0.1", port=9000, query_id="query2", node_name="host2"
-        )
+    assert _profile_event_query_ids(trace_output) == [
+        "query1",
+        "query2",
+        "root-query-id",
+    ]
 
 
-def test_gather_profile_events() -> None:
+def test_profile_event_query_ids_root_only() -> None:
+    trace_output = MagicMock()
+    trace_output.summarized_trace_output.query_summaries = {}
+    trace_output.query_id = "root-query-id"
+
+    assert _profile_event_query_ids(trace_output) == ["root-query-id"]
+
+
+def test_gather_profile_events_matches_legacy_payload_shape() -> None:
+    """
+    Frontend expects:
+      profile_events_results[node_name] = {
+        "column_names": ["ProfileEvents"],
+        "rows": [json.dumps(profile_events_map), ...],
+      }
+    """
     trace_output = MagicMock()
     trace_output.summarized_trace_output.query_summaries = {
         "host1": MagicMock(query_id="query1"),
     }
+    trace_output.query_id = "query1"
     trace_output.profile_events_meta = []
     trace_output.profile_events_results = {}
 
-    mock_system_query_result = MagicMock()
-    mock_system_query_result.results = [("profile_events",)]
-    mock_system_query_result.meta = [("column1", "type1")]
-    mock_system_query_result.profile = {"profile_key": 123}
+    profile_map = {"SelectedRows": 1, "Query": 1}
+    mock_connection = MagicMock()
+    mock_connection.execute.return_value = ClickhouseResult(
+        results=[
+            ("query1", "host1.internal", profile_map),
+            ("query2", "host2.internal", {"SelectedRows": 2}),
+        ],
+        meta=[
+            ("query_id", "String"),
+            ("host", "String"),
+            ("ProfileEvents", "Map(String, UInt64)"),
+        ],
+        profile=ClickhouseProfile(bytes=0, progress_bytes=0, blocks=0, rows=2, elapsed=0.1),
+    )
 
-    with patch(
-        "snuba.admin.clickhouse.profile_events.run_system_query_on_host_with_sql"
-    ) as mock_query:
-        mock_query.return_value = mock_system_query_result
-        with patch("snuba.admin.clickhouse.profile_events.hostname_resolves", return_value=True):
-            from flask import Flask
+    with (
+        patch(
+            "snuba.admin.clickhouse.profile_events.get_ro_query_node_connection",
+            return_value=mock_connection,
+        ),
+        patch(
+            "snuba.admin.clickhouse.profile_events.system_log_source",
+            return_value="system.query_log",
+        ),
+    ):
+        gather_profile_events(trace_output, "test_storage")
 
-            app = Flask(__name__)
-            with app.app_context():
-                g.user = "test_user"
-                gather_profile_events(trace_output, "test_storage")
+    sql = mock_connection.execute.call_args.kwargs["query"]
+    assert "SELECT" in sql
+    assert "hostname() AS host" in sql
+    assert "ProfileEvents" in sql
+    assert "query_id IN ('query1')" in sql
+    assert "now() - INTERVAL 5 MINUTE" in sql
 
-                mock_query.assert_called_once_with(
-                    "host1",
-                    9000,
-                    "test_storage",
-                    "SELECT ProfileEvents FROM system.query_log WHERE query_id = 'query1' AND type = 'QueryFinish'",
-                    False,
-                    "test_user",
-                )
+    assert trace_output.profile_events_meta == [[("ProfileEvents", "Map(String, UInt64)")]]
+    assert trace_output.profile_events_profile == {
+        "bytes": 0,
+        "progress_bytes": 0,
+        "blocks": 0,
+        "rows": 2,
+        "elapsed": 0.1,
+    }
+    # Keys use summary node_name when query_id maps; otherwise hostname().
+    assert trace_output.profile_events_results == {
+        "host1": {
+            "column_names": ["ProfileEvents"],
+            "rows": [json.dumps(profile_map)],
+        },
+        "host2.internal": {
+            "column_names": ["ProfileEvents"],
+            "rows": [json.dumps({"SelectedRows": 2})],
+        },
+    }
 
-                assert trace_output.profile_events_meta == [mock_system_query_result.meta]
-                assert trace_output.profile_events_profile == mock_system_query_result.profile
-                assert trace_output.profile_events_results["host1"] == {
-                    "column_names": ["column1"],
-                    "rows": [json.dumps("profile_events")],
-                }
 
-
-def test_gather_profile_events_retry_logic() -> None:
+def test_gather_profile_events_appends_multiple_rows_per_host() -> None:
     trace_output = MagicMock()
     trace_output.summarized_trace_output.query_summaries = {
         "host1": MagicMock(query_id="query1"),
     }
+    trace_output.query_id = "query1"
+    trace_output.profile_events_meta = []
+    trace_output.profile_events_results = {}
 
-    empty_result = MagicMock()
-    empty_result.results = []
+    mock_connection = MagicMock()
+    mock_connection.execute.return_value = ClickhouseResult(
+        results=[
+            ("query1", "host1", {"SelectedRows": 1}),
+            ("query1", "host1", {"SelectedRows": 2}),
+        ],
+        meta=[
+            ("query_id", "String"),
+            ("host", "String"),
+            ("ProfileEvents", "Map(String, UInt64)"),
+        ],
+    )
 
-    success_result = MagicMock()
-    success_result.results = [("profile_events",)]
-    success_result.meta = [("column1", "type1")]
-    success_result.profile = {"profile_key": 123}
+    with (
+        patch(
+            "snuba.admin.clickhouse.profile_events.get_ro_query_node_connection",
+            return_value=mock_connection,
+        ),
+        patch(
+            "snuba.admin.clickhouse.profile_events.system_log_source",
+            return_value="system.query_log",
+        ),
+    ):
+        gather_profile_events(trace_output, "test_storage")
 
-    with patch(
-        "snuba.admin.clickhouse.profile_events.run_system_query_on_host_with_sql"
-    ) as mock_query:
-        mock_query.side_effect = [empty_result, empty_result, success_result]
-        with patch("snuba.admin.clickhouse.profile_events.hostname_resolves", return_value=True):
-            with patch("time.sleep") as mock_sleep:
-                from flask import Flask
+    assert trace_output.profile_events_results["host1"] == {
+        "column_names": ["ProfileEvents"],
+        "rows": [
+            json.dumps({"SelectedRows": 1}),
+            json.dumps({"SelectedRows": 2}),
+        ],
+    }
 
-                app = Flask(__name__)
-                with app.app_context():
-                    g.user = "test_user"
 
-                    gather_profile_events(trace_output, "test_storage")
+def test_gather_profile_events_escapes_query_ids() -> None:
+    trace_output = MagicMock()
+    # Attacker-controlled trace_logs can put quotes/SQL into the parsed query_id.
+    malicious_id = "x' OR 1=1 --"
+    trace_output.summarized_trace_output.query_summaries = {
+        "host1": MagicMock(query_id=malicious_id),
+    }
+    trace_output.query_id = malicious_id
+    trace_output.profile_events_meta = []
+    trace_output.profile_events_results = {}
 
-                    assert mock_query.call_count == 3
-                    assert mock_sleep.call_count == 2
+    mock_connection = MagicMock()
+    mock_connection.execute.return_value = ClickhouseResult(results=[])
 
-                    assert mock_sleep.call_args_list[0][0][0] == 2
-                    assert mock_sleep.call_args_list[1][0][0] == 4
+    with (
+        patch(
+            "snuba.admin.clickhouse.profile_events.get_ro_query_node_connection",
+            return_value=mock_connection,
+        ),
+        patch(
+            "snuba.admin.clickhouse.profile_events.system_log_source",
+            return_value="system.query_log",
+        ),
+        patch("snuba.admin.clickhouse.tracing.time.sleep"),
+    ):
+        gather_profile_events(trace_output, "test_storage")
+
+    sql = mock_connection.execute.call_args.kwargs["query"]
+    assert "x' OR 1=1 --" not in sql
+    assert r"'x\' OR 1=1 --'" in sql
+
+
+def test_gather_profile_events_waits_for_all_query_ids() -> None:
+    trace_output = MagicMock()
+    trace_output.summarized_trace_output.query_summaries = {
+        "host1": MagicMock(query_id="query1"),
+        "host2": MagicMock(query_id="query2"),
+    }
+    trace_output.query_id = "query1"
+    trace_output.profile_events_meta = []
+    trace_output.profile_events_results = {}
+
+    partial_result = ClickhouseResult(
+        results=[("query1", "host1", {"SelectedRows": 1})],
+        meta=[
+            ("query_id", "String"),
+            ("host", "String"),
+            ("ProfileEvents", "Map(String, UInt64)"),
+        ],
+    )
+    complete_result = ClickhouseResult(
+        results=[
+            ("query1", "host1", {"SelectedRows": 1}),
+            ("query2", "host2", {"SelectedRows": 2}),
+        ],
+        meta=[
+            ("query_id", "String"),
+            ("host", "String"),
+            ("ProfileEvents", "Map(String, UInt64)"),
+        ],
+        profile=ClickhouseProfile(bytes=0, progress_bytes=0, blocks=0, rows=2, elapsed=0.1),
+    )
+
+    mock_connection = MagicMock()
+    mock_connection.execute.side_effect = [partial_result, complete_result]
+
+    with (
+        patch(
+            "snuba.admin.clickhouse.profile_events.get_ro_query_node_connection",
+            return_value=mock_connection,
+        ),
+        patch(
+            "snuba.admin.clickhouse.profile_events.system_log_source",
+            return_value="system.query_log",
+        ),
+        patch("snuba.admin.clickhouse.tracing.time.sleep") as mock_sleep,
+    ):
+        gather_profile_events(trace_output, "test_storage")
+
+    assert mock_connection.execute.call_count == 2
+    assert mock_sleep.call_count == 1
+    assert set(trace_output.profile_events_results) == {"host1", "host2"}
+    assert trace_output.profile_events_results["host1"]["rows"] == [json.dumps({"SelectedRows": 1})]
+    assert trace_output.profile_events_results["host2"]["rows"] == [json.dumps({"SelectedRows": 2})]

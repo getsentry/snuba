@@ -1,11 +1,11 @@
 import re
 import time
-from typing import List, Sequence, Tuple
+from collections.abc import Sequence
 
 import structlog
 from packaging import version
 
-from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.pool import ClickhousePool
 from snuba.clusters.cluster import (
     ClickhouseClientSettings,
     ClickhouseCluster,
@@ -35,7 +35,7 @@ logger = structlog.get_logger().bind(module=__name__)
 
 def get_clickhouse_clusters_for_migration_group(
     migration_group: MigrationGroup,
-) -> List[ClickhouseCluster]:
+) -> list[ClickhouseCluster]:
     storage_set_keys = get_storage_set_keys(migration_group)
     return list({get_cluster(storage_set_key) for storage_set_key in storage_set_keys})
 
@@ -71,38 +71,39 @@ def get_clusters_for_readiness_states(
 
 def check_clickhouse_connections(
     clusters: Sequence[ClickhouseCluster],
+    *,
+    max_attempts: int = 60,
+    retry_delay_seconds: float = 1.0,
 ) -> None:
     """
     Ensure that we can establish a connection with every cluster.
     """
-    attempts = 0
-
     for cluster in clusters:
         clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
 
-        while True:
+        for attempt in range(max_attempts):
             try:
-                logger.debug(
-                    "Attempting to connect to Clickhouse cluster %s (attempt %d)",
-                    cluster,
-                    attempts,
-                )
                 check_clickhouse(clickhouse)
                 break
             except InvalidClickhouseVersion as e:
                 logger.error(e)
                 raise
             except Exception as e:
-                logger.error(
+                logger.debug(
                     "Connection to Clickhouse cluster %s failed (attempt %d)",
                     cluster,
-                    attempts,
+                    attempt,
                     exc_info=e,
                 )
-                attempts += 1
-                if attempts == 60:
+                if attempt + 1 >= max_attempts:
+                    logger.error(
+                        "Connection to Clickhouse cluster %s failed after %d attempts",
+                        cluster,
+                        max_attempts,
+                        exc_info=e,
+                    )
                     raise
-                time.sleep(1)
+                time.sleep(retry_delay_seconds)
 
 
 def check_clickhouse(clickhouse: ClickhousePool) -> None:
@@ -110,15 +111,15 @@ def check_clickhouse(clickhouse: ClickhousePool) -> None:
     Checks that the clickhouse version is at least the min version and at most the max version
     """
     ver = clickhouse.execute("SELECT version()").results[0][0]
-    ver = re.search(r"(\d+.\d+.\d+.\d+)", ver)
-    if ver is None or version.parse(ver.group()) < version.parse(CLICKHOUSE_SERVER_MIN_VERSION):
+    match = re.search(r"(\d+.\d+.\d+.\d+)", ver)
+    if match is None or version.parse(match.group()) < version.parse(CLICKHOUSE_SERVER_MIN_VERSION):
         raise InvalidClickhouseVersion(
-            f"Snuba requires minimum Clickhouse version {CLICKHOUSE_SERVER_MIN_VERSION} ({clickhouse.host}:{clickhouse.port} - {version.parse(ver.group())})"
+            f"Snuba requires minimum Clickhouse version {CLICKHOUSE_SERVER_MIN_VERSION} ({clickhouse.host}:{clickhouse.port} - {version.parse(match.group()) if match else None})"
         )
 
-    if version.parse(ver.group()) > version.parse(CLICKHOUSE_SERVER_MAX_VERSION):
+    if version.parse(match.group()) > version.parse(CLICKHOUSE_SERVER_MAX_VERSION):
         logger.warning(
-            f"Snuba has only been tested on Clickhouse versions up to {CLICKHOUSE_SERVER_MAX_VERSION} ({clickhouse.host}:{clickhouse.port} - {version.parse(ver.group())}). Higher versions might not be supported."
+            f"Snuba has only been tested on Clickhouse versions up to {CLICKHOUSE_SERVER_MAX_VERSION} ({clickhouse.host}:{clickhouse.port} - {version.parse(match.group())}). Higher versions might not be supported."
         )
 
 
@@ -136,7 +137,7 @@ def _get_all_storage_keys() -> Sequence[StorageKey]:
 
 def _get_all_nodes_for_storage(
     storage_key: StorageKey,
-) -> Tuple[Sequence[ClickhouseNode], Sequence[ClickhouseNode], ClickhouseNode]:
+) -> tuple[Sequence[ClickhouseNode], Sequence[ClickhouseNode], ClickhouseNode]:
     """
     Returns all nodes for a given storage key.
     """
@@ -153,7 +154,7 @@ def _get_all_nodes_for_storage(
     return (local_nodes, distributed_nodes, query_node)
 
 
-def check_for_inactive_replicas(clusters: List[ClickhouseCluster]) -> None:
+def check_for_inactive_replicas(clusters: list[ClickhouseCluster]) -> None:
     """
     Checks for inactive replicas and raise InactiveClickhouseReplica if any are found.
     """

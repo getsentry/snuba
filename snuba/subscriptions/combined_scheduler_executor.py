@@ -1,5 +1,7 @@
+import time
+from collections.abc import Mapping, Sequence
 from datetime import timedelta
-from typing import Mapping, NamedTuple, Optional, Sequence
+from typing import NamedTuple
 
 from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Producer
@@ -8,7 +10,7 @@ from arroyo.commit import ONCE_PER_SECOND
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
-from arroyo.types import Commit
+from arroyo.types import Commit, FilteredPayload
 
 from snuba import settings
 from snuba.datasets.dataset import Dataset
@@ -48,10 +50,10 @@ def build_scheduler_executor_consumer(
     auto_offset_reset: str,
     strict_offset_reset: bool,
     schedule_ttl: int,
-    stale_threshold_seconds: Optional[int],
+    stale_threshold_seconds: int | None,
     total_concurrent_queries: int,
     metrics: MetricsBackend,
-    health_check_file: Optional[str] = None,
+    health_check_file: str | None = None,
 ) -> StreamProcessor[Tick]:
     dataset = get_dataset(dataset_name)
 
@@ -156,14 +158,15 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
         total_concurrent_queries: int,
         producer: Producer[KafkaPayload],
         metrics: MetricsBackend,
-        stale_threshold_seconds: Optional[int],
+        stale_threshold_seconds: int | None,
         result_topic: str,
         schedule_ttl: int,
-        health_check_file: Optional[str] = None,
+        health_check_file: str | None = None,
     ) -> None:
         self.__partitions = partitions
         self.__entity_names = entity_names
         self.__metrics = metrics
+        self.__stale_threshold_seconds = stale_threshold_seconds
 
         entity_keys = [EntityKey(entity_name) for entity_name in self.__entity_names]
 
@@ -231,7 +234,11 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
             self.__mode,
             self.__partitions,
             self.__buffer_size,
-            ForwardToExecutor(self.__schedulers, execute_step),
+            ForwardToExecutor(
+                self.__schedulers,
+                execute_step,
+                self.__stale_threshold_seconds,
+            ),
             self.__metrics,
         )
 
@@ -240,9 +247,11 @@ class ForwardToExecutor(ProcessingStrategy[Tick]):
     def __init__(
         self,
         schedulers: Sequence[Mapping[int, SubscriptionScheduler]],
-        next_step: ProcessingStrategy[KafkaPayload],
+        next_step: ProcessingStrategy[FilteredPayload | KafkaPayload],
+        stale_threshold_seconds: int | None = None,
     ) -> None:
         self.__next_step = next_step
+        self.__stale_threshold_seconds = stale_threshold_seconds
 
         self.__schedulers = schedulers
         self.__encoder = SubscriptionScheduledTaskEncoder()
@@ -258,14 +267,23 @@ class ForwardToExecutor(ProcessingStrategy[Tick]):
         tick = message.payload
         assert tick.partition is not None
 
-        tasks = []
-        for entity_scheduler in self.__schedulers:
-            tasks.extend([task for task in entity_scheduler[tick.partition].find(tick)])
+        encoded_tasks: list[KafkaPayload] = []
+        if (
+            self.__stale_threshold_seconds is None
+            or time.time() - tick.timestamps.lower <= self.__stale_threshold_seconds
+        ):
+            for entity_scheduler in self.__schedulers:
+                for task in entity_scheduler[tick.partition].find(tick):
+                    encoded_tasks.append(self.__encoder.encode(task))
 
-        encoded_tasks = [self.__encoder.encode(task) for task in tasks]
+        # Route empty ticks through the executor as FilteredPayload so commits
+        # stay ordered behind any in-flight subscription queries.
+        if not encoded_tasks:
+            self.__next_step.submit(message.replace(FilteredPayload()))
+            return
 
-        for task in encoded_tasks:
-            self.__next_step.submit(message.replace(task))
+        for encoded_task in encoded_tasks:
+            self.__next_step.submit(message.replace(encoded_task))
 
     def close(self) -> None:
         self.__closed = True
@@ -275,5 +293,5 @@ class ForwardToExecutor(ProcessingStrategy[Tick]):
         self.__closed = True
         self.__next_step.terminate()
 
-    def join(self, timeout: Optional[float] = None) -> None:
+    def join(self, timeout: float | None = None) -> None:
         self.__next_step.join(timeout)

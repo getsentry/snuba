@@ -269,36 +269,6 @@ schema:
   local_table_name: errors_local
   dist_table_name: errors_dist_ro
   not_deleted_mandatory_condition: deleted
-allocation_policies:
-  - name: ReferrerGuardRailPolicy
-    args:
-      required_tenant_types:
-        - referrer
-      default_config_overrides:
-        is_enforced: 1
-  - name: ConcurrentRateLimitAllocationPolicy
-    args:
-      required_tenant_types:
-        - organization_id
-        - referrer
-        - project_id
-  - name: BytesScannedRejectingPolicy
-    args:
-      required_tenant_types:
-        - organization_id
-        - project_id
-        - referrer
-  - name: CrossOrgQueryAllocationPolicy
-    args:
-      required_tenant_types:
-        - referrer
-      default_config_overrides:
-        is_enforced: 1
-        is_active: 1
-      cross_org_referrer_limits:
-        getsentry.tasks.backfill_grouping_records:
-          max_threads: 7
-          concurrent_limit: 60
 query_processors:
   - processor: UniqInSelectAndHavingProcessor
   - processor: TupleUnaliaser

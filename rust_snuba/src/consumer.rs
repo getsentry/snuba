@@ -16,13 +16,10 @@ use sentry_arroyo::types::Topic;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
-use sentry_options::init_with_schemas;
-
 use crate::config;
 use crate::factory_v2::ConsumerStrategyFactoryV2;
 use crate::logging::{setup_logging, setup_sentry};
-use crate::metrics::global_tags::set_global_tag;
-use crate::metrics::statsd::StatsDBackend;
+use crate::metrics::statsd::create_dogstatsd_backend;
 use crate::processors;
 use crate::rebalancing;
 use crate::types::{InsertOrReplacement, KafkaMessageMetadata};
@@ -49,6 +46,7 @@ pub fn consumer(
     max_dlq_buffer_length: Option<usize>,
     join_timeout_ms: Option<u64>,
     use_row_binary: bool,
+    skip_write: bool,
 ) -> usize {
     py.allow_threads(|| {
         consumer_impl(
@@ -70,6 +68,7 @@ pub fn consumer(
             join_timeout_ms,
             health_check,
             use_row_binary,
+            skip_write,
         )
     })
 }
@@ -94,10 +93,10 @@ pub fn consumer_impl(
     join_timeout_ms: Option<u64>,
     health_check: &str,
     use_row_binary: bool,
+    skip_write: bool,
 ) -> usize {
     setup_logging();
-    init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)])
-        .expect("failed to initialize sentry-options");
+    crate::init_sentry_options().expect("failed to initialize sentry-options");
 
     let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
     let max_batch_size = consumer_config.max_batch_size;
@@ -117,13 +116,12 @@ pub fn consumer_impl(
 
     for storage in &consumer_config.storages {
         tracing::info!(
-            "Storage: {}, ClickHouse Table Name: {}, Message Processor: {:?}, ClickHouse host: {}, ClickHouse port: {}, ClickHouse HTTP port: {}, ClickHouse database: {}",
+            "Storage: {}, ClickHouse Table Name: {}, Message Processor: {:?}, ClickHouse host: {}, ClickHouse port: {}, ClickHouse database: {}",
             storage.name,
             storage.clickhouse_table_name,
             &storage.message_processor,
             storage.clickhouse_cluster.host,
             storage.clickhouse_cluster.port,
-            storage.clickhouse_cluster.http_port,
             storage.clickhouse_cluster.database,
         );
     }
@@ -144,20 +142,28 @@ pub fn consumer_impl(
     }
 
     // setup arroyo metrics
-    if let (Some(host), Some(port)) = (
-        consumer_config.env.dogstatsd_host,
-        consumer_config.env.dogstatsd_port,
-    ) {
+    {
         let storage_name = consumer_config
             .storages
             .iter()
             .map(|s| s.name.clone())
             .collect::<Vec<_>>()
             .join(",");
-        set_global_tag("storage".to_owned(), storage_name);
-        set_global_tag("consumer_group".to_owned(), consumer_group.to_owned());
 
-        metrics::init(StatsDBackend::new(&host, port, "snuba.consumer")).unwrap();
+        // Set tags on Sentry scope for error observability
+        sentry::configure_scope(|scope| {
+            scope.set_tag("storage", &storage_name);
+            scope.set_tag("consumer_group", consumer_group);
+        });
+
+        let tags = [
+            ("storage", storage_name.clone()),
+            ("consumer_group", consumer_group.to_owned()),
+        ];
+
+        if let Some(backend) = create_dogstatsd_backend(&env_config, "snuba.consumer", &tags) {
+            metrics::init(backend).unwrap();
+        }
     }
 
     if !use_rust_processor {
@@ -171,6 +177,25 @@ pub fn consumer_impl(
         "Starting consumer for {:?}",
         first_storage.name,
     );
+
+    if let Some(group_instance_id) = consumer_config
+        .raw_topic
+        .broker_config
+        .get("group.instance.id")
+    {
+        tracing::info!(
+            group_instance_id = %group_instance_id,
+            consumer_group = %consumer_group,
+            "Static membership enabled (KIP-345 group.instance.id)"
+        );
+    }
+
+    if skip_write {
+        tracing::warn!(
+            consumer_group = %consumer_group,
+            "ClickHouse writes disabled (--skip-write); offsets still commit"
+        );
+    }
 
     let config = KafkaConfig::new_consumer_config(
         vec![],
@@ -191,41 +216,40 @@ pub fn consumer_impl(
     let dlq_concurrency_config = ConcurrencyConfig::new(10);
 
     // DLQ policy applies only if we are not skipping writes, otherwise we don't want to be
-    // writing to the DLQ topics in prod.
+    // writing to the DLQ topics in prod. DlqByAge is keyed off the same flag.
+    let dlq_policy = if skip_write {
+        None
+    } else {
+        consumer_config.dlq_topic.map(|dlq_topic_config| {
+            let producer = KafkaProducer::new(KafkaConfig::new_producer_config(
+                vec![],
+                Some(dlq_topic_config.broker_config),
+            ));
 
-    let dlq_producer_config = consumer_config.dlq_topic.as_ref().map(|dlq_topic_config| {
-        KafkaConfig::new_producer_config(vec![], Some(dlq_topic_config.broker_config.clone()))
-    });
+            let kafka_dlq_producer = Box::new(KafkaDlqProducer::new(
+                producer,
+                Topic::new(&dlq_topic_config.physical_topic_name),
+            ));
 
-    let dlq_topic = consumer_config
-        .dlq_topic
-        .as_ref()
-        .map(|dlq_topic_config| Topic::new(&dlq_topic_config.physical_topic_name));
+            let handle = dlq_concurrency_config.handle();
+            DlqPolicy::new(
+                handle,
+                kafka_dlq_producer,
+                DlqLimit {
+                    max_invalid_ratio: None,
+                    max_consecutive_count: None,
+                },
+                max_dlq_buffer_length,
+            )
+        })
+    };
+    let dlq_configured = dlq_policy.is_some();
 
-    let dlq_policy = consumer_config.dlq_topic.map(|dlq_topic_config| {
-        let producer = KafkaProducer::new(KafkaConfig::new_producer_config(
-            vec![],
-            Some(dlq_topic_config.broker_config),
-        ));
-
-        let kafka_dlq_producer = Box::new(KafkaDlqProducer::new(
-            producer,
-            Topic::new(&dlq_topic_config.physical_topic_name),
-        ));
-
-        let handle = dlq_concurrency_config.handle();
-        DlqPolicy::new(
-            handle,
-            kafka_dlq_producer,
-            DlqLimit {
-                max_invalid_ratio: None,
-                max_consecutive_count: None,
-            },
-            max_dlq_buffer_length,
-        )
-    });
-
-    let commit_log_producer = if let Some(topic_config) = consumer_config.commit_log_topic {
+    // Shadow consumers (--skip-write) must not produce commit log either; that
+    // stream drives post-processing against written rows.
+    let commit_log_producer = if skip_write {
+        None
+    } else if let Some(topic_config) = consumer_config.commit_log_topic {
         let producer_config =
             KafkaConfig::new_producer_config(vec![], Some(topic_config.broker_config));
         let producer = KafkaProducer::new(producer_config);
@@ -237,7 +261,11 @@ pub fn consumer_impl(
         None
     };
 
-    let replacements_config = if let Some(topic_config) = consumer_config.replacements_topic {
+    // Shadow consumers must not produce replacements either; those mutate
+    // ClickHouse via the replacements consumer.
+    let replacements_config = if skip_write {
+        None
+    } else if let Some(topic_config) = consumer_config.replacements_topic {
         let producer_config =
             KafkaConfig::new_producer_config(vec![], Some(topic_config.broker_config));
         Some((
@@ -287,8 +315,8 @@ pub fn consumer_impl(
         join_timeout_ms,
         health_check: health_check.to_string(),
         use_row_binary,
-        blq_producer_config: dlq_producer_config.clone(),
-        blq_topic: dlq_topic,
+        skip_write,
+        dlq_configured,
     };
 
     let processor = StreamProcessor::with_kafka(config, factory, topic, dlq_policy);
@@ -331,7 +359,7 @@ type PyInsert = PyObject;
 /// replacement: (key/project_id, value)
 type PyReplacement = (PyObject, PyObject);
 
-#[pyfunction]
+#[pyfunction(signature = (name, value, partition, offset, millis_since_epoch, eap_items_emit_received_at=false))]
 pub fn process_message(
     py: Python,
     name: &str,
@@ -339,6 +367,7 @@ pub fn process_message(
     partition: u16,
     offset: u64,
     millis_since_epoch: i64,
+    eap_items_emit_received_at: bool,
 ) -> PyResult<(Option<PyInsert>, Option<PyReplacement>)> {
     // XXX: Currently only takes the message payload and metadata. This assumes
     // key and headers are not used for message processing
@@ -353,10 +382,14 @@ pub fn process_message(
         offset,
         timestamp,
     };
+    let processor_config = config::ProcessorConfig {
+        eap_items_emit_received_at: name == "EAPItemsProcessor" && eap_items_emit_received_at,
+        ..Default::default()
+    };
 
     match func {
         processors::ProcessingFunctionType::ProcessingFunction(f) => {
-            let res = f(payload, meta, &config::ProcessorConfig::default())
+            let res = f(payload, meta, &processor_config)
                 .map_err(|e| SnubaRustError::new_err(format!("invalid message: {e:?}")))?;
 
             let payload = PyBytes::new(py, &res.rows.into_encoded_rows()).into();
@@ -364,7 +397,7 @@ pub fn process_message(
             Ok((Some(payload), None))
         }
         processors::ProcessingFunctionType::ProcessingFunctionWithReplacements(f) => {
-            let res = f(payload, meta, &config::ProcessorConfig::default())
+            let res = f(payload, meta, &processor_config)
                 .map_err(|e| SnubaRustError::new_err(format!("invalid message: {e:?}")))?;
 
             match res {

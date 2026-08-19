@@ -12,9 +12,7 @@ from snuba.subscriptions.subscription import SubscriptionCreator
 from snuba.utils.metrics.timer import Timer
 
 parser = argparse.ArgumentParser(description="Mock subscriptions")
-parser.add_argument(
-    "--number", type=int, help="Number of subscriptions to create", dest="number"
-)
+parser.add_argument("--number", type=int, help="Number of subscriptions to create", dest="number")
 parser.add_argument(
     "--project-id",
     type=int,
@@ -55,7 +53,7 @@ timer = Timer("mock-subscriptions")
 for _ in range(parsed.number):
     project_id = random.choice(parsed.project)
 
-    subscription_data = SubscriptionData(
+    subscription_data = SubscriptionData(  # type: ignore[operator]
         query=f"MATCH ({entity_key.value}) SELECT count() AS count WHERE project_id = {project_id}",
         project_id=project_id,
         time_window_sec=60,
@@ -64,9 +62,7 @@ for _ in range(parsed.number):
         metadata={},
     )
 
-    identifier = SubscriptionCreator(dataset, entity_key).create(
-        subscription_data, timer
-    )
+    identifier = SubscriptionCreator(dataset, entity_key).create(subscription_data, timer)
 
     print(f"Created {identifier}")
 
@@ -80,4 +76,4 @@ stores = [
 
 print(f"Total {entity_key.value} subscriptions:")
 for i, store in enumerate(stores):
-    print(f"Store {i}: {len([s for s in store.all()])} subscriptions")
+    print(f"Store {i}: {len(list(store.all()))} subscriptions")

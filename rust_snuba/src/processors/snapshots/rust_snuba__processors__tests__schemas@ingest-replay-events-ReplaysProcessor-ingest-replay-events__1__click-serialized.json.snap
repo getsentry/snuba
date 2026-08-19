@@ -56,6 +56,7 @@ expression: snapshot_payload
     "sdk_name": "",
     "sdk_version": "",
     "segment_id": null,
+    "segment_names": [],
     "session_sample_rate": -1.0,
     "tags.key": [],
     "tags.value": [],

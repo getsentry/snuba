@@ -1,6 +1,6 @@
+from collections.abc import MutableMapping
 from dataclasses import replace
 from datetime import datetime
-from typing import MutableMapping, Optional, Set
 
 from snuba import environment, settings
 from snuba.clickhouse.query import Query
@@ -14,7 +14,7 @@ from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings, SubscriptionQuerySettings
 from snuba.replacers.projects_query_flags import ProjectsQueryFlags
 from snuba.replacers.replacer_processor import ReplacerState
-from snuba.state import get_config
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "processors.replaced_groups")
@@ -32,7 +32,7 @@ class PostReplacementConsistencyEnforcer(ClickhouseQueryProcessor):
     have to remove those rows manually or to run the query in FINAL mode.
     """
 
-    def __init__(self, project_column: str, replacer_state_name: Optional[str]) -> None:
+    def __init__(self, project_column: str, replacer_state_name: str | None) -> None:
         self.__project_column = project_column
         self.__groups_column = "group_id"
         # This is used to allow us to keep the replacement state in redis for multiple
@@ -52,7 +52,7 @@ class PostReplacementConsistencyEnforcer(ClickhouseQueryProcessor):
             return
 
         for no_final_subscriptions_project in (
-            get_config("skip_final_subscriptions_projects") or "[]"
+            get_option("skip_final_subscriptions_projects", "[]")
         )[1:-1].split(","):
             if (
                 no_final_subscriptions_project
@@ -64,7 +64,7 @@ class PostReplacementConsistencyEnforcer(ClickhouseQueryProcessor):
                 return
 
         for denied_project_id_string in (
-            get_config("post_replacement_consistency_projects_denylist") or "[]"
+            get_option("post_replacement_consistency_projects_denylist", "[]")
         )[1:-1].split(","):
             if denied_project_id_string and int(denied_project_id_string) in project_ids:
                 metrics.increment(name=CONSISTENCY_DENYLIST_METRIC)
@@ -96,11 +96,9 @@ class PostReplacementConsistencyEnforcer(ClickhouseQueryProcessor):
         elif flags.group_ids_to_exclude:
             # If the number of groups to exclude exceeds our limit, the query
             # should just use final instead of the exclusion set.
-            max_group_ids_exclude = get_config(
-                "max_group_ids_exclude",
-                settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE,
+            max_group_ids_exclude = get_option(
+                "max_group_ids_exclude", settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE
             )
-            assert isinstance(max_group_ids_exclude, int)
             groups_to_exclude = self._groups_to_exclude(query, flags.group_ids_to_exclude)
             if (
                 len(flags.group_ids_to_exclude) > 2 * max_group_ids_exclude
@@ -139,7 +137,7 @@ class PostReplacementConsistencyEnforcer(ClickhouseQueryProcessor):
         """
         Initialize tags dictionary for DataDog metrics.
         """
-        tags = {replacement_type: "True" for replacement_type in flags.replacement_types}
+        tags = dict.fromkeys(flags.replacement_types, "True")
         tags["referrer"] = query_settings.referrer
         return tags
 
@@ -155,7 +153,7 @@ class PostReplacementConsistencyEnforcer(ClickhouseQueryProcessor):
     def _query_overlaps_replacements(
         self,
         query: Query,
-        latest_replacement_time: Optional[datetime],
+        latest_replacement_time: datetime | None,
     ) -> bool:
         """
         Given a Query and the latest replacement time for any project
@@ -167,7 +165,7 @@ class PostReplacementConsistencyEnforcer(ClickhouseQueryProcessor):
             latest_replacement_time > query_from if latest_replacement_time and query_from else True
         )
 
-    def _groups_to_exclude(self, query: Query, group_ids_to_exclude: Set[int]) -> Set[int]:
+    def _groups_to_exclude(self, query: Query, group_ids_to_exclude: set[int]) -> set[int]:
         """
         Given a Query and the group ids to exclude for any project
         this query touches, returns the intersection of the group ids

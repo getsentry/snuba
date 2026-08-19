@@ -2,7 +2,7 @@ import logging
 import signal
 import time
 from dataclasses import replace
-from typing import Any, Optional
+from typing import Any
 
 import click
 from arroyo import configure_metrics
@@ -105,13 +105,13 @@ def dlq_consumer(
     no_strict_offset_reset: bool,
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
-    processes: Optional[int],
-    input_block_size: Optional[int],
-    output_block_size: Optional[int],
-    log_level: Optional[str] = None,
+    processes: int | None,
+    input_block_size: int | None,
+    output_block_size: int | None,
+    log_level: str | None = None,
 ) -> None:
     shutdown_requested = False
-    consumer: Optional[StreamProcessor[KafkaPayload]] = None
+    consumer: StreamProcessor[KafkaPayload] | None = None
 
     def handler(signum: int, frame: Any) -> None:
         nonlocal shutdown_requested

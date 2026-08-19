@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Mapping, Optional, Sequence
+from collections.abc import Mapping, Sequence
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.entity_subscriptions.processors import EntitySubscriptionProcessor
@@ -32,11 +32,11 @@ class Entity(Describable, ABC):
         storages: Sequence[EntityStorageConnection],
         abstract_column_set: ColumnSet,
         join_relationships: Mapping[str, JoinRelationship],
-        validators: Optional[Sequence[QueryValidator]],
-        required_time_column: Optional[str],
+        validators: Sequence[QueryValidator] | None,
+        required_time_column: str | None,
         validate_data_model: ColumnValidationMode = ColumnValidationMode.ERROR,
-        subscription_processors: Optional[Sequence[EntitySubscriptionProcessor]],
-        subscription_validators: Optional[Sequence[EntitySubscriptionValidator]],
+        subscription_processors: Sequence[EntitySubscriptionProcessor] | None,
+        subscription_validators: Sequence[EntitySubscriptionValidator] | None,
     ) -> None:
         self.__storages = storages
 
@@ -77,7 +77,7 @@ class Entity(Describable, ABC):
         """
         return self.__data_model
 
-    def get_join_relationship(self, relationship: str) -> Optional[JoinRelationship]:
+    def get_join_relationship(self, relationship: str) -> JoinRelationship | None:
         """
         Fetch the join relationship specified by the relationship string.
         """
@@ -103,7 +103,7 @@ class Entity(Describable, ABC):
         """
         return self.__storages
 
-    def get_writable_storage(self) -> Optional[WritableTableStorage]:
+    def get_writable_storage(self) -> WritableTableStorage | None:
         """
         Temporarily support getting the writable storage from an entity.
         Once consumers/replacers no longer reference entity, this can be removed
@@ -136,7 +136,7 @@ class Entity(Describable, ABC):
 
     def get_subscription_processors(
         self,
-    ) -> Optional[Sequence[EntitySubscriptionProcessor]]:
+    ) -> Sequence[EntitySubscriptionProcessor] | None:
         """
         Provides an entity subscription processors to be run on on subscription queries.
         """
@@ -144,7 +144,7 @@ class Entity(Describable, ABC):
 
     def get_subscription_validators(
         self,
-    ) -> Optional[Sequence[EntitySubscriptionValidator]]:
+    ) -> Sequence[EntitySubscriptionValidator] | None:
         """
         Provides an entity subscription validators to be run on on subscription queries.
         """

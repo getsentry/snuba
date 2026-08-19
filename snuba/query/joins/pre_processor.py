@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, MutableMapping
 from copy import copy
-from typing import Mapping, MutableMapping, NamedTuple, Set
+from typing import NamedTuple
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -25,7 +26,7 @@ class QualifiedCol(NamedTuple):
 # Each node is a QualifiedCol instance, which represents entity
 # and column.
 # Each edge represent an equivalence between two nodes.
-EquivalenceGraph = MutableMapping[QualifiedCol, Set[QualifiedCol]]
+EquivalenceGraph = MutableMapping[QualifiedCol, set[QualifiedCol]]
 
 
 class EquivalenceExtractor(JoinVisitor[EquivalenceGraph, Entity]):
@@ -43,7 +44,7 @@ class EquivalenceExtractor(JoinVisitor[EquivalenceGraph, Entity]):
     An EquivalenceGraph is produced.
     """
 
-    def __init__(self, entities_in_join: Set[EntityKey]) -> None:
+    def __init__(self, entities_in_join: set[EntityKey]) -> None:
         # We initialize the visitor with the list of entities present
         # in the join to filter the graph just because extracting this
         # list inside the visitor before we start processing would
@@ -106,7 +107,7 @@ class EquivalenceExtractor(JoinVisitor[EquivalenceGraph, Entity]):
 
 def get_equivalent_columns(
     join: JoinClause[Entity],
-) -> Mapping[QualifiedCol, Set[QualifiedCol]]:
+) -> Mapping[QualifiedCol, set[QualifiedCol]]:
     """
     Given a Join, it returns the set of all the semantically equivalent
     columns across the entities involved in the join.
@@ -126,7 +127,7 @@ def get_equivalent_columns(
     same connected component
     """
 
-    def traverse_graph(node: QualifiedCol, visited_nodes: Set[QualifiedCol]) -> Set[QualifiedCol]:
+    def traverse_graph(node: QualifiedCol, visited_nodes: set[QualifiedCol]) -> set[QualifiedCol]:
         """
         Traverse the whole connected component in with a depth first
         algorithm starting from the node provided.
@@ -140,7 +141,7 @@ def get_equivalent_columns(
 
     entities_in_join = {entity_from_node(node) for node in join.get_alias_node_map().values()}
     adjacency_sets = join.accept(EquivalenceExtractor(entities_in_join))
-    connected_components: MutableMapping[QualifiedCol, Set[QualifiedCol]] = {}
+    connected_components: MutableMapping[QualifiedCol, set[QualifiedCol]] = {}
 
     for node in adjacency_sets:
         if node not in connected_components:

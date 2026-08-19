@@ -1,5 +1,5 @@
+from collections.abc import Mapping
 from enum import Enum
-from typing import Mapping
 
 from sentry_kafka_schemas import SchemaNotFound, get_topic
 
@@ -19,14 +19,9 @@ class Topic(Enum):
     SUBSCRIPTION_SCHEDULED_EVENTS = "scheduled-subscriptions-events"
     SUBSCRIPTION_SCHEDULED_TRANSACTIONS = "scheduled-subscriptions-transactions"
     SUBSCRIPTION_SCHEDULED_METRICS = "scheduled-subscriptions-metrics"
-    SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_SETS = "scheduled-subscriptions-generic-metrics-sets"
-    SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_DISTRIBUTIONS = (
-        "scheduled-subscriptions-generic-metrics-distributions"
-    )
     SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_COUNTERS = (
         "scheduled-subscriptions-generic-metrics-counters"
     )
-    SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_GAUGES = "scheduled-subscriptions-generic-metrics-gauges"
 
     SUBSCRIPTION_RESULTS_EVENTS = "events-subscription-results"
     SUBSCRIPTION_RESULTS_TRANSACTIONS = "transactions-subscription-results"
@@ -42,10 +37,7 @@ class Topic(Enum):
 
     REPLAYEVENTS = "ingest-replay-events"
     GENERIC_METRICS = "snuba-generic-metrics"
-    GENERIC_METRICS_SETS_COMMIT_LOG = "snuba-generic-metrics-sets-commit-log"
-    GENERIC_METRICS_DISTRIBUTIONS_COMMIT_LOG = "snuba-generic-metrics-distributions-commit-log"
     GENERIC_METRICS_COUNTERS_COMMIT_LOG = "snuba-generic-metrics-counters-commit-log"
-    GENERIC_METRICS_GAUGES_COMMIT_LOG = "snuba-generic-metrics-gauges-commit-log"
     GENERIC_EVENTS = "generic-events"
     GENERIC_EVENTS_COMMIT_LOG = "snuba-generic-events-commit-log"
     GROUP_ATTRIBUTES = "group-attributes"
@@ -57,7 +49,6 @@ class Topic(Enum):
     DEAD_LETTER_QUERYLOG = "snuba-dead-letter-querylog"
     DEAD_LETTER_GROUP_ATTRIBUTES = "snuba-dead-letter-group-attributes"
 
-    SPANS = "snuba-spans"
     EAP_SPANS_COMMIT_LOG = "snuba-eap-spans-commit-log"
     SUBSCRIPTION_SCHEDULED_EAP_SPANS = "scheduled-subscriptions-eap-spans"
     SUBSCRIPTION_RESULTS_EAP_SPANS = "eap-spans-subscription-results"
@@ -74,6 +65,8 @@ class Topic(Enum):
     LW_DELETIONS_EAP_ITEMS = "snuba-lw-deletions-eap-items"
 
     COGS_SHARED_RESOURCES_USAGE = "shared-resources-usage"
+
+    LLM_PROXY_COST = "snuba-llm-proxy-cost"
 
 
 def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:

@@ -1,5 +1,3 @@
-from typing import Optional
-
 import click
 
 from snuba.datasets.configuration.entity_builder import build_entity_from_config
@@ -16,7 +14,7 @@ class CLIDescriber(DescriptionVisitor):
     def __indent(self) -> str:
         return " " * self.__current_indentation
 
-    def visit_header(self, header: Optional[str]) -> None:
+    def visit_header(self, header: str | None) -> None:
         if header is not None:
             click.echo(f"{self.__indent()}{header}")
             click.echo(f"{self.__indent()}--------------------------------")

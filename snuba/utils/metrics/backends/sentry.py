@@ -1,9 +1,20 @@
 from __future__ import annotations
 
+from typing import Any, cast
+
 from sentry_sdk import metrics
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.types import Tags
+
+
+def _attributes(tags: Tags | None) -> dict[str, Any] | None:
+    """Cast ``Tags`` for the SDK's invariant ``dict`` annotation.
+
+    The SDK only iterates ``.items()`` into a fresh dict, so a ``Mapping`` is
+    fine at runtime and copying here would be pure waste.
+    """
+    return cast("dict[str, Any] | None", tags)
 
 
 class SentryMetricsBackend(MetricsBackend):
@@ -21,7 +32,7 @@ class SentryMetricsBackend(MetricsBackend):
         tags: Tags | None = None,
         unit: str | None = None,
     ) -> None:
-        metrics.incr(name, value, unit or "none", tags)
+        metrics.count(name, value, unit or "none", _attributes(tags))
 
     def gauge(
         self,
@@ -30,7 +41,7 @@ class SentryMetricsBackend(MetricsBackend):
         tags: Tags | None = None,
         unit: str | None = None,
     ) -> None:
-        metrics.gauge(name, value, unit or "none", tags)
+        metrics.gauge(name, value, unit or "none", _attributes(tags))
 
     def timing(
         self,
@@ -39,8 +50,8 @@ class SentryMetricsBackend(MetricsBackend):
         tags: Tags | None = None,
         unit: str | None = None,
     ) -> None:
-        # The Sentry SDK has strict typing on the unit, so it doesn't allow passing arbitrary units
-        metrics.timing(name, value, unit or "millisecond", tags)  # type: ignore
+        # SDK dropped timing; emit as a millisecond distribution.
+        metrics.distribution(name, value, unit or "millisecond", _attributes(tags))
 
     def distribution(
         self,
@@ -49,7 +60,7 @@ class SentryMetricsBackend(MetricsBackend):
         tags: Tags | None = None,
         unit: str | None = None,
     ) -> None:
-        metrics.distribution(name, value, unit or "none", tags)
+        metrics.distribution(name, value, unit or "none", _attributes(tags))
 
     def events(
         self,

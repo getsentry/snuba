@@ -1,6 +1,5 @@
 import math
 import uuid
-from typing import cast
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -31,6 +30,7 @@ from snuba.web.rpc.storage_routing.common import extract_message_meta
 from snuba.web.rpc.storage_routing.routing_strategies.common import (
     ITEM_TYPE_TO_OUTCOME_CATEGORY,
     Outcome,
+    num_items_from_outcomes_result,
 )
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
@@ -60,7 +60,7 @@ def _get_request_time_window(routing_context: RoutingContext) -> TimeWindow:
     meta = extract_message_meta(routing_context.in_msg)
     if routing_context.in_msg.HasField("page_token"):
         time_window = FlexibleTimeWindowPageWithFilters(
-            getattr(routing_context.in_msg, "page_token")
+            getattr(routing_context.in_msg, "page_token")  # noqa: B009  # proto dynamic attr
         ).get_time_window()
         if time_window:
             return time_window
@@ -119,6 +119,7 @@ class OutcomesFlexTimeRoutingStrategy(BaseRoutingStrategy):
                 tenant_ids={
                     "organization_id": in_msg_meta.organization_id,
                     "referrer": "eap.route_outcomes",
+                    "cross_org_query": 1,
                 },
                 app_id=AppID("eap"),
                 parent_api="eap.route_outcomes",
@@ -131,7 +132,7 @@ class OutcomesFlexTimeRoutingStrategy(BaseRoutingStrategy):
             timer=routing_context.timer,
         )
         routing_context.extra_info["estimation_sql"] = res.extra.get("sql", "")
-        return cast(int, res.result.get("data", [{}])[0].get("num_items", 0))
+        return num_items_from_outcomes_result(res.result)
 
     def _adjust_time_window(self, routing_context: RoutingContext) -> TimeWindow:
         """Adjust the time window to ensure we don't exceed MAX_ITEMS_TO_QUERY."""
@@ -148,7 +149,7 @@ class OutcomesFlexTimeRoutingStrategy(BaseRoutingStrategy):
             window_length = original_end_ts - original_start_ts
 
             start_timestamp_proto = TimestampProto(
-                seconds=original_end_ts - math.floor((window_length / factor))
+                seconds=original_end_ts - math.floor(window_length / factor)
             )
             end_timestamp_proto = TimestampProto(seconds=original_end_ts)
             return TimeWindow(start_timestamp_proto, end_timestamp_proto)
@@ -156,7 +157,6 @@ class OutcomesFlexTimeRoutingStrategy(BaseRoutingStrategy):
         return original_time_window
 
     def _update_routing_decision(self, routing_decision: RoutingDecision) -> None:
-
         in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
 
         # if type is unknown, just route to tier 1, no adjustment

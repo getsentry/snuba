@@ -1,4 +1,6 @@
-from typing import Any, Mapping, MutableMapping
+import contextlib
+from collections.abc import Mapping, MutableMapping
+from typing import Any
 
 from snuba.datasets.slicing import SENTRY_LOGICAL_PARTITIONS
 
@@ -33,12 +35,10 @@ def validate_settings(locals: Mapping[str, Any]) -> None:
 
     for cluster in locals["CLUSTERS"]:
         for cluster_storage_set in cluster["storage_sets"]:
-            try:
+            # We allow definition of storage_sets in configuration files
+            # that are not defined in StorageSetKey.
+            with contextlib.suppress(ValueError):
                 storage_set_to_cluster[StorageSetKey(cluster_storage_set)] = cluster
-            except ValueError:
-                # We allow definition of storage_sets in configuration files
-                # that are not defined in StorageSetKey.
-                pass
 
 
 def validate_slicing_settings(locals: Mapping[str, Any]) -> None:

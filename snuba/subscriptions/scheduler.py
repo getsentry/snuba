@@ -1,25 +1,17 @@
 import math
 from abc import ABC, abstractmethod
+from collections.abc import Iterator, Mapping, MutableMapping, MutableSequence, Sequence
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import (
-    Iterator,
-    List,
-    Mapping,
-    MutableMapping,
-    MutableSequence,
-    Optional,
-    Sequence,
-    Tuple,
-)
 
-from snuba import settings, state
+from snuba import settings
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.slicing import (
     map_logical_partition_to_slice,
     map_org_id_to_logical_partition,
 )
+from snuba.state.sentry_options import get_option
 from snuba.subscriptions.data import (
     PartitionId,
     ScheduledSubscriptionTask,
@@ -45,11 +37,11 @@ class TaskBuilder(ABC):
     @abstractmethod
     def get_task(
         self, subscription_with_metadata: SubscriptionWithMetadata, timestamp: int
-    ) -> Optional[ScheduledSubscriptionTask]:
+    ) -> ScheduledSubscriptionTask | None:
         raise NotImplementedError
 
     @abstractmethod
-    def reset_metrics(self) -> Sequence[Tuple[str, int, Tags]]:
+    def reset_metrics(self) -> Sequence[tuple[str, int, Tags]]:
         raise NotImplementedError
 
 
@@ -63,7 +55,7 @@ class ImmediateTaskBuilder(TaskBuilder):
 
     def get_task(
         self, subscription_with_metadata: SubscriptionWithMetadata, timestamp: int
-    ) -> Optional[ScheduledSubscriptionTask]:
+    ) -> ScheduledSubscriptionTask | None:
         subscription = subscription_with_metadata.subscription
 
         resolution = subscription.data.resolution_sec
@@ -73,11 +65,10 @@ class ImmediateTaskBuilder(TaskBuilder):
                 datetime.utcfromtimestamp(timestamp),
                 subscription_with_metadata,
             )
-        else:
-            return None
+        return None
 
-    def reset_metrics(self) -> Sequence[Tuple[str, int, Tags]]:
-        metrics: Sequence[Tuple[str, int, Tags]] = [("tasks.built", self.__count, {})]
+    def reset_metrics(self) -> Sequence[tuple[str, int, Tags]]:
+        metrics: Sequence[tuple[str, int, Tags]] = [("tasks.built", self.__count, {})]
         self.__count = 0
         return metrics
 
@@ -111,7 +102,7 @@ class JitteredTaskBuilder(TaskBuilder):
 
     def get_task(
         self, subscription_with_metadata: SubscriptionWithMetadata, timestamp: int
-    ) -> Optional[ScheduledSubscriptionTask]:
+    ) -> ScheduledSubscriptionTask | None:
         subscription = subscription_with_metadata.subscription
 
         resolution = subscription.data.resolution_sec
@@ -124,8 +115,7 @@ class JitteredTaskBuilder(TaskBuilder):
                     datetime.utcfromtimestamp(timestamp),
                     subscription_with_metadata,
                 )
-            else:
-                return None
+            return None
 
         jitter = subscription.identifier.uuid.int % resolution
         if timestamp % resolution == jitter:
@@ -134,11 +124,10 @@ class JitteredTaskBuilder(TaskBuilder):
                 datetime.utcfromtimestamp(timestamp - jitter),
                 subscription_with_metadata,
             )
-        else:
-            return None
+        return None
 
-    def reset_metrics(self) -> Sequence[Tuple[str, int, Tags]]:
-        metrics: Sequence[Tuple[str, int, Tags]] = [
+    def reset_metrics(self) -> Sequence[tuple[str, int, Tags]]:
+        metrics: Sequence[tuple[str, int, Tags]] = [
             ("tasks.built", self.__count, {}),
             ("tasks.above.resolution", self.__count_max_resolution, {}),
         ]
@@ -161,7 +150,7 @@ class TaskBuilderModeState:
     There are two final mode: immediate and jittered that correspond to
     two different implementations of the TaskBuilder.
 
-    The current mode is defined as runtime configuration, though we do
+    The current mode is defined as a sentry-option, though we do
     not want to transition from one mode to the other at any timestamp.
     We want for transitions to happen only at timestamps that are
     multiple of the subscription resolution.
@@ -192,7 +181,7 @@ class TaskBuilderModeState:
 
     def get_current_mode(self, subscription: Subscription, timestamp: int) -> TaskBuilderMode:
         general_mode = TaskBuilderMode(
-            state.get_config("subscription_primary_task_builder", TaskBuilderMode.JITTERED)
+            get_option("subscription_primary_task_builder", TaskBuilderMode.JITTERED.value)
         )
 
         if general_mode == TaskBuilderMode.IMMEDIATE or general_mode == TaskBuilderMode.JITTERED:
@@ -235,17 +224,16 @@ class DelegateTaskBuilder(TaskBuilder):
 
     def get_task(
         self, subscription_with_metadata: SubscriptionWithMetadata, timestamp: int
-    ) -> Optional[ScheduledSubscriptionTask]:
+    ) -> ScheduledSubscriptionTask | None:
         subscription = subscription_with_metadata.subscription
 
         primary_builder = self.__rollout_state.get_current_mode(subscription, timestamp)
 
         if primary_builder == TaskBuilderMode.JITTERED:
             return self.__jittered_builder.get_task(subscription_with_metadata, timestamp)
-        else:
-            return self.__immediate_builder.get_task(subscription_with_metadata, timestamp)
+        return self.__immediate_builder.get_task(subscription_with_metadata, timestamp)
 
-    def reset_metrics(self) -> Sequence[Tuple[str, int, Tags]]:
+    def reset_metrics(self) -> Sequence[tuple[str, int, Tags]]:
         def add_tag(tags: Tags, builder_type: str) -> Tags:
             return {
                 **tags,
@@ -271,7 +259,7 @@ def filter_subscriptions(
     subscriptions: MutableSequence[Subscription],
     entity_key: EntityKey,
     metrics: MetricsBackend,
-    slice_id: Optional[int] = None,
+    slice_id: int | None = None,
 ) -> MutableSequence[Subscription]:
     filtered_subscriptions: MutableSequence[Subscription] = []
 
@@ -312,7 +300,7 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
         partition_id: PartitionId,
         cache_ttl: timedelta,
         metrics: MetricsBackend,
-        slice_id: Optional[int] = None,
+        slice_id: int | None = None,
     ) -> None:
         self.__entity_key = entity_key
         self.__slice_id = slice_id
@@ -321,8 +309,8 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
         self.__partition_id = partition_id
         self.__metrics = metrics
 
-        self.__subscriptions: List[Subscription] = []
-        self.__last_refresh: Optional[datetime] = None
+        self.__subscriptions: list[Subscription] = []
+        self.__last_refresh: datetime | None = None
 
         self.__delegate_builder = DelegateTaskBuilder()
         self.__jittered_builder = JitteredTaskBuilder()
@@ -337,7 +325,7 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
         This function is called for every tick.
         """
         general_mode = TaskBuilderMode(
-            state.get_config("subscription_primary_task_builder", TaskBuilderMode.JITTERED)
+            get_option("subscription_primary_task_builder", TaskBuilderMode.JITTERED.value)
         )
         if general_mode == TaskBuilderMode.JITTERED:
             self.__builder: TaskBuilder = self.__jittered_builder
@@ -372,8 +360,7 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
             return filter_subscriptions(
                 self.__subscriptions, self.__entity_key, self.__metrics, self.__slice_id
             )
-        else:
-            return self.__subscriptions
+        return self.__subscriptions
 
     def find(self, tick: Tick) -> Iterator[ScheduledSubscriptionTask]:
         self.__reset_builder()

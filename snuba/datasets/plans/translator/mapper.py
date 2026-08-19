@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Generic, Optional, Sequence, TypeVar
+from collections.abc import Sequence
+from typing import Generic, TypeVar
 
 TExpIn = TypeVar("TExpIn")
 TExpOut = TypeVar("TExpOut")
@@ -28,7 +29,7 @@ class ExpressionMapper(
         self,
         expression: TExpIn,
         children_translator: TTranslator,
-    ) -> Optional[TExpOut]:
+    ) -> TExpOut | None:
         """
         Maps an expression if this rule matches such expression. If not, it returns None.
         """

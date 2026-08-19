@@ -10,6 +10,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Job names stay build-amd64 / build-arm64 so craft's status contexts
+  # do not need to change.
   build-multiplatform:
     strategy:
       matrix:
@@ -25,17 +27,20 @@ jobs:
       packages: write
     if: github.repository_owner == 'getsentry'
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
     - uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
       with:
         image_name: 'snuba'
         platforms: linux/${{ matrix.platform }}
         dockerfile_path: 'Dockerfile'
+        build_target: 'application'
         tag_suffix: -${{ matrix.platform }}
         ghcr: true
         tag_nightly: false
         tag_latest: false
 
+  # Published to Google AR (amd64). gocd deploys and migrations pin
+  # us-docker.pkg.dev/sentryio/snuba-mr/image:<sha>.
   build-production:
     runs-on: ubuntu-24.04
     name: Build and push production image
@@ -44,12 +49,13 @@ jobs:
       id-token: write
     if: ${{ github.ref_name == 'master' }}
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
         with:
           image_name: 'snuba'
           platforms: linux/amd64
           dockerfile_path: './Dockerfile'
+          build_target: 'application'
           ghcr: false
           tag_nightly: false
           tag_latest: false
@@ -58,35 +64,7 @@ jobs:
           google_workload_identity_provider: projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool
           google_service_account: gha-gcr-push@sac-prod-sa.iam.gserviceaccount.com
 
-  # Distroless image — for testing before switching production
-  build-distroless-multiplatform:
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-24.04
-            platform: amd64
-          - os: ubuntu-24.04-arm
-            platform: arm64
-    runs-on: ${{ matrix.os }}
-    name: build-distroless-${{ matrix.platform }}
-    permissions:
-      contents: read
-      packages: write
-    if: github.repository_owner == 'getsentry'
-    steps:
-    - uses: actions/checkout@v6.0.2
-    - uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
-      with:
-        image_name: 'snuba'
-        platforms: linux/${{ matrix.platform }}
-        dockerfile_path: 'Dockerfile'
-        build_target: 'application-distroless'
-        tag_suffix: -distroless-${{ matrix.platform }}
-        ghcr: true
-        tag_nightly: false
-        tag_latest: false
-
-  # Debug distroless image — with busybox for troubleshooting
+  # Debug image — with busybox for troubleshooting
   build-debug-multiplatform:
     strategy:
       matrix:
@@ -102,18 +80,21 @@ jobs:
       packages: write
     if: github.repository_owner == 'getsentry'
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
     - uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
       with:
         image_name: 'snuba'
         platforms: linux/${{ matrix.platform }}
         dockerfile_path: 'Dockerfile'
-        build_target: 'application-distroless-debug'
+        build_target: 'application-debug'
         tag_suffix: -debug-${{ matrix.platform }}
         ghcr: true
         tag_nightly: false
         tag_latest: false
 
+  # Publishes the unsuffixed tags that everyone downstream consumes: self-hosted
+  # (docker compose, the e2e job below) and craft, which retags <sha> into the
+  # versioned release and :latest.
   assemble:
     needs: [build-multiplatform]
     if: ${{ (github.ref_name == 'master' || startsWith(github.ref_name, 'release/')) && github.event_name != 'pull_request' }}
@@ -128,7 +109,7 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
       - name: Create multiplatform manifests
         run: |
@@ -137,30 +118,6 @@ jobs:
             --tag ghcr.io/getsentry/snuba:nightly \
             ghcr.io/getsentry/snuba:${{ github.sha }}-amd64 \
             ghcr.io/getsentry/snuba:${{ github.sha }}-arm64
-
-  assemble-distroless:
-    needs: [build-distroless-multiplatform]
-    if: ${{ (github.ref_name == 'master' || startsWith(github.ref_name, 'release/')) && github.event_name != 'pull_request' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Docker Login
-        run: docker login --username '${{ github.actor }}' --password-stdin ghcr.io <<< "$GHCR_TOKEN"
-        env:
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Create distroless multiplatform manifests
-        run: |
-          docker buildx imagetools create \
-            --tag ghcr.io/getsentry/snuba:${{ github.sha }}-distroless \
-            --tag ghcr.io/getsentry/snuba:nightly-distroless \
-            ghcr.io/getsentry/snuba:${{ github.sha }}-distroless-amd64 \
-            ghcr.io/getsentry/snuba:${{ github.sha }}-distroless-arm64
 
   assemble-debug:
     needs: [build-debug-multiplatform]
@@ -176,7 +133,7 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
       - name: Create debug multiplatform manifests
         run: |
@@ -186,6 +143,8 @@ jobs:
             ghcr.io/getsentry/snuba:${{ github.sha }}-debug-amd64 \
             ghcr.io/getsentry/snuba:${{ github.sha }}-debug-arm64
 
+  # Exercises the unsuffixed <sha> tag against the real self-hosted docker
+  # compose stack before craft can cut a release from it.
   self-hosted-end-to-end:
     needs: [build-multiplatform, assemble]
     runs-on: ubuntu-latest
@@ -197,4 +156,3 @@ jobs:
         with:
           project_name: snuba
           image_url: ghcr.io/getsentry/snuba:${{ github.sha }}
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

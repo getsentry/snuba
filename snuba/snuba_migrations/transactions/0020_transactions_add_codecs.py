@@ -1,4 +1,4 @@
-from typing import Sequence
+from collections.abc import Sequence
 
 from snuba.clickhouse.columns import UUID, Column, UInt
 from snuba.clusters.storage_sets import StorageSetKey
@@ -20,9 +20,7 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.ModifyColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
-                column=Column(
-                    "trace_id", UUID(Modifiers(nullable=True, codecs=["LZ4"]))
-                ),
+                column=Column("trace_id", UUID(Modifiers(nullable=True, codecs=["LZ4"]))),
                 target=operations.OperationTarget.LOCAL,
             ),
             operations.ModifyColumn(

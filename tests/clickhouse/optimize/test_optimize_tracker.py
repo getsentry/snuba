@@ -1,13 +1,12 @@
 import time
 import uuid
 from datetime import datetime, timedelta
-from typing import Optional, Set
 from unittest.mock import call, patch
 
 import pytest
 
 from snuba import settings
-from snuba.clickhouse.native import ClickhousePool, ClickhouseResult
+from snuba.clickhouse.connect import ClickhouseConnectPool
 from snuba.clickhouse.optimize import optimize
 from snuba.clickhouse.optimize.optimize import run_optimize_cron_job
 from snuba.clickhouse.optimize.optimize_tracker import (
@@ -15,6 +14,7 @@ from snuba.clickhouse.optimize.optimize_tracker import (
     OptimizedPartitionTracker,
 )
 from snuba.clickhouse.optimize.util import MergeInfo
+from snuba.clickhouse.pool import ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_writable_storage
@@ -52,9 +52,9 @@ redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
 def test_optimized_partition_tracker(tracker: OptimizedPartitionTracker) -> None:
     def assert_partitions(
         *,
-        all: Optional[Set[str]] = None,
-        completed: Optional[Set[str]] = None,
-        pending: Optional[Set[str]] = None,
+        all: set[str] | None = None,
+        completed: set[str] | None = None,
+        pending: set[str] | None = None,
     ) -> None:
         """
         Assert partition status with sleep + retry. This is needed for when the
@@ -298,10 +298,12 @@ def test_merge_info() -> None:
         ]
     )
 
-    with patch.object(ClickhousePool, "execute") as mock_clickhouse_execute:
+    with patch.object(ClickhouseConnectPool, "execute") as mock_clickhouse_execute:
         mock_clickhouse_execute.return_value = merge_query_result
         merge_info = optimize.get_current_large_merges(
-            clickhouse=ClickhousePool("127.0.0.1", 9000, "user", "password", "database"),
+            clickhouse=ClickhouseConnectPool(
+                "127.0.0.1", "user", "password", "database", port=8123
+            ),
             database="default",
             table="errors_local",
         )
@@ -322,7 +324,9 @@ def test_merge_info() -> None:
 
         assert merge_info[0].estimated_time == 8020.61436897 / (0.9895385071013121 + 0.0001)
         busy = optimize.is_busy_merging(
-            clickhouse=ClickhousePool("127.0.0.1", 9000, "user", "password", "database"),
+            clickhouse=ClickhouseConnectPool(
+                "127.0.0.1", "user", "password", "database", port=8123
+            ),
             database="default",
             table="errors_local",
         )

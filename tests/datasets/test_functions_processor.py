@@ -1,6 +1,7 @@
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, Mapping, Optional, Sequence
+from datetime import UTC, datetime
+from typing import Any
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors.functions_processor import FunctionsMessageProcessor
@@ -14,7 +15,7 @@ class Function:
     package: str
     in_app: bool
     self_times_ns: Sequence[int]
-    thread_id: Optional[str]
+    thread_id: str | None
 
     def serialize(self) -> Mapping[str, Any]:
         return {
@@ -29,19 +30,19 @@ class Function:
 
 @dataclass
 class ProfileFunctionsEvent:
-    environment: Optional[str]
+    environment: str | None
     functions: Sequence[Function]
     platform: str
     profile_id: str
     project_id: int
-    received: Optional[int]
-    release: Optional[str]
+    received: int | None
+    release: str | None
     retention_days: int
     timestamp: int
     transaction_name: str
-    start_timestamp: Optional[float]
-    end_timestamp: Optional[float]
-    profiling_type: Optional[str]
+    start_timestamp: float | None
+    end_timestamp: float | None
+    profiling_type: str | None
 
     def serialize(self) -> Mapping[str, Any]:
         return {
@@ -65,7 +66,7 @@ class TestFunctionsProcessor:
     def test_process_message_functions(self) -> None:
         meta = KafkaMessageMetadata(offset=1, partition=2, timestamp=datetime(1970, 1, 1))
 
-        now = int(datetime.now(timezone.utc).timestamp())
+        now = int(datetime.now(UTC).timestamp())
         message = ProfileFunctionsEvent(
             environment="prod",
             functions=[

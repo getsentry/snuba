@@ -1,14 +1,12 @@
-from datetime import datetime, timezone
-from typing import Any, Iterable, Mapping, Optional, Sequence, Tuple
+from collections.abc import Mapping, Sequence
+from datetime import UTC, datetime
+from typing import Any
 from unittest.mock import ANY
 
 import pytest
 
 from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.processors.generic_metrics_processor import (
-    GenericSetsMetricsProcessor,
-)
 from snuba.datasets.processors.metrics_bucket_processor import (
     PolymorphicMetricsProcessor,
 )
@@ -16,12 +14,12 @@ from snuba.processor import InsertBatch
 
 MATERIALIZATION_VERSION = 4
 
-timestamp = int(datetime.now(timezone.utc).timestamp())
+timestamp = int(datetime.now(UTC).timestamp())
 # expects that test is run in utc local time
 intermediate_timestamp = datetime.utcfromtimestamp(timestamp)
-expected_timestamp = int(intermediate_timestamp.replace(tzinfo=timezone.utc).timestamp())
+expected_timestamp = int(intermediate_timestamp.replace(tzinfo=UTC).timestamp())
 
-sentry_received_timestamp = datetime.now(timezone.utc).timestamp()
+sentry_received_timestamp = datetime.now(UTC).timestamp()
 expected_sentry_received_timestamp = datetime.utcfromtimestamp(sentry_received_timestamp)
 
 MAPPING_META_COMMON = {
@@ -33,14 +31,6 @@ MAPPING_META_COMMON = {
         "30": "tag-3",
     },
     "d": {"33": "value-3"},
-}
-
-MAPPING_META_TAG_VALUES_STRINGS = {
-    "c": {
-        "10": "tag-1",
-        "20": "tag-2",
-        "30": "tag-3",
-    },
 }
 
 SET_MESSAGE_SHARED = {
@@ -55,22 +45,6 @@ SET_MESSAGE_SHARED = {
     # test enforce retention days of 30
     "retention_days": 22,
     "mapping_meta": MAPPING_META_COMMON,
-    "sentry_received_timestamp": sentry_received_timestamp,
-}
-
-SET_MESSAGE_TAG_VALUES_STRINGS = {
-    "version": 2,
-    "use_case_id": "sessions",
-    "org_id": 1,
-    "project_id": 2,
-    "metric_id": 1232341,
-    "type": "s",
-    "timestamp": timestamp,
-    "tags": {"10": "value-1", "20": "value-2", "30": "value-3"},
-    "value": [324234, 345345, 456456, 567567],
-    # test enforce retention days of 30
-    "retention_days": 22,
-    "mapping_meta": MAPPING_META_TAG_VALUES_STRINGS,
     "sentry_received_timestamp": sentry_received_timestamp,
 }
 
@@ -187,7 +161,7 @@ TEST_CASES_POLYMORPHIC = [
 )
 def test_metrics_polymorphic_processor(
     message: Mapping[str, Any],
-    expected_output: Optional[Sequence[Mapping[str, Any]]],
+    expected_output: Sequence[Mapping[str, Any]] | None,
 ) -> None:
     settings.DISABLED_DATASETS = set()
 
@@ -195,50 +169,3 @@ def test_metrics_polymorphic_processor(
     output = PolymorphicMetricsProcessor().process_message(message, meta)
     assert isinstance(output, InsertBatch)
     assert output.rows == expected_output
-
-
-@pytest.mark.parametrize(
-    "message, expected_output",
-    [
-        pytest.param(
-            SET_MESSAGE_TAG_VALUES_STRINGS,
-            [
-                {
-                    "use_case_id": "sessions",
-                    "org_id": 1,
-                    "project_id": 2,
-                    "metric_id": 1232341,
-                    "timestamp": timestamp,
-                    "tags.key": [10, 20, 30],
-                    "tags.indexed_value": [0, 0, 0],
-                    "tags.raw_value": ["value-1", "value-2", "value-3"],
-                    "metric_type": "set",
-                    "set_values": [324234, 345345, 456456, 567567],
-                    "materialization_version": 2,
-                    "timeseries_id": 3019115090,
-                    "retention_days": 30,
-                    "granularities": [1, 2, 3],
-                    "min_retention_days": 30,
-                    "record_meta": 1,
-                }
-            ],
-            id="all tag values strings",
-        ),
-    ],
-)
-def test_generic_metrics_sets_processor(
-    message: Mapping[str, Any], expected_output: Optional[Sequence[Mapping[str, Any]]]
-) -> None:
-    meta = KafkaMessageMetadata(offset=100, partition=1, timestamp=datetime(1970, 1, 1))
-
-    expected_polymorphic_result = (
-        InsertBatch(expected_output, None, ANY) if expected_output is not None else None
-    )
-    assert (
-        GenericSetsMetricsProcessor().process_message(message, meta) == expected_polymorphic_result
-    )
-
-
-def sorted_tag_items(message: Mapping[str, Any]) -> Iterable[Tuple[str, int]]:
-    tags = message["tags"]
-    return sorted(tags.items())

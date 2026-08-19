@@ -23,8 +23,8 @@ def _cond_agg(function_name: str, condition: FunctionCall) -> FunctionCall:
 
 optimizer = FilterInSelectOptimizer()
 from_entity = Entity(
-    EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+    EntityKey.GENERIC_METRICS_COUNTERS,
+    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
 )
 settings = HTTPQuerySettings()
 

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from concurrent.futures import Future, wait
 from threading import Barrier, Thread
-from typing import Any, Callable
+from typing import Any
 
 import pytest
 

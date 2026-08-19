@@ -11,7 +11,7 @@ class ClickhouseError(SerializableException):
         if "Stack trace:" in message:
             msg = message.split("Stack trace:")[0].strip()
 
-        return 'Code: {}. {}"'.format(self.code, msg)
+        return f'Code: {self.code}. {msg}"'
 
     @property
     def code(self) -> int:

@@ -1,18 +1,13 @@
 use std::cmp::min;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use chrono::{DateTime, Utc};
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::timer;
 use sentry_protos::snuba::v1::TraceItemType;
 use serde::{Deserialize, Serialize};
-
-/// Trait for row types that can estimate their in-memory byte size.
-/// Used by byte-based batch size calculation in the Reduce step.
-pub trait EstimatedSize {
-    fn estimated_size(&self) -> usize;
-}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CommitLogEntry {
@@ -56,7 +51,7 @@ impl CogsData {
 }
 
 /// Returns the friendly name for a TraceItemType, e.g. "span" instead of "TRACE_ITEM_TYPE_SPAN".
-fn item_type_name(item_type: TraceItemType) -> String {
+pub fn item_type_name(item_type: TraceItemType) -> String {
     item_type
         .as_str_name()
         .strip_prefix("TRACE_ITEM_TYPE_")
@@ -152,18 +147,18 @@ impl LatencyRecorder {
         (write_time as f64 - (self.sum_timestamps / self.num_values as f64)) as u64
     }
 
-    fn send_metric(&self, write_time: DateTime<Utc>, metric_name: &str) {
+    fn send_metric(&self, write_time: DateTime<Utc>, metric_name: &str, metric_prefix: &str) {
         if self.num_values == 0 {
             return;
         }
 
         timer!(
-            format_args!("insertions.max_{}_ms", metric_name),
+            format_args!("{}.max_{}_ms", metric_prefix, metric_name),
             self.max_value_ms(write_time)
         );
 
         timer!(
-            format_args!("insertions.{}_ms", metric_name),
+            format_args!("{}.{}_ms", metric_prefix, metric_name),
             self.avg_value_ms(write_time),
         );
     }
@@ -223,6 +218,27 @@ impl InsertBatch {
             cogs_data: None,
             item_type_metrics: None,
         })
+    }
+
+    /// Constructor for processors that have already serialized their rows into
+    /// the wire format (e.g. the RowBinary path encodes each `EAPItemRow`
+    /// inside the processor instead of carrying the typed struct downstream).
+    /// `num_rows` is the count those bytes represent.
+    pub fn from_encoded_rows(
+        encoded_rows: Vec<u8>,
+        num_rows: usize,
+        origin_timestamp: Option<DateTime<Utc>>,
+    ) -> Self {
+        Self {
+            rows: RowData {
+                encoded_rows,
+                num_rows,
+            },
+            origin_timestamp,
+            sentry_received_timestamp: None,
+            cogs_data: None,
+            item_type_metrics: None,
+        }
     }
 
     /// In case the processing function wants to skip the message, we return an empty batch.
@@ -403,11 +419,15 @@ impl<R> BytesInsertBatch<R> {
     pub fn record_message_latency(&self) {
         let write_time = Utc::now();
 
-        self.message_timestamp.send_metric(write_time, "latency");
+        self.message_timestamp
+            .send_metric(write_time, "latency", "insertions");
         self.origin_timestamp
-            .send_metric(write_time, "end_to_end_latency");
-        self.sentry_received_timestamp
-            .send_metric(write_time, "sentry_received_latency");
+            .send_metric(write_time, "end_to_end_latency", "insertions");
+        self.sentry_received_timestamp.send_metric(
+            write_time,
+            "sentry_received_latency",
+            "insertions",
+        );
     }
 
     pub fn emit_item_type_metrics(&self) {
@@ -448,48 +468,6 @@ impl BytesInsertBatch<RowData> {
         self.cogs_data.merge(other.cogs_data);
         self.item_type_metrics.merge(other.item_type_metrics);
         self
-    }
-}
-
-impl<T> BytesInsertBatch<Vec<T>> {
-    pub fn len(&self) -> usize {
-        self.rows.len()
-    }
-
-    pub fn merge(mut self, other: Self) -> Self {
-        self.rows.extend(other.rows);
-        self.num_bytes += other.num_bytes;
-        self.commit_log_offsets.merge(other.commit_log_offsets);
-        self.message_timestamp.merge(other.message_timestamp);
-        self.origin_timestamp.merge(other.origin_timestamp);
-        self.sentry_received_timestamp
-            .merge(other.sentry_received_timestamp);
-        self.cogs_data.merge(other.cogs_data);
-        self.item_type_metrics.merge(other.item_type_metrics);
-        self
-    }
-}
-
-/// The return value of message processors that produce typed rows for RowBinary insertion.
-/// A single Kafka message may produce multiple rows, hence Vec<T>.
-#[derive(Clone, Debug)]
-pub struct TypedInsertBatch<T> {
-    pub rows: Vec<T>,
-    pub origin_timestamp: Option<DateTime<Utc>>,
-    pub sentry_received_timestamp: Option<DateTime<Utc>>,
-    pub cogs_data: Option<CogsData>,
-    pub item_type_metrics: Option<ItemTypeMetrics>,
-}
-
-impl<T> TypedInsertBatch<T> {
-    pub fn from_rows(rows: Vec<T>, origin_timestamp: Option<DateTime<Utc>>) -> Self {
-        Self {
-            rows,
-            origin_timestamp,
-            sentry_received_timestamp: None,
-            cogs_data: None,
-            item_type_metrics: None,
-        }
     }
 }
 
@@ -617,6 +595,19 @@ pub struct TrackOutcome {
     pub quantity: u64,
 }
 
+/// Key used to deduplicate items within an outcomes batch.
+/// Uses the relevant fields from the eap_items table sorting key:
+/// (organization_id, project_id, item_type, timestamp, trace_id, item_id)
+/// Note: item_type is handled separately via the HashMap in seen_items.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ItemDedupKey {
+    pub org_id: u64,
+    pub project_id: u64,
+    pub timestamp: u32,
+    pub trace_id: [u8; 16],
+    pub item_id: [u8; 16],
+}
+
 /// Key used to bucket accepted outcomes by time slot, organization, project, key, and data category.
 /// Outcome type is omitted because this consumer only processes accepted outcomes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -659,6 +650,12 @@ pub struct AggregatedOutcomesBatch {
     pub bucket_interval: u64,
     /// Per-category metrics for the current batch
     pub category_metrics: BTreeMap<u32, CategoryMetrics>,
+    /// Set of items already processed in this batch, used for deduplication, keyed by item type
+    pub seen_items: HashMap<TraceItemType, HashSet<ItemDedupKey>>,
+    /// Count of items skipped due to deduplication within this batch, keyed by item type
+    pub duplicate_item_count: HashMap<TraceItemType, u64>,
+    /// Uses the timestamp the message was added to snuba-items topic
+    broker_timestamp: LatencyRecorder,
 }
 
 impl Default for AggregatedOutcomesBatch {
@@ -667,6 +664,9 @@ impl Default for AggregatedOutcomesBatch {
             buckets: HashMap::new(),
             bucket_interval: 60,
             category_metrics: BTreeMap::new(),
+            seen_items: HashMap::new(),
+            duplicate_item_count: HashMap::new(),
+            broker_timestamp: LatencyRecorder::default(),
         }
     }
 }
@@ -678,6 +678,14 @@ impl AggregatedOutcomesBatch {
             bucket_interval,
             ..Default::default()
         }
+    }
+
+    pub fn record_if_duplicate(&mut self, item_type: TraceItemType, key: ItemDedupKey) -> bool {
+        let is_dup = !self.seen_items.entry(item_type).or_default().insert(key);
+        if is_dup {
+            *self.duplicate_item_count.entry(item_type).or_insert(0) += 1;
+        }
+        is_dup
     }
 
     /// Add or update a bucket with a count and quantity, updating per-category metrics
@@ -700,5 +708,18 @@ impl AggregatedOutcomesBatch {
     /// Get the total number of buckets
     pub fn num_buckets(&self) -> usize {
         self.buckets.len()
+    }
+
+    /// Merge a single broker timestamp into the batch's running latency recorder.
+    pub fn add_broker_timestamp(&mut self, timestamp: DateTime<Utc>) {
+        self.broker_timestamp
+            .merge(LatencyRecorder::from(timestamp));
+    }
+
+    /// Emit broker-latency timers (avg + max) under `accepted_outcomes.{metric_name}_ms` and
+    /// `accepted_outcomes.max_{metric_name}_ms`. Mirrors `BytesInsertBatch::record_message_latency`.
+    pub fn record_message_latency(&self, metric_name: &str) {
+        self.broker_timestamp
+            .send_metric(Utc::now(), metric_name, "accepted_outcomes");
     }
 }

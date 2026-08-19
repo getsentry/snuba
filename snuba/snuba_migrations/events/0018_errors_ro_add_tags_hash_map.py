@@ -1,4 +1,4 @@
-from typing import Sequence
+from collections.abc import Sequence
 
 from snuba.clickhouse.columns import UUID, Array, Column, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
@@ -32,9 +32,7 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.ModifyColumn(
                 storage_set=StorageSetKey.EVENTS_RO,
                 table_name="errors_dist_ro",
-                column=Column(
-                    "level", String(Modifiers(low_cardinality=True, nullable=True))
-                ),
+                column=Column("level", String(Modifiers(low_cardinality=True, nullable=True))),
                 target=operations.OperationTarget.DISTRIBUTED,
             ),
         ]

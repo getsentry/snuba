@@ -1,4 +1,4 @@
-from typing import Iterator, Sequence, Tuple
+from collections.abc import Iterator, Sequence
 
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.columns import MigrationModifiers as Modifiers
@@ -11,7 +11,7 @@ from snuba.migrations.operations import (
 )
 from snuba.utils.schemas import Column, String
 
-new_columns: Sequence[Tuple[Column[Modifiers], str]] = [
+new_columns: Sequence[tuple[Column[Modifiers], str]] = [
     (Column("tap_message", String()), "click_is_rage"),
     (Column("tap_view_class", String()), "tap_message"),
     (Column("tap_view_id", String()), "tap_view_class"),

@@ -3,11 +3,13 @@ from __future__ import annotations
 import random
 import textwrap
 import uuid
-from typing import Any, Dict, MutableMapping, Optional, Protocol, Type, Union
+from collections.abc import MutableMapping
+from typing import Any, Protocol
 
 import sentry_sdk
+from sentry_sdk import traces
 
-from snuba import environment, settings, state
+from snuba import environment, settings
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
@@ -30,8 +32,10 @@ from snuba.querylog.query_metadata import get_request_status
 from snuba.request import Request
 from snuba.request.exceptions import InvalidJsonRequestException
 from snuba.request.schema import RequestParts, RequestSchema
+from snuba.state.sentry_options import get_mapped_option, get_option
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.sentry import SENTRY_OP, set_tag_and_attribute
 
 metrics = MetricsWrapper(environment.metrics, "snuba.validation")
 
@@ -42,16 +46,16 @@ class Parser(Protocol):
         request_parts: RequestParts,
         settings: QuerySettings,
         dataset: Dataset,
-        custom_processing: Optional[CustomProcessors] = ...,
-    ) -> Union[Query, CompositeQuery[LogicalDataSource]]: ...
+        custom_processing: CustomProcessors | None = ...,
+    ) -> Query | CompositeQuery[LogicalDataSource]: ...
 
 
 def parse_snql_query(
     request_parts: RequestParts,
     settings: QuerySettings,
     dataset: Dataset,
-    custom_processing: Optional[CustomProcessors] = None,
-) -> Union[Query, CompositeQuery[LogicalDataSource]]:
+    custom_processing: CustomProcessors | None = None,
+) -> Query | CompositeQuery[LogicalDataSource]:
     return _parse_snql_query(request_parts.query["query"], dataset, custom_processing, settings)
 
 
@@ -59,8 +63,8 @@ def parse_mql_query(
     request_parts: RequestParts,
     settings: QuerySettings,
     dataset: Dataset,
-    custom_processing: Optional[CustomProcessors] = None,
-) -> Union[Query, CompositeQuery[LogicalDataSource]]:
+    custom_processing: CustomProcessors | None = None,
+) -> Query | CompositeQuery[LogicalDataSource]:
     return _parse_mql_query(
         request_parts.query["query"],
         request_parts.query["mql_context"],
@@ -71,20 +75,19 @@ def parse_mql_query(
 
 
 def _consistent_override(original_setting: bool, referrer: str) -> bool:
-    consistent_config = state.get_config("consistent_override", None)
-    if isinstance(consistent_config, str):
+    consistent_config = get_option("consistent_override", "")
+    if consistent_config:
         referrers_override = consistent_config.split(";")
         for config in referrers_override:
             referrer_config, percentage = config.split("=")
-            if referrer_config == referrer:
-                if random.random() > float(percentage):
-                    return False
+            if referrer_config == referrer and random.random() > float(percentage):
+                return False
 
     return original_setting
 
 
 def update_attribution_info(
-    request_parts: RequestParts, referrer: str, query_project_id: Optional[int]
+    request_parts: RequestParts, referrer: str, query_project_id: int | None
 ) -> dict[str, Any]:
     attribution_info = dict(request_parts.attribution_info)
 
@@ -99,20 +102,21 @@ def update_attribution_info(
 
 
 def build_request(
-    body: Dict[str, Any],
+    body: dict[str, Any],
     parser: Parser,
-    settings_class: Union[Type[HTTPQuerySettings], Type[SubscriptionQuerySettings]],
+    settings_class: type[HTTPQuerySettings] | type[SubscriptionQuerySettings],
     schema: RequestSchema,
     dataset: Dataset,
     timer: Timer,
     referrer: str,
-    custom_processing: Optional[CustomProcessors] = None,
+    custom_processing: CustomProcessors | None = None,
 ) -> Request:
-    with sentry_sdk.start_span(description="build_request", op="validate") as span:
+    with traces.start_span(name="build_request", attributes={SENTRY_OP: "validate"}) as span:
         try:
             dataset_name = get_dataset_name(dataset)
-            if state.get_config(
-                f"snql_disabled_dataset__{dataset_name}",
+            if get_mapped_option(
+                "snql_disabled_dataset",
+                dataset_name,
                 dataset_name in settings.SNQL_DISABLED_DATASETS,
             ):
                 raise InvalidQueryException(f"snql is disabled for dataset {dataset}")
@@ -149,11 +153,11 @@ def build_request(
             )
             raise exception
 
-        span.set_data(
+        span.set_attribute(
             "snuba_query_parsed",
             repr(query).split("\n"),
         )
-        span.set_data(
+        span.set_attribute(
             "snuba_query_raw",
             textwrap.wrap(repr(request.original_body), 100, break_long_words=False),
         )
@@ -189,7 +193,7 @@ def _get_referrer(request_parts: RequestParts, referrer: str) -> str:
 
 
 def _get_settings_object(
-    settings_class: Type[HTTPQuerySettings] | Type[SubscriptionQuerySettings],
+    settings_class: type[HTTPQuerySettings] | type[SubscriptionQuerySettings],
     request_parts: RequestParts,
     referrer: str,
 ) -> HTTPQuerySettings | SubscriptionQuerySettings:
@@ -203,12 +207,12 @@ def _get_settings_object(
         # TODO: referrer probably doesn't need to be passed in, it should be from the body
         query_settings["referrer"] = referrer
         # the parameters accept either `str` or `bool` but we pass in `str | bool`
-        return settings_class(**query_settings)  # type: ignore
-    elif settings_class == SubscriptionQuerySettings:
+        return settings_class(**query_settings)  # type: ignore[arg-type]
+    if settings_class == SubscriptionQuerySettings:
         return settings_class(
             consistent=_consistent_override(True, referrer),
         )
-    return None  # type: ignore
+    return None  # type: ignore[return-value]
 
 
 def _get_project_id(query: Query | CompositeQuery[LogicalDataSource]) -> int | None:
@@ -233,11 +237,11 @@ def _build_request(
 ) -> Request:
     org_ids = get_object_ids_in_query_ast(query, "org_id")
     if org_ids is not None and len(org_ids) == 1:
-        sentry_sdk.set_tag("snuba_org_id", org_ids.pop())
+        set_tag_and_attribute("snuba_org_id", org_ids.pop())
 
     query_project_id = _get_project_id(query)
     if query_project_id:
-        sentry_sdk.set_tag("snuba_project_id", query_project_id)
+        set_tag_and_attribute("snuba_project_id", query_project_id)
 
     attribution_info = _get_attribution_info(request_parts, referrer, query_project_id)
 

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Tuple, Union, cast
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from typing import Any, cast
 
 import pytest
 import simplejson as json
@@ -34,7 +35,7 @@ RETENTION_DAYS = 90
 
 def utc_yesterday_12_15() -> datetime:
     return (datetime.utcnow() - timedelta(days=1)).replace(
-        hour=12, minute=15, second=0, microsecond=0, tzinfo=timezone.utc
+        hour=12, minute=15, second=0, microsecond=0, tzinfo=UTC
     )
 
 
@@ -65,7 +66,7 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
         return self.app
 
     @pytest.fixture
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
+    def test_entity(self) -> str | tuple[str, str]:
         return "generic_metrics_counters"
 
     @pytest.fixture
@@ -320,7 +321,7 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
         rows = data["data"]
         assert len(rows) == 1, rows
         assert rows[0] == {
-            "tags.key": [int(k) for k in SHARED_TAGS.keys()],
+            "tags.key": [int(k) for k in SHARED_TAGS],
             "tags.raw_value": ["t1", "200"],
         }
 
@@ -358,7 +359,7 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
 @pytest.mark.redis_db
 class TestMetricsSdkApiCounters(TestGenericMetricsSdkApiCounters):
     @pytest.fixture
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
+    def test_entity(self) -> str | tuple[str, str]:
         return "metrics_counters"
 
     @pytest.fixture

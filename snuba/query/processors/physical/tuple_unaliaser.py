@@ -9,7 +9,6 @@ from snuba.query.expressions import (
     Expression,
     ExpressionVisitor,
     FunctionCall,
-    JsonPath,
     Lambda,
     Literal,
     SubscriptableReference,
@@ -43,9 +42,14 @@ class _TupleUnaliasVisitor(ExpressionVisitor[Expression]):
     def visit_curried_function_call(self, exp: CurriedFunctionCall) -> Expression:
         self.__level += 1
         transfomed_params = tuple([param.accept(self) for param in exp.parameters])
+        internal_function = exp.internal_function.accept(self)
+        assert isinstance(internal_function, FunctionCall), (
+            "The internal function of a curried function call cannot be resolved "
+            "to anything other than a function call"
+        )
         res = replace(
             exp,
-            internal_function=exp.internal_function.accept(self),
+            internal_function=internal_function,
             parameters=transfomed_params,
         )
         self.__level -= 1
@@ -62,9 +66,6 @@ class _TupleUnaliasVisitor(ExpressionVisitor[Expression]):
 
     def visit_dangerous_raw_sql(self, exp: DangerousRawSQL) -> Expression:
         return exp
-
-    def visit_json_path(self, exp: JsonPath) -> Expression:
-        return replace(exp, base=exp.base.accept(self))
 
 
 class TupleUnaliaser(ClickhouseQueryProcessor):

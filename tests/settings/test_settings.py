@@ -1,6 +1,6 @@
 import importlib
 from copy import deepcopy
-from typing import Any, Dict
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -15,7 +15,7 @@ from snuba.settings.validation import (
 from snuba.utils.streams.topics import Topic
 
 
-def build_settings_dict() -> Dict[str, Any]:
+def build_settings_dict() -> dict[str, Any]:
     # Build a dictionary with all variables defined in settings.
     all_settings = {
         key: value
@@ -34,7 +34,7 @@ def test_invalid_storage() -> None:
     try:
         validate_settings(all_settings)
     except Exception as exc:
-        assert False, f"'validate_settings' raised an exception {exc}"
+        raise AssertionError(f"'validate_settings' raised an exception {exc}") from exc
     finally:
         cluster[0]["storage_sets"].remove("non_existing_storage")
 

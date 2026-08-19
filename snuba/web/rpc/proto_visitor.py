@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from types import MethodType
-from typing import Any, Callable, Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
@@ -20,6 +21,8 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeAggregation
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
+
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 Tin = TypeVar("Tin", bound=ProtobufMessage)
 
@@ -49,7 +52,7 @@ class ColumnWrapper(ProtoWrapper[Column]):
                     ColumnWrapper(conditional.condition.right).accept(visitor)
             # Note: 'match' is a Python keyword, so use getattr
             if conditional.HasField("match"):
-                ColumnWrapper(getattr(conditional, "match")).accept(visitor)
+                ColumnWrapper(conditional.match).accept(visitor)
             if conditional.HasField("default"):
                 ColumnWrapper(conditional.default).accept(visitor)
 
@@ -57,6 +60,10 @@ class ColumnWrapper(ProtoWrapper[Column]):
 class AggregationComparisonFilterWrapper(ProtoWrapper[AggregationComparisonFilter]):
     def accept(self, visitor: ProtoVisitor) -> None:
         visitor.visit_AggregationComparisonFilterWrapper(self)
+        comparison_filter = self.underlying_proto
+        if comparison_filter.HasField("formula"):
+            ColumnWrapper(comparison_filter.formula.left).accept(visitor)
+            ColumnWrapper(comparison_filter.formula.right).accept(visitor)
 
 
 class AggregationFilterWrapper(ProtoWrapper[AggregationFilter]):
@@ -116,7 +123,7 @@ class TraceItemFilterWrapper(ProtoWrapper[TraceItemFilter]):
                 TraceItemFilterWrapper(f).accept(visitor)
 
 
-class ProtoVisitor(ABC):
+class ProtoVisitor(ABC):  # noqa: B024 dynamic visit dispatch via __getattr__; ABC marks it non-instantiable by design
     """
     Proto visitor design is split into two parts:
     1. the visitor. Responsible for only executing work on the object it is visiting
@@ -164,17 +171,35 @@ class ProtoVisitor(ABC):
 def _convert_aggregation_to_conditional_aggregation(
     input: Column | AggregationComparisonFilter | TimeSeriesExpression,
 ) -> None:
-    if input.HasField("aggregation"):
-        aggregation = input.aggregation
-        input.ClearField("aggregation")
-        input.conditional_aggregation.CopyFrom(
-            AttributeConditionalAggregation(
-                aggregate=aggregation.aggregate,
-                key=aggregation.key,
-                label=aggregation.label,
-                extrapolation_mode=aggregation.extrapolation_mode,
+    if not input.HasField("aggregation"):
+        return
+
+    input_agg = input.aggregation
+    input.ClearField("aggregation")
+
+    conditional_aggregation = AttributeConditionalAggregation(
+        aggregate=input_agg.aggregate,
+        key=input_agg.key,
+        label=input_agg.label,
+        extrapolation_mode=input_agg.extrapolation_mode,
+    )
+
+    if input_agg.HasField("ranked_by"):
+        conditional_aggregation.ranked_by.CopyFrom(input_agg.ranked_by)
+
+    match input_agg.WhichOneof("default_value"):
+        case None:
+            pass
+        case "default_value_double":
+            conditional_aggregation.default_value_double = input_agg.default_value_double
+        case "default_value_int64":
+            conditional_aggregation.default_value_int64 = input_agg.default_value_int64
+        case default:
+            raise BadSnubaRPCRequestException(
+                f"Unknown default_value in formula. Expected default_value_double or default_value_int64 but got {default}"
             )
-        )
+
+    input.conditional_aggregation.CopyFrom(conditional_aggregation)
 
 
 class AggregationToConditionalAggregationVisitor(ProtoVisitor):
@@ -211,6 +236,16 @@ class ContainsAggregateVisitor(ProtoVisitor):
         if column_wrapper.underlying_proto.HasField("conditional_aggregation"):
             self.contains_aggregate = True
 
+    def visit_AggregationComparisonFilterWrapper(
+        self, aggregation_comparison_filter_wrapper: AggregationComparisonFilterWrapper
+    ) -> None:
+        # An aggregation_filter becomes a HAVING clause, so an aggregate here makes the
+        # query aggregating even when no aggregate appears in the SELECT columns.
+        if aggregation_comparison_filter_wrapper.underlying_proto.HasField(
+            "conditional_aggregation"
+        ):
+            self.contains_aggregate = True
+
 
 class GetExpressionAggregationsVisitor(ProtoVisitor):
     """
@@ -228,3 +263,23 @@ class GetExpressionAggregationsVisitor(ProtoVisitor):
             self.aggregations.append(expression_wrapper.underlying_proto.aggregation)
         elif expression_wrapper.underlying_proto.HasField("conditional_aggregation"):
             self.aggregations.append(expression_wrapper.underlying_proto.conditional_aggregation)
+
+
+class GetColumnAggregationsVisitor(ProtoVisitor):
+    """Collect conditional_aggregation nodes under columns, including nested formulas."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.aggregations: list[AttributeConditionalAggregation] = []
+
+    def visit_ColumnWrapper(self, column_wrapper: ColumnWrapper) -> None:
+        column = column_wrapper.underlying_proto
+        if column.HasField("conditional_aggregation"):
+            self.aggregations.append(column.conditional_aggregation)
+
+    def visit_AggregationComparisonFilterWrapper(
+        self, aggregation_comparison_filter_wrapper: AggregationComparisonFilterWrapper
+    ) -> None:
+        comparison_filter = aggregation_comparison_filter_wrapper.underlying_proto
+        if comparison_filter.HasField("conditional_aggregation"):
+            self.aggregations.append(comparison_filter.conditional_aggregation)

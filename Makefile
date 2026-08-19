@@ -37,6 +37,20 @@ test-distributed:
 
 tests: test
 
+lint:
+	uv run ruff check --fix .
+	uv run ruff format .
+.PHONY: lint
+
+lint-check:
+	uv run ruff check .
+	uv run ruff format --check .
+.PHONY: lint-check
+
+typecheck:
+	uv run mypy .
+.PHONY: typecheck
+
 api-tests:
 	SNUBA_SETTINGS=test pytest -vv tests/*_api.py
 
@@ -46,8 +60,7 @@ install-rs-dev:
 .PHONY: install-rs-dev
 
 snubadocs:
-	uv pip install -U -r ./docs-requirements.txt
-	uv run sphinx-build -W -b html docs/source docs/build
+	uv run --locked --no-default-groups --group docs sphinx-build -W -b html docs/source docs/build
 
 build-admin:
 	cd snuba/admin && yarn install && yarn run build
@@ -66,8 +79,7 @@ validate-configs:
 	uv run python snuba/validate_configs.py
 
 generate-config-docs:
-	uv pip install -r ./docs-requirements.txt
-	uv run python -m snuba.datasets.configuration.generate_config_docs
+	uv run --locked --no-default-groups --group docs python -m snuba.datasets.configuration.generate_config_docs
 
 watch-rust-snuba:
 	which cargo-watch || cargo install cargo-watch
@@ -117,6 +129,7 @@ install-proto-dev:
 	echo "Installed local sentry-protos, please restart the vscode language server. Run 'uv pip uninstall sentry-protos && uv sync' to go back to the original version."
 .PHONY: install-proto-dev
 
+# Dumps the DogStatsD payloads snuba emits; see the script's --help to point snuba at it.
 listen-metrics:
-	sudo tcpdump -i lo0 -l -A udp port 8125
+	uv run python scripts/listen-metrics.py
 .PHONY: listen-metrics

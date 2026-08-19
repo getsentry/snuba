@@ -1,26 +1,33 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Mapping
 from random import random
-from typing import Any, Mapping, Optional, Union
+from typing import Any
 from uuid import UUID
 
-import sentry_sdk
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
+from sentry_sdk import traces
 from usageaccountant import UsageUnit
 
 from snuba import environment, settings, state
 from snuba.cogs.accountant import record_cogs
 from snuba.datasets.storage import StorageNotAvailable
 from snuba.query.exceptions import QueryPlanException
-from snuba.querylog.query_metadata import QueryStatus, SnubaQueryMetadata, Status
+from snuba.querylog.query_metadata import (
+    QueryStatus,
+    SnubaQueryMetadata,
+    Status,
+    get_request_status,
+)
 from snuba.request import Request
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.sentry import set_tag_and_attribute
 from snuba.web import QueryException, QueryResult
 
 metrics = MetricsWrapper(environment.metrics, "api")
-from snuba.querylog.query_metadata import get_request_status
 
 _ITEM_TYPE_TO_APP_FEATURE: dict[str, str] = {
     "TRACE_ITEM_TYPE_SPAN": "spans",
@@ -35,6 +42,7 @@ _ITEM_TYPE_TO_APP_FEATURE: dict[str, str] = {
     "TRACE_ITEM_TYPE_ATTACHMENT": "attachments",
     "TRACE_ITEM_TYPE_PREPROD": "preprod",
     "TRACE_ITEM_TYPE_USER_SESSION": "sessions",
+    "TRACE_ITEM_TYPE_PROCESSING_ERROR": "processing_errors",
     "TRACE_ITEM_TYPE_UNSPECIFIED": "null",
 }
 
@@ -48,7 +56,7 @@ def _record_timer_metrics(
     request: Request,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
-    result: Union[QueryResult, QueryException, QueryPlanException],
+    result: QueryResult | QueryException | QueryPlanException,
 ) -> None:
     final = str(request.query.get_final())
     referrer = request.referrer or "none"
@@ -94,7 +102,7 @@ def _record_timer_metrics(
 
 def _record_bytes_scanned_metrics(
     query_metadata: SnubaQueryMetadata,
-    result: Union[QueryResult, QueryException, QueryPlanException],
+    result: QueryResult | QueryException | QueryPlanException,
 ) -> None:
     """
     Experimental metrics - trying to understand whether or not
@@ -121,7 +129,7 @@ def _record_bytes_scanned_metrics(
 def _record_cogs(
     request: Request,
     query_metadata: SnubaQueryMetadata,
-    result: Union[QueryResult, QueryException, QueryPlanException],
+    result: QueryResult | QueryException | QueryPlanException,
 ) -> None:
     """
     Record bytes scanned for the clickhouse compute of resource of a query.
@@ -137,9 +145,9 @@ def _record_cogs(
     cluster_name = query_metadata.query_list[0].stats.get("cluster_name", "")
 
     if cluster_name.startswith("snuba-events-analytics-platform"):
-        if random() < (state.get_config("snuba_api_cogs_probability") or 0):
+        if random() < (get_option("snuba_api_cogs_probability", 0.0)):
             record_cogs(
-                resource_id="clickhouse",
+                resource_id="eap_clickhouse",
                 app_feature=_get_eap_app_feature(request),
                 amount=bytes_scanned,
                 usage_type=UsageUnit.BYTES,
@@ -172,7 +180,7 @@ def _record_cogs(
         .replace("_0", "")
     )
 
-    if random() < (state.get_config("snuba_api_cogs_probability") or 0):
+    if random() < (get_option("snuba_api_cogs_probability", 0.0)):
         record_cogs(
             resource_id=f"{cluster_name}",
             app_feature=app_feature,
@@ -188,7 +196,7 @@ def record_query(
     request: Request,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
-    result: Union[QueryResult, QueryException, QueryPlanException],
+    result: QueryResult | QueryException | QueryPlanException,
 ) -> None:
     """
     Records a request after it has been parsed and validated, whether
@@ -212,22 +220,22 @@ def record_query(
 
 def _add_tags(
     timer: Timer,
-    experiments: Optional[Mapping[str, Any]] = None,
-    metadata: Optional[SnubaQueryMetadata] = None,
+    experiments: Mapping[str, Any] | None = None,
+    metadata: SnubaQueryMetadata | None = None,
 ) -> None:
-    if sentry_sdk.get_current_span():
+    if traces.get_current_span() is not None:
         duration_group = timer.get_duration_group()
-        sentry_sdk.set_tag("duration_group", duration_group)
+        set_tag_and_attribute("duration_group", duration_group)
         if duration_group == ">30s":
-            sentry_sdk.set_tag("timeout", "too_long")
+            set_tag_and_attribute("timeout", "too_long")
         if experiments is not None:
             for name, value in experiments.items():
-                sentry_sdk.set_tag(name, str(value))
+                set_tag_and_attribute(name, str(value))
         if metadata is not None:
             for query_data in metadata.query_list:
                 max_threads = query_data.stats.get("max_threads")
                 if max_threads is not None:
-                    sentry_sdk.set_tag("max_threads", max_threads)
+                    set_tag_and_attribute("max_threads", max_threads)
                     break
 
 
@@ -237,7 +245,7 @@ def _build_failed_request_dict(
     dataset: str,
     organization: int,
     request_status: Status,
-    referrer: Optional[str],
+    referrer: str | None,
     exception_name: str | None = None,
 ) -> snuba_queries_v1.Querylog:
     return {
@@ -271,7 +279,7 @@ def record_invalid_request(
     organization: int,
     timer: Timer,
     request_status: Status,
-    referrer: Optional[str],
+    referrer: str | None,
     exception_name: str | None = None,
 ) -> None:
     """
@@ -302,7 +310,7 @@ def record_error_building_request(
     organization: int,
     timer: Timer,
     request_status: Status,
-    referrer: Optional[str],
+    referrer: str | None,
     exception_name: str | None = None,
 ) -> None:
     """
@@ -330,7 +338,7 @@ def _record_failure_metric_with_status(
     status: QueryStatus,
     request_status: Status,
     timer: Timer,
-    referrer: Optional[str],
+    referrer: str | None,
     exception_name: str | None = None,
 ) -> None:
     # TODO: Revisit if recording some data for these queries in the querylog

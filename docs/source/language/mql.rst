@@ -46,7 +46,7 @@ to Snuba also contains a ``mql_context`` dictionary::
     {
         "mql": "sum(transaction.duration)",
         "mql_context": {
-            "entity": "generic_metrics_distributions",
+            "entity": "generic_metrics_counters",
             "start": "2023-01-02T03:04:05+00:00",
             "end": "2023-01-16T03:04:05+00:00",
             "rollup": {

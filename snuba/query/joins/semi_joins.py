@@ -1,5 +1,3 @@
-from typing import Set
-
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import (
@@ -44,7 +42,7 @@ class SemiJoinOptimizer(CompositeQueryProcessor):
         if isinstance(from_clause, CompositeQuery):
             self.process_query(from_clause, query_settings)
             return
-        elif isinstance(from_clause, ProcessableQuery):
+        if isinstance(from_clause, ProcessableQuery):
             return
 
         # Now this has to be a join, so we can work with it.
@@ -54,7 +52,7 @@ class SemiJoinOptimizer(CompositeQueryProcessor):
 
 
 class SemiJoinGenerator(JoinVisitor[JoinNode[Table], Table]):
-    def __init__(self, referenced_columns: Set[Column]) -> None:
+    def __init__(self, referenced_columns: set[Column]) -> None:
         self.__referenced_columns = referenced_columns
 
     def visit_individual_node(self, node: IndividualNode[Table]) -> IndividualNode[Table]:

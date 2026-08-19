@@ -1,9 +1,47 @@
+import re
+from collections.abc import MutableMapping, Sequence
 from dataclasses import dataclass
-from typing import MutableMapping, Optional, Sequence, Tuple, TypedDict
+from typing import TypedDict
 
-from snuba.admin.clickhouse.common import _get_storage, get_clusterless_node_connection
-from snuba.clickhouse.native import ClickhousePool
-from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.admin.clickhouse.common import (
+    _get_storage,
+    _node_connect_port,
+    get_clusterless_node_connection,
+)
+from snuba.clickhouse.escaping import escape_string
+from snuba.clickhouse.pool import ClickhousePool
+from snuba.clusters.cluster import (
+    DEFAULT_CLICKHOUSE_HTTP_PORT,
+    ClickhouseClientSettings,
+    ClickhouseCluster,
+)
+from snuba.utils.serializable_exception import SerializableException
+
+
+class InvalidClusterName(SerializableException):
+    pass
+
+
+# Caller-supplied cluster names are interpolated into executed DDL and into
+# clusterAllReplicas() on connections holding full cluster credentials.
+CLUSTER_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]{1,128}$")
+
+
+def validate_cluster_name(cluster_name: str) -> str:
+    if not CLUSTER_NAME_RE.match(cluster_name):
+        raise InvalidClusterName(
+            "cluster name must be 1-128 characters of letters, digits, underscores or dashes"
+        )
+    return cluster_name
+
+
+def _http_port_for_host(host: str, cluster: ClickhouseCluster) -> int:
+    if host == cluster.get_query_node().host_name:
+        return cluster.get_port()
+    for node in (*cluster.get_local_nodes(), *cluster.get_distributed_nodes()):
+        if node.host_name == host:
+            return _node_connect_port(node, cluster)
+    return DEFAULT_CLICKHOUSE_HTTP_PORT
 
 
 @dataclass
@@ -26,7 +64,7 @@ def get_create_table_statements(
     tables: Sequence[str],
     source_connection: ClickhousePool,
     source_database: str,
-    cluster_name: Optional[str],
+    cluster_name: str | None,
 ) -> Sequence[TableStatement]:
     table_statements = []
 
@@ -55,11 +93,11 @@ def get_create_table_statements(
             table_engine = source_connection.execute(
                 f"SELECT engine FROM system.tables WHERE name = '{table}'"
             ).results[0][0]
-            is_mergetree = True if "MergeTree" in table_engine else False
+            is_mergetree = "MergeTree" in table_engine
 
         if cluster_name:
             table_statement = table_statement.replace(
-                db_table, f"{db_table} ON CLUSTER '{cluster_name}'"
+                db_table, f"{db_table} ON CLUSTER {escape_string(cluster_name)}"
             )
 
         table_statements.append(
@@ -77,10 +115,10 @@ def get_tables(connection: ClickhousePool) -> Sequence[str]:
 
 def verify_tables_on_replicas(
     connection: ClickhousePool,
-    cluster_name: Optional[str],
+    cluster_name: str | None,
     database_name: str,
     table_names: Sequence[str],
-) -> Tuple[MutableMapping[str, list[str]], int]:
+) -> tuple[MutableMapping[str, list[str]], int]:
     """
     Checks that the tables we have copied are present on all hosts.
     Returns a count of the verified hosts (host that have all the
@@ -88,7 +126,7 @@ def verify_tables_on_replicas(
     if the expected created tables are missing.
     """
     if cluster_name:
-        from_clause = f"FROM clusterAllReplicas('{cluster_name}', system.tables)"
+        from_clause = f"FROM clusterAllReplicas({escape_string(cluster_name)}, system.tables)"
     else:
         from_clause = "FROM system.tables"
 
@@ -97,7 +135,7 @@ def verify_tables_on_replicas(
         hostName() as host,
         groupArray(name) as table_name
     {from_clause}
-    WHERE database = '{database_name}'
+    WHERE database = {escape_string(database_name)}
     GROUP BY host
     ORDER BY host
     """
@@ -124,23 +162,27 @@ def copy_tables(
     source_host: str,
     storage_name: str,
     dry_run: bool,
-    target_host: Optional[str] = None,
+    target_host: str | None = None,
     skip_on_cluster: bool = False,
-    cluster_name_override: Optional[str] = None,
+    cluster_name_override: str | None = None,
 ) -> CopyTablesResponse:
-    settings = ClickhouseClientSettings.QUERY
-    source_connection = get_clusterless_node_connection(
-        source_host, 9000, storage_name, client_settings=settings
-    )
-
+    # Table copies can run long, so use the unbounded INTERNAL profile rather
+    # than the 30s user-read QUERY profile.
+    settings = ClickhouseClientSettings.INTERNAL
     storage = _get_storage(storage_name)
     cluster = storage.get_cluster()
     database_name = cluster.get_database()
+    source_connection = get_clusterless_node_connection(
+        source_host,
+        _http_port_for_host(source_host, cluster),
+        storage_name,
+        client_settings=settings,
+    )
 
     if skip_on_cluster:
         cluster_name = None
     elif cluster_name_override:
-        cluster_name = cluster_name_override
+        cluster_name = validate_cluster_name(cluster_name_override)
     elif not cluster.is_single_node():
         cluster_name = storage.get_cluster().get_clickhouse_cluster_name()
         assert cluster_name, "Missing cluster name for ON CLUSTER create statement"
@@ -171,16 +213,19 @@ def copy_tables(
 
     if target_host:
         target_connection = get_clusterless_node_connection(
-            target_host, 9000, storage_name, client_settings=settings
+            target_host,
+            _http_port_for_host(target_host, cluster),
+            storage_name,
+            client_settings=settings,
         )
     else:
         target_connection = source_connection
 
     for ts in mergetree_tables:
-        target_connection.execute(ts.statement)
+        target_connection.command(ts.statement)
 
     for ts in non_mergetree_tables:
-        target_connection.execute(ts.statement)
+        target_connection.command(ts.statement)
 
     # Verify tables were created on all replicas
     missing_tables_by_host, verified_hosts_num = verify_tables_on_replicas(

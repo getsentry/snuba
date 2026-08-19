@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Callable, Generic, Iterable, Optional, Sequence, Union, cast
+from collections.abc import Callable, Iterable, Sequence
+from typing import Generic, cast
 
 from snuba.query import (
     LimitBy,
@@ -26,27 +27,24 @@ class CompositeQuery(Query, Generic[TSimpleDataSource]):
 
     def __init__(
         self,
-        from_clause: Optional[
-            Union[
-                ProcessableQuery[TSimpleDataSource],
-                CompositeQuery[TSimpleDataSource],
-                JoinClause[TSimpleDataSource],
-            ]
-        ],
+        from_clause: ProcessableQuery[TSimpleDataSource]
+        | CompositeQuery[TSimpleDataSource]
+        | JoinClause[TSimpleDataSource]
+        | None,
         # TODO: Consider if to remove the defaults and make some of
         # these fields mandatory. This impacts a lot of code so it
         # would be done on its own.
-        selected_columns: Optional[Sequence[SelectedExpression]] = None,
-        array_join: Optional[Sequence[Expression]] = None,
-        condition: Optional[Expression] = None,
-        groupby: Optional[Sequence[Expression]] = None,
-        having: Optional[Expression] = None,
-        order_by: Optional[Sequence[OrderBy]] = None,
-        limitby: Optional[LimitBy] = None,
-        limit: Optional[int] = None,
+        selected_columns: Sequence[SelectedExpression] | None = None,
+        array_join: Sequence[Expression] | None = None,
+        condition: Expression | None = None,
+        groupby: Sequence[Expression] | None = None,
+        having: Expression | None = None,
+        order_by: Sequence[OrderBy] | None = None,
+        limitby: LimitBy | None = None,
+        limit: int | None = None,
         offset: int = 0,
         totals: bool = False,
-        granularity: Optional[int] = None,
+        granularity: int | None = None,
     ):
         super().__init__(
             selected_columns=selected_columns,
@@ -88,21 +86,19 @@ class CompositeQuery(Query, Generic[TSimpleDataSource]):
 
     def get_from_clause(
         self,
-    ) -> Union[
-        ProcessableQuery[TSimpleDataSource],
-        CompositeQuery[TSimpleDataSource],
-        JoinClause[TSimpleDataSource],
-    ]:
+    ) -> (
+        ProcessableQuery[TSimpleDataSource]
+        | CompositeQuery[TSimpleDataSource]
+        | JoinClause[TSimpleDataSource]
+    ):
         assert self.__from_clause is not None, "Data source has not been provided yet."
         return self.__from_clause
 
     def set_from_clause(
         self,
-        from_clause: Union[
-            ProcessableQuery[TSimpleDataSource],
-            CompositeQuery[TSimpleDataSource],
-            JoinClause[TSimpleDataSource],
-        ],
+        from_clause: ProcessableQuery[TSimpleDataSource]
+        | CompositeQuery[TSimpleDataSource]
+        | JoinClause[TSimpleDataSource],
     ) -> None:
         self.__from_clause = from_clause
 

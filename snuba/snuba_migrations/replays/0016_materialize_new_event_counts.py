@@ -1,4 +1,4 @@
-from typing import Iterator, List, Sequence, Tuple
+from collections.abc import Iterator, Sequence
 
 from snuba.clickhouse.columns import Column, UInt
 from snuba.clusters.storage_sets import StorageSetKey
@@ -52,7 +52,7 @@ def backward_columns_iter() -> Iterator[operations.SqlOperation]:
         )
 
 
-columns: List[Tuple[str, Column[Modifiers]]] = [
+columns: list[tuple[str, Column[Modifiers]]] = [
     (
         "debug_id",
         Column(
@@ -71,9 +71,7 @@ columns: List[Tuple[str, Column[Modifiers]]] = [
             "count_warning_events",
             UInt(
                 8,
-                Modifiers(
-                    materialized="warning_id != '00000000-0000-0000-0000-000000000000'"
-                ),
+                Modifiers(materialized="warning_id != '00000000-0000-0000-0000-000000000000'"),
             ),
         ),
     ),

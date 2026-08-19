@@ -20,9 +20,14 @@ in ``~/.sentry/sentry.conf.py``::
 
     SENTRY_EVENTSTREAM = "sentry.eventstream.kafka.KafkaEventStream"
 
-And then use::
+Then start the services and switch Snuba to local development::
 
-    devservices up --exclude=snuba
+    devservices up
+    devservices toggle snuba local
+
+To switch Snuba back to a containerized deployment, use::
+
+    devservices toggle snuba containerized
 
 Note that Snuba assumes that everything is running on UTC time. Otherwise
 you may experience issues with timezone mismatches.
@@ -39,11 +44,11 @@ Add/change the following lines in ``~/.sentry/sentry.conf.py``::
 
 Run::
 
-    sentry devservices up
+    devservices up
 
 Access raw clickhouse client (similar to psql)::
 
-    docker exec -it sentry_clickhouse clickhouse-client
+    docker exec -it snuba-clickhouse-1 clickhouse-client
 
 Data is written into the table `sentry_local`: `select count() from sentry_local;`
 

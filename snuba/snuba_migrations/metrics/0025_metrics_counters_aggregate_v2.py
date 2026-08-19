@@ -1,4 +1,4 @@
-from typing import Sequence
+from collections.abc import Sequence
 
 from snuba.clickhouse.columns import Array, Column, UInt
 from snuba.clusters.storage_sets import StorageSetKey
@@ -65,11 +65,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
         ]
 
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
-        return [
-            operations.DropTable(
-                storage_set=StorageSetKey.METRICS, table_name=self.table_name
-            )
-        ]
+        return [operations.DropTable(storage_set=StorageSetKey.METRICS, table_name=self.table_name)]
 
     def forwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
@@ -94,7 +90,5 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
 
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
-            operations.DropTable(
-                storage_set=StorageSetKey.METRICS, table_name=self.dist_table_name
-            )
+            operations.DropTable(storage_set=StorageSetKey.METRICS, table_name=self.dist_table_name)
         ]

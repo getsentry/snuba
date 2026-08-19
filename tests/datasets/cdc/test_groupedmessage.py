@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -206,9 +206,9 @@ class TestGroupedMessage:
         "id": 74,
         "record_deleted": 0,
         "status": 0,
-        "last_seen": datetime(2019, 6, 19, 6, 46, 28, tzinfo=timezone.utc),
-        "first_seen": datetime(2019, 6, 19, 6, 45, 32, tzinfo=timezone.utc),
-        "active_at": datetime(2019, 6, 19, 6, 45, 32, tzinfo=timezone.utc),
+        "last_seen": datetime(2019, 6, 19, 6, 46, 28, tzinfo=UTC),
+        "first_seen": datetime(2019, 6, 19, 6, 45, 32, tzinfo=UTC),
+        "active_at": datetime(2019, 6, 19, 6, 45, 32, tzinfo=UTC),
         "first_release_id": None,
     }
 
@@ -232,7 +232,7 @@ class TestGroupedMessage:
         ret = processor.process_message(self.INSERT_MSG, metadata)
         assert ret == InsertBatch(
             [self.PROCESSED],
-            datetime(2019, 9, 19, 0, 17, 21, 447870, tzinfo=timezone.utc),
+            datetime(2019, 9, 19, 0, 17, 21, 447870, tzinfo=UTC),
         )
         write_processed_messages(self.storage, [ret])
         results = (
@@ -256,13 +256,13 @@ class TestGroupedMessage:
         ret = processor.process_message(self.UPDATE_MSG, metadata)
         assert ret == InsertBatch(
             [self.PROCESSED],
-            datetime(2019, 9, 19, 0, 17, 21, 447870, tzinfo=timezone.utc),
+            datetime(2019, 9, 19, 0, 17, 21, 447870, tzinfo=UTC),
         )
 
         ret = processor.process_message(self.DELETE_MSG, metadata)
         assert ret == InsertBatch(
             [self.DELETED],
-            datetime(2019, 9, 19, 0, 17, 21, 447870, tzinfo=timezone.utc),
+            datetime(2019, 9, 19, 0, 17, 21, 447870, tzinfo=UTC),
         )
 
     def test_bulk_load(self) -> None:

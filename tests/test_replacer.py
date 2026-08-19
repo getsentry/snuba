@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import importlib
 import time
-from datetime import datetime, timedelta, timezone
-from typing import Any, Mapping, MutableMapping, Sequence
+from collections.abc import Mapping, MutableMapping, Sequence
+from datetime import UTC, datetime, timedelta
+from typing import Any
 from unittest import mock
 
 import pytest
 import simplejson as json
 from arroyo.backends.kafka import KafkaPayload
+from arroyo.processing.strategies.healthcheck import Healthcheck
 from arroyo.types import BrokerValue, Message, Partition, Topic
+from sentry_options.testing import override_options
 
 from snuba import replacer, settings
 from snuba.clickhouse.optimize.optimize import run_optimize
@@ -121,7 +124,7 @@ class TestReplacer:
         assert _issue_count() == [{"count": 1, "group_id": 1}]
         assert _issue_count(total=True) == [{"count": 1, "group_id": 1}]
 
-        timestamp = datetime.now(tz=timezone.utc)
+        timestamp = datetime.now(tz=UTC)
 
         message: Message[KafkaPayload] = Message(
             BrokerValue(
@@ -364,7 +367,7 @@ class TestReplacer:
             {ReplacementType.EXCLUDE_GROUPS},
         )
 
-    @mock.patch.object(settings, "REPLACER_MAX_GROUP_IDS_TO_EXCLUDE", 2)
+    @override_options("snuba", {"max_group_ids_exclude": 2})
     def test_query_time_flags_bounded_size(self) -> None:
         redis_client.flushdb()
         project_id = 256
@@ -423,3 +426,14 @@ class TestReplacer:
             # exclude_groups from project setter, start_merge from group setter
             {ReplacementType.EXCLUDE_GROUPS, ReplacementType.START_MERGE},
         )
+
+    def test_replacer_strategy_factory_wraps_healthcheck(self) -> None:
+        worker = mock.Mock()
+        factory = replacer.ReplacerStrategyFactory(
+            worker=worker,
+            health_check_file="/tmp/health.txt",
+        )
+
+        strategy = factory.create_with_partitions(mock.Mock(), {})
+
+        assert isinstance(strategy, Healthcheck)

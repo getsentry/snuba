@@ -1,5 +1,5 @@
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
-from typing import Sequence
 
 from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.datasets.entities.storage_selectors import QueryStorageSelector

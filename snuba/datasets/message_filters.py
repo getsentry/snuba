@@ -25,11 +25,11 @@ class StreamMessageFilter(ABC, Generic[TPayload], metaclass=RegisteredClass):
         return cls.__name__
 
     @classmethod
-    def get_from_name(cls, name: str) -> "StreamMessageFilter[TPayload]":
+    def get_from_name(cls, name: str) -> StreamMessageFilter[TPayload]:
         return cast("StreamMessageFilter[TPayload]", cls.class_from_name(name))
 
     @classmethod
-    def from_kwargs(cls, **kwargs: str) -> "StreamMessageFilter[TPayload]":
+    def from_kwargs(cls, **kwargs: str) -> StreamMessageFilter[TPayload]:
         return cls(**kwargs)
 
     @abstractmethod
@@ -72,7 +72,7 @@ class CdcTableNameMessageFilter(StreamMessageFilter[KafkaPayload]):
         self.__postgres_table = postgres_table
 
     def should_drop(self, message: Message[KafkaPayload]) -> bool:
-        assert [p.index for p in message.committable.keys()] == [KAFKA_ONLY_PARTITION], (
+        assert [p.index for p in message.committable] == [KAFKA_ONLY_PARTITION], (
             "CDC can only work with single partition topics for consistency"
         )
 

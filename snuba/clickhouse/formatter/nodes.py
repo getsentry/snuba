@@ -1,10 +1,11 @@
 from abc import ABC
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Optional, Sequence, Union
+from typing import Any
 
 
 @dataclass(frozen=True)
-class FormattedNode(ABC):
+class FormattedNode(ABC):  # noqa: B024 - methods raise NotImplementedError rather than using @abstractmethod to preserve runtime behavior
     """
     After formatting all the clauses of a query, we may serialize the
     query itself as a string or exporting it in a structured format for
@@ -20,7 +21,7 @@ class FormattedNode(ABC):
         """
         raise NotImplementedError
 
-    def structured(self) -> Union[str, Sequence[Any]]:
+    def structured(self) -> str | Sequence[Any]:
         """
         This exports the query as a Sequence of clauses. Each clause
         is either a string or a Sequence itself (like for subqueries).
@@ -53,9 +54,9 @@ class SequenceNode(FormattedNode):
 
 @dataclass(frozen=True)
 class PaddingNode(FormattedNode):
-    prefix: Optional[str]
+    prefix: str | None
     node: FormattedNode
-    suffix: Optional[str] = None
+    suffix: str | None = None
 
     def __str__(self) -> str:
         prefix = f"{self.prefix} " if self.prefix else ""
@@ -74,8 +75,7 @@ class PaddingNode(FormattedNode):
             return ret + [
                 self.suffix,
             ]
-        else:
-            return ret
+        return ret
 
 
 @dataclass(frozen=True)
@@ -86,7 +86,7 @@ class FormattedQuery(SequenceNode):
     differently for different usages (running the query or tracing).
     """
 
-    def get_sql(self, format: Optional[str] = None) -> str:
+    def get_sql(self, format: str | None = None) -> str:
         query = str(self)
         if format is not None:
             query = f"{query} FORMAT {format}"

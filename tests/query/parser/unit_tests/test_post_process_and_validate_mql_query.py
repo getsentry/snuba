@@ -30,8 +30,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                    EntityKey.GENERIC_METRICS_COUNTERS,
+                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -115,8 +115,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -230,8 +230,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                    EntityKey.GENERIC_METRICS_COUNTERS,
+                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -318,8 +318,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -436,8 +436,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                    EntityKey.GENERIC_METRICS_COUNTERS,
+                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -525,8 +525,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -642,8 +642,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                    EntityKey.GENERIC_METRICS_COUNTERS,
+                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -735,8 +735,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -859,8 +859,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                    EntityKey.GENERIC_METRICS_COUNTERS,
+                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -953,8 +953,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -1092,8 +1092,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                    EntityKey.GENERIC_METRICS_COUNTERS,
+                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -1180,8 +1180,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -1301,8 +1301,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                    EntityKey.GENERIC_METRICS_COUNTERS,
+                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -1393,8 +1393,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -1516,8 +1516,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                    EntityKey.GENERIC_METRICS_COUNTERS,
+                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -1601,8 +1601,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -1713,8 +1713,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                    EntityKey.GENERIC_METRICS_COUNTERS,
+                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -1795,8 +1795,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -1904,8 +1904,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                    EntityKey.GENERIC_METRICS_COUNTERS,
+                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -1993,8 +1993,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -2090,8 +2090,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                    EntityKey.GENERIC_METRICS_COUNTERS,
+                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -2145,8 +2145,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -2220,8 +2220,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                    EntityKey.GENERIC_METRICS_COUNTERS,
+                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -2269,8 +2269,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -2338,8 +2338,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_SETS,
-                    get_entity(EntityKey.GENERIC_METRICS_SETS).get_data_model(),
+                    EntityKey.GENERIC_METRICS_COUNTERS,
+                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -2403,8 +2403,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_SETS,
-                get_entity(EntityKey.GENERIC_METRICS_SETS).get_data_model(),
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -2478,8 +2478,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                    EntityKey.GENERIC_METRICS_COUNTERS,
+                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -2571,8 +2571,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -2805,8 +2805,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                    EntityKey.GENERIC_METRICS_COUNTERS,
+                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -2892,8 +2892,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -2992,8 +2992,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                    EntityKey.GENERIC_METRICS_COUNTERS,
+                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -3051,8 +3051,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -3128,8 +3128,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_SETS,
-                    get_entity(EntityKey.GENERIC_METRICS_SETS).get_data_model(),
+                    EntityKey.GENERIC_METRICS_COUNTERS,
+                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -3184,8 +3184,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_SETS,
-                get_entity(EntityKey.GENERIC_METRICS_SETS).get_data_model(),
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -3252,8 +3252,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                    EntityKey.GENERIC_METRICS_COUNTERS,
+                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -3313,8 +3313,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -3386,8 +3386,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                    EntityKey.GENERIC_METRICS_COUNTERS,
+                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -3477,8 +3477,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(

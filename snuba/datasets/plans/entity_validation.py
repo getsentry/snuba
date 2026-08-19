@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from typing import Union
-
-import sentry_sdk
+from sentry_sdk import traces
 
 from snuba.datasets.entities.factory import get_entity
 from snuba.query import Query
@@ -14,6 +12,7 @@ from snuba.query.logical import EntityQuery
 from snuba.query.parser.validation.functions import FunctionCallsValidator
 from snuba.query.query_settings import QuerySettings
 from snuba.state import explain_meta
+from snuba.utils.sentry import SENTRY_OP
 
 EXPRESSION_VALIDATORS = [FunctionCallsValidator()]
 
@@ -28,7 +27,7 @@ def _validate_query(query: Query) -> None:
             v.validate(exp, query.get_from_clause())
 
 
-def _validate_entities_with_query(query: Union[CompositeQuery[QueryEntity], EntityQuery]) -> None:
+def _validate_entities_with_query(query: CompositeQuery[QueryEntity] | EntityQuery) -> None:
     """
     Applies all validator defined on the entities in the query
     """
@@ -41,7 +40,7 @@ def _validate_entities_with_query(query: Union[CompositeQuery[QueryEntity], Enti
             raise ValidationException(
                 f"Validation failed for entity {query.get_from_clause().key.value}: {e}",
                 should_report=e.should_report,
-            )
+            ) from e
     else:
         from_clause = query.get_from_clause()
         if isinstance(from_clause, JoinClause):
@@ -56,14 +55,14 @@ def _validate_entities_with_query(query: Union[CompositeQuery[QueryEntity], Enti
                     raise ValidationException(
                         f"Validation failed for entity {node.data_source.key.value}: {e}",
                         should_report=e.should_report,
-                    )
+                    ) from e
 
 
 VALIDATORS = [_validate_query, _validate_entities_with_query]
 
 
 def run_entity_validators(
-    query: Union[CompositeQuery[QueryEntity], EntityQuery],
+    query: CompositeQuery[QueryEntity] | EntityQuery,
     settings: QuerySettings | None = None,
 ) -> None:
     """
@@ -71,7 +70,7 @@ def run_entity_validators(
     """
     for validator_func in VALIDATORS:
         description = getattr(validator_func, "__name__", "custom")
-        with sentry_sdk.start_span(op="validator", description=description):
+        with traces.start_span(name=description, attributes={SENTRY_OP: "validator"}):
             if settings and settings.get_dry_run():
                 with explain_meta.with_query_differ("entity_validator", description, query):
                     validator_func(query)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Type, TypedDict
+from typing import Any, TypedDict
 
 from snuba.clickhouse.columns import (
     Array,
@@ -67,7 +67,7 @@ NUMBER_COLUMN_TYPES: dict[str, Any] = {
     "Float": Float,
 }
 
-SIMPLE_COLUMN_TYPES: dict[str, Type[ColumnType[SchemaModifiers]]] = {
+SIMPLE_COLUMN_TYPES: dict[str, type[ColumnType[SchemaModifiers]]] = {
     **NUMBER_COLUMN_TYPES,
     "String": String,
     "DateTime": DateTime,
@@ -89,7 +89,7 @@ def __parse_number(
     col: dict[str, Any], modifiers: SchemaModifiers | None
 ) -> ColumnType[SchemaModifiers]:
     col_type = NUMBER_COLUMN_TYPES[col["type"]](col["args"]["size"], modifiers)
-    assert isinstance(col_type, UInt) or isinstance(col_type, Float) or isinstance(col_type, Int)
+    assert isinstance(col_type, (UInt, Float, Int))
     return col_type
 
 

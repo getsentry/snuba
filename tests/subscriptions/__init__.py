@@ -116,10 +116,10 @@ class BaseSubscriptionTest:
             write_raw_unprocessed_events(items_storage, extra_messages + messages)
 
 
-def __entity_eq__(self: Entity, other: object) -> bool:
+def __entity_eq__(self: object, other: object) -> bool:
     if not isinstance(other, Entity):
         return False
     return isinstance(self, type(other))
 
 
-Entity.__eq__ = __entity_eq__  # type: ignore
+Entity.__eq__ = __entity_eq__  # type: ignore[method-assign]

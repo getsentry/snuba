@@ -1,9 +1,9 @@
+from collections.abc import Sequence
 from datetime import datetime, timedelta
-from typing import Sequence, Tuple
 
 import pytest
+from sentry_options.testing import override_options
 
-from snuba import state
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.subscriptions.data import (
     ScheduledSubscriptionTask,
@@ -219,23 +219,23 @@ TEST_CASES = [
 def test_sequences(
     builder: TaskBuilder,
     primary_builder_config: str,
-    sequence_in: Sequence[Tuple[int, Subscription]],
-    task_sequence: Sequence[Tuple[int, ScheduledSubscriptionTask]],
-    metrics: Sequence[Tuple[str, int, Tags]],
+    sequence_in: Sequence[tuple[int, Subscription]],
+    task_sequence: Sequence[tuple[int, ScheduledSubscriptionTask]],
+    metrics: Sequence[tuple[str, int, Tags]],
 ) -> None:
     """
     Tries to execute the task builder on several sequences of
     subscriptions and validate the proper jitter is applied.
     state.
     """
-    state.set_config("subscription_primary_task_builder", primary_builder_config)
-    output = []
-    for timestamp, subscription in sequence_in:
-        ret = builder.get_task(
-            SubscriptionWithMetadata(EntityKey.EVENTS, subscription, 1), timestamp
-        )
-        if ret:
-            output.append((timestamp, ret))
+    with override_options("snuba", {"subscription_primary_task_builder": primary_builder_config}):
+        output = []
+        for timestamp, subscription in sequence_in:
+            ret = builder.get_task(
+                SubscriptionWithMetadata(EntityKey.EVENTS, subscription, 1), timestamp
+            )
+            if ret:
+                output.append((timestamp, ret))
 
-    assert output == task_sequence
-    assert builder.reset_metrics() == metrics
+        assert output == task_sequence
+        assert builder.reset_metrics() == metrics

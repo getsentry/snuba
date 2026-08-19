@@ -1,9 +1,9 @@
 import logging
 import math
 import time
-from typing import Sequence
+from collections.abc import Sequence
 
-from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.pool import ClickhousePool
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
@@ -24,9 +24,7 @@ def update_querylog_table(clickhouse: ClickhousePool, database: str) -> None:
         f"SELECT sampling_key, sorting_key FROM system.tables WHERE name = '{TABLE_NAME}' AND database = '{database}'"
     ).results
 
-    new_create_table_statement = curr_create_table_statement.replace(
-        TABLE_NAME, TABLE_NAME_NEW
-    )
+    new_create_table_statement = curr_create_table_statement.replace(TABLE_NAME, TABLE_NAME_NEW)
 
     # Switch the sorting key
     if curr_sorting_key != new_sorting_key:
@@ -71,14 +69,12 @@ def update_querylog_table(clickhouse: ClickhousePool, database: str) -> None:
         clickhouse.execute(insert_op.format_sql())
 
     # Ensure each table has the same number of rows before deleting the old one
-    [(new_row_count,)] = clickhouse.execute(
-        f"SELECT count() FROM {TABLE_NAME_NEW}"
-    ).results
+    [(new_row_count,)] = clickhouse.execute(f"SELECT count() FROM {TABLE_NAME_NEW}").results
     assert row_count == new_row_count
 
-    clickhouse.execute(f"RENAME TABLE {TABLE_NAME} TO {TABLE_NAME_OLD};")
-    clickhouse.execute(f"RENAME TABLE {TABLE_NAME_NEW} TO {TABLE_NAME};")
-    clickhouse.execute(f"DROP TABLE {TABLE_NAME_OLD};")
+    clickhouse.command(f"RENAME TABLE {TABLE_NAME} TO {TABLE_NAME_OLD};")
+    clickhouse.command(f"RENAME TABLE {TABLE_NAME_NEW} TO {TABLE_NAME};")
+    clickhouse.command(f"DROP TABLE {TABLE_NAME_OLD};")
     return
 
 
@@ -121,12 +117,12 @@ def cleanup(clickhouse: ClickhousePool, logger: logging.Logger) -> None:
     if table_exists(TABLE_NAME_NEW):
         logger.info(f"Dropping table {TABLE_NAME_NEW}")
         time.sleep(1)
-        clickhouse.execute(f"DROP TABLE {TABLE_NAME_NEW};")
+        clickhouse.command(f"DROP TABLE {TABLE_NAME_NEW};")
 
     if table_exists(TABLE_NAME_OLD):
         logger.info(f"Dropping table {TABLE_NAME_OLD}")
         time.sleep(1)
-        clickhouse.execute(f"DROP TABLE {TABLE_NAME_OLD};")
+        clickhouse.command(f"DROP TABLE {TABLE_NAME_OLD};")
 
 
 class Migration(migration.CodeMigration):

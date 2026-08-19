@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import logging
-from typing import Callable, cast
+import typing
+from collections.abc import Callable
+from typing import cast
 
 from snuba import state
 from snuba.configs.configuration import Configuration
 from snuba.query.allocation_policies import (
     CROSS_ORG_SUGGESTION,
+    MAX_THRESHOLD,
+    NO_SUGGESTION,
     PASS_THROUGH_REFERRERS_SUGGESTION,
     AllocationPolicy,
     AllocationPolicyViolations,
@@ -27,23 +31,19 @@ DEFAULT_PER_SECOND_QUERIES_LIMIT = 50
 
 logger = logging.getLogger("snuba.query.allocation_policy_rate_limit")
 
-_PASS_THROUGH_REFERRERS = set(
-    [
-        # these referrers are tied to ingest and are better limited by the ReferrerGuardRailPolicy
-        "subscriptions_executor",
-        "tsdb-modelid:4.batch_alert_event_frequency",
-        "tsdb-modelid:4.batch_alert_event_uniq_user_frequency",
-        "tsdb-modelid:4.batch_alert_event_frequency_percent",
-        "tsdb-modelid:4.wf_batch_alert_event_frequency",
-        "tsdb-modelid:300.wf_batch_alert_event_uniq_user_frequency",
-        "tsdb-modelid:4.wf_batch_alert_event_frequency_percent",
-    ]
-)
-from snuba.query.allocation_policies import MAX_THRESHOLD, NO_SUGGESTION
+_PASS_THROUGH_REFERRERS = {
+    # these referrers are tied to ingest and are better limited by the ReferrerGuardRailPolicy
+    "subscriptions_executor",
+    "tsdb-modelid:4.batch_alert_event_frequency",
+    "tsdb-modelid:4.batch_alert_event_uniq_user_frequency",
+    "tsdb-modelid:4.batch_alert_event_frequency_percent",
+    "tsdb-modelid:4.wf_batch_alert_event_frequency",
+    "tsdb-modelid:300.wf_batch_alert_event_uniq_user_frequency",
+    "tsdb-modelid:4.wf_batch_alert_event_frequency_percent",
+}
 
 QUOTA_UNIT = "concurrent_queries"
 SUGGESTION = "A customer is sending too many queries to snuba. The customer may be abusing an API or the queries may be innefficient"
-import typing
 
 
 class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):

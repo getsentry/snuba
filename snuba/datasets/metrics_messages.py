@@ -1,5 +1,6 @@
+from collections.abc import Iterable, Mapping, MutableMapping
 from enum import Enum
-from typing import Any, Iterable, Mapping, MutableMapping
+from typing import Any
 
 
 class InputType(Enum):

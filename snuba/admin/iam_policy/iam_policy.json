@@ -8,29 +8,10 @@
     },
     {
       "members": [
-        "group:role-deploy-snuba-migrations-operator@sentry.io"
-      ],
-      "role": "roles/SearchIssuesExecutor"
-    },
-    {
-      "members": [
-        "group:team-sns@sentry.io",
-        "group:access-snuba-admin@sentry.io"
-      ],
-      "role": "roles/MigrationsReader"
-    },
-    {
-      "members": [
-        "group:team-sns@sentry.io",
+        "group:team-events-analytics-platform@sentry.io",
         "group:team-ops@sentry.io"
       ],
       "role": "roles/AllTools"
-    },
-    {
-      "members": [
-          "group:access-snuba-admin@sentry.io"
-      ],
-      "role": "roles/ProductTools"
     },
     {
       "members": [
@@ -45,14 +26,14 @@
     {
       "members": [
         "group:team-ops@sentry.io",
-        "group:team-sns@sentry.io"
+        "group:team-events-analytics-platform@sentry.io"
       ],
       "role": "roles/AllMigrationsExecutor"
     },
     {
       "members": [
         "group:team-ops@sentry.io",
-        "group:team-sns@sentry.io"
+        "group:team-events-analytics-platform@sentry.io"
       ],
       "role": "roles/ClickhouseAdmin"
     }

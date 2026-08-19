@@ -33,7 +33,7 @@ class NoopCHQueryProcessor(ClickhouseQueryProcessor):
 
 
 @pytest.fixture
-def mock_storage() -> Generator[ReadableTableStorage, None, None]:
+def mock_storage() -> Generator[ReadableTableStorage]:
     # Create a fake storage
     mock_storage = ReadableTableStorage(
         storage_key=StorageKey("mockstorage"),
@@ -125,9 +125,11 @@ def test_default_subscriptable(mock_storage: ReadableTableStorage) -> None:
         )
     )
     assert not result.error
+    schema = mock_storage.get_schema()
+    assert isinstance(schema, TableSchema)
     expected = Query(
         from_clause=Table(
-            table_name=mock_storage.get_schema().get_table_name(),  # type: ignore
+            table_name=schema.get_table_name(),
             schema=mock_storage.get_schema().get_columns(),
             storage_key=mock_storage.get_storage_key(),
             allocation_policies=mock_storage.get_allocation_policies(),

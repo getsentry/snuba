@@ -4,8 +4,10 @@ import pytest
 
 from snuba.admin.clickhouse.common import _get_storage, get_clusterless_node_connection
 from snuba.admin.clickhouse.copy_tables import (
+    InvalidClusterName,
     copy_tables,
     get_create_table_statements,
+    validate_cluster_name,
     verify_tables_on_replicas,
 )
 from snuba.clusters.cluster import ClickhouseClientSettings
@@ -53,7 +55,7 @@ SETTINGS index_granularity = 8192
 """
 
 OUTCOMES_DAILY_MV = """
-CREATE MATERIALIZED VIEW IF NOT EXISTS {db}.outcomes_mv_daily_local_v2 ON CLUSTER 'test_cluster' TO {db}.outcomes_daily_local_v2
+CREATE MATERIALIZED VIEW IF NOT EXISTS {db}.outcomes_mv_daily_local_v3 ON CLUSTER 'test_cluster' TO {db}.outcomes_daily_local_v2
 (
     `org_id` UInt64,
     `project_id` UInt64,
@@ -74,7 +76,7 @@ AS SELECT
     ifNull(reason, 'none') AS reason,
     category,
     count() AS times_seen,
-    sum(quantity) AS quantity
+    sum(quantity64) AS quantity
 FROM {db}.outcomes_raw_local
 GROUP BY
     org_id,
@@ -88,7 +90,7 @@ GROUP BY
 
 TABLE_DATA = [
     ("outcomes_daily_local_v2", "outcomes_daily", OUTCOMES_DAILY_TABLE, True),
-    ("outcomes_mv_daily_local_v2", "outcomes_daily", OUTCOMES_DAILY_MV, False),
+    ("outcomes_mv_daily_local_v3", "outcomes_daily", OUTCOMES_DAILY_MV, False),
 ]
 
 
@@ -125,7 +127,7 @@ def test_get_table_statements(
     table_statements = get_create_table_statements(
         tables=[table],
         source_connection=get_clusterless_node_connection(
-            host, 9000, storage_name, client_settings=settings
+            host, cluster.get_port(), storage_name, client_settings=settings
         ),
         source_database=database_name,
         cluster_name="test_cluster",
@@ -162,7 +164,7 @@ def test_get_table_statement_without_cluster() -> None:
     table_statements = get_create_table_statements(
         tables=[table],
         source_connection=get_clusterless_node_connection(
-            host, 9000, storage_name, client_settings=settings
+            host, cluster.get_port(), storage_name, client_settings=settings
         ),
         source_database=database_name,
         cluster_name=cluster_name,
@@ -183,25 +185,27 @@ def test_create_tables_order() -> None:
     run_migrations()
     host = os.environ.get("CLICKHOUSE_HOST", "127.0.0.1")
     expected_local_tables = [
+        "llm_proxy_cost_raw_local",
         "migrations_local",
         "outcomes_daily_local_v2",
         "outcomes_hourly_local",
         "outcomes_raw_local",
     ]
     expected_non_local_tables = [
+        "llm_proxy_cost_raw_dist",
         "migrations_dist",
         "outcomes_daily_dist_v2",
         "outcomes_hourly_dist",
-        "outcomes_mv_daily_local_v2",
-        "outcomes_mv_hourly_local",
+        "outcomes_mv_daily_local_v3",
+        "outcomes_mv_hourly_local_v2",
         "outcomes_raw_dist",
     ]
 
     results = copy_tables(source_host=host, storage_name="outcomes_raw", dry_run=True)
     all_tables = str(results["tables"])
 
-    local_tables = all_tables.split(",")[:4]
-    non_local_tables = all_tables.split(",")[4:]
+    local_tables = all_tables.split(",")[:5]
+    non_local_tables = all_tables.split(",")[5:]
     assert local_tables == expected_local_tables
     assert all(table in expected_non_local_tables for table in non_local_tables)
 
@@ -258,7 +262,7 @@ def test_verify_tables_on_replicas() -> None:
     cluster_name = None if cluster.is_single_node() else cluster.get_clickhouse_cluster_name()
 
     connection = get_clusterless_node_connection(
-        host, 9000, "outcomes_raw", client_settings=settings
+        host, cluster.get_port(), "outcomes_raw", client_settings=settings
     )
 
     # Test with table that exist, all should be verified
@@ -277,3 +281,40 @@ def test_verify_tables_on_replicas() -> None:
 
     assert verified_count == 0
     assert ["nonexistent_table_xyz"] in missing_hosts.values()
+
+
+@pytest.mark.parametrize(
+    "cluster_name",
+    [
+        "cluster",
+        "Cluster_1",
+        "snuba-events",
+        "a",
+        "A-b_c-123",
+        "x" * 128,
+    ],
+)
+def test_validate_cluster_name_accepts_identifier_shape(cluster_name: str) -> None:
+    assert validate_cluster_name(cluster_name) == cluster_name
+
+
+@pytest.mark.parametrize(
+    "cluster_name",
+    [
+        "",
+        "foo'",
+        "foo'; DROP TABLE x; --",
+        "cluster') OR 1=1 --",
+        'cluster"',
+        "cluster`name`",
+        "cluster name",
+        "cluster.name",
+        "cluster/name",
+        "cluster;name",
+        "cluster\\name",
+        "x" * 129,
+    ],
+)
+def test_validate_cluster_name_rejects_quote_breaking_names(cluster_name: str) -> None:
+    with pytest.raises(InvalidClusterName):
+        validate_cluster_name(cluster_name)

@@ -13,12 +13,11 @@ from snuba.query.expressions import (
 )
 from snuba.query.processors.physical.tuple_unaliaser import TupleUnaliaser
 from snuba.query.query_settings import HTTPQuerySettings
-from snuba.state import set_config
 from tests.query.processors.query_builders import build_query
 
 
 def equals(op1: Expression, op2: Expression, alias: str | None = None) -> FunctionCall:
-    return FunctionCall(alias, "eq", tuple([op1, op2]))
+    return FunctionCall(alias, "eq", (op1, op2))
 
 
 def some_tuple(alias: str | None):
@@ -66,9 +65,7 @@ TEST_QUERIES = [
                         identity(
                             equals(
                                 # alias of the tuple of internal function is removed (it is not useful)
-                                tupleElement(
-                                    None, some_tuple(alias="ayyy"), Literal(None, 1)
-                                ),
+                                tupleElement(None, some_tuple(alias="ayyy"), Literal(None, 1)),
                                 Literal(None, 300),
                             )
                         )
@@ -83,9 +80,7 @@ TEST_QUERIES = [
                         identity(
                             equals(
                                 # alias of the tuple of internal function is removed (it is not useful)
-                                tupleElement(
-                                    None, some_tuple(alias=None), Literal(None, 1)
-                                ),
+                                tupleElement(None, some_tuple(alias=None), Literal(None, 1)),
                                 Literal(None, 300),
                             )
                         )
@@ -98,9 +93,7 @@ TEST_QUERIES = [
     pytest.param(
         build_query(
             selected_columns=[
-                CurriedFunctionCall(
-                    None, some_tuple(alias="foo"), (Literal(None, "4"),)
-                )
+                CurriedFunctionCall(None, some_tuple(alias="foo"), (Literal(None, "4"),))
             ]
         ),
         build_query(
@@ -114,9 +107,7 @@ TEST_QUERIES = [
 
 
 @pytest.mark.parametrize("input_query,expected_query", TEST_QUERIES)
-@pytest.mark.redis_db
 def test_tuple_unaliaser(input_query, expected_query):
-    set_config("tuple_unaliaser_rollout", 1)
     settings = HTTPQuerySettings()
     TupleUnaliaser().process_query(input_query, settings)
     assert input_query == expected_query

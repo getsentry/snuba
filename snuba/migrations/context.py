@@ -1,5 +1,6 @@
 import logging
-from typing import Callable, NamedTuple
+from collections.abc import Callable
+from typing import NamedTuple
 
 from snuba.migrations.status import Status
 

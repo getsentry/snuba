@@ -1,6 +1,7 @@
 import base64
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from typing import Any, Callable
+from typing import Any
 
 import pytest
 from confluent_kafka.admin import AdminClient
@@ -18,7 +19,6 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     Function,
 )
 
-from snuba import state
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.subscriptions.data import PartitionId, RPCSubscriptionData
@@ -187,8 +187,6 @@ class TestCreateSubscriptionApi(BaseApiTest):
             3600,
             metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
         )
-
-        state.set_config("CreateSubscriptionRequest.entity_name", "eap_items")
 
         message = CreateSubscriptionRequest(
             time_series_request=TimeSeriesRequest(

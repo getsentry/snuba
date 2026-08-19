@@ -2,9 +2,9 @@ import hashlib
 import json
 import logging
 import time
-import typing
+from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta
-from typing import List, Mapping, Optional, Sequence, TypeVar
+from typing import TypeVar
 
 import rapidjson
 from arroyo.backends.kafka import KafkaPayload
@@ -35,7 +35,7 @@ from snuba.query.dsl import column, equals, literal
 from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import RedisClientKey, get_redis_client
-from snuba.state import get_int_config, get_str_config
+from snuba.state.sentry_options import get_mapped_option, get_option
 from snuba.utils.metrics import MetricsBackend
 from snuba.web import QueryException
 from snuba.web.bulk_delete_query import construct_or_conditions, construct_query
@@ -72,7 +72,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         self.__partition_column = deletion_settings.partition_column
         self.__formatter: Formatter = formatter
         self.__metrics = metrics
-        self.__last_ongoing_mutations_check: Optional[float] = None
+        self.__last_ongoing_mutations_check: float | None = None
         self.__redis_client = get_redis_client(RedisClientKey.CONFIG)
 
     def poll(self) -> None:
@@ -85,11 +85,11 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         if self.__storage.get_storage_key() != StorageKey.EAP_ITEMS:
             return conditions
 
-        str_config = get_str_config("org_ids_delete_allowlist", "")
+        str_config = get_option("org_ids_delete_allowlist", "")
         if not str_config:
             return conditions  # allowlist not set → allow all
 
-        org_ids_delete_allowlist = set(int(org_id) for org_id in str_config.split(","))
+        org_ids_delete_allowlist = {int(org_id) for org_id in str_config.split(",")}
 
         allowed = []
         for cond in conditions:
@@ -116,12 +116,12 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
             # backpressure is applied while we wait for the
             # currently ongoing mutations to finish
             self.__metrics.increment("too_many_ongoing_mutations")
-            raise MessageRejected
+            raise MessageRejected from None
         except QueryException as err:
             cause = err.__cause__
             if isinstance(cause, AllocationPolicyViolations):
                 self.__metrics.increment("allocation_policy_violation")
-                raise MessageRejected
+                raise MessageRejected from None
 
         self.__next_step.submit(message)
 
@@ -156,7 +156,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         parts.sort()
         return hashlib.md5("|".join(parts).encode()).hexdigest()[:16]
 
-    def _get_partition_dates(self, table: str) -> List[str]:
+    def _get_partition_dates(self, table: str) -> list[str]:
         from snuba.util import decode_part_str
 
         cluster = self.__storage.get_cluster()
@@ -199,14 +199,29 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
     def _execute_delete(self, conditions: Sequence[ConditionsBag]) -> None:
         self._check_ongoing_mutations()
         query_settings = HTTPQuerySettings()
-        # starting in 24.4 the default is 2
-        lw_sync = get_int_config("lightweight_deletes_sync")
-        if lw_sync is not None:
-            query_settings.set_clickhouse_settings({"lightweight_deletes_sync": lw_sync})
+        # starting in 24.4 the default is 2; -1 (the schema default) means
+        # "unset", leaving ClickHouse's own default in place.
+        lw_sync = get_option("lightweight_deletes_sync", -1)
+        if lw_sync >= 0:
+            query_settings.push_clickhouse_setting("lightweight_deletes_sync", lw_sync)
+
+        lw_updates_enabled = get_option("lightweight_delete_mode", "")
+        if lw_updates_enabled:
+            mode = (
+                lw_updates_enabled
+                if lw_updates_enabled
+                in ("alter_update", "lightweight_update", "lightweight_update_force")
+                else "lightweight_update"
+            )
+            # Options for `lightweight_delete_mode` setting:
+            # alter_update - run ALTER UPDATE query that creates a heavyweight mutation.
+            # lightweight_update - run lightweight update if possible, run ALTER UPDATE otherwise.
+            # lightweight_update_force - run lightweight update if possible, throw otherwise.
+            query_settings.push_clickhouse_setting("lightweight_delete_mode", mode)
 
         split_enabled = bool(
             self.__partition_column
-            and get_int_config(f"lw_deletes_split_by_partition_{self.__storage_name}", default=0)
+            and get_mapped_option("lw_deletes_split_by_partition", self.__storage_name, 0)
         )
 
         for table in self.__tables:
@@ -224,6 +239,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         query_settings: HTTPQuerySettings,
         conditions: Sequence[ConditionsBag],
     ) -> None:
+        assert self.__partition_column is not None
         partition_dates = self._get_partition_dates(table)
         if not partition_dates:
             logger.warning(
@@ -256,7 +272,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
 
             self._check_ongoing_mutations(skip_throttle=True)
             partition_condition = equals(
-                FunctionCall(None, "toMonday", (column(self.__partition_column),)),  # type: ignore[arg-type]
+                FunctionCall(None, "toMonday", (column(self.__partition_column),)),
                 literal(partition_date),
             )
             partition_where = combine_and_conditions([where_clause, partition_condition])
@@ -275,7 +291,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         table: str,
         query: Query,
         query_settings: HTTPQuerySettings,
-        partition_week: Optional[str] = None,
+        partition_week: str | None = None,
     ) -> None:
         tags = {"table": table}
         if partition_week:
@@ -302,7 +318,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
                 if cause.code in LW_DELETE_NON_RETRYABLE_CLICKHOUSE_ERROR_CODES:
                     logger.exception("Error running delete query %r", exc)
                 else:
-                    raise LWDeleteQueryException(exc.message)
+                    raise LWDeleteQueryException(exc.message) from exc
 
     def _check_ongoing_mutations(self, skip_throttle: bool = False) -> None:
         now = time.time()
@@ -317,12 +333,8 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         start = time.time()
         parts_mutating = _num_parts_currently_mutating(self.__storage.get_cluster())
         self.__last_ongoing_mutations_check = time.time()
-        max_parts_mutating = typing.cast(
-            int,
-            get_int_config(
-                "max_parts_mutating_for_delete",
-                default=settings.MAX_PARTS_MUTATING_FOR_DELETE,
-            ),
+        max_parts_mutating = get_option(
+            "max_parts_mutating_for_delete", settings.MAX_PARTS_MUTATING_FOR_DELETE
         )
         self.__metrics.timing("ongoing_mutations_query_ms", (time.time() - start) * 1000)
         if parts_mutating > max_parts_mutating:
@@ -336,7 +348,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
     def terminate(self) -> None:
         self.__next_step.terminate()
 
-    def join(self, timeout: Optional[float] = None) -> None:
+    def join(self, timeout: float | None = None) -> None:
         self.__next_step.join(timeout)
 
 

@@ -1,26 +1,23 @@
+import os
 from abc import ABC, abstractmethod
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
-from threading import Lock
+from functools import cache
 from typing import (
     Any,
-    Dict,
     Generic,
-    Mapping,
-    MutableMapping,
     NamedTuple,
-    Optional,
-    Sequence,
-    Set,
-    Tuple,
     TypeVar,
 )
 
 import structlog
 
 from snuba import settings
+from snuba.clickhouse.connect import ClickhouseConnectPool
 from snuba.clickhouse.http import HTTPBatchWriter, InsertStatement, JSONRow
-from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
+from snuba.clickhouse.pool import ClickhousePool
+from snuba.clickhouse.reader import ClickhouseReader
 from snuba.clusters.storage_sets import (
     DEV_STORAGE_SETS,
     StorageSetKey,
@@ -33,16 +30,25 @@ from snuba.writer import BatchWriter
 
 logger = structlog.get_logger().bind(module=__name__)
 
+# Well-known default ClickHouse HTTP port, used by by-host helpers (e.g. CLI
+# tools) that only know a node's address and have no cluster config to read an
+# port from.
+DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
+# User-facing read queries get a 25s timeout, leaving headroom under a ~30s
+# frontend request budget to still return a response. Migrations, DDL and
+# other long-running operations keep their own (default or longer) timeouts
+# above/below.
+_DEFAULT_USER_FACING_TIMEOUT = 25
+
 
 class ClickhouseClientSettingsType(NamedTuple):
     settings: Mapping[str, Any]
-    timeout: Optional[int]
+    timeout: int | None
 
 
 class ConnectionId(NamedTuple):
     hostname: str
-    tcp_port: int
-    http_port: int
+    port: int
     database_name: str
 
 
@@ -65,9 +71,18 @@ class ClickhouseClientSettings(Enum):
     )
     DELETE = ClickhouseClientSettingsType({"mutations_sync": 1}, None)
     OPTIMIZE = ClickhouseClientSettingsType({}, settings.OPTIMIZE_QUERY_TIMEOUT)
-    QUERY = ClickhouseClientSettingsType({}, None)
+    QUERY = ClickhouseClientSettingsType({}, _DEFAULT_USER_FACING_TIMEOUT)
+    TRACING = ClickhouseClientSettingsType(
+        {"readonly": 2, "max_execution_time": _DEFAULT_USER_FACING_TIMEOUT},
+        _DEFAULT_USER_FACING_TIMEOUT,
+    )
+    # Internal/maintenance queries that are NOT user-facing reads and must not
+    # inherit QUERY's 25s cap: cluster topology discovery (system.clusters),
+    # storage-routing load lookups, delete-throttling system-table checks, the
+    # span-export job and admin table copies. These can legitimately run long,
+    # so they stay unbounded (their behavior before QUERY got a read timeout).
+    INTERNAL = ClickhouseClientSettingsType({}, None)
     QUERYLOG = ClickhouseClientSettingsType({}, None)
-    TRACING = ClickhouseClientSettingsType({"readonly": 2}, None)
     REPLACE = ClickhouseClientSettingsType(
         {
             # Replacing existing rows requires reconstructing the entire tuple
@@ -104,8 +119,8 @@ class ClickhouseClientSettings(Enum):
 class ClickhouseNode:
     host_name: str
     port: int
-    shard: Optional[int] = None
-    replica: Optional[int] = None
+    shard: int | None = None
+    replica: int | None = None
 
     def __str__(self) -> str:
         return f"{self.host_name}:{self.port}"
@@ -137,13 +152,13 @@ class Cluster(ABC, Generic[TWriterOptions]):
         - optimize
     """
 
-    def __init__(self, storage_sets: Set[str]):
+    def __init__(self, storage_sets: set[str]):
         self.__storage_sets = storage_sets
         # register the cluster's storage sets
         for storage_set in storage_sets:
             register_storage_set_key(storage_set)
 
-    def get_storage_set_keys(self) -> Set[StorageSetKey]:
+    def get_storage_set_keys(self) -> set[StorageSetKey]:
         return {StorageSetKey(storage_set) for storage_set in self.__storage_sets}
 
     @abstractmethod
@@ -155,75 +170,83 @@ class Cluster(ABC, Generic[TWriterOptions]):
         self,
         metrics: MetricsBackend,
         insert_statement: InsertStatement,
-        encoding: Optional[str],
+        encoding: str | None,
         options: TWriterOptions,
-        chunk_size: Optional[int],
+        chunk_size: int | None,
         buffer_size: int,
     ) -> BatchWriter[JSONRow]:
         raise NotImplementedError
 
 
-ClickhouseWriterOptions = Optional[Mapping[str, Any]]
+ClickhouseWriterOptions = Mapping[str, Any] | None
 
 
-CacheKey = Tuple[
-    ClickhouseNode,
-    ClickhouseClientSettings,
-    str,
-    str,
-    str,
-    bool,
-    Optional[str],
-    Optional[bool],
-]
+@cache
+def _build_pool_cached(
+    client_settings: ClickhouseClientSettings,
+    host: str,
+    port: int,
+    user: str,
+    password: str,
+    database: str | None,
+    secure: bool,
+    ca_certs: str | None,
+    verify: bool | None,
+) -> ClickhousePool:
+    """Return the process-local pool for this exact endpoint and configuration."""
+    client_settings_dict, timeout = client_settings.value
+    return ClickhouseConnectPool(
+        host=host,
+        port=port,
+        user=user,
+        password=password,
+        database=database,
+        client_settings=client_settings_dict,
+        send_receive_timeout=timeout,
+        secure=secure,
+        ca_certs=ca_certs,
+        verify=verify,
+    )
 
 
-class ConnectionCache:
-    def __init__(self) -> None:
-        self.__cache: MutableMapping[CacheKey, ClickhousePool] = {}
-        self.__lock = Lock()
-
-    def get_node_connection(
-        self,
-        client_settings: ClickhouseClientSettings,
-        node: ClickhouseNode,
-        user: str,
-        password: str,
-        database: str,
-        secure: bool,
-        ca_certs: Optional[str],
-        verify: Optional[bool],
-    ) -> ClickhousePool:
-        with self.__lock:
-            settings, timeout = client_settings.value
-            cache_key = (
-                node,
-                client_settings,
-                user,
-                password,
-                database,
-                secure,
-                ca_certs,
-                verify,
-            )
-            if cache_key not in self.__cache:
-                self.__cache[cache_key] = ClickhousePool(
-                    node.host_name,
-                    node.port,
-                    user,
-                    password,
-                    database,
-                    client_settings=settings,
-                    send_receive_timeout=timeout,
-                    secure=secure,
-                    ca_certs=ca_certs,
-                    verify=verify,
-                )
-
-            return self.__cache[cache_key]
+def _clear_pool_cache_after_fork() -> None:
+    """Drop inherited pool objects so children never reuse parent locks/clients."""
+    _build_pool_cached.cache_clear()
 
 
-connection_cache = ConnectionCache()
+os.register_at_fork(after_in_child=_clear_pool_cache_after_fork)
+
+
+def build_pool(
+    client_settings: ClickhouseClientSettings,
+    node: ClickhouseNode,
+    user: str,
+    password: str,
+    database: str | None,
+    secure: bool = False,
+    ca_certs: str | None = None,
+    verify: bool | None = None,
+) -> ClickhousePool:
+    """Return a cached client pool scoped to one cluster endpoint and configuration.
+
+    Client construction probes ClickHouse for server settings and timezone.
+    Host and port are explicit cache-key fields so clients are never shared
+    across cluster endpoints. Credentials, database, TLS, and client settings
+    also remain part of the key.
+    """
+    return _build_pool_cached(
+        client_settings,
+        node.host_name,
+        node.port,
+        user,
+        password,
+        database,
+        secure,
+        ca_certs,
+        verify,
+    )
+
+
 _DEFAULT_MAX_CONNECTIONS = 1
 
 
@@ -232,7 +255,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
     ClickhouseCluster provides a reader, writer and Clickhouse connections that are
     shared by all storages located on the cluster.
 
-    ClickhouseCluster is initialized with a single address (host/port/http_port),
+    ClickhouseCluster is initialized with a single address (host/port),
     which is used for all read and write operations related to the cluster. This
     address can refer to either the address of the actual ClickHouse server, or a
     proxy server (e.g. for load balancing).
@@ -253,18 +276,17 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         user: str,
         password: str,
         database: str,
-        http_port: int,
         secure: bool,
-        ca_certs: Optional[str],
-        verify: Optional[bool],
-        storage_sets: Set[str],
+        ca_certs: str | None,
+        verify: bool | None,
+        storage_sets: set[str],
         single_node: bool,
         # The cluster name and distributed cluster name only apply if single_node is set to False
-        cluster_name: Optional[str] = None,
-        distributed_cluster_name: Optional[str] = None,
-        cache_partition_id: Optional[str] = None,
-        query_settings_prefix: Optional[str] = None,
-        max_connections: Optional[int] = None,
+        cluster_name: str | None = None,
+        distributed_cluster_name: str | None = None,
+        cache_partition_id: str | None = None,
+        query_settings_prefix: str | None = None,
+        max_connections: int | None = None,
         block_connections: bool = False,
     ):
         super().__init__(storage_sets)
@@ -276,23 +298,22 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         self.__user = user
         self.__password = password
         self.__database = database
-        self.__http_port = http_port
         self.__secure = secure
         self.__ca_certs = ca_certs
         self.__verify = verify
         self.__single_node = single_node
         self.__cluster_name = cluster_name
         self.__distributed_cluster_name = distributed_cluster_name
-        self.__reader: Optional[Reader] = None
-        self.__deleter: Optional[Reader] = None
-        self.__connection_cache = connection_cache
         self.__cache_partition_id = cache_partition_id
         self.__query_settings_prefix = query_settings_prefix
+        # The local node used by the deleter is static cluster topology; cache
+        # it so get_deleter() does not re-run a system.clusters lookup per call.
+        self.__delete_local_node: ClickhouseNode | None = None
 
     def __str__(self) -> str:
         return str(self.__query_node)
 
-    def get_credentials(self) -> Tuple[str, str]:
+    def get_credentials(self) -> tuple[str, str]:
         """
         Returns the user credentials for the Clickhouse connection
         """
@@ -313,12 +334,9 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         node: ClickhouseNode,
     ) -> ClickhousePool:
         """
-        Get a Clickhouse connection using the client settings provided. Reuse any
-        connection to the same node with the same settings otherwise establish a new
-        connection.
+        Build a Clickhouse connection using the client settings provided.
         """
-
-        return self.__connection_cache.get_node_connection(
+        return build_pool(
             client_settings,
             node,
             self.__user,
@@ -330,38 +348,43 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         )
 
     def get_deleter(self) -> Reader:
-        if not self.__deleter:
-            # we need the connection to the storage nodes, not
-            # the distributed nodes
-            local_node = self.get_local_nodes()[0]
-            self.__deleter = NativeDriverReader(
-                cache_partition_id=f"{self.__cache_partition_id}_deletes",
-                client=self.get_node_connection(ClickhouseClientSettings.DELETE, local_node),
-                query_settings_prefix=self.__query_settings_prefix,
-            )
-        return self.__deleter
+        # we need the connection to the storage nodes, not the distributed
+        # nodes. The node lookup is cached (it can run a system.clusters query
+        # on multi-node clusters) while the connection is resolved per call so
+        # the driver can still switch at runtime.
+        if self.__delete_local_node is None:
+            self.__delete_local_node = self.get_local_nodes()[0]
+        return ClickhouseReader(
+            cache_partition_id=f"{self.__cache_partition_id}_deletes",
+            client=self.get_node_connection(
+                ClickhouseClientSettings.DELETE, self.__delete_local_node
+            ),
+            query_settings_prefix=self.__query_settings_prefix,
+        )
 
     def get_reader(self) -> Reader:
-        if not self.__reader:
-            self.__reader = NativeDriverReader(
-                cache_partition_id=self.__cache_partition_id,
-                client=self.get_query_connection(ClickhouseClientSettings.QUERY),
-                query_settings_prefix=self.__query_settings_prefix,
-            )
-        return self.__reader
+        """
+        Return a reader for the query node. ClickhouseReader wraps the
+        clickhouse-connect pool from get_query_connection.
+        """
+        return ClickhouseReader(
+            cache_partition_id=self.__cache_partition_id,
+            client=self.get_query_connection(ClickhouseClientSettings.QUERY),
+            query_settings_prefix=self.__query_settings_prefix,
+        )
 
     def get_batch_writer(
         self,
         metrics: MetricsBackend,
         insert_statement: InsertStatement,
-        encoding: Optional[str],
+        encoding: str | None,
         options: ClickhouseWriterOptions,
-        chunk_size: Optional[int],
+        chunk_size: int | None,
         buffer_size: int,
     ) -> BatchWriter[JSONRow]:
         return HTTPBatchWriter(
             host=self.__query_node.host_name,
-            port=self.__http_port,
+            port=self.__port,
             max_connections=self.__max_connections,
             block_connections=self.__block_connections,
             user=self.__user,
@@ -385,10 +408,10 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         """
         return self.__single_node
 
-    def get_clickhouse_cluster_name(self) -> Optional[str]:
+    def get_clickhouse_cluster_name(self) -> str | None:
         return self.__cluster_name
 
-    def get_clickhouse_distributed_cluster_name(self) -> Optional[str]:
+    def get_clickhouse_distributed_cluster_name(self) -> str | None:
         return self.__distributed_cluster_name
 
     def get_database(self) -> str:
@@ -419,19 +442,24 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
     def get_connection_id(self) -> ConnectionId:
         return ConnectionId(
             hostname=self.__query_node.host_name,
-            tcp_port=self.__query_node.port,
-            http_port=self.__http_port,
+            port=self.__port,
             database_name=self.__database,
         )
 
     def __get_cluster_nodes(self, cluster_name: str) -> Sequence[ClickhouseNode]:
+        # system.clusters reports the TCP port; discard it. Replicas serve HTTP
+        # on 8123. Envoy only fronts the query endpoint.
         return [
-            ClickhouseNode(*host)
-            for host in self.get_query_connection(ClickhouseClientSettings.QUERY)
+            ClickhouseNode(
+                host_name=host[0],
+                port=DEFAULT_CLICKHOUSE_HTTP_PORT,
+                shard=host[2],
+                replica=host[3],
+            )
+            for host in self.get_query_connection(ClickhouseClientSettings.INTERNAL)
             .execute(
                 "select host_name, port, shard_num, replica_num from system.clusters where cluster=%(cluster_name)s",
                 {"cluster_name": cluster_name},
-                retryable=True,
             )
             .results
         ]
@@ -442,30 +470,31 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
     def get_port(self) -> int:
         return self.__port
 
-    def get_http_port(self) -> int:
-        return self.__http_port
-
     def get_secure(self) -> bool:
         return self.__secure
+
+    def get_ca_certs(self) -> str | None:
+        return self.__ca_certs
+
+    def get_verify(self) -> bool | None:
+        return self.__verify
 
 
 CLUSTERS = [
     ClickhouseCluster(
         host=cluster["host"],
-        port=cluster["port"],
+        # Prefer http_port when present so older dual-port configs still dial HTTP.
+        port=cluster.get("http_port", cluster["port"]),
         user=cluster.get("user", "default"),
         password=cluster.get("password", ""),
         database=cluster.get("database", "default"),
-        http_port=cluster["http_port"],
         secure=cluster.get("secure", False),
         ca_certs=cluster.get("ca_certs", None),
         verify=cluster.get("verify", False),
         storage_sets=cluster["storage_sets"],
         single_node=cluster["single_node"],
-        cluster_name=cluster["cluster_name"] if "cluster_name" in cluster else None,
-        distributed_cluster_name=(
-            cluster["distributed_cluster_name"] if "distributed_cluster_name" in cluster else None
-        ),
+        cluster_name=cluster.get("cluster_name", None),
+        distributed_cluster_name=(cluster.get("distributed_cluster_name", None)),
         cache_partition_id=cluster.get("cache_partition_id"),
         query_settings_prefix=cluster.get("query_settings_prefix"),
         max_connections=cluster.get("max_connections", _DEFAULT_MAX_CONNECTIONS),
@@ -483,41 +512,39 @@ assert len(_registered_storage_sets) == len(_unique_registered_storage_sets), (
     "Storage set registered to more than one cluster"
 )
 
-_STORAGE_SET_CLUSTER_MAP: Dict[StorageSetKey, ClickhouseCluster] = {
+_STORAGE_SET_CLUSTER_MAP: dict[StorageSetKey, ClickhouseCluster] = {
     storage_set: cluster for cluster in CLUSTERS for storage_set in cluster.get_storage_set_keys()
 }
 
 
-def _get_storage_set_cluster_map() -> Dict[StorageSetKey, ClickhouseCluster]:
+def _get_storage_set_cluster_map() -> dict[StorageSetKey, ClickhouseCluster]:
     return _STORAGE_SET_CLUSTER_MAP
 
 
 def _build_sliced_cluster(cluster: Mapping[str, Any]) -> ClickhouseCluster:
     return ClickhouseCluster(
         host=cluster["host"],
-        port=cluster["port"],
+        # Prefer http_port when present so older dual-port configs still dial HTTP.
+        port=cluster.get("http_port", cluster["port"]),
         user=cluster.get("user", "default"),
         password=cluster.get("password", ""),
         database=cluster.get("database", "default"),
-        http_port=cluster["http_port"],
         secure=cluster.get("secure", False),
         ca_certs=cluster.get("ca_certs", None),
         verify=cluster.get("verify", False),
         storage_sets={storage_tuple[0] for storage_tuple in cluster["storage_set_slices"]},
         single_node=cluster["single_node"],
-        cluster_name=cluster["cluster_name"] if "cluster_name" in cluster else None,
-        distributed_cluster_name=(
-            cluster["distributed_cluster_name"] if "distributed_cluster_name" in cluster else None
-        ),
+        cluster_name=cluster.get("cluster_name", None),
+        distributed_cluster_name=(cluster.get("distributed_cluster_name", None)),
         cache_partition_id=cluster.get("cache_partition_id"),
         query_settings_prefix=cluster.get("query_settings_prefix"),
     )
 
 
-_SLICED_STORAGE_SET_CLUSTER_MAP: Dict[Tuple[StorageSetKey, int], ClickhouseCluster] = {}
+_SLICED_STORAGE_SET_CLUSTER_MAP: dict[tuple[StorageSetKey, int], ClickhouseCluster] = {}
 
 
-def _get_sliced_storage_set_cluster_map() -> Dict[Tuple[StorageSetKey, int], ClickhouseCluster]:
+def _get_sliced_storage_set_cluster_map() -> dict[tuple[StorageSetKey, int], ClickhouseCluster]:
     if len(_SLICED_STORAGE_SET_CLUSTER_MAP) == 0:
         for cluster in settings.SLICED_CLUSTERS:
             for storage_set_tuple in cluster["storage_set_slices"]:
@@ -532,9 +559,7 @@ class UndefinedClickhouseCluster(SerializableException):
     pass
 
 
-def get_cluster(
-    storage_set_key: StorageSetKey, slice_id: Optional[int] = None
-) -> ClickhouseCluster:
+def get_cluster(storage_set_key: StorageSetKey, slice_id: int | None = None) -> ClickhouseCluster:
     """Return a clickhouse cluster for a storage set key.
 
     If passing in a sliced storage set, a slice_id must be specified.

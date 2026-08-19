@@ -21,6 +21,9 @@ on:
       version:
         required: true
         type: string
+    secrets:
+      GETSENTRY_BOT_REVERT_TOKEN:
+        required: true
 
 # disable all permissions -- we use the PAT's permissions instead
 permissions: {}
@@ -29,10 +32,10 @@ jobs:
   bump-version:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         token: ${{ secrets.GETSENTRY_BOT_REVERT_TOKEN }}
-    - uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098 # v7.3.1
+    - uses: astral-sh/setup-uv@ae62891fec2bb8e7d6c99fc78c9fec3a63790f8d # v10.0.0
     - run: uv python install
     - run: |
         set -euxo pipefail

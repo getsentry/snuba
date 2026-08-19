@@ -1,4 +1,4 @@
-from typing import Sequence
+from collections.abc import Sequence
 
 from snuba.clickhouse.columns import Column, String
 from snuba.clusters.storage_sets import StorageSetKey
@@ -6,7 +6,6 @@ from snuba.migrations import migration, operations
 
 
 class Migration(migration.ClickhouseNodeMigrationLegacy):
-
     blocking = False
     forwards_local_first: bool = False
     backwards_local_first: bool = True

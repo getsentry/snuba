@@ -1,11 +1,11 @@
-from typing import List, Mapping, Tuple
+from collections.abc import Mapping
 
 import pytest
 
 from snuba.migrations import migration
 from snuba.migrations.groups import MigrationGroup, get_group_loader
 
-all_migrations: List[Tuple[str, MigrationGroup, migration.ClickhouseNodeMigration]] = []
+all_migrations: list[tuple[str, MigrationGroup, migration.ClickhouseNodeMigration]] = []
 for group in MigrationGroup:
     group_loader = get_group_loader(group)
     for migration_id in group_loader.get_migrations():

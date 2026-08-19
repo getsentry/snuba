@@ -5,7 +5,7 @@ from structlog.testing import capture_logs
 
 import snuba.admin.audit_log.query
 from snuba.admin.audit_log.query import QueryExecutionStatus, audit_log
-from snuba.clickhouse.native import ClickhouseResult
+from snuba.clickhouse.pool import ClickhouseResult
 
 
 def test_audit_log_success() -> None:
@@ -34,7 +34,7 @@ def test_audit_log_failure() -> None:
         def failed_query(query: str, user: str) -> ClickhouseResult:
             raise Exception()
 
-        with pytest.raises(Exception):
+        with pytest.raises(Exception):  # noqa: B017 decorated fn raises bare Exception; verifying audit_log re-raises it
             failed_query("test_bad_query", "test_bad_user")
 
     assert len(cap_logs) == 1

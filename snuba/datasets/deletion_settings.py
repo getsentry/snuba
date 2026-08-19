@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Sequence
+from typing import cast
 
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
@@ -15,8 +16,8 @@ class DeletionSettings:
     bulk_delete_only: bool = False
     allowed_columns: Sequence[str] = field(default_factory=list)
     max_rows_to_delete: int = MAX_ROWS_TO_DELETE_DEFAULT
-    allowed_attributes_by_item_type: Dict[str, List[str]] = field(default_factory=dict)
-    partition_column: Optional[str] = None
+    allowed_attributes_by_item_type: dict[str, list[str]] = field(default_factory=dict)
+    partition_column: str | None = None
 
 
 def get_trace_item_type_name(item_type: int) -> str:
@@ -38,7 +39,7 @@ def get_trace_item_type_name(item_type: int) -> str:
     try:
         # Get the full protobuf enum name (e.g., "TRACE_ITEM_TYPE_SPAN")
         # Cast to TraceItemType.ValueType to satisfy type checker
-        full_name = TraceItemType.Name(item_type)  # type: ignore[arg-type]
+        full_name = TraceItemType.Name(cast("TraceItemType.ValueType", item_type))
 
         # Strip the "TRACE_ITEM_TYPE_" prefix and convert to lowercase
         prefix = "TRACE_ITEM_TYPE_"

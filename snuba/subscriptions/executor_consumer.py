@@ -4,9 +4,10 @@ import logging
 import math
 import time
 from collections import deque
+from collections.abc import Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from datetime import datetime
-from typing import Deque, Mapping, Optional, Sequence, Tuple
 
 from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Producer
@@ -18,9 +19,8 @@ from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
 from arroyo.processing.strategies.commit import CommitOffsets
 from arroyo.processing.strategies.healthcheck import Healthcheck
 from arroyo.processing.strategies.produce import Produce
-from arroyo.types import Commit
+from arroyo.types import Commit, FilteredPayload
 
-from snuba import state
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.consumers.utils import get_partition_count
 from snuba.datasets.dataset import Dataset
@@ -29,6 +29,7 @@ from snuba.datasets.entities.factory import get_entity, get_entity_name
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.reader import Result
+from snuba.state.sentry_options import get_option
 from snuba.subscriptions.codecs import (
     SubscriptionScheduledTaskEncoder,
     SubscriptionTaskResultEncoder,
@@ -74,7 +75,7 @@ def calculate_max_concurrent_queries(
     fall back to 1 replica (meaning the max concurrent queries == the total)
     """
     replicas = total_partition_count / assigned_partition_count
-    return math.ceil((total_concurrent_queries / replicas))
+    return math.ceil(total_concurrent_queries / replicas)
 
 
 def build_executor_consumer(
@@ -82,14 +83,14 @@ def build_executor_consumer(
     entity_names: Sequence[str],
     consumer_group: str,
     bootstrap_servers: Sequence[str],
-    slice_id: Optional[int],
+    slice_id: int | None,
     producer: Producer[KafkaPayload],
     total_concurrent_queries: int,
     auto_offset_reset: str,
-    strict_offset_reset: Optional[bool],
+    strict_offset_reset: bool | None,
     metrics: MetricsBackend,
-    stale_threshold_seconds: Optional[int],
-    health_check_file: Optional[str] = None,
+    stale_threshold_seconds: int | None,
+    health_check_file: str | None = None,
 ) -> StreamProcessor[KafkaPayload]:
     # Validate that a valid dataset/entity pair was passed in
     dataset = get_dataset(dataset_name)
@@ -100,7 +101,7 @@ def build_executor_consumer(
 
     def get_topics_for_entity(
         entity_name: str,
-    ) -> Tuple[KafkaTopicSpec, KafkaTopicSpec]:
+    ) -> tuple[KafkaTopicSpec, KafkaTopicSpec]:
         assert entity_name in dataset_entity_names, (
             f"Entity {entity_name} does not exist in dataset {dataset_name}"
         )
@@ -170,9 +171,9 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
         entity_names: Sequence[str],
         producer: Producer[KafkaPayload],
         metrics: MetricsBackend,
-        stale_threshold_seconds: Optional[int],
+        stale_threshold_seconds: int | None,
         result_topic: str,
-        health_check_file: Optional[str] = None,
+        health_check_file: str | None = None,
     ) -> None:
         self.__total_concurrent_queries = total_concurrent_queries
         self.__total_partition_count = total_partition_count
@@ -188,7 +189,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
         self,
         commit: Commit,
         partitions: Mapping[Partition, int],
-    ) -> ProcessingStrategy[KafkaPayload]:
+    ) -> ProcessingStrategy[FilteredPayload | KafkaPayload]:
         calculated_max_concurrent_queries = calculate_max_concurrent_queries(
             len(partitions),
             self.__total_partition_count,
@@ -196,7 +197,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
         )
         self.__metrics.gauge("calculated_max_concurrent_queries", calculated_max_concurrent_queries)
 
-        strategy: ProcessingStrategy[KafkaPayload] = ExecuteQuery(
+        strategy: ProcessingStrategy[FilteredPayload | KafkaPayload] = ExecuteQuery(
             self.__dataset,
             self.__entity_names,
             calculated_max_concurrent_queries,
@@ -211,7 +212,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
         return strategy
 
 
-class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
+class ExecuteQuery(ProcessingStrategy[FilteredPayload | KafkaPayload]):
     """
     Decodes a scheduled subscription task from the Kafka payload, builds
     the request and executes the ClickHouse query.
@@ -222,9 +223,9 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         dataset: Dataset,
         entity_names: Sequence[str],
         max_concurrent_queries: int,
-        stale_threshold_seconds: Optional[int],
+        stale_threshold_seconds: int | None,
         metrics: MetricsBackend,
-        next_step: ProcessingStrategy[KafkaPayload],
+        next_step: ProcessingStrategy[FilteredPayload | KafkaPayload],
     ) -> None:
         self.__dataset = dataset
         self.__entity_names = set(entity_names)
@@ -237,7 +238,12 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         self.__encoder = SubscriptionScheduledTaskEncoder()
         self.__result_encoder = SubscriptionTaskResultEncoder()
 
-        self.__queue: Deque[Tuple[Message[KafkaPayload], SubscriptionTaskResultFuture]] = deque()
+        self.__queue: deque[
+            tuple[
+                Message[FilteredPayload | KafkaPayload],
+                SubscriptionTaskResultFuture | None,
+            ]
+        ] = deque()
 
         self.__closed = False
 
@@ -249,7 +255,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
     def __execute_query(
         self, task: ScheduledSubscriptionTask, tick_upper_offset: int
-    ) -> Tuple[SubscriptionRequest, Result]:
+    ) -> tuple[SubscriptionRequest, Result]:
         # Measure the amount of time that took between the task's scheduled
         # time and it beginning to execute.
         self.__metrics.timing("executor.latency", (time.time() - task.timestamp.timestamp()) * 1000)
@@ -268,7 +274,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
             result = task.task.subscription.data.run_query(
                 self.__dataset,
-                request,  # type: ignore
+                request,  # type: ignore[arg-type]
                 timer,
                 robust=True,
                 concurrent_queries_gauge=self.__concurrent_clickhouse_gauge,
@@ -278,10 +284,17 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
     def poll(self) -> None:
         while self.__queue:
-            if not self.__queue[0][1].future.done():
+            message, result_future = self.__queue[0]
+
+            if result_future is None:
+                self.__queue.popleft()
+                self.__next_step.submit(message)
+                continue
+
+            if not result_future.future.done():
                 break
 
-            message, result_future = self.__queue.popleft()
+            self.__queue.popleft()
 
             try:
                 transformed_message = message.replace(
@@ -291,34 +304,51 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
                 )
             except QueryException as exc:
                 cause = exc.__cause__
-                if isinstance(cause, ClickhouseError):
-                    if cause.code in NON_RETRYABLE_CLICKHOUSE_ERROR_CODES:
-                        logger.exception("Error running subscription query %r", exc)
-                        self.__metrics.increment(
-                            "subscription_executor_nonretryable_error",
-                            tags={"error_type": str(cause.code)},
-                        )
-                    else:
-                        raise SubscriptionQueryException(exc.message)
+                # Retryable ClickHouse errors are re-raised so the consumer
+                # crashes and the message is retried. Every other failure
+                # (non-retryable ClickHouse error codes as well as non-ClickHouse
+                # causes such as QueryTooLongException) is non-retryable: log it,
+                # emit a metric and skip the message instead of submitting an
+                # unassigned transformed_message downstream.
+                if (
+                    isinstance(cause, ClickhouseError)
+                    and cause.code not in NON_RETRYABLE_CLICKHOUSE_ERROR_CODES
+                ):
+                    raise SubscriptionQueryException(exc.message) from exc
+
+                logger.exception("Error running subscription query %r", exc)
+                error_type = (
+                    str(cause.code) if isinstance(cause, ClickhouseError) else type(cause).__name__
+                )
+                self.__metrics.increment(
+                    "subscription_executor_nonretryable_error",
+                    tags={"error_type": error_type},
+                )
+                continue
 
             self.__next_step.submit(transformed_message)
 
         self.__next_step.poll()
 
-    def submit(self, message: Message[KafkaPayload]) -> None:
+    def submit(self, message: Message[FilteredPayload | KafkaPayload]) -> None:
         assert not self.__closed
 
         # If there are max_concurrent_queries + 10 pending futures in the queue,
         # we will start raising MessageRejected to slow down the consumer as
         # it means our executor cannot keep up
-        queue_size_factor = state.get_config("executor_queue_size_factor", 10)
-        assert queue_size_factor is not None, "Invalid executor_queue_size_factor config"
+        queue_size_factor = get_option("executor_queue_size_factor", 10)
         max_queue_size = self.__max_concurrent_queries * queue_size_factor
 
         # Tell the consumer to pause until we have removed some futures from
         # the queue
         if len(self.__queue) >= max_queue_size:
             raise MessageRejected
+
+        # Empty ticks are forwarded as FilteredPayload so CommitOffsets still
+        # advances, but only after earlier in-flight queries complete.
+        if isinstance(message.payload, FilteredPayload):
+            self.__queue.append((message, None))
+            return
 
         task = self.__encoder.decode(message.payload)
 
@@ -358,7 +388,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         self.__executor.shutdown()
         self.__next_step.terminate()
 
-    def join(self, timeout: Optional[float] = None) -> None:
+    def join(self, timeout: float | None = None) -> None:
         start = time.time()
 
         while self.__queue:
@@ -370,14 +400,26 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
             message, result_future = self.__queue.popleft()
 
+            if result_future is None:
+                self.__next_step.submit(message)
+                continue
+
+            try:
+                result = result_future.future.result(remaining)
+            except FutureTimeoutError:
+                logger.warning(
+                    f"Timed out waiting for future, {len(self.__queue)} futures remaining in queue"
+                )
+                continue
+
             transformed_message = self.__result_encoder.encode(
-                SubscriptionTaskResult(result_future.task, result_future.future.result(remaining))
+                SubscriptionTaskResult(result_future.task, result)
             )
 
             self.__next_step.submit(message.replace(transformed_message))
 
         remaining = timeout - (time.time() - start) if timeout is not None else None
-        self.__executor.shutdown()
+        self.__executor.shutdown(cancel_futures=True)
 
         self.__next_step.close()
         self.__next_step.join(remaining)

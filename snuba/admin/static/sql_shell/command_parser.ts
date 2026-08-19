@@ -41,8 +41,8 @@ const COMMANDS: CommandDefinition[] = [
           port: parseInt(hostMatch[2], 10),
         };
       }
-      // Default port if not specified
-      return { type: "host", host: hostStr, port: 9000 };
+      // Default to ClickHouse HTTP when the port is omitted.
+      return { type: "host", host: hostStr, port: 8123 };
     },
     modes: ["system"],
   },

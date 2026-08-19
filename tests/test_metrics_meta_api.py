@@ -1,6 +1,7 @@
 import json
+from collections.abc import Callable, Generator, Mapping
 from datetime import UTC, datetime, timedelta
-from typing import Any, Callable, Generator, Mapping, Tuple, Union
+from typing import Any
 
 import pytest
 
@@ -16,7 +17,7 @@ RETENTION_DAYS = 90
 SNQL_ROUTE = "/generic_metrics/snql"
 
 
-def get_tags() -> Generator[Mapping[str, str], None, None]:
+def get_tags() -> Generator[Mapping[str, str]]:
     idx = 0
     mappings = {"environment": "112358", "release": "132134"}
     while True:
@@ -31,25 +32,25 @@ def get_tags() -> Generator[Mapping[str, str], None, None]:
 
 @pytest.mark.genmetrics_db
 @pytest.mark.redis_db
-class TestGenericMetricsApiSets(BaseApiTest):
+class TestGenericMetricsApiCounters(BaseApiTest):
     @pytest.fixture
     def test_app(self) -> Any:
         return self.app
 
     @pytest.fixture
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
-        return "generic_metrics_sets"
+    def test_entity(self) -> str | tuple[str, str]:
+        return "generic_metrics_counters"
 
     @pytest.fixture
     def test_storage_set(self) -> StorageKey:
-        return StorageKey.GENERIC_METRICS_SETS_RAW
+        return StorageKey.GENERIC_METRICS_COUNTERS_RAW
 
     @pytest.fixture
     def test_metric_type(self) -> InputType:
-        return InputType.SET
+        return InputType.COUNTER
 
     def generate_metric_values(self) -> Any:
-        return [1, 2, 3]
+        return 1.0
 
     @pytest.fixture(autouse=True)
     def setup_teardown(
@@ -161,66 +162,3 @@ class TestGenericMetricsApiSets(BaseApiTest):
         assert len(data["data"]) == 2, data
         assert data["data"][0]["tag_key"] == 112358
         assert data["data"][1]["tag_key"] == 132134
-
-
-@pytest.mark.genmetrics_db
-@pytest.mark.redis_db
-class TestGenericMetricsApiCounters(TestGenericMetricsApiSets):
-    @pytest.fixture
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
-        return "generic_metrics_counters"
-
-    @pytest.fixture
-    def test_storage_set(self) -> StorageKey:
-        return StorageKey.GENERIC_METRICS_COUNTERS_RAW
-
-    @pytest.fixture
-    def test_metric_type(self) -> InputType:
-        return InputType.COUNTER
-
-    def generate_metric_values(self) -> Any:
-        return 1.0
-
-
-@pytest.mark.genmetrics_db
-@pytest.mark.redis_db
-class TestGenericMetricsApiGauges(TestGenericMetricsApiSets):
-    @pytest.fixture
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
-        return "generic_metrics_gauges"
-
-    @pytest.fixture
-    def test_storage_set(self) -> StorageKey:
-        return StorageKey.GENERIC_METRICS_GAUGES_RAW
-
-    @pytest.fixture
-    def test_metric_type(self) -> InputType:
-        return InputType.GAUGE
-
-    def generate_metric_values(self) -> Any:
-        return {
-            "min": 2.0,
-            "max": 21.0,
-            "sum": 25.0,
-            "count": 3,
-            "last": 4.0,
-        }
-
-
-@pytest.mark.genmetrics_db
-@pytest.mark.redis_db
-class TestGenericMetricsApiDistributions(TestGenericMetricsApiSets):
-    @pytest.fixture
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
-        return "generic_metrics_distributions"
-
-    @pytest.fixture
-    def test_storage_set(self) -> StorageKey:
-        return StorageKey.GENERIC_METRICS_DISTRIBUTIONS_RAW
-
-    @pytest.fixture
-    def test_metric_type(self) -> InputType:
-        return InputType.DISTRIBUTION
-
-    def generate_metric_values(self) -> Any:
-        return [1, 2, 3, 4, 5, 1, 2, 3, 4, 5]

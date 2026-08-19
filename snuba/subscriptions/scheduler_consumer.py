@@ -1,6 +1,7 @@
 import logging
+from collections.abc import Callable, Mapping, MutableMapping, Sequence
 from datetime import timedelta
-from typing import Callable, Mapping, MutableMapping, NamedTuple, Optional, Sequence
+from typing import NamedTuple
 
 from arroyo.backends.abstract import Consumer, Producer
 from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
@@ -41,7 +42,7 @@ class MessageDetails(NamedTuple):
     orig_message_ts: float
     # The timestamp the message was first received by Sentry (Relay)
     # It is optional since it is not currently present on all topics
-    received_p99: Optional[float]
+    received_p99: float | None
 
 
 class CommitLogTickConsumer(Consumer[Tick]):
@@ -99,7 +100,7 @@ class CommitLogTickConsumer(Consumer[Tick]):
         followed_consumer_group: str,
         metrics: MetricsBackend,
         synchronization_timestamp: str,
-        time_shift: Optional[timedelta] = None,
+        time_shift: timedelta | None = None,
     ) -> None:
         self.__consumer = consumer
         self.__followed_consumer_group = followed_consumer_group
@@ -112,8 +113,8 @@ class CommitLogTickConsumer(Consumer[Tick]):
     def subscribe(
         self,
         topics: Sequence[Topic],
-        on_assign: Optional[Callable[[Mapping[Partition, int]], None]] = None,
-        on_revoke: Optional[Callable[[Sequence[Partition]], None]] = None,
+        on_assign: Callable[[Mapping[Partition, int]], None] | None = None,
+        on_revoke: Callable[[Sequence[Partition]], None] | None = None,
     ) -> None:
         def revocation_callback(partitions: Sequence[Partition]) -> None:
             self.__previous_messages = {}
@@ -121,14 +122,12 @@ class CommitLogTickConsumer(Consumer[Tick]):
             if on_revoke is not None:
                 on_revoke(partitions)
 
-        self.__consumer.subscribe(
-            topics, on_assign=on_assign, on_revoke=revocation_callback
-        )
+        self.__consumer.subscribe(topics, on_assign=on_assign, on_revoke=revocation_callback)
 
     def unsubscribe(self) -> None:
         self.__consumer.unsubscribe()
 
-    def poll(self, timeout: Optional[float] = None) -> Optional[BrokerValue[Tick]]:
+    def poll(self, timeout: float | None = None) -> BrokerValue[Tick] | None:
         value = self.__consumer.poll(timeout)
         if value is None:
             return None
@@ -152,12 +151,14 @@ class CommitLogTickConsumer(Consumer[Tick]):
 
         previous_message = self.__previous_messages.get(commit.partition)
 
-        result: Optional[BrokerValue[Tick]]
+        result: BrokerValue[Tick] | None
         if previous_message is not None:
             try:
                 time_interval = Interval(
-                    getattr(previous_message, self.__synchronization_timestamp),
-                    getattr(commit, self.__synchronization_timestamp),
+                    self.__sync_timestamp(
+                        previous_message.orig_message_ts, previous_message.received_p99
+                    ),
+                    self.__sync_timestamp(commit.orig_message_ts, commit.received_p99),
                 )
                 offset_interval = Interval(previous_message.offset, commit.offset)
             except InvalidRangeError:
@@ -184,6 +185,14 @@ class CommitLogTickConsumer(Consumer[Tick]):
 
         return result
 
+    def __sync_timestamp(self, orig_message_ts: float, received_p99: float | None) -> float:
+        if self.__synchronization_timestamp == "orig_message_ts":
+            return orig_message_ts
+        if received_p99 is None:
+            self.__metrics.increment("subscriptions.scheduler.sync_ts_fallback")
+            return orig_message_ts
+        return received_p99
+
     def pause(self, partitions: Sequence[Partition]) -> None:
         self.__consumer.pause(partitions)
 
@@ -204,10 +213,10 @@ class CommitLogTickConsumer(Consumer[Tick]):
     def stage_offsets(self, offsets: Mapping[Partition, int]) -> None:
         return self.__consumer.stage_offsets(offsets)
 
-    def commit_offsets(self) -> Mapping[Partition, int]:
+    def commit_offsets(self) -> Mapping[Partition, int] | None:
         return self.__consumer.commit_offsets()
 
-    def close(self, timeout: Optional[float] = None) -> None:
+    def close(self, timeout: float | None = None) -> None:
         return self.__consumer.close(timeout)
 
     @property
@@ -228,20 +237,20 @@ class SchedulerBuilder:
         bootstrap_servers: Sequence[str],
         producer: Producer[KafkaPayload],
         auto_offset_reset: str,
-        strict_offset_reset: Optional[bool],
+        strict_offset_reset: bool | None,
         schedule_ttl: int,
-        stale_threshold_seconds: Optional[int],
+        stale_threshold_seconds: int | None,
         metrics: MetricsBackend,
-        slice_id: Optional[int] = None,
-        health_check_file: Optional[str] = None,
+        slice_id: int | None = None,
+        health_check_file: str | None = None,
     ) -> None:
         self.__entity_key = EntityKey(entity_name)
 
         storage = get_entity(self.__entity_key).get_writable_storage()
 
-        assert (
-            storage is not None
-        ), f"Entity {entity_name} does not have a writable storage by default."
+        assert storage is not None, (
+            f"Entity {entity_name} does not have a writable storage by default."
+        )
 
         stream_loader = storage.get_table_writer().get_stream_loader()
 
@@ -252,9 +261,9 @@ class SchedulerBuilder:
         try:
             default_topic_spec = stream_loader.get_default_topic_spec()
             default_topic_config = default_topic_spec.topic_current_config_values
-            assert (
-                default_topic_config["message.timestamp.type"] == "LogAppendTime"
-            ), f"{default_topic_spec.get_physical_topic_name()} topic requires LogAppendTime"
+            assert default_topic_config["message.timestamp.type"] == "LogAppendTime", (
+                f"{default_topic_spec.get_physical_topic_name()} topic requires LogAppendTime"
+            )
         except AssertionError:
             raise
         except Exception:
@@ -272,9 +281,7 @@ class SchedulerBuilder:
         assert mode is not None
         self.__mode = mode
 
-        synchronization_timestamp = (
-            stream_loader.get_subscription_sychronization_timestamp()
-        )
+        synchronization_timestamp = stream_loader.get_subscription_sychronization_timestamp()
         assert synchronization_timestamp is not None
         self.__synchronization_timestamp = synchronization_timestamp
 
@@ -299,9 +306,7 @@ class SchedulerBuilder:
     def build_consumer(self) -> StreamProcessor[Tick]:
         return StreamProcessor(
             self.__build_tick_consumer(),
-            Topic(
-                self.__commit_log_topic_spec.get_physical_topic_name(self.__slice_id)
-            ),
+            Topic(self.__commit_log_topic_spec.get_physical_topic_name(self.__slice_id)),
             self.__build_strategy_factory(),
             ONCE_PER_SECOND,
         )
@@ -349,13 +354,13 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
         entity_key: EntityKey,
         mode: SchedulingWatermarkMode,
         schedule_ttl: int,
-        stale_threshold_seconds: Optional[int],
+        stale_threshold_seconds: int | None,
         partitions: int,
         producer: Producer[KafkaPayload],
         scheduled_topic_spec: KafkaTopicSpec,
         metrics: MetricsBackend,
-        slice_id: Optional[int] = None,
-        health_check_file: Optional[str] = None,
+        slice_id: int | None = None,
+        health_check_file: str | None = None,
     ) -> None:
         self.__mode = mode
         self.__stale_threshold_seconds = stale_threshold_seconds
@@ -373,9 +378,7 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
         self.__schedulers = {
             index: SubscriptionScheduler(
                 entity_key,
-                RedisSubscriptionDataStore(
-                    redis_client, entity_key, PartitionId(index)
-                ),
+                RedisSubscriptionDataStore(redis_client, entity_key, PartitionId(index)),
                 partition_id=PartitionId(index),
                 cache_ttl=timedelta(seconds=schedule_ttl),
                 metrics=self.__metrics,

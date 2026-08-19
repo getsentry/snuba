@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import difflib
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Generator, Literal, cast
+from typing import Any, Literal, cast
 
 from flask import g
 
@@ -44,7 +45,7 @@ class ExplainMeta:
 
 
 @contextmanager
-def with_query_differ(category: str, name: str, query: Any) -> Generator[None, None, None]:
+def with_query_differ(category: str, name: str, query: Any) -> Generator[None]:
     original = str(query)
     yield
     transformed = str(query)
@@ -89,7 +90,7 @@ def get_explain_meta() -> ExplainMeta | None:
         if hasattr(g, "explain_meta"):
             return cast(ExplainMeta, g.explain_meta)
         g.explain_meta = ExplainMeta()
-        return g.explain_meta
+        return cast(ExplainMeta, g.explain_meta)
     except RuntimeError:
         # Code is executing outside of a flask context
         return None

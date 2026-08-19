@@ -1,8 +1,9 @@
+from collections.abc import Mapping, Sequence
 from functools import cached_property
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any
 
 from arroyo.backends.kafka import KafkaPayload
-from confluent_kafka.admin import (
+from confluent_kafka.admin import (  # type: ignore[attr-defined]  # not re-exported in stubs
     AdminClient,
     ConfigResource,
     ResourceType,
@@ -54,7 +55,7 @@ class KafkaTopicSpec:
         topic = self.__topic.value
         return settings.KAFKA_TOPIC_MAP.get(topic, topic)
 
-    def get_physical_topic_name(self, slice_id: Optional[int] = None) -> str:
+    def get_physical_topic_name(self, slice_id: int | None = None) -> str:
         """
         Slice aware version of``topic_name``.
         """
@@ -104,15 +105,15 @@ class KafkaStreamLoader:
         self,
         processor: MessageProcessor,
         default_topic_spec: KafkaTopicSpec,
-        pre_filter: Optional[StreamMessageFilter[KafkaPayload]] = None,
-        replacement_topic_spec: Optional[KafkaTopicSpec] = None,
-        commit_log_topic_spec: Optional[KafkaTopicSpec] = None,
-        subscription_scheduler_mode: Optional[SchedulingWatermarkMode] = None,
-        subscription_synchronization_timestamp: Optional[str] = None,
-        subscription_scheduled_topic_spec: Optional[KafkaTopicSpec] = None,
-        subscription_result_topic_spec: Optional[KafkaTopicSpec] = None,
-        subscription_delay_seconds: Optional[int] = None,
-        dlq_topic_spec: Optional[KafkaTopicSpec] = None,
+        pre_filter: StreamMessageFilter[KafkaPayload] | None = None,
+        replacement_topic_spec: KafkaTopicSpec | None = None,
+        commit_log_topic_spec: KafkaTopicSpec | None = None,
+        subscription_scheduler_mode: SchedulingWatermarkMode | None = None,
+        subscription_synchronization_timestamp: str | None = None,
+        subscription_scheduled_topic_spec: KafkaTopicSpec | None = None,
+        subscription_result_topic_spec: KafkaTopicSpec | None = None,
+        subscription_delay_seconds: int | None = None,
+        dlq_topic_spec: KafkaTopicSpec | None = None,
     ) -> None:
         subscription_values = [
             bool(subscription_scheduled_topic_spec),
@@ -140,7 +141,7 @@ class KafkaStreamLoader:
     def get_processor(self) -> MessageProcessor:
         return self.__processor
 
-    def get_pre_filter(self) -> Optional[StreamMessageFilter[KafkaPayload]]:
+    def get_pre_filter(self) -> StreamMessageFilter[KafkaPayload] | None:
         """
         Returns a filter (or none if none is defined) to be applied to the messages
         coming from the Kafka stream before parsing the content of the message.
@@ -150,66 +151,66 @@ class KafkaStreamLoader:
     def get_default_topic_spec(self) -> KafkaTopicSpec:
         return self.__default_topic_spec
 
-    def get_replacement_topic_spec(self) -> Optional[KafkaTopicSpec]:
+    def get_replacement_topic_spec(self) -> KafkaTopicSpec | None:
         return self.__replacement_topic_spec
 
-    def get_commit_log_topic_spec(self) -> Optional[KafkaTopicSpec]:
+    def get_commit_log_topic_spec(self) -> KafkaTopicSpec | None:
         return self.__commit_log_topic_spec
 
-    def get_subscription_scheduler_mode(self) -> Optional[SchedulingWatermarkMode]:
+    def get_subscription_scheduler_mode(self) -> SchedulingWatermarkMode | None:
         return self.__subscription_scheduler_mode
 
-    def get_subscription_sychronization_timestamp(self) -> Optional[str]:
+    def get_subscription_sychronization_timestamp(self) -> str | None:
         return self.__subscription_synchronization_timestamp
 
-    def get_subscription_scheduled_topic_spec(self) -> Optional[KafkaTopicSpec]:
+    def get_subscription_scheduled_topic_spec(self) -> KafkaTopicSpec | None:
         return self.__subscription_scheduled_topic_spec
 
-    def get_subscription_result_topic_spec(self) -> Optional[KafkaTopicSpec]:
+    def get_subscription_result_topic_spec(self) -> KafkaTopicSpec | None:
         return self.__subscription_result_topic_spec
 
-    def get_subscription_delay_seconds(self) -> Optional[int]:
+    def get_subscription_delay_seconds(self) -> int | None:
         return self.__subscription_delay_seconds
 
-    def get_dlq_topic_spec(self) -> Optional[KafkaTopicSpec]:
+    def get_dlq_topic_spec(self) -> KafkaTopicSpec | None:
         return self.__dlq_topic_spec
 
 
 def build_kafka_stream_loader_from_settings(
     processor: MessageProcessor,
     default_topic: Topic,
-    pre_filter: Optional[StreamMessageFilter[KafkaPayload]] = None,
-    replacement_topic: Optional[Topic] = None,
-    commit_log_topic: Optional[Topic] = None,
-    subscription_scheduler_mode: Optional[SchedulingWatermarkMode] = None,
-    subscription_scheduled_topic: Optional[Topic] = None,
-    subscription_result_topic: Optional[Topic] = None,
-    subscription_synchronization_timestamp: Optional[str] = None,
-    subscription_delay_seconds: Optional[int] = None,
-    dlq_topic: Optional[Topic] = None,
+    pre_filter: StreamMessageFilter[KafkaPayload] | None = None,
+    replacement_topic: Topic | None = None,
+    commit_log_topic: Topic | None = None,
+    subscription_scheduler_mode: SchedulingWatermarkMode | None = None,
+    subscription_scheduled_topic: Topic | None = None,
+    subscription_result_topic: Topic | None = None,
+    subscription_synchronization_timestamp: str | None = None,
+    subscription_delay_seconds: int | None = None,
+    dlq_topic: Topic | None = None,
 ) -> KafkaStreamLoader:
     default_topic_spec = KafkaTopicSpec(default_topic)
 
-    replacement_topic_spec: Optional[KafkaTopicSpec]
+    replacement_topic_spec: KafkaTopicSpec | None
 
     if replacement_topic is not None:
         replacement_topic_spec = KafkaTopicSpec(replacement_topic)
     else:
         replacement_topic_spec = None
 
-    commit_log_topic_spec: Optional[KafkaTopicSpec]
+    commit_log_topic_spec: KafkaTopicSpec | None
     if commit_log_topic is not None:
         commit_log_topic_spec = KafkaTopicSpec(commit_log_topic)
     else:
         commit_log_topic_spec = None
 
-    subscription_scheduled_topic_spec: Optional[KafkaTopicSpec]
+    subscription_scheduled_topic_spec: KafkaTopicSpec | None
     if subscription_scheduled_topic is not None:
         subscription_scheduled_topic_spec = KafkaTopicSpec(subscription_scheduled_topic)
     else:
         subscription_scheduled_topic_spec = None
 
-    subscription_result_topic_spec: Optional[KafkaTopicSpec]
+    subscription_result_topic_spec: KafkaTopicSpec | None
     if subscription_result_topic is not None:
         subscription_result_topic_spec = KafkaTopicSpec(subscription_result_topic)
     else:
@@ -255,7 +256,7 @@ class TableWriter:
         storage_set: StorageSetKey,
         write_schema: WritableTableSchema,
         stream_loader: KafkaStreamLoader,
-        replacer_processor: Optional[ReplacerProcessor[Any]] = None,
+        replacer_processor: ReplacerProcessor[Any] | None = None,
         writer_options: ClickhouseWriterOptions = None,
         write_format: WriteFormat = WriteFormat.JSON,
     ) -> None:
@@ -273,9 +274,9 @@ class TableWriter:
         self,
         metrics: MetricsBackend,
         options: ClickhouseWriterOptions = None,
-        table_name: Optional[str] = None,
+        table_name: str | None = None,
         chunk_size: int = settings.CLICKHOUSE_HTTP_CHUNK_SIZE,
-        slice_id: Optional[int] = None,
+        slice_id: int | None = None,
     ) -> BatchWriter[JSONRow]:
         table_name = table_name or self.__table_schema.get_table_name()
         if self.__write_format == WriteFormat.JSON:
@@ -308,10 +309,10 @@ class TableWriter:
     def get_bulk_writer(
         self,
         metrics: MetricsBackend,
-        encoding: Optional[str],
+        encoding: str | None,
         column_names: Sequence[str],
         options: ClickhouseWriterOptions = None,
-        table_name: Optional[str] = None,
+        table_name: str | None = None,
     ) -> BatchWriter[bytes]:
         table_name = table_name or self.__table_schema.get_table_name()
 
@@ -331,7 +332,7 @@ class TableWriter:
         source: BulkLoadSource,
         source_table: str,
         row_processor: CdcRowProcessor,
-        table_name: Optional[str] = None,
+        table_name: str | None = None,
     ) -> BulkLoader:
         """
         Returns the instance of the bulk loader to populate the dataset from an
@@ -351,7 +352,7 @@ class TableWriter:
     def get_stream_loader(self) -> KafkaStreamLoader:
         return self.__stream_loader
 
-    def get_replacer_processor(self) -> Optional[ReplacerProcessor[Any]]:
+    def get_replacer_processor(self) -> ReplacerProcessor[Any] | None:
         """
         Returns a replacement processor if this table writer knows how to do
         replacements on the table it manages.

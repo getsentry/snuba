@@ -1,4 +1,4 @@
-from typing import List, Sequence
+from collections.abc import Sequence
 
 from snuba.clickhouse.columns import Column, UInt
 from snuba.clusters.storage_sets import StorageSetKey
@@ -13,7 +13,7 @@ sampling_weights = [8, 8**2, 8**3]
 old_version = 3
 new_version = old_version + 1
 
-columns: List[Column[Modifiers]] = [
+columns: list[Column[Modifiers]] = [
     Column("organization_id", UInt(64)),
     Column("project_id", UInt(64)),
     Column("item_type", UInt(8)),
@@ -122,7 +122,7 @@ class Migration(migration.ClickhouseNodeMigration):
     blocking = False
 
     def forwards_ops(self) -> Sequence[SqlOperation]:
-        ops: List[SqlOperation] = []
+        ops: list[SqlOperation] = []
 
         for sampling_weight in sampling_weights:
             local_table_name = f"eap_items_1_downsample_{sampling_weight}_local"
@@ -148,7 +148,7 @@ class Migration(migration.ClickhouseNodeMigration):
         return ops
 
     def backwards_ops(self) -> Sequence[SqlOperation]:
-        ops: List[SqlOperation] = []
+        ops: list[SqlOperation] = []
 
         for sampling_weight in sampling_weights:
             local_table_name = f"eap_items_1_downsample_{sampling_weight}_local"

@@ -1,5 +1,6 @@
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
-from typing import Any, Mapping, Sequence, Tuple
+from typing import Any
 
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
@@ -41,7 +42,7 @@ def simple_function(body: str) -> Expression:
     return parse_clickhouse_function(body)
 
 
-def partial_function(body: str, constants: Sequence[Tuple[str, Any]]) -> Expression:
+def partial_function(body: str, constants: Sequence[tuple[str, Any]]) -> Expression:
     parsed = parse_clickhouse_function(body)
     constants_lookup = {name: Literal(None, value) for (name, value) in constants}
     return replace_in_expression(parsed, constants_lookup)
@@ -92,14 +93,14 @@ class _CustomFunction(LogicalQueryProcessor):
     def __init__(
         self,
         name: str,
-        signature: Sequence[Tuple[str, ParamType]],
+        signature: Sequence[tuple[str, ParamType]],
         body: Expression,
     ) -> None:
         self.__function_name = name
         self.__param_names: Sequence[str] = []
         param_types: Sequence[ParamType] = []
         if len(signature) > 0:
-            self.__param_names, param_types = zip(*signature)
+            self.__param_names, param_types = zip(*signature, strict=False)
         self.__body = body
         self.__validator = SignatureValidator(param_types)
 
@@ -132,15 +133,11 @@ class _CustomFunction(LogicalQueryProcessor):
                         should_report=False,
                     ) from exception
 
-                resolved_params = {
-                    name: expression
-                    for (name, expression) in zip(self.__param_names, expression.parameters)
-                }
+                resolved_params = dict(zip(self.__param_names, expression.parameters, strict=False))
 
                 ret = replace_in_expression(self.__body, resolved_params)
                 return replace(ret, alias=expression.alias)
-            else:
-                return expression
+            return expression
 
         query.transform_expressions(apply_function)
 

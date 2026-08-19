@@ -28,12 +28,16 @@ repos:
         language: system
         types: [python]
         require_serial: true
+        # Keep in sync with [tool.mypy] exclude in pyproject.toml. pre-commit
+        # passes filenames explicitly, which bypasses mypy's own `exclude`, so
+        # these dirs must be re-excluded here to honor the same policy.
+        exclude: '^(rust_snuba/|tests/datasets/|tests/query/|test_distributed_migrations/)'
 
       - id: validate-configs-syntax
         name: validate-configs-syntax
         entry: env SNUBA_SETTINGS=test python3 -m snuba.validate_configs
         language: python
-        additional_dependencies: [ 'fastjsonschema', 'pyyaml', 'sentry_sdk' ]
+        additional_dependencies: [ 'fastjsonschema', 'pyyaml', 'sentry_sdk>=2.66.1' ]
         pass_filenames: false
         files: 'snuba/datasets/configuration/.*'
       - id: cargo-fmt

@@ -32,6 +32,7 @@ RUN set -ex; \
         g++ \
         gnupg \
         protobuf-compiler \
+        libcurl4-openssl-dev \
     '; \
     runtimeDeps=' \
         curl \
@@ -135,7 +136,9 @@ ENV LD_PRELOAD=/usr/src/snuba/libjemalloc.so.2 \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-# set default path for sentry options values
+# set up sentry options schemas and default path.
+# schemas must be on disk at SENTRY_OPTIONS_DIR for the python client's init()
+COPY sentry-options/schemas /etc/sentry-options/schemas
 ENV SENTRY_OPTIONS_DIR=/etc/sentry-options
 
 USER snuba
@@ -143,57 +146,24 @@ EXPOSE 1218 1219
 ENTRYPOINT [ "./docker_entrypoint.sh" ]
 CMD [ "api" ]
 
-FROM application_base AS application
-USER 0
-RUN set -ex; \
-    apt-get purge -y --auto-remove $(cat /tmp/build-deps.txt); \
-    rm /tmp/build-deps.txt; \
-    rm -rf /var/lib/apt/lists/*;
-USER snuba
-
-# --- Distroless stages (additive, no changes to existing stages above) ---
-
-# Prepare artifacts for distroless: fix venv symlinks and verify shared libs.
+# Prepare artifacts for the DHI runtime: fix venv symlinks and verify shared libs.
 # The build image has Python at /usr/local/bin/python3, but the DHI
 # runtime has it at /opt/python/bin/python3.
-FROM application_base AS distroless_prep
+FROM application_base AS runtime_prep
 USER 0
 RUN ln -sf /opt/python/bin/python3 /.venv/bin/python3 && \
     ln -sf /opt/python/bin/python3 /.venv/bin/python
 RUN find /.venv -name "*.so" -exec ldd {} \; 2>&1 | grep "not found" && exit 1 || true
 
-# Distroless production image — minimal attack surface, no shell
-FROM ghcr.io/getsentry/dhi/python:3.13-debian13 AS application-distroless
+# Production image — DHI runtime, no shell
+FROM ghcr.io/getsentry/dhi/python:3.13-debian13 AS application
 
-COPY --from=distroless_prep /.venv /.venv
-COPY --from=distroless_prep /usr/src/snuba /usr/src/snuba
-COPY --from=distroless_prep /usr/lib/*/libjemalloc.so.2 /usr/lib/libjemalloc.so.2
-COPY --from=distroless_prep /etc/passwd /etc/passwd
-COPY --from=distroless_prep /etc/group /etc/group
-
-WORKDIR /usr/src/snuba
-ARG SOURCE_COMMIT
-ENV PATH="/.venv/bin:/opt/python/bin:$PATH" \
-    LD_PRELOAD=/usr/lib/libjemalloc.so.2 \
-    SNUBA_RELEASE=$SOURCE_COMMIT \
-    FLASK_DEBUG=0 \
-    PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    SENTRY_OPTIONS_DIR=/etc/sentry-options
-
-USER 1000
-EXPOSE 1218 1219
-ENTRYPOINT ["python3", "/usr/src/snuba/docker_entrypoint.py"]
-CMD ["api"]
-
-# Debug distroless image — includes busybox (sh, ls, cat, wget, env, etc.)
-FROM ghcr.io/getsentry/dhi/python:3.13-debian13-dev AS application-distroless-debug
-
-COPY --from=distroless_prep /.venv /.venv
-COPY --from=distroless_prep /usr/src/snuba /usr/src/snuba
-COPY --from=distroless_prep /usr/lib/*/libjemalloc.so.2 /usr/lib/libjemalloc.so.2
-COPY --from=distroless_prep /etc/passwd /etc/passwd
-COPY --from=distroless_prep /etc/group /etc/group
+COPY --from=runtime_prep /.venv /.venv
+COPY --from=runtime_prep /usr/src/snuba /usr/src/snuba
+COPY --from=runtime_prep /etc/sentry-options /etc/sentry-options
+COPY --from=runtime_prep /usr/lib/*/libjemalloc.so.2 /usr/lib/libjemalloc.so.2
+COPY --from=runtime_prep /etc/passwd /etc/passwd
+COPY --from=runtime_prep /etc/group /etc/group
 
 WORKDIR /usr/src/snuba
 ARG SOURCE_COMMIT
@@ -210,7 +180,30 @@ EXPOSE 1218 1219
 ENTRYPOINT ["python3", "/usr/src/snuba/docker_entrypoint.py"]
 CMD ["api"]
 
-# --- End distroless stages ---
+# Debug image — includes busybox (sh, ls, cat, wget, env, etc.)
+FROM ghcr.io/getsentry/dhi/python:3.13-debian13-dev AS application-debug
+
+COPY --from=runtime_prep /.venv /.venv
+COPY --from=runtime_prep /usr/src/snuba /usr/src/snuba
+COPY --from=runtime_prep /etc/sentry-options /etc/sentry-options
+COPY --from=runtime_prep /usr/lib/*/libjemalloc.so.2 /usr/lib/libjemalloc.so.2
+COPY --from=runtime_prep /etc/passwd /etc/passwd
+COPY --from=runtime_prep /etc/group /etc/group
+
+WORKDIR /usr/src/snuba
+ARG SOURCE_COMMIT
+ENV PATH="/.venv/bin:/opt/python/bin:$PATH" \
+    LD_PRELOAD=/usr/lib/libjemalloc.so.2 \
+    SNUBA_RELEASE=$SOURCE_COMMIT \
+    FLASK_DEBUG=0 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    SENTRY_OPTIONS_DIR=/etc/sentry-options
+
+USER 1000
+EXPOSE 1218 1219
+ENTRYPOINT ["python3", "/usr/src/snuba/docker_entrypoint.py"]
+CMD ["api"]
 
 FROM application_base AS testing
 

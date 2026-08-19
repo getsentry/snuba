@@ -1,69 +1,75 @@
-from snuba import state
 from snuba.admin.audit_log.query import audit_log
 from snuba.admin.clickhouse.common import (
     get_ro_query_node_connection,
     validate_ro_query,
 )
-from snuba.clickhouse.native import ClickhouseResult
+from snuba.clickhouse.pool import ClickhousePool, ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.state.sentry_options import get_option
 
+# Default cap for interactive querylog SQL. 0 means "use all cores" in ClickHouse
+# and is reserved for intentional full-scan tools (EAP Stats).
 _MAX_CH_THREADS = 4
 
 
-class BadThreadsValue(Exception):
-    pass
-
-
 @audit_log
-def run_querylog_query(query: str, user: str) -> ClickhouseResult:
+def run_querylog_query(
+    query: str,
+    user: str,
+    max_threads: int | None = None,
+) -> ClickhouseResult:
     """
     Validates, audit logs, and executes given query against Querylog
     table in ClickHouse. `user` param is necessary for audit_log
     decorator.
+
+    ``max_threads`` overrides the default thread cap. Pass ``0`` to let
+    ClickHouse use all available cores (needed for whole-dataset scans).
     """
     schema = get_storage(StorageKey.QUERYLOG).get_schema()
     assert isinstance(schema, TableSchema)
-    validate_ro_query(
-        sql_query=query, allowed_tables={schema.get_table_name(), "clickhouse_queries"}
+    allowed_tables = {schema.get_table_name(), "clickhouse_queries"}
+    connection = validate_ro_query(
+        sql_query=query,
+        allowed_tables=allowed_tables,
+        get_connection=lambda: get_ro_query_node_connection(
+            StorageKey.QUERYLOG.value, ClickhouseClientSettings.QUERYLOG
+        ),
     )
-    return __run_querylog_query(query)
+    assert connection is not None
+    return __run_querylog_query(query, connection, max_threads=max_threads)
 
 
 def describe_querylog_schema() -> ClickhouseResult:
     schema = get_storage(StorageKey.QUERYLOG).get_schema()
     assert isinstance(schema, TableSchema)
-    return __run_querylog_query(f"DESCRIBE TABLE {schema.get_table_name()}")
+    connection = get_ro_query_node_connection(
+        StorageKey.QUERYLOG.value, ClickhouseClientSettings.QUERYLOG
+    )
+    return __run_querylog_query(f"DESCRIBE TABLE {schema.get_table_name()}", connection)
 
 
-def _get_clickhouse_threads() -> int:
-    config_threads = state.get_config("admin.querylog_threads", _MAX_CH_THREADS)
-    try:
-        return min(
-            int(config_threads) if config_threads is not None else _MAX_CH_THREADS,
-            _MAX_CH_THREADS,
-        )
-    except ValueError:
-        # in case the config is set incorrectly
-        raise BadThreadsValue(
-            f"{config_threads} is not a valid configuration option for Clickhouse `max_threads`"
-        )
+def _get_clickhouse_threads(max_threads: int | None = None) -> int:
+    if max_threads is not None:
+        # Allow 0 (ClickHouse: use all cores). Negative values are invalid.
+        return max(0, int(max_threads))
+    config_threads = get_option("admin.querylog_threads", _MAX_CH_THREADS)
+    return min(config_threads, _MAX_CH_THREADS)
 
 
-def __run_querylog_query(query: str) -> ClickhouseResult:
+def __run_querylog_query(
+    query: str, connection: ClickhousePool, max_threads: int | None = None
+) -> ClickhouseResult:
     """
     Runs given Query against Querylog table in ClickHouse. This function assumes valid
     query and does not validate/sanitize query or response data.
     """
-    connection = get_ro_query_node_connection(
-        StorageKey.QUERYLOG.value, ClickhouseClientSettings.QUERYLOG
-    )
-
     query_result = connection.execute(
         query=query,
         with_column_types=True,
-        settings={"max_threads": _get_clickhouse_threads()},
+        settings={"max_threads": _get_clickhouse_threads(max_threads)},
     )
     return query_result

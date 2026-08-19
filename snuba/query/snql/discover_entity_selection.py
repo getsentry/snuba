@@ -179,9 +179,11 @@ def match_query_to_entity(
             if result:
                 if result.string("function") == ConditionFunctions.EQ:
                     event_types.add(event_type)
-                elif result.string("function") == ConditionFunctions.NEQ:
-                    if event_type == "transaction":
-                        return EntityKey.DISCOVER_EVENTS
+                elif (
+                    result.string("function") == ConditionFunctions.NEQ
+                    and event_type == "transaction"
+                ):
+                    return EntityKey.DISCOVER_EVENTS
 
     if len(event_types) == 1 and "transaction" in event_types:
         return EntityKey.DISCOVER_TRANSACTIONS
@@ -227,12 +229,11 @@ def match_query_to_entity(
     if has_event_columns and has_transaction_columns:
         # Impossible query, use the merge table
         return EntityKey.DISCOVER
-    elif has_event_columns:
+    if has_event_columns:
         return EntityKey.DISCOVER_EVENTS
-    elif has_transaction_columns:
+    if has_transaction_columns:
         return EntityKey.DISCOVER_TRANSACTIONS
-    else:
-        return EntityKey.DISCOVER
+    return EntityKey.DISCOVER
 
 
 def _track_bad_query(

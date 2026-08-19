@@ -1,8 +1,9 @@
 import os
-from typing import Optional
 from unittest.mock import patch
 
 import pytest
+from sentry_options import OptionValue
+from sentry_options.testing import override_options
 
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.entities.entity_key import EntityKey
@@ -19,11 +20,10 @@ from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import Column, Literal
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.query_settings import HTTPQuerySettings
-from snuba.state import delete_config, set_config
 
-DISTS_ENTITY_KEY = EntityKey("generic_metrics_distributions")
-DISTS_STORAGE_KEY = StorageKey("generic_metrics_distributions")
-DISTS_STORAGE_SET_KEY = StorageSetKey("generic_metrics_distributions")
+DISTS_ENTITY_KEY = EntityKey("generic_metrics_counters")
+DISTS_STORAGE_KEY = StorageKey("generic_metrics_counters")
+DISTS_STORAGE_SET_KEY = StorageSetKey("generic_metrics_counters")
 
 """
 This mock logical partition : slice mapping should follow the pattern of
@@ -33,7 +33,7 @@ This mock logical partition : slice mapping should follow the pattern of
 3: 1
 ...
 """
-MOCK_LOGICAL_PART_MAPPING = {"generic_metrics_distributions": {x: x % 2 for x in range(0, 256)}}
+MOCK_LOGICAL_PART_MAPPING = {"generic_metrics_counters": {x: x % 2 for x in range(0, 256)}}
 
 SLICE_0_DATABASE_VALUE = "slice_0_db"
 SLICE_1_DATABASE_VALUE = "slice_1_db"
@@ -46,7 +46,7 @@ SLICED_CLUSTERS_CONFIG = [
         "password": "",
         "database": SLICE_0_DATABASE_VALUE,
         "http_port": 8123,
-        "storage_set_slices": {("generic_metrics_distributions", 0)},
+        "storage_set_slices": {("generic_metrics_counters", 0)},
         "single_node": True,
     },
     {
@@ -56,7 +56,7 @@ SLICED_CLUSTERS_CONFIG = [
         "password": "",
         "database": SLICE_1_DATABASE_VALUE,
         "http_port": 8124,
-        "storage_set_slices": {("generic_metrics_distributions", 1)},
+        "storage_set_slices": {("generic_metrics_counters", 1)},
         "single_node": True,
     },
 ]
@@ -79,7 +79,7 @@ test_data = [
 ]
 
 
-@patch("snuba.settings.SLICED_STORAGE_SETS", {"generic_metrics_distributions": 2})
+@patch("snuba.settings.SLICED_STORAGE_SETS", {"generic_metrics_counters": 2})
 @patch("snuba.settings.LOGICAL_PARTITION_MAPPING", MOCK_LOGICAL_PART_MAPPING)
 @patch("snuba.settings.SLICED_CLUSTERS", SLICED_CLUSTERS_CONFIG)
 @pytest.mark.parametrize("org_id, expected_slice_db, set_override", test_data)
@@ -91,12 +91,14 @@ def test_column_based_partition_selector(
     Tests that the column based partition selector selects the right cluster
     for a query.
     """
+    override: dict[str, OptionValue] = {}
     if set_override:
         logical_partition = map_org_id_to_logical_partition(org_id)
-        set_config(
-            f"{MEGA_CLUSTER_RUNTIME_CONFIG_PREFIX}_generic_metrics_distributions",
-            f"[{logical_partition}]",
-        )
+        override = {
+            MEGA_CLUSTER_RUNTIME_CONFIG_PREFIX: {
+                "generic_metrics_counters": f"[{logical_partition}]"
+            }
+        }
     query = LogicalQuery(
         QueryEntity(
             DISTS_ENTITY_KEY,
@@ -116,37 +118,35 @@ def test_column_based_partition_selector(
         DISTS_STORAGE_SET_KEY,
         "org_id",
     )
-    cluster = selector.select_cluster(query, settings)
-
-    assert cluster.get_database() == expected_slice_db
-    if set_override:
-        delete_config(f"{MEGA_CLUSTER_RUNTIME_CONFIG_PREFIX}_generic_metrics_distributions")
+    with override_options("snuba", override):
+        cluster = selector.select_cluster(query, settings)
+        assert cluster.get_database() == expected_slice_db
 
 
 mega_cluster_test_data = [
     pytest.param(
-        StorageSetKey("generic_metrics_distributions"),
+        StorageSetKey("generic_metrics_counters"),
         1,
         None,
         False,
         id="no override configured",
     ),
     pytest.param(
-        StorageSetKey("generic_metrics_distributions"),
+        StorageSetKey("generic_metrics_counters"),
         1,
         "[1]",
         True,
         id="override configured",
     ),
     pytest.param(
-        StorageSetKey("generic_metrics_distributions"),
+        StorageSetKey("generic_metrics_counters"),
         1,
         "[100]",
         False,
         id="override configured for different partition",
     ),
     pytest.param(
-        StorageSetKey("generic_metrics_distributions"),
+        StorageSetKey("generic_metrics_counters"),
         1,
         "[100, 40, 25, 1]",
         True,
@@ -163,11 +163,13 @@ mega_cluster_test_data = [
 def test_should_use_mega_cluster(
     storage_set: StorageSetKey,
     logical_partition: int,
-    override_config: Optional[str],
+    override_config: str | None,
     expected: bool,
 ) -> None:
-    if override_config:
-        set_config(f"{MEGA_CLUSTER_RUNTIME_CONFIG_PREFIX}_{storage_set.value}", override_config)
-    assert _should_use_mega_cluster(storage_set, logical_partition) == expected
-    if override_config:
-        delete_config(f"MEGA_CLUSTER_RUNTIME_CONFIG_PREFIX_{storage_set}")
+    override: dict[str, OptionValue] = (
+        {MEGA_CLUSTER_RUNTIME_CONFIG_PREFIX: {storage_set.value: override_config}}
+        if override_config
+        else {}
+    )
+    with override_options("snuba", override):
+        assert _should_use_mega_cluster(storage_set, logical_partition) == expected

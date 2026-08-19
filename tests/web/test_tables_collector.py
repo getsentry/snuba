@@ -1,5 +1,3 @@
-from typing import Optional, Set, Union
-
 import pytest
 
 from snuba.clickhouse.columns import UUID, ColumnSet, String, UInt
@@ -135,10 +133,10 @@ TEST_CASES = [
     TEST_CASES,
 )
 def test_count_columns(
-    query: Union[ClickhouseQuery, CompositeQuery[Table]],
-    expected_tables: Set[str],
+    query: ClickhouseQuery | CompositeQuery[Table],
+    expected_tables: set[str],
     expected_final: bool,
-    expected_sampling: Optional[float],
+    expected_sampling: float | None,
 ) -> None:
     tables_collector = TablesCollector()
     tables_collector.visit(query)

@@ -1,5 +1,5 @@
 import logging
-from typing import Sequence
+from collections.abc import Sequence
 
 from snuba.clickhouse.columns import Column, UInt
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
@@ -46,10 +46,9 @@ def fix_order_by(_logger: logging.Logger) -> None:
     clickhouse.execute(add_column_sql)
 
     # There shouldn't be any data in the table yet
-    assert (
-        clickhouse.execute(f"SELECT COUNT() FROM {TABLE_NAME} FINAL;").results[0][0]
-        == 0
-    ), f"{TABLE_NAME} is not empty"
+    assert clickhouse.execute(f"SELECT COUNT() FROM {TABLE_NAME} FINAL;").results[0][0] == 0, (
+        f"{TABLE_NAME} is not empty"
+    )
 
     new_order_by = f"ORDER BY ({new_primary_key})"
     old_order_by = f"ORDER BY {old_primary_key}"
@@ -64,11 +63,11 @@ def fix_order_by(_logger: logging.Logger) -> None:
 
     clickhouse.execute(new_create_table_statement)
 
-    clickhouse.execute(f"RENAME TABLE {TABLE_NAME} TO {TABLE_NAME_OLD};")
+    clickhouse.command(f"RENAME TABLE {TABLE_NAME} TO {TABLE_NAME_OLD};")
 
-    clickhouse.execute(f"RENAME TABLE {TABLE_NAME_NEW} TO {TABLE_NAME};")
+    clickhouse.command(f"RENAME TABLE {TABLE_NAME_NEW} TO {TABLE_NAME};")
 
-    clickhouse.execute(f"DROP TABLE {TABLE_NAME_OLD};")
+    clickhouse.command(f"DROP TABLE {TABLE_NAME_OLD};")
 
 
 def ensure_drop_temporary_tables(_logger: logging.Logger) -> None:

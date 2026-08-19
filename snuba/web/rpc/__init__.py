@@ -3,18 +3,20 @@ import os
 import random
 import uuid
 from bisect import bisect_left
-from typing import Generic, List, Tuple, Type, cast, final
+from typing import Any, Generic, cast, final
 
 import sentry_sdk
-from clickhouse_driver.errors import ErrorCodes as clickhouse_errors
 from google.protobuf.message import DecodeError
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
+from sentry_sdk import traces
 
-from snuba import environment, state
+from snuba import environment
+from snuba.clickhouse.error_codes import ErrorCodes as clickhouse_errors
 from snuba.query.allocation_policies import AllocationPolicyViolations
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -23,6 +25,7 @@ from snuba.utils.registered_class import (
     RegisteredClass,
     import_submodules_in_directory,
 )
+from snuba.utils.sentry import SENTRY_OP, set_tag_and_attribute
 from snuba.web import QueryException
 from snuba.web.rpc.common.common import Tin, Tout
 from snuba.web.rpc.common.exceptions import (
@@ -32,6 +35,7 @@ from snuba.web.rpc.common.exceptions import (
     RPCRequestException,
     convert_rpc_exception_to_proto,
 )
+from snuba.web.rpc.common.query_info import extract_query_info_tags
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingContext,
     RoutingDecision,
@@ -53,11 +57,9 @@ _BUCKETS_COUNT = len(_TIME_PERIOD_HOURS_BUCKETS)
 
 def _should_log_rpc_request() -> bool:
     """
-    Determine if this RPC request should be logged based on runtime configuration.
+    Determine if this RPC request should be logged based on the rpc_logging_sample_rate option.
     """
-    sample_rate = state.get_float_config("rpc_logging_sample_rate", 0)
-    if sample_rate is None:
-        sample_rate = 0
+    sample_rate = get_option("rpc_logging_sample_rate", 0.0)
 
     # If sample rate is 0, never log
     if sample_rate <= 0.0:
@@ -85,19 +87,18 @@ def _flush_logs() -> None:
 
 
 def _set_rpc_error_tags(in_msg: ProtobufMessage) -> None:
-    sentry_sdk.set_tag("source", "rpc_api")
+    set_tag_and_attribute("source", "rpc_api")
 
-    # Extract and tag fields from meta if available
     if hasattr(in_msg, "meta"):
         meta = in_msg.meta
 
         if hasattr(meta, "referrer") and meta.referrer:
-            sentry_sdk.set_tag("referrer", meta.referrer)
+            set_tag_and_attribute("referrer", meta.referrer)
 
         if hasattr(meta, "organization_id") and meta.organization_id:
-            sentry_sdk.set_tag("organization_id", str(meta.organization_id))
+            set_tag_and_attribute("organization_id", str(meta.organization_id))
         if hasattr(meta, "request_id") and meta.request_id:
-            sentry_sdk.set_tag("request_id", str(meta.request_id))
+            set_tag_and_attribute("request_id", str(meta.request_id))
 
 
 class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
@@ -129,8 +130,8 @@ class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
     def get_from_trace_item_type(
         cls,
         trace_item_type: TraceItemType.ValueType,
-    ) -> "Type[TraceItemDataResolver[Tin, Tout]]":
-        registry = getattr(cls, "_registry")
+    ) -> "type[TraceItemDataResolver[Tin, Tout]]":
+        registry = cls._registry
         try:
             shape = registry.get_class_from_name(f"{cls.endpoint_name()}__{trace_item_type}")
         except InvalidConfigKeyError:
@@ -138,7 +139,7 @@ class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
                 f"{cls.endpoint_name()}__{TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED}"
             )
         return cast(
-            Type["TraceItemDataResolver[Tin, Tout]"],
+            type["TraceItemDataResolver[Tin, Tout]"],
             shape,
         )
 
@@ -152,11 +153,11 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         self._metrics_backend = metrics_backend or environment.metrics
 
     @classmethod
-    def request_class(cls) -> Type[Tin]:
+    def request_class(cls) -> type[Tin]:
         raise NotImplementedError
 
     @classmethod
-    def response_class(cls) -> Type[Tout]:
+    def response_class(cls) -> type[Tout]:
         raise NotImplementedError
 
     @classmethod
@@ -181,10 +182,10 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         )
 
     @classmethod
-    def get_from_name(cls, name: str, version: str) -> Type["RPCEndpoint[Tin, Tout]"]:
+    def get_from_name(cls, name: str, version: str) -> type["RPCEndpoint[Tin, Tout]"]:
         return cast(
-            Type["RPCEndpoint[Tin, Tout]"],
-            getattr(cls, "_registry").get_class_from_name(f"{name}__{version}"),
+            type["RPCEndpoint[Tin, Tout]"],
+            cls._registry.get_class_from_name(f"{name}__{version}"),
         )
 
     def parse_from_string(self, bytestring: bytes) -> Tin:
@@ -203,10 +204,8 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     @final
     def execute(self, in_msg: Tin) -> Tout:
         scope = sentry_sdk.get_current_scope()
+        # Renames the service span (segment) directly in stream mode.
         scope.set_transaction_name(self.config_key())
-        span = scope.span
-        if span is not None:
-            span.description = self.config_key()
         self.routing_context = RoutingContext(
             timer=self._timer,
             in_msg=in_msg,
@@ -219,8 +218,13 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         meta = getattr(in_msg, "meta", RequestMeta())
         try:
             if self.routing_decision.can_run:
-                with sentry_sdk.start_span(op="execute") as span:
-                    span.set_data("selected_tier", self.routing_decision.tier)
+                with traces.start_span(
+                    name="execute",
+                    attributes={
+                        SENTRY_OP: "execute",
+                        "selected_tier": self.routing_decision.tier.name,
+                    },
+                ):
                     out = self._execute(in_msg)
             else:
                 raise RPCAllocationPolicyException(
@@ -275,11 +279,16 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     def __before_execute(self, in_msg: Tin) -> None:
         # Generate request_id if not already present
         meta = getattr(in_msg, "meta", None)
-        if meta is not None:
-            if not hasattr(meta, "request_id") or not meta.request_id:
-                meta.request_id = self.routing_context.query_id
+        if meta is not None and (not hasattr(meta, "request_id") or not meta.request_id):
+            meta.request_id = self.routing_context.query_id
 
-        self._timer.update_tags(self.__extract_request_tags(in_msg))
+        request_tags = self.__extract_request_tags(in_msg)
+        self._timer.update_tags(request_tags)
+        # Mirror the highest-signal shape tags onto the Sentry transaction so
+        # we can slice EAP traces by query type in Discover/Trace View.
+        for key in ("query_type", "trace_item_type", "filter_profile", "has_groupby"):
+            if key in request_tags:
+                sentry_sdk.set_tag(key, request_tags[key])
 
         selected_strategy = RoutingStrategySelector().select_routing_strategy(self.routing_context)
         self.routing_decision = selected_strategy.get_routing_decision(self.routing_context)
@@ -287,35 +296,38 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         self._before_execute(in_msg)
 
     def __extract_request_tags(self, in_msg: Tin) -> dict[str, str]:
-        if not hasattr(in_msg, "meta"):
-            return {}
+        tags: dict[str, str] = {}
 
-        meta = in_msg.meta
-        tags = {}
+        if hasattr(in_msg, "meta"):
+            meta = in_msg.meta
 
-        if hasattr(meta, "start_timestamp") and hasattr(meta, "end_timestamp"):
-            start = meta.start_timestamp.ToDatetime()
-            end = meta.end_timestamp.ToDatetime()
-            delta_in_hours = (end - start).total_seconds() / 3600
-            bucket = bisect_left(_TIME_PERIOD_HOURS_BUCKETS, delta_in_hours)
-            if delta_in_hours <= 1:
-                tags["time_period"] = "lte_1_hour"
-            elif delta_in_hours <= 24:
-                tags["time_period"] = "lte_1_day"
-            else:
-                tags["time_period"] = (
-                    f"lte_{_TIME_PERIOD_HOURS_BUCKETS[bucket] // 24}_days"
-                    if bucket < _BUCKETS_COUNT
-                    else f"gt_{_TIME_PERIOD_HOURS_BUCKETS[_BUCKETS_COUNT - 1] // 24}_days"
+            if hasattr(meta, "start_timestamp") and hasattr(meta, "end_timestamp"):
+                start = meta.start_timestamp.ToDatetime()
+                end = meta.end_timestamp.ToDatetime()
+                delta_in_hours = (end - start).total_seconds() / 3600
+                bucket = bisect_left(_TIME_PERIOD_HOURS_BUCKETS, delta_in_hours)
+                if delta_in_hours <= 1:
+                    tags["time_period"] = "lte_1_hour"
+                elif delta_in_hours <= 24:
+                    tags["time_period"] = "lte_1_day"
+                else:
+                    tags["time_period"] = (
+                        f"lte_{_TIME_PERIOD_HOURS_BUCKETS[bucket] // 24}_days"
+                        if bucket < _BUCKETS_COUNT
+                        else f"gt_{_TIME_PERIOD_HOURS_BUCKETS[_BUCKETS_COUNT - 1] // 24}_days"
+                    )
+
+            if hasattr(meta, "referrer"):
+                tags["referrer"] = meta.referrer
+
+            if self._uses_storage_routing(in_msg):
+                tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(
+                    in_msg.meta.downsampled_storage_config.mode
                 )
 
-        if hasattr(meta, "referrer"):
-            tags["referrer"] = meta.referrer
-
-        if self._uses_storage_routing(in_msg):
-            tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(
-                in_msg.meta.downsampled_storage_config.mode
-            )
+        # Query-shape tags (query_type, groupby, filter profile, etc.) used to
+        # attribute RPC cost. Always attempt this even when meta is missing.
+        tags.update(extract_query_info_tags(in_msg, endpoint_name=self.__class__.__name__))
 
         return tags
 
@@ -331,7 +343,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                 f"RPC request started - endpoint: {self.__class__.__name__}, request_id: {request_id}"
             )
 
-            flush_logs = state.get_float_config("rpc_logging_flush_logs", 0)
+            flush_logs = get_option("rpc_logging_flush_logs", 0.0)
             if flush_logs and flush_logs > 0:
                 _flush_logs()
 
@@ -359,17 +371,22 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                     tags=self._timer.tags,
                 )
             else:
-                sentry_sdk.capture_exception(error)
+                # `should_report=False` marks an exception (e.g. an invalid
+                # query from a client, like an empty-string filter on a hexint
+                # column) that we deliberately do not want surfaced in Sentry.
+                # Honor that flag here, matching the legacy HTTP path in
+                # `snuba/web/views.py`.
+                if getattr(error, "should_report", True):
+                    sentry_sdk.capture_exception(error)
                 self.metrics.increment(
                     "request_error",
                     tags=self._timer.tags,
                 )
             raise error
-        else:
-            self.metrics.increment(
-                "request_success",
-                tags=self._timer.tags,
-            )
+        self.metrics.increment(
+            "request_success",
+            tags=self._timer.tags,
+        )
         return res
 
     def _after_execute(self, in_msg: Tin, out_msg: Tout, error: Exception | None) -> Tout:
@@ -383,14 +400,14 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
             logging.info(
                 f"RPC request finished - endpoint: {self.__class__.__name__}, request_id: {request_id}, status: {status}"
             )
-            flush_logs = state.get_float_config("rpc_logging_flush_logs", 0)
+            flush_logs = get_option("rpc_logging_flush_logs", 0.0)
             if flush_logs and flush_logs > 0:
                 _flush_logs()
 
         return out_msg
 
 
-def list_all_endpoint_names() -> List[Tuple[str, str]]:
+def list_all_endpoint_names() -> list[tuple[str, str]]:
     return [
         (name.split("__")[0], name.split("__")[1])
         for name in RPCEndpoint.all_names()
@@ -408,7 +425,7 @@ for v, module_path in _TO_IMPORT.items():
 
 def run_rpc_handler(name: str, version: str, data: bytes) -> ProtobufMessage | ErrorProto:
     try:
-        endpoint = RPCEndpoint.get_from_name(name, version)()  # type: ignore
+        endpoint: RPCEndpoint[Any, Any] = RPCEndpoint.get_from_name(name, version)()
     except (AttributeError, InvalidConfigKeyError) as e:
         return convert_rpc_exception_to_proto(
             RPCRequestException(
@@ -431,7 +448,12 @@ def run_rpc_handler(name: str, version: str, data: bytes) -> ProtobufMessage | E
     except (RPCRequestException, QueryException) as e:
         return convert_rpc_exception_to_proto(e)
     except Exception as e:
-        sentry_sdk.capture_exception(e)
+        # Don't report exceptions that opted out via `should_report=False`
+        # (e.g. invalid client queries). `execute` re-raises after
+        # `__after_execute`, so this is the second capture site for the same
+        # error and must honor the flag too.
+        if getattr(e, "should_report", True):
+            sentry_sdk.capture_exception(e)
         return convert_rpc_exception_to_proto(
             RPCRequestException(
                 status_code=500,

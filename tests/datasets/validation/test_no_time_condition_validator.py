@@ -25,7 +25,7 @@ tests = [
 ]
 
 
-@pytest.mark.parametrize("key, condition", tests)  # type: ignore
+@pytest.mark.parametrize("key, condition", tests)
 def test_no_time_based_validation(key: EntityKey, condition: Expression) -> None:
     entity = get_entity(key)
     query = LogicalQuery(
@@ -71,10 +71,8 @@ invalid_tests = [
 ]
 
 
-@pytest.mark.parametrize("key, condition", invalid_tests)  # type: ignore
-def test_no_time_based_validation_failure(
-    key: EntityKey, condition: Expression
-) -> None:
+@pytest.mark.parametrize("key, condition", invalid_tests)
+def test_no_time_based_validation_failure(key: EntityKey, condition: Expression) -> None:
     entity = get_entity(key)
     query = LogicalQuery(
         QueryEntity(key, entity.get_data_model()),

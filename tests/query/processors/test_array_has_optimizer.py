@@ -1,5 +1,3 @@
-from typing import Optional
-
 import pytest
 
 from snuba.clickhouse.query import Query as ClickhouseQuery
@@ -193,7 +191,7 @@ array_has_tests = [
 @pytest.mark.parametrize("query, expected_conditions", array_has_tests)
 def test_array_has_optimizer(
     query: ClickhouseQuery,
-    expected_conditions: Optional[Expression],
+    expected_conditions: Expression | None,
 ) -> None:
     query_settings = HTTPQuerySettings()
     array_has_processor = ArrayHasOptimizer(["spans.op", "spans.group"])

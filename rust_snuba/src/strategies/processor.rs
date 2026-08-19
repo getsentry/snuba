@@ -9,33 +9,20 @@ use sentry_arroyo::counter;
 use sentry_arroyo::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
-use sentry_arroyo::processing::strategies::{InvalidMessage, ProcessingStrategy};
+use sentry_arroyo::processing::strategies::{
+    InvalidMessage, InvalidMessageReason, ProcessingStrategy,
+};
 use sentry_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition};
 use sentry_kafka_schemas::{Schema, SchemaError, SchemaType};
 
-use sentry_options::options;
-
 use crate::config::ProcessorConfig;
+use crate::processors::utils::SilencedDLQMessage;
 use crate::processors::{ProcessingFunction, ProcessingFunctionWithReplacements};
 use crate::types::{
-    BytesInsertBatch, CommitLogEntry, CommitLogOffsets, EstimatedSize, InsertBatch,
-    InsertOrReplacement, KafkaMessageMetadata, RowData, TypedInsertBatch,
+    BytesInsertBatch, CommitLogEntry, CommitLogOffsets, InsertBatch, InsertOrReplacement,
+    KafkaMessageMetadata, RowData,
 };
 use tokio::time::Instant;
-
-fn commit_log_offset(raw_offset: u64) -> u64 {
-    let use_next_offset = options("snuba")
-        .ok()
-        .and_then(|o| o.get("consumer.commit_log_use_next_offset").ok())
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-
-    if use_next_offset {
-        raw_offset + 1
-    } else {
-        raw_offset
-    }
-}
 
 pub fn make_rust_processor(
     next_step: impl ProcessingStrategy<BytesInsertBatch<RowData>> + 'static,
@@ -72,7 +59,7 @@ pub fn make_rust_processor(
             .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([(
                 partition.index,
                 CommitLogEntry {
-                    offset: commit_log_offset(offset),
+                    offset: offset + 1,
                     orig_message_ts: timestamp,
                     received_p99: transformed.origin_timestamp.into_iter().collect(),
                 },
@@ -151,7 +138,7 @@ pub fn make_rust_processor_with_replacements(
                     .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([(
                         partition.index,
                         CommitLogEntry {
-                            offset: commit_log_offset(offset),
+                            offset: offset + 1,
                             orig_message_ts: timestamp,
                             received_p99: transformed.origin_timestamp.into_iter().collect(),
                         },
@@ -183,86 +170,6 @@ pub fn make_rust_processor_with_replacements(
         enforce_schema,
         func,
         result_to_next_msg,
-        processor_config,
-        stop_at_timestamp,
-    };
-
-    Box::new(RunTaskInThreads::new(
-        next_step,
-        task_runner,
-        concurrency,
-        Some("process_message"),
-    ))
-}
-
-pub fn make_rust_processor_row_binary<T: Clone + Send + Sync + EstimatedSize + 'static>(
-    next_step: impl ProcessingStrategy<BytesInsertBatch<Vec<T>>> + 'static,
-    func: fn(
-        KafkaPayload,
-        KafkaMessageMetadata,
-        &ProcessorConfig,
-    ) -> anyhow::Result<TypedInsertBatch<T>>,
-    schema_name: &str,
-    enforce_schema: bool,
-    concurrency: &ConcurrencyConfig,
-    processor_config: ProcessorConfig,
-    stop_at_timestamp: Option<i64>,
-) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
-    let schema = get_schema(schema_name, enforce_schema);
-
-    fn result_to_next_msg<T: EstimatedSize>(
-        transformed: TypedInsertBatch<T>,
-        partition: Partition,
-        offset: u64,
-        timestamp: DateTime<Utc>,
-        stop_at_timestamp: Option<i64>,
-    ) -> anyhow::Result<Message<BytesInsertBatch<Vec<T>>>> {
-        // If a stop timestamp is set (used for backfills / replays), skip
-        // processing messages whose timestamp exceeds the cutoff by returning
-        // an empty batch that still commits the offset.
-        if let Some(stop) = stop_at_timestamp {
-            if stop < timestamp.timestamp() {
-                let payload = BytesInsertBatch::from_rows(Vec::new());
-                return Ok(Message::new_broker_message(
-                    payload, partition, offset, timestamp,
-                ));
-            }
-        }
-
-        let num_bytes: usize = transformed.rows.iter().map(|r| r.estimated_size()).sum();
-        let mut payload = BytesInsertBatch::from_rows(transformed.rows)
-            .with_num_bytes(num_bytes)
-            .with_message_timestamp(timestamp)
-            .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([(
-                partition.index,
-                CommitLogEntry {
-                    offset: commit_log_offset(offset),
-                    orig_message_ts: timestamp,
-                    received_p99: transformed.origin_timestamp.into_iter().collect(),
-                },
-            )])))
-            .with_cogs_data(transformed.cogs_data.unwrap_or_default());
-
-        if let Some(ts) = transformed.origin_timestamp {
-            payload = payload.with_origin_timestamp(ts);
-        }
-        if let Some(ts) = transformed.sentry_received_timestamp {
-            payload = payload.with_sentry_received_timestamp(ts);
-        }
-        if let Some(metrics) = transformed.item_type_metrics {
-            payload = payload.with_item_type_metrics(metrics);
-        }
-
-        Ok(Message::new_broker_message(
-            payload, partition, offset, timestamp,
-        ))
-    }
-
-    let task_runner = MessageProcessor {
-        schema,
-        enforce_schema,
-        func,
-        result_to_next_msg: result_to_next_msg::<T>,
         processor_config,
         stop_at_timestamp,
     };
@@ -324,35 +231,37 @@ impl<TResult: Clone, TNext: Clone> MessageProcessor<TResult, TNext> {
             }
         };
 
-        let maybe_err = RunTaskError::InvalidMessage(InvalidMessage {
+        let invalid_msg = InvalidMessage {
             partition: msg.partition,
             offset: msg.offset,
-        });
+            reason: InvalidMessageReason::Invalid,
+        };
 
         let kafka_payload = &msg.payload.clone();
         let Some(payload) = kafka_payload.payload() else {
-            return Err(maybe_err);
+            return Err(RunTaskError::InvalidMessage(invalid_msg));
         };
 
         record_message_stats(payload);
 
         let processed_message = self.process_payload(msg).map_err(|error| {
+            if error.is::<SilencedDLQMessage>() {
+                return RunTaskError::InvalidMessage(InvalidMessage {
+                    reason: InvalidMessageReason::Ignored,
+                    ..invalid_msg
+                });
+            }
+
             counter!("invalid_message");
 
-            sentry::with_scope(
-                |scope| {
-                    let payload = String::from_utf8_lossy(payload);
-                    let payload_as_value: serde_json::Value =
-                        serde_json::from_str(&payload).unwrap_or(payload.into());
-                    scope.set_extra("payload", payload_as_value);
-                },
-                || {
-                    let error: &dyn std::error::Error = error.as_ref();
-                    tracing::error!(error, "Failed processing message");
-                },
+            let error: &dyn std::error::Error = error.as_ref();
+            tracing::error!(
+                error,
+                error_chain = %error_chain(error),
+                "Failed processing message"
             );
 
-            maybe_err
+            RunTaskError::InvalidMessage(invalid_msg)
         });
 
         let elapsed = start_time.elapsed();
@@ -410,6 +319,7 @@ pub fn validate_schema(
     let maybe_err = RunTaskError::InvalidMessage(InvalidMessage {
         partition: msg.partition,
         offset: msg.offset,
+        reason: InvalidMessageReason::Invalid,
     });
 
     let kafka_payload = &msg.payload.clone();
@@ -417,9 +327,7 @@ pub fn validate_schema(
         return Err(maybe_err);
     };
 
-    if let Err(error) = _validate_schema(schema, enforce_schema, payload) {
-        let error: &dyn std::error::Error = &error;
-        tracing::error!(error, "Failed schema validation");
+    if _validate_schema(schema, enforce_schema, payload).is_err() {
         return Err(maybe_err);
     };
 
@@ -446,15 +354,11 @@ fn _validate_schema(
 
     counter!("schema_validation.failed");
 
-    sentry::with_scope(
-        |scope| {
-            let payload = String::from_utf8_lossy(payload).into();
-            scope.set_extra("payload", payload)
-        },
-        || {
-            let error: &dyn std::error::Error = &error;
-            tracing::error!(error, "Validation error");
-        },
+    let err: &dyn std::error::Error = &error;
+    tracing::warn!(
+        error = err,
+        error_chain = %error_chain(err),
+        "Validation error"
     );
 
     if !enforce_schema {
@@ -462,6 +366,17 @@ fn _validate_schema(
     } else {
         Err(error)
     }
+}
+
+fn error_chain(error: &dyn std::error::Error) -> String {
+    let mut message = error.to_string();
+    let mut source = error.source();
+    while let Some(err) = source {
+        message.push_str(": ");
+        message.push_str(&err.to_string());
+        source = err.source();
+    }
+    message
 }
 
 static IP_REGEX: LazyLock<Regex> = LazyLock::new(|| {
@@ -492,20 +407,35 @@ fn record_message_stats(payload: &[u8]) {
 mod tests {
     use super::*;
 
+    use std::sync::Arc;
+    use std::time::Duration;
+
     use chrono::Utc;
     use sentry_arroyo::backends::kafka::types::KafkaPayload;
+    use sentry_arroyo::processing::strategies::{
+        CommitRequest, InvalidMessageReason, ProcessingStrategy, StrategyError, SubmitError,
+    };
     use sentry_arroyo::types::{Message, Partition, Topic};
 
-    use sentry_options::init_with_schemas;
-    use sentry_options::testing::override_options;
-    use serde_json::json;
-
-    use crate::types::InsertBatch;
+    use crate::types::{InsertBatch, RowData};
     use crate::Noop;
 
-    static INIT: std::sync::Once = std::sync::Once::new();
-    fn init_config() {
-        INIT.call_once(|| init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)]).unwrap());
+    #[test]
+    fn error_chain_includes_source() {
+        let err: anyhow::Error =
+            SchemaError::InvalidMessage(sentry_kafka_schemas::ValidationError::SchemaViolation(
+                "'$.foo' is a required property".to_string(),
+            ))
+            .into();
+        let message = error_chain(err.as_ref());
+        assert!(
+            message.contains("Invalid message"),
+            "missing outer error: {message}"
+        );
+        assert!(
+            message.contains("is a required property"),
+            "missing validation cause: {message}"
+        );
     }
 
     #[test]
@@ -550,23 +480,155 @@ mod tests {
     }
 
     #[test]
-    fn commit_log_offset_returns_raw_when_option_disabled() {
-        init_config();
-        let _guard =
-            override_options(&[("snuba", "consumer.commit_log_use_next_offset", json!(false))])
-                .unwrap();
+    fn process_failure_rejects_invalid_message() {
+        fn failing_processor(
+            _payload: KafkaPayload,
+            _metadata: KafkaMessageMetadata,
+            _config: &ProcessorConfig,
+        ) -> anyhow::Result<InsertBatch> {
+            anyhow::bail!("synthetic process failure")
+        }
 
-        assert_eq!(commit_log_offset(42), 42);
+        let partition = Partition::new(Topic::new("test"), 0);
+        let offset = 17;
+        let concurrency = ConcurrencyConfig::new(1);
+        let mut strategy = make_rust_processor(
+            Noop,
+            failing_processor,
+            "outcomes",
+            false,
+            &concurrency,
+            ProcessorConfig::default(),
+            None,
+        );
+
+        let payload = KafkaPayload::new(None, None, Some(b"{}".to_vec()));
+        let message = Message::new_broker_message(payload, partition, offset, Utc::now());
+
+        strategy.submit(message).unwrap();
+        let err = strategy
+            .join(None)
+            .expect_err("process failure should surface as InvalidMessage");
+
+        match err {
+            StrategyError::InvalidMessage(invalid) => {
+                assert_eq!(invalid.partition, partition);
+                assert_eq!(invalid.offset, offset);
+                assert_eq!(invalid.reason, InvalidMessageReason::Invalid);
+            }
+            other => panic!("unexpected strategy error: {other:?}"),
+        }
     }
 
     #[test]
-    fn commit_log_offset_returns_next_when_option_enabled() {
-        init_config();
-        let _guard =
-            override_options(&[("snuba", "consumer.commit_log_use_next_offset", json!(true))])
-                .unwrap();
+    fn schema_validation_failure_rejects_invalid_message() {
+        fn noop_processor(
+            _payload: KafkaPayload,
+            _metadata: KafkaMessageMetadata,
+            _config: &ProcessorConfig,
+        ) -> anyhow::Result<InsertBatch> {
+            Ok(InsertBatch::default())
+        }
 
-        assert_eq!(commit_log_offset(42), 43);
+        let partition = Partition::new(Topic::new("test"), 0);
+        let offset = 23;
+        let concurrency = ConcurrencyConfig::new(1);
+        let mut strategy = make_rust_processor(
+            Noop,
+            noop_processor,
+            "outcomes",
+            true,
+            &concurrency,
+            ProcessorConfig::default(),
+            None,
+        );
+
+        let payload = KafkaPayload::new(None, None, Some(b"{}".to_vec()));
+        let message = Message::new_broker_message(payload, partition, offset, Utc::now());
+
+        strategy.submit(message).unwrap();
+        let err = strategy
+            .join(None)
+            .expect_err("schema validation failure should surface as InvalidMessage");
+
+        match err {
+            StrategyError::InvalidMessage(invalid) => {
+                assert_eq!(invalid.partition, partition);
+                assert_eq!(invalid.offset, offset);
+                assert_eq!(invalid.reason, InvalidMessageReason::Invalid);
+            }
+            other => panic!("unexpected strategy error: {other:?}"),
+        }
+    }
+
+    /// The commit log offset produced by the processor must use next-to-consume
+    /// semantics (raw offset + 1).
+    #[test]
+    fn commit_log_entry_uses_next_offset() {
+        let captured: Arc<std::sync::Mutex<Vec<BytesInsertBatch<RowData>>>> =
+            Arc::new(std::sync::Mutex::new(Vec::new()));
+        let captured_clone = captured.clone();
+
+        struct Capture(Arc<std::sync::Mutex<Vec<BytesInsertBatch<RowData>>>>);
+        impl ProcessingStrategy<BytesInsertBatch<RowData>> for Capture {
+            fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
+                Ok(None)
+            }
+            fn submit(
+                &mut self,
+                message: Message<BytesInsertBatch<RowData>>,
+            ) -> Result<(), SubmitError<BytesInsertBatch<RowData>>> {
+                self.0.lock().unwrap().push(message.into_payload());
+                Ok(())
+            }
+            fn terminate(&mut self) {}
+            fn join(
+                &mut self,
+                _timeout: Option<Duration>,
+            ) -> Result<Option<CommitRequest>, StrategyError> {
+                Ok(None)
+            }
+        }
+
+        fn noop_processor(
+            _payload: KafkaPayload,
+            _metadata: KafkaMessageMetadata,
+            _config: &ProcessorConfig,
+        ) -> anyhow::Result<InsertBatch> {
+            Ok(InsertBatch::default())
+        }
+
+        let partition = Partition::new(Topic::new("events-small"), 7);
+        let raw_offset: u64 = 42;
+        let concurrency = ConcurrencyConfig::new(1);
+
+        let mut strategy = make_rust_processor(
+            Capture(captured_clone),
+            noop_processor,
+            "outcomes",
+            false,
+            &concurrency,
+            ProcessorConfig::default(),
+            None,
+        );
+
+        let payload = KafkaPayload::new(None, None, Some(b"{}".to_vec()));
+        let message = Message::new_broker_message(payload, partition, raw_offset, Utc::now());
+
+        strategy.submit(message).unwrap();
+        strategy.poll().unwrap();
+        let _ = strategy.join(None);
+
+        let batches = captured.lock().unwrap();
+        assert_eq!(batches.len(), 1);
+
+        let offsets = batches[0].commit_log_offsets();
+        let entry = offsets
+            .0
+            .get(&partition.index)
+            .expect("commit log entry missing for partition");
+
+        assert_eq!(entry.offset, raw_offset + 1);
     }
 
     #[test]

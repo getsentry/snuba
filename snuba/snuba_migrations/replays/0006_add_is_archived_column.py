@@ -1,11 +1,11 @@
-from typing import List, Sequence, Tuple
+from collections.abc import Sequence
 
 from snuba.clickhouse.columns import Column, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
-new_columns: Sequence[Tuple[Column[Modifiers], str]] = [
+new_columns: Sequence[tuple[Column[Modifiers], str]] = [
     (Column("is_archived", UInt(8, Modifiers(nullable=True))), "urls")
 ]
 
@@ -14,7 +14,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
     blocking = False
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
-        ops: List[operations.SqlOperation] = []
+        ops: list[operations.SqlOperation] = []
 
         for column, after in new_columns:
             ops.append(
@@ -29,19 +29,15 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
         return ops
 
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
-        ops: List[operations.SqlOperation] = []
+        ops: list[operations.SqlOperation] = []
 
         for column, _ in reversed(new_columns):
-            ops.append(
-                operations.DropColumn(
-                    StorageSetKey.REPLAYS, "replays_local", column.name
-                )
-            )
+            ops.append(operations.DropColumn(StorageSetKey.REPLAYS, "replays_local", column.name))
 
         return ops
 
     def forwards_dist(self) -> Sequence[operations.SqlOperation]:
-        ops: List[operations.SqlOperation] = []
+        ops: list[operations.SqlOperation] = []
 
         for column, after in new_columns:
             ops.append(
@@ -56,13 +52,9 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
         return ops
 
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
-        ops: List[operations.SqlOperation] = []
+        ops: list[operations.SqlOperation] = []
 
         for column, _ in reversed(new_columns):
-            ops.append(
-                operations.DropColumn(
-                    StorageSetKey.REPLAYS, "replays_dist", column.name
-                )
-            )
+            ops.append(operations.DropColumn(StorageSetKey.REPLAYS, "replays_dist", column.name))
 
         return ops

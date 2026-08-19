@@ -1,13 +1,12 @@
 import time
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies.abstract import MessageRejected
 from arroyo.types import Message
 
-from snuba.state import get_int_config
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics import MetricsBackend
 
 _CACHE_TTL_SECONDS = 60
@@ -19,8 +18,8 @@ class OffPeakProcessingStrategy(ProcessingStrategy[KafkaPayload]):
     configurable off-peak hours. Outside those hours, raises MessageRejected
     to apply backpressure so messages accumulate in Kafka.
 
-    Controlled via runtime config (Redis-backed):
-      - lw_deletions_offpeak_enabled (int, default 0): feature toggle
+    Controlled via sentry-options:
+      - lw_deletions_offpeak_enabled (bool, default false): feature toggle
       - lw_deletions_offpeak_start (int, default 0): start hour UTC, inclusive
       - lw_deletions_offpeak_end (int, default 24): end hour UTC, exclusive
     """
@@ -32,7 +31,7 @@ class OffPeakProcessingStrategy(ProcessingStrategy[KafkaPayload]):
     ) -> None:
         self.__next_step = next_step
         self.__metrics = metrics
-        self.__cached_result: Optional[bool] = None
+        self.__cached_result: bool | None = None
         self.__cached_at: float = 0.0
 
     def poll(self) -> None:
@@ -49,15 +48,15 @@ class OffPeakProcessingStrategy(ProcessingStrategy[KafkaPayload]):
         if self.__cached_result is not None and (now - self.__cached_at) < _CACHE_TTL_SECONDS:
             return self.__cached_result
 
-        enabled = get_int_config("lw_deletions_offpeak_enabled", default=0)
+        enabled = get_option("lw_deletions_offpeak_enabled", False)
         if not enabled:
             self.__cached_result = True
             self.__cached_at = now
             return True
 
-        start = get_int_config("lw_deletions_offpeak_start", default=0) or 0
-        end = get_int_config("lw_deletions_offpeak_end", default=24) or 24
-        current_hour = datetime.now(timezone.utc).hour
+        start = get_option("lw_deletions_offpeak_start", 0)
+        end = get_option("lw_deletions_offpeak_end", 24)
+        current_hour = datetime.now(UTC).hour
 
         if start == end:
             result = False
@@ -77,5 +76,5 @@ class OffPeakProcessingStrategy(ProcessingStrategy[KafkaPayload]):
     def terminate(self) -> None:
         self.__next_step.terminate()
 
-    def join(self, timeout: Optional[float] = None) -> None:
+    def join(self, timeout: float | None = None) -> None:
         self.__next_step.join(timeout)

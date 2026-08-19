@@ -3,17 +3,19 @@ from __future__ import annotations
 import calendar
 import time
 import uuid
-from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Generator, List, Sequence, Tuple, Union
+from collections.abc import Callable, Generator, Sequence
+from datetime import UTC, datetime, timedelta
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 import simplejson as json
 from confluent_kafka.admin import AdminClient
 from dateutil.parser import parse as parse_datetime
+from sentry_options.testing import override_options
 from sentry_sdk import Client, Hub
 
-from snuba import settings, state
+from snuba import settings
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.entities.entity_key import EntityKey
@@ -28,7 +30,6 @@ from snuba.utils.manage_topics import create_topics
 from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
 from snuba.utils.streams.topics import Topic as SnubaTopic
 from tests.base import BaseApiTest
-from tests.conftest import SnubaSetConfig
 from tests.helpers import write_processed_messages
 
 
@@ -36,7 +37,7 @@ from tests.helpers import write_processed_messages
 @pytest.mark.redis_db
 class SimpleAPITest(BaseApiTest):
     @pytest.fixture(autouse=True)
-    def setup_teardown(self, events_db: None, redis_db: None) -> Generator[None, None, None]:
+    def setup_teardown(self, events_db: None, redis_db: None) -> Generator[None]:
         # values for test data
         self.project_ids = [1, 2, 3]  # 3 projects
         self.environments = ["prød", "test"]  # 2 environments
@@ -55,14 +56,6 @@ class SimpleAPITest(BaseApiTest):
         self.generate_fizzbuzz_events()
 
         yield
-
-        # Reset rate limits
-        state.delete_config("global_concurrent_limit")
-        state.delete_config("global_per_second_limit")
-        state.delete_config("project_concurrent_limit")
-        state.delete_config("project_concurrent_limit_1")
-        state.delete_config("project_per_second_limit")
-        state.delete_config("date_align_seconds")
 
     def write_events(self, events: Sequence[InsertEvent]) -> None:
         processor = self.storage.get_table_writer().get_stream_loader().get_processor()
@@ -153,15 +146,14 @@ class SimpleAPITest(BaseApiTest):
         dbsize: int | dict[str, int] = redis_client.dbsize()
         if isinstance(dbsize, dict):
             return sum(dbsize.values())
-        else:
-            return dbsize
+        return dbsize
 
 
 @pytest.mark.events_db
 @pytest.mark.redis_db
 class TestApi(SimpleAPITest):
     @pytest.fixture
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
+    def test_entity(self) -> str | tuple[str, str]:
         return "events"
 
     @pytest.fixture
@@ -181,7 +173,7 @@ class TestApi(SimpleAPITest):
             .get_cluster()
             .get_query_connection(ClickhouseClientSettings.QUERY)
         )
-        res = clickhouse.execute("SELECT count() FROM %s" % self.table).results
+        res = clickhouse.execute(f"SELECT count() FROM {self.table}").results
         assert res[0][0] == 330
 
         rollup_mins = 60
@@ -253,9 +245,7 @@ class TestApi(SimpleAPITest):
                         "granularity": 60,
                         "selected_columns": ["time"],
                         "groupby": "time",
-                        "from_date": (self.base_time + skew)
-                        .replace(tzinfo=timezone.utc)
-                        .isoformat(),
+                        "from_date": (self.base_time + skew).replace(tzinfo=UTC).isoformat(),
                         "to_date": (
                             self.base_time + skew + timedelta(minutes=self.minutes)
                         ).isoformat(),
@@ -269,25 +259,25 @@ class TestApi(SimpleAPITest):
 
         # But if we set time alignment to an hour, the buckets will fall back to
         # the 1hr boundary.
-        state.set_config("date_align_seconds", 3600)
-        result = json.loads(
-            self.post(
-                json.dumps(
-                    {
-                        "project": 1,
-                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
-                        "granularity": 60,
-                        "selected_columns": ["time"],
-                        "groupby": "time",
-                        "from_date": (self.base_time + skew).isoformat(),
-                        "to_date": (
-                            self.base_time + skew + timedelta(minutes=self.minutes)
-                        ).isoformat(),
-                        "orderby": "time",
-                    }
-                ),
-            ).data
-        )
+        with override_options("snuba", {"date_align_seconds": 3600}):
+            result = json.loads(
+                self.post(
+                    json.dumps(
+                        {
+                            "project": 1,
+                            "tenant_ids": {"referrer": "r", "organization_id": 1234},
+                            "granularity": 60,
+                            "selected_columns": ["time"],
+                            "groupby": "time",
+                            "from_date": (self.base_time + skew).isoformat(),
+                            "to_date": (
+                                self.base_time + skew + timedelta(minutes=self.minutes)
+                            ).isoformat(),
+                            "orderby": "time",
+                        }
+                    ),
+                ).data
+            )
         bucket_time = parse_datetime(result["data"][0]["time"]).replace(tzinfo=None)
         assert bucket_time == self.base_time
 
@@ -1127,23 +1117,21 @@ class TestApi(SimpleAPITest):
 
         result_map = {d["tags_key"]: d for d in result["data"]}
         # Result contains both promoted and regular tags
-        assert set(result_map.keys()) == set(
-            [
-                # Promoted tags
-                "environment",
-                "sentry:dist",
-                "sentry:release",
-                "os.rooted",
-                "os.name",
-                # User (nested) tags
-                "foo",
-                "foo.bar",
-                # Note this is a nested (user-provided) os_name tag and is
-                # unrelated to the fact that we happen to store the
-                # `os.name` tag as an `os_name` column.
-                "os_name",
-            ]
-        )
+        assert set(result_map.keys()) == {
+            # Promoted tags
+            "environment",
+            "sentry:dist",
+            "sentry:release",
+            "os.rooted",
+            "os.name",
+            # User (nested) tags
+            "foo",
+            "foo.bar",
+            # Note this is a nested (user-provided) os_name tag and is
+            # unrelated to the fact that we happen to store the
+            # `os.name` tag as an `os_name` column.
+            "os_name",
+        }
 
         # Reguar (nested) tag
         assert result_map["foo"]["count"] == 180
@@ -1461,7 +1449,7 @@ class TestApi(SimpleAPITest):
         assert result["meta"] == [{"name": "timestamp", "type": "DateTime"}]
 
     def test_exception_captured_by_sentry(self) -> None:
-        events: List[Any] = []
+        events: list[Any] = []
         with Hub(Client(transport=events.append)):
             # This endpoint should return 500 as it internally raises an exception
             response = self.app.get("/tests/error")
@@ -1470,10 +1458,15 @@ class TestApi(SimpleAPITest):
             assert len(events) == 1
             assert events[0]["exception"]["values"][0]["type"] == "ZeroDivisionError"
 
+    @override_options(
+        "snuba",
+        {
+            "read_through_cache.short_circuit": True,
+            "consistent_override": "test_override=0;another=0.5",
+        },
+    )
     def test_consistent(self) -> None:
-        state.set_config("consistent_override", "test_override=0;another=0.5")
-        state.set_config("read_through_cache.short_circuit", 1)
-        query_data = {
+        query_data: dict[str, Any] = {
             "project": 2,
             "tenant_ids": {"referrer": "test_query", "organization_id": 1234},
             "aggregations": [["count()", "", "aggregate"]],
@@ -1487,10 +1480,10 @@ class TestApi(SimpleAPITest):
         response = json.loads(self.post(query, referrer="test_query").data)
         assert response["stats"]["consistent"]
 
-        query_data["tenant_ids"]["referrer"] = "test_override"  # type: ignore
+        query_data["tenant_ids"]["referrer"] = "test_override"
         query = json.dumps(query_data)
         response = json.loads(self.post(query, referrer="test_override").data)
-        assert response["stats"]["consistent"] == False
+        assert not response["stats"]["consistent"]
 
     def test_gracefully_handle_multiple_conditions_on_same_column(self) -> None:
         response = self.post(
@@ -1623,7 +1616,7 @@ class TestApi(SimpleAPITest):
         assert len(clickhouse.execute(f"SELECT * FROM {self.table}").results) == 0
 
     def test_max_limit(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(Exception):  # noqa: B017 over-limit request may surface as various exception types
             self.post(
                 json.dumps(
                     {
@@ -1750,7 +1743,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
                 partition,
             ).all()
         )[0]
-        assert data.tenant_ids == dict()  # not saved to the redis store
+        assert data.tenant_ids == {}  # not saved to the redis store
         assert "tenant_ids" not in data.to_dict()  # doesn't show up in dictified data
 
     @pytest.mark.clickhouse_db
@@ -1831,7 +1824,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
 
     def test_time_error(self) -> None:
         resp = self.app.post(
-            "{}/{}/subscriptions".format(self.dataset_name, self.entity_key),
+            f"{self.dataset_name}/{self.entity_key}/subscriptions",
             data=json.dumps(
                 {
                     "project_id": 1,
@@ -1857,7 +1850,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
         with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
             uuid4.return_value = expected_uuid
             resp = self.app.post(
-                "{}/{}/subscriptions".format(self.dataset_name, self.entity_key),
+                f"{self.dataset_name}/{self.entity_key}/subscriptions",
                 data=json.dumps(
                     {
                         "project_id": 1,
@@ -1961,5 +1954,6 @@ class TestAPIErrorsRO(TestApi):
     """
 
     @pytest.fixture(autouse=True)
-    def use_readonly_table(self, snuba_set_config: SnubaSetConfig) -> None:
-        snuba_set_config("enable_events_readonly_table", 1)
+    def use_readonly_table(self) -> Generator[None]:
+        with override_options("snuba", {"enable_events_readonly_table": True}):
+            yield

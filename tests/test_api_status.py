@@ -1,11 +1,12 @@
+from collections.abc import Callable
 from datetime import datetime, timedelta
-from typing import Any, Callable
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 import simplejson as json
-from clickhouse_driver.errors import ErrorCodes
 
+from snuba.clickhouse.error_codes import ErrorCodes
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.state.cache.abstract import ExecutionTimeoutError
 from snuba.state.rate_limit import (

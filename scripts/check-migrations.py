@@ -2,8 +2,8 @@
 import argparse
 import os
 import subprocess
+from collections.abc import Sequence
 from shutil import ExecError
-from typing import Optional, Sequence
 
 import requests
 
@@ -107,13 +107,10 @@ def _get_changes(globs: Sequence[str], workdir: str, to: str) -> str:
     )
     if changes.returncode != 0:
         raise ExecError(changes.stdout)
-    else:
-        return changes.stdout
+    return changes.stdout
 
 
-def main(
-    to: str = "origin/master", workdir: str = ".", labels: Optional[Sequence[str]] = []
-) -> None:
+def main(to: str = "origin/master", workdir: str = ".", labels: Sequence[str] | None = []) -> None:
     if labels:
         for label in labels:
             if SKIP_LABEL in label:

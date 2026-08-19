@@ -20,11 +20,11 @@ def test_encode_preserves_column_order(values_encoder: ValuesRowEncoder) -> None
             "col1": FunctionCall(
                 None,
                 "test",
-                tuple([FunctionCall(None, "inner", tuple([Literal(None, "inner_arg")]))]),
+                (FunctionCall(None, "inner", (Literal(None, "inner_arg"),)),),
             ),
         }
     )
-    assert encoded == "(test(inner('inner_arg')),5,'test_string')".encode("utf-8")
+    assert encoded == b"(test(inner('inner_arg')),5,'test_string')"
 
 
 def test_encode_fails_on_non_expression(values_encoder: ValuesRowEncoder) -> None:

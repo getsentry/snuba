@@ -1,5 +1,6 @@
 from abc import abstractmethod
-from typing import Callable, Mapping, MutableMapping, Optional, Protocol, Union
+from collections.abc import Callable, Mapping, MutableMapping
+from typing import Protocol
 
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.commit import ONCE_PER_SECOND
@@ -23,7 +24,7 @@ from snuba.consumers.consumer import BytesInsertBatch, ProcessedMessageBatchWrit
 from snuba.consumers.dlq import ExitAfterNMessages
 from snuba.processor import ReplacementBatch
 
-ProcessedMessage = Union[None, BytesInsertBatch, ReplacementBatch]
+ProcessedMessage = None | BytesInsertBatch | ReplacementBatch
 
 
 class StreamMessageFilter(Protocol):
@@ -60,22 +61,22 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
 
     def __init__(
         self,
-        prefilter: Optional[StreamMessageFilter],
+        prefilter: StreamMessageFilter | None,
         process_message: Callable[[Message[KafkaPayload]], ProcessedMessage],
         collector: Callable[[], ProcessedMessageBatchWriter],
         max_batch_size: int,
         max_batch_time: float,
-        processes: Optional[int],
-        input_block_size: Optional[int],
-        output_block_size: Optional[int],
-        max_insert_batch_size: Optional[int],
-        max_insert_batch_time: Optional[float],
+        processes: int | None,
+        input_block_size: int | None,
+        output_block_size: int | None,
+        max_insert_batch_size: int | None,
+        max_insert_batch_time: float | None,
         metrics_tags: MutableMapping[str, str],
         # Passed in the case of DLQ consumer which exits after a certain number of messages
         # is processed
-        max_messages_to_process: Optional[int] = None,
-        initialize_parallel_transform: Optional[Callable[[], None]] = None,
-        health_check_file: Optional[str] = None,
+        max_messages_to_process: int | None = None,
+        initialize_parallel_transform: Callable[[], None] | None = None,
+        health_check_file: str | None = None,
     ) -> None:
         self.__prefilter = prefilter
         self.__process_message = process_message
@@ -150,7 +151,7 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
 
         transform_function = self.__process_message
 
-        strategy: ProcessingStrategy[Union[FilteredPayload, KafkaPayload]]
+        strategy: ProcessingStrategy[FilteredPayload | KafkaPayload]
         if self.__pool is None:
             strategy = RunTask(transform_function, collect)
         else:

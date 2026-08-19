@@ -1,4 +1,4 @@
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 import pytest
 from click import Command
@@ -7,7 +7,7 @@ from click.testing import CliRunner
 from snuba.cli.migrations import list, migrate, reverse, reverse_in_progress, run
 
 
-def _check_run(runner: CliRunner, func: Command, args: Optional[Sequence[str]] = None) -> None:
+def _check_run(runner: CliRunner, func: Command, args: Sequence[str] | None = None) -> None:
     result = runner.invoke(func, args)
     assert result.exit_code == 0
 

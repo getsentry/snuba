@@ -1,4 +1,5 @@
-from typing import Mapping, NamedTuple, Optional
+from collections.abc import Mapping
+from typing import NamedTuple
 
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.translators.snuba.mappers import (
@@ -15,14 +16,14 @@ from snuba.query.query_settings import QuerySettings
 
 class SubscriptableMatch(NamedTuple):
     # The table name associated with the nested column found in the query.
-    table_name: Optional[str]
+    table_name: str | None
     # The nested column name
     column_name: str
     # The key found in the query (like key in tags[key])
     key: str
 
 
-def match_subscriptable_reference(exp: Expression) -> Optional[SubscriptableMatch]:
+def match_subscriptable_reference(exp: Expression) -> SubscriptableMatch | None:
     """
     Finds the expression, in the Clickhouse query, that loads the value
     of a specific tag (or any nested column that represents a mapping,
@@ -112,12 +113,11 @@ class MappingColumnPromoter(ClickhouseQueryProcessor):
                         and "FixedString" not in col_type_name
                     ):
                         return Column(exp.alias, subscript.table_name, promoted_col_name)
-                    else:
-                        return FunctionCall(
-                            exp.alias,
-                            "toString",
-                            (Column(None, subscript.table_name, promoted_col_name),),
-                        )
+                    return FunctionCall(
+                        exp.alias,
+                        "toString",
+                        (Column(None, subscript.table_name, promoted_col_name),),
+                    )
 
             return exp
 

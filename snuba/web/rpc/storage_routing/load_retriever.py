@@ -1,7 +1,8 @@
 import inspect
 import json
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable
+from typing import Any
 
 import sentry_sdk
 
@@ -131,12 +132,12 @@ def get_cluster_loadinfo(
             """
 
         cluster_load = float(
-            cluster.get_query_connection(ClickhouseClientSettings.QUERY)
+            cluster.get_query_connection(ClickhouseClientSettings.INTERNAL)
             .execute(cluster_load_query)
             .results[0][0]
         )
         concurrent_queries = int(
-            cluster.get_query_connection(ClickhouseClientSettings.QUERY)
+            cluster.get_query_connection(ClickhouseClientSettings.INTERNAL)
             .execute(concurrent_queries_query)
             .results[0][0]
         )

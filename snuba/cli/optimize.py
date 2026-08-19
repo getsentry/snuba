@@ -1,5 +1,4 @@
 from datetime import UTC, timedelta
-from typing import Optional
 
 import click
 
@@ -23,7 +22,7 @@ from snuba.redis import RedisClientKey, get_redis_client
 @click.option(
     "--clickhouse-port",
     type=int,
-    help="Clickhouse native port to write to.",
+    help="ClickHouse port identifying the target node.",
 )
 @click.option(
     "--clickhouse-secure",
@@ -66,20 +65,21 @@ from snuba.redis import RedisClientKey, get_redis_client
 )
 def optimize(
     *,
-    clickhouse_host: Optional[str],
-    clickhouse_port: Optional[int],
+    clickhouse_host: str | None,
+    clickhouse_port: int | None,
     clickhouse_secure: bool,
-    clickhouse_ca_certs: Optional[str],
-    clickhouse_verify: Optional[bool],
+    clickhouse_ca_certs: str | None,
+    clickhouse_verify: bool | None,
     storage_name: str,
     default_parallel_threads: int,
-    log_level: Optional[str] = None,
+    log_level: str | None = None,
     divide_partitions: int,
 ) -> None:
     from datetime import datetime
 
-    from snuba.clickhouse.native import ClickhousePool
     from snuba.clickhouse.optimize.optimize import logger
+    from snuba.clickhouse.pool import ClickhousePool
+    from snuba.clusters.cluster import ClickhouseNode, build_pool
 
     setup_logging(log_level)
     setup_sentry()
@@ -100,17 +100,18 @@ def optimize(
     # passing this information won't be necessary, and running this command once
     # will ensure that optimize is performed on all of the individual nodes for
     # that cluster.
+    connection: ClickhousePool
     if clickhouse_host and clickhouse_port:
-        connection = ClickhousePool(
-            clickhouse_host,
-            clickhouse_port,
+        # --clickhouse-port is the HTTP connect port.
+        connection = build_pool(
+            ClickhouseClientSettings.OPTIMIZE,
+            ClickhouseNode(clickhouse_host, clickhouse_port),
             clickhouse_user,
             clickhouse_password,
             database,
-            clickhouse_secure,
-            clickhouse_ca_certs,
-            clickhouse_verify,
-            send_receive_timeout=ClickhouseClientSettings.OPTIMIZE.value.timeout,
+            secure=clickhouse_secure,
+            ca_certs=clickhouse_ca_certs,
+            verify=clickhouse_verify,
         )
     elif not storage.get_cluster().is_single_node():
         raise click.ClickException("Provide Clickhouse host and port for optimize")
@@ -157,4 +158,4 @@ def optimize(
     )
 
     tracker.delete_all_states()
-    logger.info("Optimized %s partitions on %s" % (num_dropped, clickhouse_host))
+    logger.info(f"Optimized {num_dropped} partitions on {clickhouse_host}")

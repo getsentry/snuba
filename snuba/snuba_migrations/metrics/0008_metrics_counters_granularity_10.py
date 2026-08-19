@@ -1,4 +1,4 @@
-from typing import Sequence
+from collections.abc import Sequence
 
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
@@ -21,9 +21,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return (
-            get_forward_view_migration_local(
-                **get_migration_args_for_counters(granularity=10)
-            ),
+            get_forward_view_migration_local(**get_migration_args_for_counters(granularity=10)),
         )
 
     def backwards_local(self) -> Sequence[operations.SqlOperation]:

@@ -1,5 +1,5 @@
+from collections.abc import Callable, Sequence
 from logging import Logger
-from typing import Callable, Sequence
 from unittest import mock
 from unittest.mock import Mock, patch
 
@@ -763,8 +763,8 @@ class TestOnCluster:
         op = RunSql(StorageSetKey.EVENTS, sql, target=OperationTarget.LOCAL)
         op.execute()
 
-        # Should execute once (single-node execution via parent's execute())
-        mock_connection.execute.assert_called_once_with(sql, settings=None)
+        # DDL goes through command(); single-node path via parent's execute()
+        mock_connection.command.assert_called_once_with(sql, settings=None)
 
     @patch("snuba.migrations.operations.get_cluster")
     def test_run_sql_without_on_cluster_uses_per_node_execution(
@@ -783,8 +783,8 @@ class TestOnCluster:
         op = RunSql(StorageSetKey.EVENTS, sql, target=OperationTarget.LOCAL)
         op.execute()
 
-        # Should execute twice (once per node via _execute_per_node())
-        assert mock_connection.execute.call_count == 2
+        # Should command twice (once per node via _execute_per_node())
+        assert mock_connection.command.call_count == 2
 
     @patch("snuba.migrations.operations.get_cluster")
     def test_run_sql_on_cluster_case_insensitive(self, mock_get_cluster: Mock) -> None:
@@ -801,5 +801,5 @@ class TestOnCluster:
         op = RunSql(StorageSetKey.EVENTS, sql, target=OperationTarget.LOCAL)
         op.execute()
 
-        # Should execute once (detected ON CLUSTER)
-        mock_connection.execute.assert_called_once()
+        # Should command once (detected ON CLUSTER)
+        mock_connection.command.assert_called_once()

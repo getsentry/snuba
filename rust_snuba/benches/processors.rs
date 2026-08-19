@@ -7,9 +7,9 @@ use criterion::{black_box, BenchmarkGroup, BenchmarkId, Criterion, Throughput};
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use rust_snuba::{
-    BatchSizeCalculation, BrokerConfig, ClickhouseConfig, ConsumerStrategyFactoryV2, EnvConfig,
-    KafkaMessageMetadata, MessageProcessorConfig, ProcessingFunction, ProcessingFunctionType,
-    ProcessorConfig, StatsDBackend, StorageConfig, TopicConfig, PROCESSORS,
+    BatchSizeCalculation, BrokerConfig, ClickhouseConfig, ConsumerStrategyFactoryV2,
+    DogStatsDBackend, EnvConfig, KafkaMessageMetadata, MessageProcessorConfig, ProcessingFunction,
+    ProcessingFunctionType, ProcessorConfig, StorageConfig, TopicConfig, PROCESSORS,
 };
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::backends::local::broker::LocalBroker;
@@ -54,7 +54,6 @@ fn create_factory(
             host: "test".into(),
             port: 1234,
             secure: false,
-            http_port: 1234,
             user: "test".into(),
             password: "test".into(),
             database: "test".into(),
@@ -104,8 +103,8 @@ fn create_factory(
         join_timeout_ms: None,
         health_check: "arroyo".to_string(),
         use_row_binary: false,
-        blq_producer_config: None,
-        blq_topic: None,
+        skip_write: false,
+        dlq_configured: false,
     };
     Box::new(factory)
 }
@@ -208,8 +207,8 @@ fn run_processor_bench(
 }
 
 fn main() {
-    // this sends to nowhere, but because it's UDP we won't error.
-    metrics::init(StatsDBackend::new("127.0.0.1", 8081, "snuba.consumer")).unwrap();
+    // No exporter is installed, so the `metrics` facade discards everything this records.
+    metrics::init(DogStatsDBackend).unwrap();
 
     let mut c = Criterion::default().configure_from_args();
 

@@ -108,6 +108,6 @@ mod tests {
             )]),
             "shared-resources-usage",
         );
-        accountant.record_bytes("generic_metrics_processor_sets", "custom", 100)
+        accountant.record_bytes("generic_metrics_processor_counters", "custom", 100)
     }
 }

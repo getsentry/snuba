@@ -107,7 +107,7 @@ def test_uuid_array_column_processor(
         condition=expected,
     )
 
-    UUIDArrayColumnProcessor(set(["column1", "column2"])).process_query(
+    UUIDArrayColumnProcessor({"column1", "column2"}).process_query(
         unprocessed_query, HTTPQuerySettings()
     )
     assert unprocessed_query.get_selected_columns() == [

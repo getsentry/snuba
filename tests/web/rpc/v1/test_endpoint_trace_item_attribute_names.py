@@ -1,20 +1,33 @@
+import uuid
+from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
     TraceItemAttributeNamesRequest,
     TraceItemAttributeNamesResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
-from sentry_protos.snuba.v1.trace_item_filter_pb2 import ExistsFilter, TraceItemFilter
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import AndFilter, ExistsFilter, TraceItemFilter
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.query.data_source.simple import Storage as StorageDataSource
+from snuba.query.expressions import FunctionCall, Lambda, Literal
 from snuba.web.rpc.v1.endpoint_trace_item_attribute_names import (
+    UNSEARCHABLE_ATTRIBUTE_KEYS,
     EndpointTraceItemAttributeNames,
+    get_co_occurring_attributes,
+)
+from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs import (
+    CO_OCCURRING_ATTRS_STORAGE_KEY,
+    CO_OCCURRING_ATTRS_V2_OPTION,
+    CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION,
+    CO_OCCURRING_ATTRS_V2_STORAGE_KEY,
 )
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -58,14 +71,33 @@ def populate_eap_spans_storage(num_rows: int) -> None:
             attributes=attributes,
         )
 
-    items_storage = get_storage(StorageKey("eap_items"))
+    items_storage = get_writable_storage(StorageKey("eap_items"))
     messages = [generate_span_event_message(i) for i in range(num_rows)]
-    write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+    write_raw_unprocessed_events(items_storage, messages)
 
 
 @pytest.fixture(autouse=True)
 def setup_teardown(eap: None, redis_db: None) -> None:
     populate_eap_spans_storage(num_rows=TOTAL_GENERATED_SPANS)
+
+
+@pytest.fixture(autouse=True, params=[False, True], ids=["co_occurring_v1", "co_occurring_v2"])
+def co_occurring_storage(request: pytest.FixtureRequest) -> Generator[bool]:
+    """Run every test in this module against both co-occurring-attributes storages, so the
+    shared behaviour holds on either side of the rollout.
+
+    The v2 start timestamp is pinned back so the date gate does not send the v2 leg to v1:
+    whether ``BASE_TIME`` clears the real cutoff depends on the day the suite runs.
+    """
+    use_v2 = bool(request.param)
+    with override_options(
+        "snuba",
+        {
+            CO_OCCURRING_ATTRS_V2_OPTION: use_v2,
+            CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION: 0,
+        },
+    ):
+        yield use_v2
 
 
 @pytest.mark.eap
@@ -94,6 +126,73 @@ class TestTraceItemAttributeNames(BaseApiTest):
                 )
             )
         assert res.attributes == expected
+
+    def test_semver_sort(self) -> None:
+        # Version-like attribute names: lexicographically "1.2.10" < "1.2.2" <
+        # "1.2.9"; with SORT_SEMVER (semver) they order "1.2.2" < "1.2.9" < "1.2.10".
+        items_storage = get_writable_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            items_storage,
+            [
+                gen_item_message(
+                    start_timestamp=BASE_TIME,
+                    attributes={name: AnyValue(string_value="x")},
+                )
+                for name in ("1.2.9", "1.2.10", "1.2.2")
+            ],
+        )
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int((BASE_TIME - timedelta(days=1)).timestamp())),
+                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
+            ),
+            limit=100,
+            type=AttributeKey.Type.TYPE_STRING,
+            value_substring_match="1.2",
+            order_by=TraceItemAttributeNamesRequest.OrderBy(
+                sort=TraceItemAttributeNamesRequest.OrderBy.SORT_SEMVER,
+            ),
+        )
+        res = EndpointTraceItemAttributeNames().execute(req)
+        assert [a.name for a in res.attributes] == ["1.2.2", "1.2.9", "1.2.10"]
+
+    def test_semver_sort_descending(self) -> None:
+        # descending applies to SORT_SEMVER name ordering even with column unset,
+        # so the result is the exact reverse of the ascending semver order.
+        items_storage = get_writable_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            items_storage,
+            [
+                gen_item_message(
+                    start_timestamp=BASE_TIME,
+                    attributes={name: AnyValue(string_value="x")},
+                )
+                for name in ("1.2.9", "1.2.10", "1.2.2")
+            ],
+        )
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int((BASE_TIME - timedelta(days=1)).timestamp())),
+                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
+            ),
+            limit=100,
+            type=AttributeKey.Type.TYPE_STRING,
+            value_substring_match="1.2",
+            order_by=TraceItemAttributeNamesRequest.OrderBy(
+                sort=TraceItemAttributeNamesRequest.OrderBy.SORT_SEMVER,
+                descending=True,
+            ),
+        )
+        res = EndpointTraceItemAttributeNames().execute(req)
+        assert [a.name for a in res.attributes] == ["1.2.10", "1.2.9", "1.2.2"]
 
     def test_simple_float_backward_compat(self) -> None:
         req = TraceItemAttributeNamesRequest(
@@ -206,6 +305,32 @@ class TestTraceItemAttributeNames(BaseApiTest):
         res = EndpointTraceItemAttributeNames().execute(req)
         assert res.meta.query_info != []
 
+    def test_reads_the_storage_selected_by_the_rollout_flag(
+        self, co_occurring_storage: bool
+    ) -> None:
+        """The option picks which storage is read, in either direction."""
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                request_id=str(uuid.uuid4()),
+                start_timestamp=Timestamp(seconds=int((BASE_TIME - timedelta(days=1)).timestamp())),
+                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
+            ),
+            limit=10,
+            type=AttributeKey.Type.TYPE_STRING,
+        )
+        expected = (
+            CO_OCCURRING_ATTRS_V2_STORAGE_KEY
+            if co_occurring_storage
+            else CO_OCCURRING_ATTRS_STORAGE_KEY
+        )
+        from_clause = get_co_occurring_attributes(req).query.get_from_clause()
+        assert isinstance(from_clause, StorageDataSource)
+        assert from_clause.key == expected
+
     def test_basic_co_occurring_attrs(self) -> None:
         req = TraceItemAttributeNamesRequest(
             meta=RequestMeta(
@@ -236,6 +361,108 @@ class TestTraceItemAttributeNames(BaseApiTest):
         ]
         assert res.attributes == expected
 
+    def test_basic_co_occurring_attrs_with_match_any(self) -> None:
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int((BASE_TIME - timedelta(days=1)).timestamp())),
+                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
+            ),
+            limit=TOTAL_GENERATED_ATTR_PER_TYPE,
+            intersecting_attributes_filter=TraceItemFilter(
+                and_filter=AndFilter(
+                    filters=[
+                        TraceItemFilter(
+                            exists_filter=ExistsFilter(
+                                key=AttributeKey(type=AttributeKey.TYPE_STRING, name=key)
+                            )
+                        )
+                        for key in ["a_tag_000", "a_tag_001"]
+                    ]
+                )
+            ),
+            match_mode=TraceItemAttributeNamesRequest.MatchMode.MATCH_MODE_ANY,
+            type=AttributeKey.Type.TYPE_STRING,
+        )
+        res = EndpointTraceItemAttributeNames().execute(req)
+        assert (
+            TraceItemAttributeNamesResponse.Attribute(
+                name="a_tag_000", type=AttributeKey.Type.TYPE_STRING
+            )
+            in res.attributes
+        )
+        assert (
+            TraceItemAttributeNamesResponse.Attribute(
+                name="a_tag_001", type=AttributeKey.Type.TYPE_STRING
+            )
+            in res.attributes
+        )
+
+    def test_co_occurring_attrs_excludes_unsearchable_keys_without_in_set(self) -> None:
+        """Regression guard for SNUBA-B82 (mixed-version distributed reads).
+
+        The unsearchable-key exclusion must be emitted as ``NOT has(array(...), x)``,
+        never as ``NOT (x IN (...))``. A constant ``IN`` set makes ClickHouse build a
+        prepared set whose server-generated ``__set_String_<hash>_<hash>`` identifier
+        lands in the (arrayJoin'd) result-block column name. On a mixed-version cluster
+        the two sides hash the set differently, so the column names disagree across
+        ``Remote`` and the distributed read fails with
+        ``Code: 10 ... Not found column ... While executing Remote.``. ``has`` over a
+        constant array keeps the array inline in the column name, which is byte-stable
+        across versions.
+        """
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                request_id=str(uuid.uuid4()),
+                start_timestamp=Timestamp(seconds=int((BASE_TIME - timedelta(days=1)).timestamp())),
+                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
+            ),
+            limit=TOTAL_GENERATED_ATTR_PER_TYPE,
+            type=AttributeKey.Type.TYPE_STRING,
+        )
+
+        query = get_co_occurring_attributes(req).query
+
+        # distinct(arrayJoin(arrayFilter((attr) -> not(has(array(...), attr.2)), ...)))
+        distinct = query.get_selected_columns()[0].expression
+        assert isinstance(distinct, FunctionCall) and distinct.function_name == "distinct"
+        array_join = distinct.parameters[0]
+        assert isinstance(array_join, FunctionCall) and array_join.function_name == "arrayJoin"
+        array_filter = array_join.parameters[0]
+        assert (
+            isinstance(array_filter, FunctionCall) and array_filter.function_name == "arrayFilter"
+        )
+        predicate = array_filter.parameters[0]
+        assert isinstance(predicate, Lambda)
+
+        body = predicate.transformation
+        assert isinstance(body, FunctionCall) and body.function_name == "not"
+        has_call = body.parameters[0]
+        assert isinstance(has_call, FunctionCall) and has_call.function_name == "has"
+
+        keys_array, needle = has_call.parameters
+        assert isinstance(keys_array, FunctionCall) and keys_array.function_name == "array"
+        key_values = [p.value for p in keys_array.parameters if isinstance(p, Literal)]
+        assert key_values == UNSEARCHABLE_ATTRIBUTE_KEYS
+        assert isinstance(needle, FunctionCall) and needle.function_name == "tupleElement"
+
+        # No IN set may be built over the unsearchable keys (that would reintroduce
+        # the __set_* prepared-set identifier and the mixed-version failure).
+        unsearchable = set(UNSEARCHABLE_ATTRIBUTE_KEYS)
+        for exp in query.get_all_expressions():
+            if isinstance(exp, FunctionCall) and exp.function_name == "in":
+                for param in exp.parameters:
+                    if isinstance(param, FunctionCall) and param.function_name == "array":
+                        values = {p.value for p in param.parameters if isinstance(p, Literal)}
+                        assert values != unsearchable
+
     def test_simple_boolean(self) -> None:
         req = TraceItemAttributeNamesRequest(
             meta=RequestMeta(
@@ -260,3 +487,146 @@ class TestTraceItemAttributeNames(BaseApiTest):
                 )
             )
         assert res.attributes == expected
+
+    def test_default_order_is_alphabetical(self) -> None:
+        """Without order_by, the endpoint keeps its historical name-ascending order
+        regardless of frequency, so existing consumers are unaffected."""
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int((BASE_TIME - timedelta(days=1)).timestamp())),
+                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
+            ),
+            limit=1000,
+            type=AttributeKey.Type.TYPE_STRING,
+        )
+        res = EndpointTraceItemAttributeNames().execute(req)
+        attr_names = [attr.name for attr in res.attributes]
+
+        # Fully alphabetical: the high-frequency "foo" does NOT jump ahead of "a_tag_000".
+        assert attr_names == sorted(attr_names)
+        assert attr_names.index("a_tag_000") < attr_names.index("foo")
+        # No counts are returned on the default path.
+        assert all(not attr.HasField("count") for attr in res.attributes)
+
+    def test_order_by_count_desc(self) -> None:
+        """order_by COLUMN_COUNT descending returns the most frequent keys first
+        (name ascending as a tiebreaker) and populates counts in the response."""
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int((BASE_TIME - timedelta(days=1)).timestamp())),
+                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
+            ),
+            limit=1000,
+            type=AttributeKey.Type.TYPE_STRING,
+            order_by=TraceItemAttributeNamesRequest.OrderBy(
+                column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT,
+                descending=True,
+            ),
+        )
+        res = EndpointTraceItemAttributeNames().execute(req)
+        attr_names = [attr.name for attr in res.attributes]
+
+        # "foo"/"bar"/"baz" occur on every span (frequency 3) while each "a_tag_*"
+        # occurs once, so the common attributes must sort ahead of the rare ones.
+        for common in ("foo", "bar", "baz"):
+            assert attr_names.index(common) < attr_names.index("a_tag_000"), (
+                f"high-frequency '{common}' should sort before low-frequency 'a_tag_000'"
+            )
+
+        # Counts are populated and reflect relative frequency. The value is a
+        # co-occurring-row count (approximate; exact per-item counts come with the
+        # v2 storage follow-up), so assert the relationship, not an exact value.
+        counts = {attr.name: attr.count for attr in res.attributes if attr.HasField("count")}
+        assert counts["foo"] > counts["a_tag_000"]
+        assert counts["a_tag_000"] >= 1
+
+        # Equal-frequency keys tie-break alphabetically.
+        a_tags = [name for name in attr_names if name.startswith("a_tag_")]
+        assert a_tags == sorted(a_tags)
+
+    def test_order_by_count_equal_frequency_tiebreak(self) -> None:
+        """Under count ordering, keys with equal frequency tie-break alphabetically."""
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int((BASE_TIME - timedelta(days=1)).timestamp())),
+                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
+            ),
+            limit=TOTAL_GENERATED_ATTR_PER_TYPE,
+            type=AttributeKey.Type.TYPE_STRING,
+            value_substring_match="a_tag",
+            order_by=TraceItemAttributeNamesRequest.OrderBy(
+                column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT,
+                descending=True,
+            ),
+        )
+        res = EndpointTraceItemAttributeNames().execute(req)
+        attr_names = [attr.name for attr in res.attributes]
+        assert attr_names == [
+            f"a_tag_{str(i).zfill(3)}" for i in range(TOTAL_GENERATED_ATTR_PER_TYPE)
+        ]
+
+    def test_order_by_count_pins_non_stored_first_both_directions(self) -> None:
+        """Synthetic non-stored attributes (e.g. sentry.service) are pinned first under
+        count ordering regardless of direction (regression: ascending placed them last)."""
+        for descending in (True, False):
+            req = TraceItemAttributeNamesRequest(
+                meta=RequestMeta(
+                    project_ids=[1, 2, 3],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                    start_timestamp=Timestamp(
+                        seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
+                    ),
+                    end_timestamp=Timestamp(
+                        seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
+                    ),
+                ),
+                limit=1000,
+                type=AttributeKey.Type.TYPE_STRING,
+                order_by=TraceItemAttributeNamesRequest.OrderBy(
+                    column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT,
+                    descending=descending,
+                ),
+            )
+            res = EndpointTraceItemAttributeNames().execute(req)
+            attr_names = [attr.name for attr in res.attributes]
+            assert attr_names[0] == "sentry.service", (
+                f"non-stored attr should be first when descending={descending}, got {attr_names[:3]}"
+            )
+
+    def test_order_by_name_descending(self) -> None:
+        """COLUMN_NAME + descending returns names in descending order, including the
+        synthetic non-stored keys merged in (regression: re-sort forced them ascending)."""
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int((BASE_TIME - timedelta(days=1)).timestamp())),
+                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
+            ),
+            limit=1000,
+            type=AttributeKey.Type.TYPE_STRING,
+            order_by=TraceItemAttributeNamesRequest.OrderBy(
+                column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_NAME,
+                descending=True,
+            ),
+        )
+        res = EndpointTraceItemAttributeNames().execute(req)
+        attr_names = [attr.name for attr in res.attributes]
+        assert "sentry.service" in attr_names
+        assert attr_names == sorted(attr_names, reverse=True)

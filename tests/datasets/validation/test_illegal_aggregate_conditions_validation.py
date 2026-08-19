@@ -1,5 +1,4 @@
 import datetime
-from typing import Optional
 
 import pytest
 
@@ -133,8 +132,8 @@ tests = [
 @pytest.mark.parametrize("condition, having, exception", tests)
 @pytest.mark.redis_db
 def test_illegal_aggregate_in_condition_validator(
-    condition: Optional[Expression],
-    having: Optional[Expression],
+    condition: Expression | None,
+    having: Expression | None,
     exception: Exception,
 ) -> None:
     query = LogicalQuery(

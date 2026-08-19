@@ -12,6 +12,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.datasets.configuration.entity_builder import build_entity_from_config
 from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba.utils.schemas import FixedString
 from tests.datasets.configuration.utils import ConfigurationTest
 
 
@@ -29,8 +30,12 @@ class TestEntityConfiguration(ConfigurationTest):
         )
         columns = list(entity.get_data_model())
         assert len(columns) == 3
-        assert columns[0].type.length == 420  # type: ignore
-        assert columns[2].type.length == 69  # type: ignore
+        column_0_type = columns[0].type
+        column_2_type = columns[2].type
+        assert isinstance(column_0_type, FixedString)
+        assert isinstance(column_2_type, FixedString)
+        assert column_0_type.length == 420
+        assert column_2_type.length == 69
 
     def test_bad_configuration_broken_query_processor(self) -> None:
         with pytest.raises(JsonSchemaValueException):

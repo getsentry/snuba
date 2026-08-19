@@ -1,4 +1,3 @@
-import typing
 from datetime import datetime, timedelta
 from unittest import mock
 
@@ -10,15 +9,13 @@ from snuba.replacers.replacements_and_expiry import (
     get_config_auto_replacements_bypass_projects,
     set_config_auto_replacements_bypass_projects,
 )
-from snuba.state import get_int_config
+from snuba.state.sentry_options import get_option
 
 
 @freeze_time("2024-5-13 09:00:00")
 class TestState:
     start_test_time = datetime.now()
-    expiry_window_minutes = typing.cast(
-        int, get_int_config(REPLACEMENTS_EXPIRY_WINDOW_MINUTES_KEY, 5)
-    )
+    expiry_window_minutes = get_option(REPLACEMENTS_EXPIRY_WINDOW_MINUTES_KEY, 5)
     proj1_add_time = start_test_time
     proj2_add_time = start_test_time + timedelta(minutes=expiry_window_minutes // 2)
     proj1_expiry = proj1_add_time + timedelta(minutes=expiry_window_minutes)
@@ -29,7 +26,7 @@ class TestState:
         set_config_auto_replacements_bypass_projects([1], self.proj1_add_time)
         assert set(
             get_config_auto_replacements_bypass_projects(self.proj1_expiry - timedelta(minutes=1))
-        ) == set([1])
+        ) == {1}
 
     @pytest.mark.redis_db
     def test_project_expires_after_expiry(self) -> None:
@@ -49,10 +46,10 @@ class TestState:
         set_config_auto_replacements_bypass_projects([2], self.proj2_add_time)
         assert set(
             get_config_auto_replacements_bypass_projects(self.proj1_expiry - timedelta(minutes=1))
-        ) == set([1, 2])
+        ) == {1, 2}
         assert set(
             get_config_auto_replacements_bypass_projects(self.proj1_expiry + timedelta(minutes=1))
-        ) == set([2])
+        ) == {2}
 
     @pytest.mark.redis_db
     def test_expiry_does_not_update(self) -> None:
@@ -73,7 +70,7 @@ class TestState:
 
     @pytest.mark.redis_db
     @mock.patch(
-        "snuba.replacers.replacements_and_expiry.get_int_config",
+        "snuba.replacers.replacements_and_expiry.get_option",
     )
     def test_expiry_window_changes(self, mock: mock.MagicMock) -> None:
         mock.side_effect = [5, 10]
@@ -82,13 +79,16 @@ class TestState:
         # project 1 expires after 5 minutes
         assert set(
             get_config_auto_replacements_bypass_projects(self.proj1_add_time + timedelta(minutes=6))
-        ) == set([2])
+        ) == {2}
         # project 2 expires at 10 minutes
         assert set(
             get_config_auto_replacements_bypass_projects(self.proj2_add_time + timedelta(minutes=9))
-        ) == set([2])
-        assert set(
-            get_config_auto_replacements_bypass_projects(
-                self.proj2_add_time + timedelta(minutes=11)
+        ) == {2}
+        assert (
+            set(
+                get_config_auto_replacements_bypass_projects(
+                    self.proj2_add_time + timedelta(minutes=11)
+                )
             )
-        ) == set([])
+            == set()
+        )

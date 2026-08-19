@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any as AnyType
-from typing import Generic, Mapping, Optional, Sequence, Tuple, Type, TypeVar, Union
+from typing import Generic, TypeVar
 
 from snuba.query.expressions import Column as ColumnExpr
 from snuba.query.expressions import Expression, OptionalScalarType
@@ -12,7 +13,7 @@ from snuba.query.expressions import FunctionCall as FunctionCallExpr
 from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.expressions import SubscriptableReference as SubscriptableReferenceExpr
 
-MatchType = Union[Expression, OptionalScalarType]
+MatchType = Expression | OptionalScalarType
 
 TMatchedType = TypeVar("TMatchedType", covariant=True)
 
@@ -65,7 +66,7 @@ class MatchResult:
         assert isinstance(ret, str), type(ret)
         return ret
 
-    def optional_string(self, name: str) -> Optional[str]:
+    def optional_string(self, name: str) -> str | None:
         """
         Returns a string present in the result or it is None.
         """
@@ -114,7 +115,7 @@ class Pattern(ABC, Generic[TMatchedType]):
     """
 
     @abstractmethod
-    def match(self, node: AnyType) -> Optional[MatchResult]:
+    def match(self, node: AnyType) -> MatchResult | None:
         """
         Returns a MatchResult if the node provided matches this pattern
         otherwise it returns None.
@@ -146,7 +147,7 @@ class Param(Pattern[TMatchedType]):
     name: str
     pattern: Pattern[TMatchedType]
 
-    def match(self, node: AnyType) -> Optional[MatchResult]:
+    def match(self, node: AnyType) -> MatchResult | None:
         result = self.pattern.match(node)
         if result is None:
             return None
@@ -161,7 +162,7 @@ class AnyExpression(Pattern[Expression]):
     match abstract classes (like Expression)
     """
 
-    def match(self, node: AnyType) -> Optional[MatchResult]:
+    def match(self, node: AnyType) -> MatchResult | None:
         return MatchResult() if isinstance(node, Expression) else None
 
 
@@ -171,9 +172,9 @@ class Any(Pattern[TMatchedType]):
     Match any concrete expression/scalar of the type provided.
     """
 
-    type: Type[TMatchedType]
+    type: type[TMatchedType]
 
-    def match(self, node: AnyType) -> Optional[MatchResult]:
+    def match(self, node: AnyType) -> MatchResult | None:
         return MatchResult() if isinstance(node, self.type) else None
 
 
@@ -185,7 +186,7 @@ class String(Pattern[str]):
 
     value: str
 
-    def match(self, node: AnyType) -> Optional[MatchResult]:
+    def match(self, node: AnyType) -> MatchResult | None:
         return MatchResult() if node == self.value else None
 
 
@@ -197,30 +198,30 @@ class Integer(Pattern[int]):
 
     value: int
 
-    def match(self, node: AnyType) -> Optional[MatchResult]:
+    def match(self, node: AnyType) -> MatchResult | None:
         return MatchResult() if node == self.value else None
 
 
 @dataclass(frozen=True)
-class OptionalString(Pattern[Optional[str]]):
+class OptionalString(Pattern[str | None]):
     """
     Matches one specific string (or None).
     """
 
-    value: Optional[str]
+    value: str | None
 
-    def match(self, node: AnyType) -> Optional[MatchResult]:
+    def match(self, node: AnyType) -> MatchResult | None:
         return MatchResult() if node == self.value else None
 
 
 @dataclass(frozen=True)
-class AnyOptionalString(Pattern[Optional[str]]):
+class AnyOptionalString(Pattern[str | None]):
     """
     Matches any string including the None value. This cannot be done with
     Any(type) because that cannot match Union[str, None].
     """
 
-    def match(self, node: AnyType) -> Optional[MatchResult]:
+    def match(self, node: AnyType) -> MatchResult | None:
         return MatchResult() if node is None or isinstance(node, str) else None
 
 
@@ -233,7 +234,7 @@ class Or(Pattern[TMatchedType]):
 
     patterns: Sequence[Pattern[TMatchedType]]
 
-    def match(self, node: AnyType) -> Optional[MatchResult]:
+    def match(self, node: AnyType) -> MatchResult | None:
         for p in self.patterns:
             ret = p.match(node)
             if ret:
@@ -251,10 +252,10 @@ class Column(Pattern[ColumnExpr]):
     (equivalent to Any, but less verbose).
     """
 
-    table_name: Optional[Pattern[Optional[str]]] = None
-    column_name: Optional[Pattern[str]] = None
+    table_name: Pattern[str | None] | None = None
+    column_name: Pattern[str] | None = None
 
-    def match(self, node: AnyType) -> Optional[MatchResult]:
+    def match(self, node: AnyType) -> MatchResult | None:
         if not isinstance(node, ColumnExpr):
             return None
 
@@ -274,16 +275,15 @@ class Column(Pattern[ColumnExpr]):
 
 @dataclass(frozen=True)
 class Literal(Pattern[LiteralExpr]):
-    value: Optional[Pattern[OptionalScalarType]] = None
+    value: Pattern[OptionalScalarType] | None = None
 
-    def match(self, node: AnyType) -> Optional[MatchResult]:
+    def match(self, node: AnyType) -> MatchResult | None:
         if not isinstance(node, LiteralExpr):
             return None
 
         if self.value is not None:
             return self.value.match(node.value)
-        else:
-            return MatchResult()
+        return MatchResult()
 
 
 @dataclass(frozen=True)
@@ -294,11 +294,11 @@ class FunctionCall(Pattern[FunctionCallExpr]):
     are provided, they have to match, otherwise they are ignored.
     """
 
-    function_name: Optional[Pattern[str]] = None
+    function_name: Pattern[str] | None = None
     # This is a tuple instead of a sequence to match the data structure
     # we use in the actual FunctionCall class. There it has to be a tuple
     # to be hashable.
-    parameters: Optional[Tuple[Pattern[Expression], ...]] = None
+    parameters: tuple[Pattern[Expression], ...] | None = None
     # Specifies whether we allow optional parameters when matching.
     # if this is False, all patterns of the function to match must match
     # one by one. If with_optionals is True, this will allow additional
@@ -311,9 +311,9 @@ class FunctionCall(Pattern[FunctionCallExpr]):
     # If it is set, then it will iterate through the parameters and
     # check them against the type. If this is set, it's not necessary
     # to also specify the parameters field.
-    all_parameters: Optional[Pattern[Expression]] = None
+    all_parameters: Pattern[Expression] | None = None
 
-    def match(self, node: AnyType) -> Optional[MatchResult]:
+    def match(self, node: AnyType) -> MatchResult | None:
         if not isinstance(node, FunctionCallExpr):
             return None
 
@@ -337,8 +337,7 @@ class FunctionCall(Pattern[FunctionCallExpr]):
                 p_result = param_pattern.match(node.parameters[index])
                 if p_result is None:
                     return None
-                else:
-                    result = result.merge(p_result)
+                result = result.merge(p_result)
 
         if self.all_parameters:
             for p in node.parameters:
@@ -355,11 +354,11 @@ class SubscriptableReference(Pattern[SubscriptableReferenceExpr]):
     If column_name and key arguments are provided, they have to match, otherwise they are ignored.
     """
 
-    table_name: Optional[Pattern[Optional[str]]] = None
-    column_name: Optional[Pattern[str]] = None
-    key: Optional[Pattern[str]] = None
+    table_name: Pattern[str | None] | None = None
+    column_name: Pattern[str] | None = None
+    key: Pattern[str] | None = None
 
-    def match(self, node: AnyType) -> Optional[MatchResult]:
+    def match(self, node: AnyType) -> MatchResult | None:
         if not isinstance(node, SubscriptableReferenceExpr):
             return None
 

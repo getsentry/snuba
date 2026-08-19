@@ -1,7 +1,7 @@
 import functools
 import logging
+from collections.abc import MutableMapping
 from dataclasses import dataclass
-from typing import MutableMapping, Optional
 
 from arroyo.backends.kafka import (
     KafkaConsumer,
@@ -39,16 +39,16 @@ logger = logging.getLogger(__name__)
 class KafkaParameters:
     group_id: str
     auto_offset_reset: str
-    strict_offset_reset: Optional[bool]
+    strict_offset_reset: bool | None
     queued_max_messages_kbytes: int
     queued_min_messages: int
 
 
 @dataclass(frozen=True)
 class ProcessingParameters:
-    processes: Optional[int]
-    input_block_size: Optional[int]
-    output_block_size: Optional[int]
+    processes: int | None
+    input_block_size: int | None
+    output_block_size: int | None
 
 
 class ConsumerBuilder:
@@ -68,17 +68,17 @@ class ConsumerBuilder:
         processing_params: ProcessingParameters,
         max_batch_size: int,
         max_batch_time_ms: int,
-        max_insert_batch_size: Optional[int],
-        max_insert_batch_time_ms: Optional[int],
+        max_insert_batch_size: int | None,
+        max_insert_batch_time_ms: int | None,
         metrics: MetricsBackend,
         metrics_tags: MutableMapping[str, str],
-        slice_id: Optional[int],
-        join_timeout: Optional[float],
+        slice_id: int | None,
+        join_timeout: float | None,
         enforce_schema: bool,
-        profile_path: Optional[str] = None,
-        max_poll_interval_ms: Optional[int] = None,
-        health_check_file: Optional[str] = None,
-        group_instance_id: Optional[str] = None,
+        profile_path: str | None = None,
+        max_poll_interval_ms: int | None = None,
+        health_check_file: str | None = None,
+        group_instance_id: str | None = None,
     ) -> None:
         assert len(consumer_config.storages) == 1, "Only one storage supported"
         storage_key = StorageKey(consumer_config.storages[0].name)
@@ -106,6 +106,7 @@ class ConsumerBuilder:
             else None
         )
 
+        self.replacements_producer: Producer | None
         if self.__consumer_config.replacements_topic is not None:
             self.replacements_producer = Producer(
                 build_kafka_configuration(
@@ -125,6 +126,7 @@ class ConsumerBuilder:
             else None
         )
 
+        self.commit_log_producer: Producer | None
         if self.__consumer_config.commit_log_topic is not None:
             self.commit_log_producer = Producer(
                 build_kafka_configuration(self.__consumer_config.commit_log_topic.broker_config)
@@ -151,13 +153,13 @@ class ConsumerBuilder:
         self.health_check_file = health_check_file
         self.group_instance_id = group_instance_id
 
-        self.dlq_producer: Optional[KafkaProducer] = None
+        self.dlq_producer: KafkaProducer | None = None
 
     def __build_consumer(
         self,
         strategy_factory: ProcessingStrategyFactory[KafkaPayload],
         input_topic: Topic,
-        dlq_policy: Optional[DlqPolicy[KafkaPayload]],
+        dlq_policy: DlqPolicy[KafkaPayload] | None,
     ) -> StreamProcessor[KafkaPayload]:
         configuration = build_kafka_consumer_configuration(
             self.__consumer_config.raw_topic.broker_config,
@@ -215,6 +217,7 @@ class ConsumerBuilder:
         processor = stream_loader.get_processor()
 
         if self.commit_log_topic:
+            assert self.commit_log_producer is not None
             commit_log_config = CommitLogConfig(
                 self.commit_log_producer, self.commit_log_topic, self.group_id
             )
@@ -376,7 +379,7 @@ class ConsumerBuilder:
             self.__build_default_dlq_policy(),
         )
 
-    def __build_default_dlq_policy(self) -> Optional[DlqPolicy[KafkaPayload]]:
+    def __build_default_dlq_policy(self) -> DlqPolicy[KafkaPayload] | None:
         """
         Default DLQ policy applies to the base consumer or the DLQ consumer when
         the selected policy is re-insert to DLQ.

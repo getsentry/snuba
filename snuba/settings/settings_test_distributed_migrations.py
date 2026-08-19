@@ -1,16 +1,16 @@
 import os
-from typing import Any, Mapping, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 from snuba.settings.settings_test import *  # noqa
 
 CLUSTERS: Sequence[Mapping[str, Any]] = [
     {
         "host": os.environ.get("CLICKHOUSE_HOST_MIGRATIONS", "clickhouse-query"),
-        "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
+        "port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123)),
         "user": os.environ.get("CLICKHOUSE_USER", "default"),
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
         "database": os.environ.get("CLICKHOUSE_DATABASE", "snuba_test"),
-        "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8229)),
         "storage_sets": {},
         "single_node": False,
         "cluster_name": "query_cluster",
@@ -18,11 +18,10 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
     },
     {
         "host": os.environ.get("CLICKHOUSE_HOST_MIGRATIONS", "clickhouse-query"),
-        "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
+        "port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123)),
         "user": os.environ.get("CLICKHOUSE_USER", "default"),
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
         "database": os.environ.get("CLICKHOUSE_DATABASE", "snuba_test"),
-        "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8229)),
         "storage_sets": {
             "migrations",
         },
@@ -32,11 +31,10 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
     },
     {
         "host": os.environ.get("CLICKHOUSE_HOST_MIGRATIONS", "clickhouse-query"),
-        "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
+        "port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123)),
         "user": os.environ.get("CLICKHOUSE_USER", "default"),
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
         "database": os.environ.get("CLICKHOUSE_DATABASE", "snuba_test"),
-        "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8229)),
         "storage_sets": {
             "discover",
             "events",
@@ -53,8 +51,8 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "generic_metrics_distributions",
             "search_issues",
             "generic_metrics_counters",
-            "spans",
             "events_analytics_platform",
+            "events_analytics_platform_ro",
             "group_attributes",
             "generic_metrics_gauges",
             "profile_chunks",

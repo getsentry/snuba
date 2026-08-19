@@ -11,7 +11,7 @@ from snuba.cli.optimize import optimize
 def test_optimize_cli() -> None:
     runner = CliRunner()
     host = os.environ.get("CLICKHOUSE_HOST", "127.0.0.1")
-    port = os.environ.get("CLICKHOUSE_PORT", "9000")
+    port = os.environ.get("CLICKHOUSE_HTTP_PORT", "8123")
     result = runner.invoke(
         optimize,
         [

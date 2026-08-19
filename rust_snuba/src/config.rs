@@ -6,6 +6,8 @@ use serde_json::Value;
 #[derive(Clone, Default)]
 pub struct ProcessorConfig {
     pub env_config: EnvConfig,
+    pub storage_name: String,
+    pub eap_items_emit_received_at: bool,
 }
 
 #[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -96,7 +98,6 @@ pub struct ClickhouseConfig {
     pub host: String,
     pub port: u16,
     pub secure: bool,
-    pub http_port: u16,
     pub user: String,
     pub password: String,
     pub database: String,
@@ -113,8 +114,7 @@ pub struct MessageProcessorConfig {
 #[serde(deny_unknown_fields)]
 pub struct EnvConfig {
     pub sentry_dsn: Option<String>,
-    pub dogstatsd_host: Option<String>,
-    pub dogstatsd_port: Option<u16>,
+    pub dogstatsd_socket_path: Option<String>,
     pub default_retention_days: u16,
     pub lower_retention_days: u16,
     pub valid_retention_days: HashSet<u16>,
@@ -126,8 +126,7 @@ impl Default for EnvConfig {
     fn default() -> Self {
         Self {
             sentry_dsn: None,
-            dogstatsd_host: None,
-            dogstatsd_port: None,
+            dogstatsd_socket_path: None,
             default_retention_days: 90,
             lower_retention_days: 30,
             valid_retention_days: [30, 60, 90].iter().cloned().collect(),

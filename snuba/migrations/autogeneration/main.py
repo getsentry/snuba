@@ -1,7 +1,6 @@
 import ast
 import os
 import subprocess
-from typing import Optional
 
 from yaml import safe_load
 
@@ -10,7 +9,7 @@ from snuba.migrations import group_loader
 from snuba.migrations.autogeneration.diff import generate_python_migration
 
 
-def generate(storage_path: str, migration_name: Optional[str] = None) -> str:
+def generate(storage_path: str, migration_name: str | None = None) -> str:
     # load into memory the given storage and the version of it at HEAD
     tmpnew, tmpold = get_working_and_head(storage_path)
     new_storage = safe_load(tmpnew)
@@ -63,7 +62,7 @@ def get_working_and_head(path: str) -> tuple[str, str]:
         raise ValueError(e.stderr.decode("utf-8")) from e
 
     # working
-    with open(path, "r") as f:
+    with open(path) as f:
         working_file = f.read()
 
     return (working_file, head_file)

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from abc import ABC
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import NamedTuple, Optional, Sequence, Union
+from typing import NamedTuple
 
 
 class Property(NamedTuple):
@@ -10,8 +11,8 @@ class Property(NamedTuple):
     value: str
 
 
-class DescriptionVisitor(ABC):
-    def visit_header(self, header: Optional[str]) -> None:
+class DescriptionVisitor(ABC):  # noqa: B024 - intentional ABC; methods raise NotImplementedError rather than being abstract
+    def visit_header(self, header: str | None) -> None:
         raise NotImplementedError
 
     def visit_description(self, desc: Description) -> None:
@@ -34,8 +35,8 @@ class Description:
     The serialization method is independent on the structure.
     """
 
-    header: Optional[str]
-    content: Sequence[Union[Description, str, Property]]
+    header: str | None
+    content: Sequence[Description | str | Property]
 
     def accept(self, visitor: DescriptionVisitor) -> None:
         visitor.visit_header(self.header)
@@ -48,7 +49,7 @@ class Description:
                 visitor.visit_description(c)
 
 
-class Describable(ABC):
+class Describable(ABC):  # noqa: B024 - intentional ABC; methods raise NotImplementedError rather than being abstract
     """
     Class to be extended by any data structure we want to describe
     either via CLI commands, UI or API.

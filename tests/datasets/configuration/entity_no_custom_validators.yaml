@@ -1,6 +1,6 @@
 version: v1
 kind: entity
-name: generic_metrics_sets
+name: generic_metrics_counters
 
 schema:
   [
@@ -12,13 +12,13 @@ schema:
   ]
 
 storages:
-  - storage: generic_metrics_sets
-  - storage: generic_metrics_sets_raw
+  - storage: generic_metrics_counters
+  - storage: generic_metrics_counters_raw
     is_writable: true
 storage_selector:
   selector: SimpleQueryStorageSelector
   args:
-    storage: generic_metrics_sets
+    storage: generic_metrics_counters
 query_processors: []
 validators: []
 required_time_column: timestamp

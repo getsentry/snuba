@@ -31,8 +31,7 @@ def resolve(value: str, mapping: dict[str, str | int]) -> str | int:
 def resolve_tag_column_name(value: str, mapping: dict[str, str | int], dataset: Dataset) -> str:
     if get_dataset_name(dataset) == "metrics":
         return f"tags[{resolve(value, mapping)}]"
-    else:
-        return f"tags_raw[{resolve(value, mapping)}]"
+    return f"tags_raw[{resolve(value, mapping)}]"
 
 
 def resolve_tag_key_mappings(

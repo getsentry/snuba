@@ -1,5 +1,6 @@
+from collections.abc import Callable, Sequence
 from itertools import combinations
-from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple, TypeVar, Union
+from typing import TypeVar
 
 from snuba.clickhouse.query import Query
 from snuba.query.conditions import (
@@ -40,21 +41,21 @@ class AbstractArrayJoinOptimizer(ClickhouseQueryProcessor):
         self.__val_names = val_names
 
     @property
-    def key_columns(self) -> List[str]:
+    def key_columns(self) -> list[str]:
         """
         The full name of all the nested key columns
         """
         return [f"{self.column_name}.{column}" for column in self.__key_names]
 
     @property
-    def val_column(self) -> List[str]:
+    def val_column(self) -> list[str]:
         """
         The full name of all the nested value columns
         """
         return [f"{self.column_name}.{column}" for column in self.__val_names]
 
     @property
-    def all_columns(self) -> List[str]:
+    def all_columns(self) -> list[str]:
         """
         The full name of all the nested columns
         """
@@ -62,7 +63,7 @@ class AbstractArrayJoinOptimizer(ClickhouseQueryProcessor):
 
     def get_filtered_arrays(
         self, query: Query, all_column_names: Sequence[str]
-    ) -> Tuple[Dict[str, Sequence[str]], Dict[Tuple[str, ...], Sequence[Tuple[str, ...]]]]:
+    ) -> tuple[dict[str, Sequence[str]], dict[tuple[str, ...], Sequence[tuple[str, ...]]]]:
         # Check which array joins have been selected
         selected_array_joins = {
             column_name
@@ -124,8 +125,8 @@ def array_join_pattern(*column_names: str) -> FunctionCall:
     )
 
 
-T = TypeVar("T", bound=Union[str, Tuple[str, ...]])
-Extractor = Callable[[Expression], Set[T]]
+T = TypeVar("T", bound=str | tuple[str, ...])
+Extractor = Callable[[Expression], set[T]]
 
 
 def skippable_condition_pattern(*column_names: str) -> Callable[[Expression], bool]:
@@ -161,8 +162,8 @@ def get_single_column_filters(query: Query, column_name: str) -> Sequence[str]:
 
 
 def get_multiple_columns_filters(
-    query: Query, column_names: Tuple[str, ...]
-) -> Sequence[Tuple[str, ...]]:
+    query: Query, column_names: tuple[str, ...]
+) -> Sequence[tuple[str, ...]]:
     pattern = array_join_pattern(*column_names)
 
     return get_filtered_mapping_keys(
@@ -188,7 +189,7 @@ def get_filtered_mapping_keys(
     in the query.
     """
     ast_condition = query.get_condition()
-    cond_keys: Optional[Set[T]] = (
+    cond_keys: set[T] | None = (
         get_mapping_keys_in_condition(ast_condition, extractors, is_skippable_condition)
         if ast_condition is not None
         else set()
@@ -199,7 +200,7 @@ def get_filtered_mapping_keys(
         return []
 
     ast_having = query.get_having()
-    having_keys: Optional[Set[T]] = (
+    having_keys: set[T] | None = (
         get_mapping_keys_in_condition(ast_having, extractors, is_skippable_condition)
         if ast_having is not None
         else set()
@@ -209,14 +210,14 @@ def get_filtered_mapping_keys(
         return []
 
     keys = cond_keys | having_keys
-    return sorted(list(keys))
+    return sorted(keys)
 
 
 def get_mapping_keys_in_condition(
     conditions: Expression,
     extractors: Sequence[Extractor[T]],
     is_skippable_condition: Callable[[Expression], bool],
-) -> Optional[Set[T]]:
+) -> set[T] | None:
     """
     Examines the top level AND conditions and applies the extractor functions to
     extract the matching keys.
@@ -224,7 +225,7 @@ def get_mapping_keys_in_condition(
     If any we find any OR conditions, we exit early though there could be possible
     optimizations to be done in these situations.
     """
-    keys_found: Set[T] = set()
+    keys_found: set[T] = set()
 
     for c in get_first_level_and_conditions(conditions):
         if is_skippable_condition(c):
@@ -242,7 +243,7 @@ def get_mapping_keys_in_condition(
 def string_literal_equal_condition_extractor(
     key_pattern: Pattern[Expression],
 ) -> Extractor[str]:
-    def extractor(condition: Expression) -> Set[str]:
+    def extractor(condition: Expression) -> set[str]:
         match = FunctionCall(
             String(ConditionFunctions.EQ),
             (key_pattern, Literal(Param("key", Any(str)))),
@@ -259,7 +260,7 @@ def string_literal_equal_condition_extractor(
 def string_literal_in_condition_extractor(
     key_pattern: Pattern[Expression],
 ) -> Extractor[str]:
-    def extractor(condition: Expression) -> Set[str]:
+    def extractor(condition: Expression) -> set[str]:
         match = is_in_condition_pattern(key_pattern).match(condition)
 
         if match is None:
@@ -279,8 +280,8 @@ def string_literal_in_condition_extractor(
 
 def tuple_literal_equal_condition_extractor(
     key_pattern: Pattern[Expression],
-) -> Extractor[Tuple[str, ...]]:
-    def extractor(condition: Expression) -> Set[Tuple[str, ...]]:
+) -> Extractor[tuple[str, ...]]:
+    def extractor(condition: Expression) -> set[tuple[str, ...]]:
         match = FunctionCall(
             String(ConditionFunctions.EQ),
             (key_pattern, Param("tuple", FunctionCall(String("tuple"), None))),
@@ -306,8 +307,8 @@ def tuple_literal_equal_condition_extractor(
 
 def tuple_literal_in_condition_extractor(
     key_pattern: Pattern[Expression],
-) -> Extractor[Tuple[str, ...]]:
-    def extractor(condition: Expression) -> Set[Tuple[str, ...]]:
+) -> Extractor[tuple[str, ...]]:
+    def extractor(condition: Expression) -> set[tuple[str, ...]]:
         match = is_in_condition_pattern(key_pattern).match(condition)
 
         if match is None:
@@ -320,7 +321,7 @@ def tuple_literal_in_condition_extractor(
         ):
             return set()
 
-        parameters: Set[Tuple[str, ...]] = set()
+        parameters: set[tuple[str, ...]] = set()
 
         for tuple_param in function.parameters:
             if (

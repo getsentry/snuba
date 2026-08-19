@@ -67,7 +67,7 @@ data.
 
 This is done with the `partition_key_column_name` property in the storage schema (we do not
 support sharded storages for non-YAML based entities). You can see an example of how one
-might shard by organization_id in generic_metrics_sets and generic_metrics_distributions
+might shard by organization_id in generic_metrics_counters
 dataset YAML files.
 
 Adding sliced Kafka topics

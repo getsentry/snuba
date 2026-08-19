@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from typing import Any, Dict, Union
+from typing import Any
 
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.query import ProcessableQuery
@@ -15,8 +15,8 @@ from snuba.query.query_settings import QuerySettings
 @dataclass(frozen=True)
 class Request:
     id: uuid.UUID
-    original_body: Dict[str, Any]
-    query: Union[Query, CompositeQuery[LogicalDataSource]]
+    original_body: dict[str, Any]
+    query: Query | CompositeQuery[LogicalDataSource]
     query_settings: QuerySettings
     attribution_info: AttributionInfo
 

@@ -1,4 +1,5 @@
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import pytest
 
@@ -484,7 +485,7 @@ test_cases = [
             ),
             selected_columns=[
                 SelectedExpression("group_id", Column("group_id", "err", "group_id")),
-                SelectedExpression("events", FunctionCall("events", "count", tuple())),
+                SelectedExpression("events", FunctionCall("events", "count", ())),
             ],
             groupby=[Column(None, "groups", "id")],
         ),

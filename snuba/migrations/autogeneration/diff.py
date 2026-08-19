@@ -1,4 +1,5 @@
-from typing import Any, Sequence, cast
+from collections.abc import Sequence
+from typing import Any, cast
 
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.configuration.utils import parse_columns
@@ -40,7 +41,7 @@ def _storage_diff_to_migration_ops(
     if not valid:
         raise ValueError(reason)
 
-    oldcol_names = set(col["name"] for col in oldstorage["schema"]["columns"])
+    oldcol_names = {col["name"] for col in oldstorage["schema"]["columns"]}
     newcols = newstorage["schema"]["columns"]
 
     forwardops: list[AddColumn] = []
@@ -114,7 +115,7 @@ def _is_valid_add_column(
     # verify nothing changed but the columns
     t1 = oldstorage["schema"].pop("columns")
     t2 = newstorage["schema"].pop("columns")
-    if not (oldstorage == newstorage):
+    if oldstorage != newstorage:
         return (
             False,
             "Expected the only change to the storage to be the columns, but that is not true",
@@ -126,8 +127,8 @@ def _is_valid_add_column(
     oldstorage_cols = oldstorage["schema"]["columns"]
     newstorage_cols = newstorage["schema"]["columns"]
 
-    colnames_old = set(e["name"] for e in oldstorage_cols)
-    colnames_new = set(e["name"] for e in newstorage_cols)
+    colnames_old = {e["name"] for e in oldstorage_cols}
+    colnames_new = {e["name"] for e in newstorage_cols}
     if not colnames_old.issubset(colnames_new):
         return (False, "Column removal is not supported")
 
@@ -150,8 +151,7 @@ def _is_valid_add_column(
                     False,
                     "Adding a column to the beginning is currently unsupported, please add it anywhere else.",
                 )
-            else:
-                pnew += 1
+            pnew += 1
     assert pold == len(oldstorage_cols)  # should always hold
     return True, ""
 

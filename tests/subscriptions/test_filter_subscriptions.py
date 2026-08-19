@@ -2,7 +2,6 @@ import importlib
 import uuid
 from datetime import timedelta
 from random import randint
-from typing import MutableSequence
 from unittest.mock import patch
 
 import pytest
@@ -35,18 +34,21 @@ def build_subscription(resolution: timedelta, org_id: int) -> Subscription:
 
 
 @pytest.fixture
-def expected_subs() -> MutableSequence[Subscription]:
+def expected_subs() -> list[Subscription]:
     return [build_subscription(timedelta(minutes=1), 2) for count in range(randint(1, 50))]
 
 
 @pytest.fixture
-def extra_subs() -> MutableSequence[Subscription]:
+def extra_subs() -> list[Subscription]:
     return [build_subscription(timedelta(minutes=3), 1) for count in range(randint(1, 50))]
 
 
 @patch("snuba.settings.SLICED_STORAGE_SETS", {"events": 3})
 @patch("snuba.settings.LOGICAL_PARTITION_MAPPING", {"events": {0: 0, 1: 1, 2: 2}})
-def test_filter_subscriptions(expected_subs, extra_subs) -> None:  # type: ignore
+def test_filter_subscriptions(
+    expected_subs: list[Subscription],
+    extra_subs: list[Subscription],
+) -> None:
     importlib.reload(scheduler)
 
     filtered_subs = filter_subscriptions(

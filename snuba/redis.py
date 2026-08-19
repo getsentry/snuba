@@ -1,9 +1,10 @@
-from __future__ import absolute_import, annotations
+from __future__ import annotations
 
 import time
+from collections.abc import Callable, Iterable, Mapping
 from enum import Enum
 from functools import wraps
-from typing import Any, Callable, Iterable, Mapping, TypeVar, Union, cast
+from typing import Any, TypeAlias, TypeVar, cast
 
 from redis.cluster import ClusterNode, RedisCluster
 from redis.exceptions import RedisClusterException
@@ -19,7 +20,7 @@ from snuba.utils.serializable_exception import SerializableException
 # FailoverRedis anyway.
 SingleNodeRedis = FailoverRedis
 
-RedisClientType = Union[SingleNodeRedis, RedisCluster]
+RedisClientType: TypeAlias = SingleNodeRedis | RedisCluster
 
 
 class FailedClusterInitization(SerializableException):
@@ -70,18 +71,17 @@ def _initialize_redis_cluster(config: settings.RedisClusterConfig) -> RedisClien
             reinitialize_steps=config["reinitialize_steps"],
             socket_timeout=config.get("socket_timeout", settings.REDIS_SOCKET_TIMEOUT),
         )
-    else:
-        return SingleNodeRedis(
-            _retries=2,
-            _backoff_max=3,
-            host=config["host"],
-            port=config["port"],
-            password=config["password"],
-            db=config["db"],
-            ssl=config.get("ssl", False),
-            socket_keepalive=True,
-            socket_timeout=config.get("socket_timeout", settings.REDIS_SOCKET_TIMEOUT),
-        )
+    return SingleNodeRedis(
+        _retries=2,
+        _backoff_max=3,
+        host=config["host"],
+        port=config["port"],
+        password=config["password"],
+        db=config["db"],
+        ssl=config.get("ssl", False),
+        socket_keepalive=True,
+        socket_timeout=config.get("socket_timeout", settings.REDIS_SOCKET_TIMEOUT),
+    )
 
 
 _default_redis_client: RedisClientType = _initialize_redis_cluster(
@@ -105,7 +105,7 @@ def _initialize_specialized_redis_cluster(
     if config is None:
         return _default_redis_client
     for k, v in overrides.items():
-        config[k] = v  # type: ignore
+        config[k] = v  # type: ignore[literal-required]
     return _initialize_redis_cluster(config)
 
 

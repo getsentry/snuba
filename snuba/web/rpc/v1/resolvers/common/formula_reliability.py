@@ -1,6 +1,6 @@
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Any, Dict
+from datetime import UTC, datetime
+from typing import Any
 
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
@@ -19,11 +19,19 @@ class FormulaExtrapolationContext:
     reliability: Reliability.ValueType = Reliability.RELIABILITY_UNSPECIFIED
 
 
+def _unix_seconds(value: Any) -> int:
+    if not isinstance(value, datetime):
+        value = datetime.fromisoformat(str(value))
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return int(value.timestamp())
+
+
 class FormulaReliabilityCalculator:
     def __init__(
         self,
         request: TimeSeriesRequest,
-        clickhouse_data: list[Dict[str, Any]],
+        clickhouse_data: list[dict[str, Any]],
         time_buckets: list[Timestamp],
     ) -> None:
         """
@@ -108,7 +116,7 @@ class FormulaReliabilityContext:
         """
         reliability_context = FormulaReliabilityContext()
 
-        reliability_context.bucket = int(datetime.fromisoformat(row["time"]).timestamp())
+        reliability_context.bucket = int(_unix_seconds(row["time"]))
 
         for formula, children in formulas_to_children.items():
             for child in children:

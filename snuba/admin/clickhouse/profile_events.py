@@ -1,106 +1,87 @@
 import json
-import socket
-import time
-from typing import Dict, List, cast
+from typing import cast
 
 import structlog
-from flask import g
 
-from snuba.admin.clickhouse.common import InvalidNodeError
-from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_sql
-from snuba.admin.clickhouse.tracing import QueryTraceData, TraceOutput
-from snuba.utils.constants import (
-    PROFILE_EVENTS_MAX_ATTEMPTS,
-    PROFILE_EVENTS_MAX_WAIT_SECONDS,
-)
+from snuba.admin.clickhouse.common import get_ro_query_node_connection
+from snuba.admin.clickhouse.tracing import TraceOutput, poll_system_query, system_log_source
+from snuba.clickhouse.escaping import escape_string
+from snuba.clickhouse.pool import ClickhouseResult
+from snuba.clusters.cluster import ClickhouseClientSettings
 
 logger = structlog.get_logger().bind(module=__name__)
 
 
 def gather_profile_events(query_trace: TraceOutput, storage: str) -> None:
+    query_ids = _profile_event_query_ids(query_trace)
+    if not query_ids:
+        return
+
+    connection = get_ro_query_node_connection(storage, ClickhouseClientSettings.QUERY)
+    source = system_log_source(storage, "query_log")
+    id_list = ", ".join(escape_string(query_id) for query_id in query_ids)
+    sql = f"""
+        SELECT
+            query_id,
+            hostname() AS host,
+            ProfileEvents
+        FROM {source}
+        WHERE event_time >= now() - INTERVAL 5 MINUTE
+          AND type = 'QueryFinish'
+          AND query_id IN ({id_list})
     """
-    Gathers profile events for each query trace and updates the query_trace object with results.
-    Uses exponential backoff when polling for results.
 
-    Args:
-        query_trace: TraceOutput object to update with profile events
-        storage: Storage identifier
-    """
-    profile_events_raw_sql = "SELECT ProfileEvents FROM system.query_log WHERE query_id = '{}' AND type = 'QueryFinish'"
+    expected_query_ids = set(query_ids)
 
-    for query_trace_data in parse_trace_for_query_ids(query_trace):
-        sql = profile_events_raw_sql.format(query_trace_data.query_id)
-        logger.info(
-            "Gathering profile event using host: {}, port = {}, storage = {}, sql = {}, g.user = {}".format(
-                query_trace_data.host, query_trace_data.port, storage, sql, g.user
-            )
-        )
+    def _all_query_ids_present(result: ClickhouseResult) -> bool:
+        if not result.results:
+            return False
+        seen = {str(row[0]) for row in result.results if row}
+        return expected_query_ids.issubset(seen)
 
-        system_query_result = None
-        attempt = 0
-        wait_time = 1
-        while attempt < PROFILE_EVENTS_MAX_ATTEMPTS:
-            try:
-                system_query_result = run_system_query_on_host_with_sql(
-                    query_trace_data.host,
-                    int(query_trace_data.port),
-                    storage,
-                    sql,
-                    False,
-                    g.user,
-                )
-            except InvalidNodeError as exc:
-                # this can happen for the abnormal storage sets like
-                # discover and errors_ro, where the query_trace_data host
-                # and port don't match the cluster definitions
-                logger.error(exc, exc_info=True)
-                break
+    # Wait until every requested query_id has flushed, not just the first node.
+    result = poll_system_query(connection, sql, accept_result=_all_query_ids_present)
+    if result is None or not result.results:
+        return
 
-            if system_query_result.results:
-                break
+    # Keep the historical single-column ProfileEvents meta the frontend expects.
+    query_trace.profile_events_meta.append(
+        [col for col in (result.meta or []) if col[0] == "ProfileEvents"] or result.meta
+    )
+    if result.profile is not None:
+        query_trace.profile_events_profile = cast(dict[str, int], result.profile)
 
-            wait_time = min(wait_time * 2, PROFILE_EVENTS_MAX_WAIT_SECONDS)
-            time.sleep(wait_time)
-            attempt += 1
-
-        if system_query_result is not None and len(system_query_result.results) > 0:
-            query_trace.profile_events_meta.append(system_query_result.meta)
-            query_trace.profile_events_profile = cast(
-                Dict[str, int], system_query_result.profile
-            )
-            columns = system_query_result.meta
-            if columns:
-                res = {}
-                res["column_names"] = [name for name, _ in columns]
-                res["rows"] = []
-                for query_result in system_query_result.results:
-                    if query_result[0]:
-                        res["rows"].append(json.dumps(query_result[0]))
-                query_trace.profile_events_results[query_trace_data.node_name] = res
-
-
-def hostname_resolves(hostname: str) -> bool:
-    try:
-        socket.gethostbyname(hostname)
-    except socket.error:
-        return False
-    else:
-        return True
-
-
-def parse_trace_for_query_ids(trace_output: TraceOutput) -> List[QueryTraceData]:
-    summarized_trace_output = trace_output.summarized_trace_output
-    node_name_to_query_id = {
-        node_name: query_summary.query_id
-        for node_name, query_summary in summarized_trace_output.query_summaries.items()
+    # Prefer summary node_name keys (same as the old per-host path) when we can
+    # map by query_id; otherwise fall back to hostname().
+    query_id_to_node = {
+        summary.query_id: node_name
+        for node_name, summary in query_trace.summarized_trace_output.query_summaries.items()
+        if summary.query_id
     }
-    logger.info("node to query id mapping: {}".format(node_name_to_query_id))
-    return [
-        QueryTraceData(
-            host=node_name if hostname_resolves(node_name) else "127.0.0.1",
-            port=9000,
-            query_id=query_id,
-            node_name=node_name,
+
+    for row in result.results:
+        if len(row) < 3 or not row[2]:
+            continue
+        row_query_id = str(row[0])
+        hostname = str(row[1])
+        profile_events = row[2]
+        node_name = query_id_to_node.get(row_query_id, hostname)
+        host_result = query_trace.profile_events_results.setdefault(
+            node_name,
+            {
+                "column_names": ["ProfileEvents"],
+                "rows": [],
+            },
         )
-        for node_name, query_id in node_name_to_query_id.items()
-    ]
+        cast(list[str], host_result["rows"]).append(json.dumps(profile_events))
+
+
+def _profile_event_query_ids(query_trace: TraceOutput) -> list[str]:
+    ids = {
+        query_summary.query_id
+        for query_summary in query_trace.summarized_trace_output.query_summaries.values()
+        if query_summary.query_id
+    }
+    if query_trace.query_id:
+        ids.add(query_trace.query_id)
+    return sorted(ids)

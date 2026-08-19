@@ -23,6 +23,11 @@ class IndexedIDs(Enum):
     SPAN_EXCLUSIVE_TIME_LIGHT_METRIC = METRICS_START_INDEX + 406
 
 
+# Every line of a `sql` body below must start with at least the 4 spaces of class
+# indentation: the frontend de-indents predefined queries with
+# `line.substring(4)` (see static/cardinality_analyzer/index.tsx) before putting
+# them in the editor. Indentation *beyond* those 4 spaces is preserved, so the
+# continuation indents here show up in the editor as well.
 class CardinalityQuery(PreDefinedQuery, metaclass=RegisteredClass):
     @classmethod
     def config_key(cls) -> str:
@@ -34,13 +39,13 @@ class SpanGroupingCardinality(CardinalityQuery):
 
     sql = """
     SELECT org_id, project_id,
-    tags.raw_value [indexOf(tags.key, 9223372036854776062)] AS `span.category`,
-    uniq(tags.raw_value [indexOf(tags.key, 9223372036854776060)]) AS count_groups
+        tags.raw_value [indexOf(tags.key, 9223372036854776062)] AS `span.category`,
+        uniq(tags.raw_value [indexOf(tags.key, 9223372036854776060)]) AS count_groups
     FROM generic_metric_distributions_aggregated_dist
     WHERE (granularity = 2)
-    AND (timestamp >= now() - INTERVAL {{hour_window}} HOUR)
-    AND (metric_id IN [9223372036854776212, 9223372036854776213])
-    AND `span.category` = '{{span_category}}'
+        AND (timestamp >= now() - INTERVAL {{hour_window}} HOUR)
+        AND (metric_id IN [9223372036854776212, 9223372036854776213])
+        AND `span.category` = '{{span_category}}'
     GROUP BY org_id, project_id, `span.category`
     ORDER BY count_groups DESC
     LIMIT 100
@@ -54,16 +59,16 @@ class SpanGroupingCardinalitySamples(CardinalityQuery):
 
     sql = """
     SELECT DISTINCT
-    tags.raw_value[indexOf(tags.key, 9223372036854776062)] AS `span.category`,
-    tags.raw_value[indexOf(tags.key, 9223372036854776060)] AS `span.group`,
-    tags.raw_value[indexOf(tags.key, 9223372036854776057)] AS `span.description`
+        tags.raw_value[indexOf(tags.key, 9223372036854776062)] AS `span.category`,
+        tags.raw_value[indexOf(tags.key, 9223372036854776060)] AS `span.group`,
+        tags.raw_value[indexOf(tags.key, 9223372036854776057)] AS `span.description`
     FROM generic_metric_distributions_aggregated_dist
     WHERE (granularity = 2)
-    AND (timestamp >= now() - INTERVAL {{hour_window}} HOUR)
-    AND (org_id = {{org_id}})
-    AND (project_id = {{project_id}})
-    AND (metric_id = 9223372036854776214)
-    ORDER BY span.description
+        AND (timestamp >= now() - INTERVAL {{hour_window}} HOUR)
+        AND (org_id = {{org_id}})
+        AND (project_id = {{project_id}})
+        AND (metric_id = 9223372036854776214)
+    ORDER BY `span.description`
     LIMIT 1000
     """
 
@@ -82,10 +87,10 @@ class BucketsByOrgProject(CardinalityQuery):
     SELECT org_id, project_id, granularity, count()
     FROM generic_metric_{{metric_type}}_aggregated_dist
     WHERE timestamp >= (now() - INTERVAL {{hour_window}} HOUR)
-    AND org_id = {{org_id}}
-    AND project_id = {{project_id}}
+        AND org_id = {{org_id}}
+        AND project_id = {{project_id}}
     GROUP BY org_id, project_id, granularity
-    WITH TOTALS
+        WITH TOTALS
     ORDER BY granularity ASC
     """
 
@@ -103,10 +108,10 @@ class BucketsByOrgProjectGauges(CardinalityQuery):
     SELECT org_id, project_id, granularity, count()
     FROM generic_metric_gauges_aggregated_dist
     WHERE rounded_timestamp >= (now() - INTERVAL {{hour_window}} HOUR)
-    AND org_id = {{org_id}}
-    AND project_id = {{project_id}}
+        AND org_id = {{org_id}}
+        AND project_id = {{project_id}}
     GROUP BY org_id, project_id, granularity
-    WITH TOTALS
+        WITH TOTALS
     ORDER BY granularity ASC
     """
 
@@ -120,10 +125,10 @@ class DatapointsByOrgProjectDistributions(CardinalityQuery):
     SELECT org_id, project_id, granularity, countMerge(count)
     FROM generic_metric_distributions_aggregated_dist
     WHERE timestamp >= (now() - INTERVAL {{hour_window}} HOUR)
-    AND org_id = {{org_id}}
-    AND project_id = {{project_id}}
+        AND org_id = {{org_id}}
+        AND project_id = {{project_id}}
     GROUP BY org_id, project_id, granularity
-    WITH TOTALS
+        WITH TOTALS
     ORDER BY granularity ASC
     """
 
@@ -137,10 +142,10 @@ class DatapointsByOrgProjectCounters(CardinalityQuery):
     SELECT org_id, project_id, granularity, sumMerge(value)
     FROM generic_metric_counters_aggregated_dist
     WHERE timestamp >= (now() - INTERVAL {{hour_window}} HOUR)
-    AND org_id = {{org_id}}
-    AND project_id = {{project_id}}
+        AND org_id = {{org_id}}
+        AND project_id = {{project_id}}
     GROUP BY org_id, project_id, granularity
-    WITH TOTALS
+        WITH TOTALS
     ORDER BY granularity ASC
     """
 
@@ -154,10 +159,10 @@ class DatapointsByOrgProjectGauges(CardinalityQuery):
     SELECT org_id, project_id, granularity, sumMerge(count)
     FROM generic_metric_gauges_aggregated_dist
     WHERE rounded_timestamp >= (now() - INTERVAL {{hour_window}} HOUR)
-    AND org_id = {{org_id}}
-    AND project_id = {{project_id}}
+        AND org_id = {{org_id}}
+        AND project_id = {{project_id}}
     GROUP BY org_id, project_id, granularity
-    WITH TOTALS
+        WITH TOTALS
     ORDER BY granularity ASC
     """
 
@@ -177,7 +182,7 @@ class BucketsPerOrgOverTime(CardinalityQuery):
     SELECT toStartOfHour(timestamp) as time, org_id, count() as total
     FROM generic_metric_{{metric_type}}_aggregated_dist
     WHERE timestamp >= (now() - INTERVAL {{hour}} HOUR)
-    AND use_case_id  = 'custom'
+        AND use_case_id  = 'custom'
     GROUP BY time, org_id
     ORDER BY time ASC, total DESC
     LIMIT 5 BY time

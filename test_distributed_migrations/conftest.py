@@ -47,15 +47,10 @@ def pytest_configure() -> None:
             user="default",
             password="",
             database="default",
-            http_port=cluster_node["http_port"],
             storage_sets=cluster_node["storage_sets"],
             single_node=cluster_node["single_node"],
-            cluster_name=cluster_node["cluster_name"] if "cluster_name" in cluster_node else None,
-            distributed_cluster_name=(
-                cluster_node["distributed_cluster_name"]
-                if "distributed_cluster_name" in cluster_node
-                else None
-            ),
+            cluster_name=cluster_node.get("cluster_name", None),
+            distributed_cluster_name=(cluster_node.get("distributed_cluster_name", None)),
             secure=cluster_node.get("secure", False),
             ca_certs=cluster_node.get("ca_certs", None),
             verify=cluster_node.get("verify", False),
@@ -64,7 +59,7 @@ def pytest_configure() -> None:
         database_name = cluster_node["database"]
 
         # create the test database
-        clickhouse_cluster.get_query_connection(ClickhouseClientSettings.MIGRATE).execute(
+        clickhouse_cluster.get_query_connection(ClickhouseClientSettings.MIGRATE).command(
             f"CREATE DATABASE IF NOT EXISTS {database_name} ON CLUSTER {clickhouse_cluster.get_clickhouse_cluster_name()};"
         )
 

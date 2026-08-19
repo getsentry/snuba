@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, List, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import snuba.clickhouse.translators.snuba.function_call_mappers  # noqa
 from snuba.clickhouse.translators.snuba.allowed import (
@@ -104,7 +105,7 @@ def _build_storage_selector(config_storage_selector: dict[str, Any]) -> QuerySto
 
 def _build_subscription_processors(
     config: dict[str, Any],
-) -> Optional[Sequence[EntitySubscriptionProcessor]]:
+) -> Sequence[EntitySubscriptionProcessor] | None:
     if "subscription_processors" in config:
         processors: Sequence[EntitySubscriptionProcessor] = [
             EntitySubscriptionProcessor.get_from_name(pro_config["processor"])(**pro_config["args"])
@@ -116,7 +117,7 @@ def _build_subscription_processors(
 
 def _build_subscription_validators(
     config: dict[str, Any],
-) -> Optional[Sequence[EntitySubscriptionValidator]]:
+) -> Sequence[EntitySubscriptionValidator] | None:
     if "subscription_validators" in config:
         validators: Sequence[EntitySubscriptionValidator] = [
             EntitySubscriptionValidator.get_from_name(val_config["validator"])(**val_config["args"])
@@ -128,7 +129,7 @@ def _build_subscription_validators(
 
 def _build_storage_connections(
     config_storages: list[dict[str, Any]],
-) -> List[EntityStorageConnection]:
+) -> list[EntityStorageConnection]:
     return [
         EntityStorageConnection(
             storage=get_storage(StorageKey(storage_connection["storage"])),
@@ -137,9 +138,7 @@ def _build_storage_connections(
                 if "translation_mappers" in storage_connection
                 else TranslationMappers()
             ),
-            is_writable=(
-                storage_connection["is_writable"] if "is_writable" in storage_connection else False
-            ),
+            is_writable=(storage_connection.get("is_writable", False)),
         )
         for storage_connection in config_storages
     ]
@@ -178,9 +177,9 @@ def _build_validation_mode(mode: str | None) -> ColumnValidationMode | None:
 
     if mode == "do_nothing":
         return ColumnValidationMode.DO_NOTHING
-    elif mode == "warn":
+    if mode == "warn":
         return ColumnValidationMode.WARN
-    elif mode == "error":
+    if mode == "error":
         return ColumnValidationMode.ERROR
 
     raise InvalidEntityConfigException(f"{mode} is not a valid validation mode")

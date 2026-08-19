@@ -40,32 +40,15 @@ local migrate_stage(stage_name, region) = [
   },
 ];
 
-// Snuba deploy to SaaS is blocked till S4S deploy is healthy
-local s4s_health_check(region) =
-  if region == 's4s' then
-    [
-      {
-        health_check: {
-          jobs: {
-            health_check: {
-              environment_variables: {
-                SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}',
-                DATADOG_API_KEY: '{{SECRET:[devinfra][st_datadog_api_key]}}',
-                DATADOG_APP_KEY: '{{SECRET:[devinfra][st_datadog_app_key]}}',
-                LABEL_SELECTOR: 'service=snuba',
-              },
-              elastic_profile_id: 'snuba',
-              tasks: [
-                gocdtasks.script(importstr '../bash/s4s-sentry-health-check.sh'),
-                gocdtasks.script(importstr '../bash/s4s-ddog-health-check.sh'),
-              ],
-            },
-          },
-        },
-      },
-    ]
-  else
-    [];
+local saas_datadog_monitor_ids = {
+  us: '311884335 311884334',
+  de: '311884404 311884405',
+  s4s2: '314687721 314687720',
+  us2: '',
+  'customer-1': '314685652 314685651',
+  'customer-2': '314685913 314685914',
+  'customer-7': '314685866 314685865',
+};
 
 // Snuba deploy to ST is blocked till SaaS deploy is healthy
 local saas_health_check(region) =
@@ -79,6 +62,7 @@ local saas_health_check(region) =
                 SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}',
                 DATADOG_API_KEY: '{{SECRET:[devinfra][sentry_datadog_api_key]}}',
                 DATADOG_APP_KEY: '{{SECRET:[devinfra][sentry_datadog_app_key]}}',
+                DATADOG_MONITOR_IDS: saas_datadog_monitor_ids[region],
                 LABEL_SELECTOR: 'service=snuba',
                 SENTRY_ENVIRONMENT: region,
               },
@@ -133,6 +117,7 @@ local deploy_canary_stage(region) =
                 SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}',
                 DATADOG_API_KEY: '{{SECRET:[devinfra][sentry_datadog_api_key]}}',
                 DATADOG_APP_KEY: '{{SECRET:[devinfra][sentry_datadog_app_key]}}',
+                DATADOG_MONITOR_IDS: saas_datadog_monitor_ids[region],
                 LABEL_SELECTOR: 'service=snuba,is_canary=true',
               },
               tasks: [
@@ -157,6 +142,7 @@ local deploy_canary_stage(region) =
                 SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}',
                 DATADOG_API_KEY: '{{SECRET:[devinfra][sentry_datadog_api_key]}}',
                 DATADOG_APP_KEY: '{{SECRET:[devinfra][sentry_datadog_app_key]}}',
+                DATADOG_MONITOR_IDS: saas_datadog_monitor_ids[region],
                 LABEL_SELECTOR: 'service=snuba,is_canary=true',
               },
               tasks: [
@@ -245,5 +231,5 @@ function(region) {
       },
     },
 
-  ] + migrate_stage('migrate', region) + s4s_health_check(region) + saas_health_check(region),
+  ] + migrate_stage('migrate', region) + saas_health_check(region),
 }

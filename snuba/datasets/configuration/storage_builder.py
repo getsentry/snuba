@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from arroyo.backends.kafka import KafkaPayload
+
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.cdc.cdcstorage import CdcStorage
@@ -79,17 +81,13 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
         "storage_set_key": StorageSetKey(config[STORAGE][SET_KEY]),
         SCHEMA: __build_storage_schema(config),
         READINESS_STATE: ReadinessState(config[READINESS_STATE]),
-        QUERY_PROCESSORS: get_query_processors(
-            config[QUERY_PROCESSORS] if QUERY_PROCESSORS in config else []
-        ),
+        QUERY_PROCESSORS: get_query_processors(config.get(QUERY_PROCESSORS, [])),
         DELETION_SETTINGS: (
             DeletionSettings(**config[DELETION_SETTINGS]) if DELETION_SETTINGS in config else {}
         ),
-        DELETION_PROCESSORS: get_query_processors(
-            config[DELETION_PROCESSORS] if DELETION_PROCESSORS in config else []
-        ),
+        DELETION_PROCESSORS: get_query_processors(config.get(DELETION_PROCESSORS, [])),
         MANDATORY_CONDITION_CHECKERS: get_mandatory_condition_checkers(
-            config[MANDATORY_CONDITION_CHECKERS] if MANDATORY_CONDITION_CHECKERS in config else []
+            config.get(MANDATORY_CONDITION_CHECKERS, [])
         ),
         ALLOCATION_POLICIES: (
             [
@@ -117,14 +115,14 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
             if DELETE_ALLOCATION_POLICIES in config
             else []
         ),
-        REQUIRED_TIME_COLUMN: config.get(REQUIRED_TIME_COLUMN, None),
+        REQUIRED_TIME_COLUMN: config.get(REQUIRED_TIME_COLUMN),
     }
 
 
 def __build_writable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
     return {
         STREAM_LOADER: build_stream_loader(config[STREAM_LOADER]),
-        WRITER_OPTIONS: config[WRITER_OPTIONS] if WRITER_OPTIONS in config else {},
+        WRITER_OPTIONS: config.get(WRITER_OPTIONS, {}),
         REPLACER_PROCESSOR: (
             ReplacerProcessor.get_from_name(config[REPLACER_PROCESSOR]["processor"]).from_kwargs(
                 **config[REPLACER_PROCESSOR].get("args", {})
@@ -183,7 +181,7 @@ def build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
     assert processor is not None
     default_topic = Topic(loader_config["default_topic"])
     # optionals
-    pre_filter = None
+    pre_filter: StreamMessageFilter[KafkaPayload] | None = None
     if PRE_FILTER in loader_config and loader_config[PRE_FILTER] is not None:
         pre_filter = StreamMessageFilter.get_from_name(
             loader_config[PRE_FILTER]["type"]

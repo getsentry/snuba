@@ -3,7 +3,7 @@ import subprocess
 import time
 
 
-class TestCli(object):
+class TestCli:
     def test_consumer_cli(self) -> None:
         """
         Check that the consumer daemon runs until it is killed

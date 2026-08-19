@@ -1,4 +1,5 @@
-from typing import Any, Mapping, Optional
+from collections.abc import Mapping
+from typing import Any
 
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
@@ -10,7 +11,7 @@ class ExtractSpanData(Job):
         self.__validate_job_params(job_spec.params)
         super().__init__(job_spec)
 
-    def __validate_job_params(self, params: Optional[Mapping[Any, Any]]) -> None:
+    def __validate_job_params(self, params: Mapping[Any, Any] | None) -> None:
         assert params
         required_params = [
             "organization_ids",
@@ -112,7 +113,7 @@ class ExtractSpanData(Job):
 
     def execute(self, logger: JobLogger) -> None:
         cluster = get_cluster(StorageSetKey.EVENTS_ANALYTICS_PLATFORM)
-        connection = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
+        connection = cluster.get_query_connection(ClickhouseClientSettings.INTERNAL)
 
         query = f"""
         INSERT INTO FUNCTION gcs('{self._gcp_bucket_name}/{self._output_file_path}',

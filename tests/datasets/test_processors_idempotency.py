@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Tuple
 
 import pytest
 
@@ -27,7 +26,7 @@ test_data = [
 
 @pytest.mark.parametrize("message,processor", test_data)
 def test_processors_of_multistorage_consumer_are_idempotent(
-    message: Tuple[int, str, InsertEvent], processor: MessageProcessor
+    message: tuple[int, str, InsertEvent], processor: MessageProcessor
 ) -> None:
     """
     Test that when the same message is provided to the processors, the result would be the same. That is the process

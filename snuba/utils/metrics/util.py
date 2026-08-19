@@ -1,59 +1,67 @@
-import inspect
-from functools import partial, wraps
-from typing import Any, Callable, Mapping, Optional, TypeVar, cast
+from __future__ import annotations
 
 import _strptime  # NOQA fixes _strptime deferred import issue
-import sentry_sdk
+import inspect
+from collections.abc import Callable, Mapping
+from functools import wraps
+from typing import Any, TypeVar, cast
+
+from sentry_sdk import traces
 
 from snuba import settings
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.types import Tags
+from snuba.utils.sentry import SENTRY_OP
 
 
 def create_metrics(
     prefix: str,
-    tags: Optional[Tags] = None,
-    sample_rates: Optional[Mapping[str, float]] = None,
+    tags: Tags | None = None,
+    sample_rates: Mapping[str, float] | None = None,
 ) -> MetricsBackend:
-    """Create a DogStatsd object if DOGSTATSD_HOST and DOGSTATSD_PORT are defined,
-    with the specified prefix and tags. Return a DummyMetricsBackend otherwise.
+    """Create a DogStatsd object if a DogStatsD Unix domain socket is configured.
+
+    Metrics are sent to the local DogStatsD agent over the socket configured by
+    ``settings.DOGSTATSD_SOCKET_PATH``, which is the only supported transport and is passed
+    to the datadog client verbatim. Return a DummyMetricsBackend when it is not configured.
     Prefixes must start with `snuba.<category>`, for example: `snuba.processor`.
     """
-    host: Optional[str] = settings.DOGSTATSD_HOST
-    port: Optional[int] = settings.DOGSTATSD_PORT
-
     if settings.TESTING:
         from snuba.utils.metrics.backends.testing import TestingMetricsBackend
 
         return TestingMetricsBackend()
-    elif host is None and port is None:
+
+    # No socket configured -> no metrics.
+    socket_path: str | None = settings.DOGSTATSD_SOCKET_PATH
+    if socket_path is None:
         from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 
         return DummyMetricsBackend()
-    elif host is None or port is None:
-        raise ValueError(
-            f"DOGSTATSD_HOST and DOGSTATSD_PORT should both be None or not None. Found DOGSTATSD_HOST: {host}, DOGSTATSD_PORT: {port} instead."
-        )
 
-    from datadog import DogStatsd
+    from datadog import DogStatsd  # type: ignore[attr-defined]  # datadog lacks explicit re-export
 
     from snuba.utils.metrics.backends.datadog import DatadogMetricsBackend
     from snuba.utils.metrics.backends.dualwrite import SentryDatadogMetricsBackend
     from snuba.utils.metrics.backends.sentry import SentryMetricsBackend
 
+    constant_tags = [f"{key}:{value}" for key, value in tags.items()] if tags is not None else None
+
+    def make_client() -> DogStatsd:
+        # socket_path is passed to the datadog client verbatim. It is expected to be a
+        # full address including the transport scheme (e.g.
+        # "unixgram:///run/dogstatsd.sock"); the datadog client strips the scheme and
+        # selects the socket kind itself. The same env var (SNUBA_DOGSTATSD_SOCKET_PATH)
+        # is passed verbatim to the Rust exporter, which parses the scheme too, so no
+        # scheme is hardcoded on either side.
+        return DogStatsd(
+            socket_path=socket_path,
+            namespace=prefix,
+            constant_tags=constant_tags,
+            disable_telemetry=False,
+        )
+
     return SentryDatadogMetricsBackend(
-        DatadogMetricsBackend(
-            partial(
-                DogStatsd,
-                host=host,
-                port=port,
-                namespace=prefix,
-                constant_tags=(
-                    [f"{key}:{value}" for key, value in tags.items()] if tags is not None else None
-                ),
-            ),
-            sample_rates,
-        ),
+        DatadogMetricsBackend(make_client, sample_rates),
         SentryMetricsBackend(),
     )
 
@@ -66,14 +74,24 @@ def with_span(op: str = "function") -> Callable[[F], F]:
 
     def decorator(func: F) -> F:
         frame_info = inspect.stack()[1]
-        filename = frame_info.filename
+        attributes: dict[str, Any] = {SENTRY_OP: op, "filename": frame_info.filename}
 
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            with sentry_sdk.start_span(description=func.__name__, op=op) as span:
-                span.set_data("filename", filename)
+            with traces.start_span(name=func.__name__, attributes=attributes):
                 return func(*args, **kwargs)
 
         return cast(F, wrapper)
 
     return decorator
+
+
+def set_current_span_attributes(attributes: Mapping[str, Any]) -> None:
+    """Set attributes on the active stream-mode span, if any.
+
+    Replaces ``sentry_sdk.update_current_span()``, a no-op under stream mode.
+    """
+    span = traces.get_current_span()
+    if span is None:
+        return
+    span.set_attributes(dict(attributes))

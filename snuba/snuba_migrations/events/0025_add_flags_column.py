@@ -1,4 +1,4 @@
-from typing import Iterator, Sequence
+from collections.abc import Iterator, Sequence
 
 from snuba.clickhouse.columns import Array, Column, Nested, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
@@ -31,9 +31,7 @@ def forward_ops() -> Iterator[operations.SqlOperation]:
             operations.AddColumn(
                 storage_set=storage_set,
                 table_name=table_name,
-                column=Column(
-                    "flags", Nested([("key", String()), ("value", String())])
-                ),
+                column=Column("flags", Nested([("key", String()), ("value", String())])),
                 after="_tags_hash_map",
                 target=target,
             ),

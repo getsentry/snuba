@@ -3,22 +3,26 @@ from __future__ import annotations
 import math
 from abc import ABC, abstractmethod
 from bisect import bisect_left
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
     AttributeConditionalAggregation,
 )
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
     AttributeKey,
     AttributeKeyExpression,
     ExtrapolationMode,
     Function,
+    RankedBy,
     Reliability,
 )
 
+from snuba.protos.common import ARRAY_TYPES
 from snuba.query.dsl import CurriedFunctions as cf
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, column, literal
@@ -27,8 +31,10 @@ from snuba.query.expressions import (
     Expression,
     FunctionCall,
 )
+from snuba.state.sentry_options import get_option
 from snuba.web.rpc.common.common import (
     get_field_existence_expression,
+    semver_sort_key,
     trace_item_filters_to_expression,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
@@ -65,8 +71,15 @@ def _get_condition_in_aggregation(
 ) -> Expression:
     condition_in_aggregation: Expression = literal(True)
     if isinstance(aggregation, AttributeConditionalAggregation):
+        # This condition is embedded in SELECT-clause conditional aggregates (countIf,
+        # sumIf, ...), so build any constant IN-set as has(array, x) to keep the
+        # result-block column name stable across mixed-version ClickHouse nodes on
+        # distributed reads (membership_as_has, see common._in_or_has).
         condition_in_aggregation = trace_item_filters_to_expression(
-            aggregation.filter, attribute_key_to_expression
+            TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED,
+            aggregation.filter,
+            attribute_key_to_expression,
+            membership_as_has=True,
         )
     return condition_in_aggregation
 
@@ -129,9 +142,11 @@ def _resolve_field_and_existence(
         else:
             raise RuntimeError("expected existence_checks to never be empty, but it is")
         return field, existence
-    else:
-        field = attribute_key_to_expression(aggregation.key)
-        return field, get_field_existence_expression(field)
+    # Array keys resolve like scalars now: attribute_key_to_expression reads the typed
+    # array column(s) natively and get_field_existence_expression maps that read to a
+    # notEmpty existence check (see snuba.web.rpc.common.common).
+    field = attribute_key_to_expression(aggregation.key)
+    return field, get_field_existence_expression(field)
 
 
 @dataclass(frozen=True)
@@ -154,7 +169,7 @@ class ExtrapolationContext(ABC):
     @staticmethod
     def from_row(
         column_label: str,
-        row_data: Dict[str, Any],
+        row_data: dict[str, Any],
     ) -> ExtrapolationContext:
         value = row_data[column_label]
         is_extrapolated = False
@@ -233,7 +248,7 @@ class GenericExtrapolationContext(ExtrapolationContext):
         # than the value, so reliability is low.
         if self.confidence_interval == 0:
             return Reliability.RELIABILITY_HIGH
-        elif self.value == 0:
+        if self.value == 0:
             return Reliability.RELIABILITY_LOW
 
         if abs(self.confidence_interval / self.value) <= CONFIDENCE_INTERVAL_THRESHOLD:
@@ -287,7 +302,7 @@ class CustomColumnInformation:
 
     # A column that this custom column depends on or attached to.
     # For example, if we are computing the confidence interval for an aggregation column, we need to know for which column we are computing a confidence interval.
-    referenced_column: Optional[str]
+    referenced_column: str | None
 
     # Metadata about the custom column that can be used to encode additional information in the column.
     # E.g. the aggregation function type for the confidence interval column.
@@ -302,7 +317,7 @@ class CustomColumnInformation:
         return alias
 
     @staticmethod
-    def from_alias(alias: str) -> "CustomColumnInformation":
+    def from_alias(alias: str) -> CustomColumnInformation:
         if not alias.startswith(CUSTOM_COLUMN_PREFIX):
             raise ValueError(f"Alias {alias} does not start with {CUSTOM_COLUMN_PREFIX}")
 
@@ -326,18 +341,19 @@ def _get_sampling_weight_expression(
     if extrapolation_mode == ExtrapolationMode.EXTRAPOLATION_MODE_CLIENT_ONLY:
         # Use client sample rate attribute, convert to weight (1/rate)
         return f.divide(1, client_sample_rate_column)
-    elif extrapolation_mode == ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY:
+    if extrapolation_mode == ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY:
         # Use server sample rate attribute, convert to weight (1/rate)
         return f.divide(1, server_sample_rate_column)
-    else:
-        # Default behavior for existing modes - always use sampling_factor now
-        return f.divide(1, sampling_factor_column)
+    # Default behavior for existing modes - always use sampling_factor now
+    return f.divide(1, sampling_factor_column)
 
 
 def get_attribute_confidence_interval_alias(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
-    additional_metadata: dict[str, str] = {},
+    additional_metadata: dict[str, str] | None = None,
 ) -> str | None:
+    if additional_metadata is None:
+        additional_metadata = {}
     function_alias_map = {
         Function.FUNCTION_COUNT: "count",
         Function.FUNCTION_AVG: "avg",
@@ -419,7 +435,7 @@ def get_count_column(
     )
 
 
-def _get_possible_percentiles(percentile: float, granularity: float, width: float) -> List[float]:
+def _get_possible_percentiles(percentile: float, granularity: float, width: float) -> list[float]:
     """
     Returns a list of possible percentiles to use for the confidence interval calculation from the range percentile - width to percentile + width,
     with a granularity of granularity.
@@ -470,6 +486,32 @@ def _get_possible_percentiles_expression(
     )
 
 
+def _is_integer_key_aggregation(aggregation: AttributeConditionalAggregation) -> bool:
+    if aggregation.HasField("expression"):
+        return False
+    return aggregation.key.type == AttributeKey.TYPE_INT
+
+
+def _get_extrapolated_sum(
+    aggregation: AttributeConditionalAggregation,
+    field: Expression,
+    field_exists: Expression,
+    condition_in_aggregation: Expression,
+    sampling_weight: Expression,
+    alias: str | None,
+) -> CurriedFunctionCall | FunctionCall:
+    alias_dict = {"alias": alias} if alias else {}
+    round_to_int = _is_integer_key_aggregation(aggregation)
+    sum_expr = f.sumIfOrNull(
+        f.multiply(field, sampling_weight),
+        and_cond(field_exists, condition_in_aggregation),
+        **({} if round_to_int else alias_dict),
+    )
+    if round_to_int:
+        return f.round(sum_expr, **alias_dict)
+    return sum_expr
+
+
 def get_extrapolated_function(
     aggregation: AttributeConditionalAggregation,
     field: Expression,
@@ -477,8 +519,18 @@ def get_extrapolated_function(
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
     use_sampling_factor: bool = False,
 ) -> CurriedFunctionCall | FunctionCall | None:
-    alias = aggregation.label if aggregation.label else None
+    alias = aggregation.label or None
     alias_dict = {"alias": alias} if alias else {}
+
+    if aggregation.aggregate in (
+        Function.FUNCTION_COLLECT_UNIQUE,
+        Function.FUNCTION_FIRST,
+        Function.FUNCTION_LAST,
+    ):
+        raise BadSnubaRPCRequestException(
+            f"Extrapolation is not supported for {Function.Name(aggregation.aggregate)} function."
+        )
+
     condition_in_aggregation = _get_condition_in_aggregation(
         aggregation, attribute_key_to_expression
     )
@@ -487,109 +539,100 @@ def get_extrapolated_function(
         use_sampling_factor,
         aggregation.extrapolation_mode,
     )
+    condition = and_cond(field_exists, condition_in_aggregation)
+    rounded_sampling_weight = f.cast(
+        f.round(f.multiply(sampling_weight, PERCENTILE_CORRECTION_FACTOR)),
+        "UInt64",
+    )
     function_map_sample_weighted: dict[Function.ValueType, CurriedFunctionCall | FunctionCall] = {
-        Function.FUNCTION_SUM: f.sumIfOrNull(
-            f.multiply(field, sampling_weight),
-            and_cond(field_exists, condition_in_aggregation),
-            **alias_dict,
+        Function.FUNCTION_SUM: _get_extrapolated_sum(
+            aggregation,
+            field,
+            field_exists,
+            condition_in_aggregation,
+            sampling_weight,
+            alias,
         ),
         Function.FUNCTION_AVERAGE: f.divide(
-            f.sumIfOrNull(
-                f.multiply(field, sampling_weight),
-                and_cond(field_exists, condition_in_aggregation),
-            ),
-            f.sumIfOrNull(
-                sampling_weight,
-                and_cond(field_exists, condition_in_aggregation),
-            ),
+            f.sumIfOrNull(f.multiply(field, sampling_weight), condition),
+            f.sumIfOrNull(sampling_weight, condition),
             **alias_dict,
         ),
         Function.FUNCTION_AVG: f.divide(
-            f.sumIfOrNull(
-                f.multiply(field, sampling_weight),
-                and_cond(field_exists, condition_in_aggregation),
-            ),
-            f.sumIfOrNull(
-                sampling_weight,
-                and_cond(field_exists, condition_in_aggregation),
-            ),
+            f.sumIfOrNull(f.multiply(field, sampling_weight), condition),
+            f.sumIfOrNull(sampling_weight, condition),
             **alias_dict,
         ),
-        Function.FUNCTION_COUNT: f.round(
-            f.sumIfOrNull(
-                sampling_weight,
-                and_cond(field_exists, condition_in_aggregation),
-            ),
-            **alias_dict,
-        ),
+        Function.FUNCTION_COUNT: f.round(f.sumIfOrNull(sampling_weight, condition), **alias_dict),
         Function.FUNCTION_P50: cf.quantileTDigestWeightedIfOrNull(0.5)(
-            field,
-            f.cast(
-                f.round(f.multiply(sampling_weight, PERCENTILE_CORRECTION_FACTOR)),
-                "UInt64",
-            ),
-            and_cond(field_exists, condition_in_aggregation),
-            **alias_dict,
+            field, rounded_sampling_weight, condition, **alias_dict
         ),
         Function.FUNCTION_P75: cf.quantileTDigestWeightedIfOrNull(0.75)(
-            field,
-            f.cast(
-                f.round(f.multiply(sampling_weight, PERCENTILE_CORRECTION_FACTOR)),
-                "UInt64",
-            ),
-            and_cond(field_exists, condition_in_aggregation),
-            **alias_dict,
+            field, rounded_sampling_weight, condition, **alias_dict
         ),
         Function.FUNCTION_P90: cf.quantileTDigestWeightedIfOrNull(0.9)(
-            field,
-            f.cast(
-                f.round(f.multiply(sampling_weight, PERCENTILE_CORRECTION_FACTOR)),
-                "UInt64",
-            ),
-            and_cond(field_exists, condition_in_aggregation),
-            **alias_dict,
+            field, rounded_sampling_weight, condition, **alias_dict
         ),
         Function.FUNCTION_P95: cf.quantileTDigestWeightedIfOrNull(0.95)(
-            field,
-            f.cast(
-                f.round(f.multiply(sampling_weight, PERCENTILE_CORRECTION_FACTOR)),
-                "UInt64",
-            ),
-            and_cond(field_exists, condition_in_aggregation),
-            **alias_dict,
+            field, rounded_sampling_weight, condition, **alias_dict
         ),
         Function.FUNCTION_P99: cf.quantileTDigestWeightedIfOrNull(0.99)(
-            field,
-            f.cast(
-                f.round(f.multiply(sampling_weight, PERCENTILE_CORRECTION_FACTOR)),
-                "UInt64",
-            ),
-            and_cond(field_exists, condition_in_aggregation),
-            **alias_dict,
+            field, rounded_sampling_weight, condition, **alias_dict
         ),
-        Function.FUNCTION_MAX: f.maxIfOrNull(
-            field,
-            and_cond(field_exists, condition_in_aggregation),
-            **alias_dict,
-        ),
-        Function.FUNCTION_MIN: f.minIfOrNull(
-            field,
-            and_cond(field_exists, condition_in_aggregation),
-            **alias_dict,
-        ),
-        Function.FUNCTION_UNIQ: f.uniqIfOrNull(
-            field,
-            and_cond(field_exists, condition_in_aggregation),
-            **alias_dict,
-        ),
-        Function.FUNCTION_ANY: f.anyIfOrNull(
-            field,
-            and_cond(field_exists, condition_in_aggregation),
-            **alias_dict,
-        ),
+        Function.FUNCTION_MAX: f.maxIfOrNull(field, condition, **alias_dict),
+        Function.FUNCTION_MIN: f.minIfOrNull(field, condition, **alias_dict),
+        Function.FUNCTION_UNIQ: f.uniqIfOrNull(field, condition, **alias_dict),
+        Function.FUNCTION_ANY: f.anyIfOrNull(field, condition, **alias_dict),
     }
 
     return function_map_sample_weighted.get(aggregation.aggregate)
+
+
+def get_non_extrapolated_function(
+    aggregation: AttributeConditionalAggregation,
+    field: Expression,
+    field_exists: Expression,
+    condition_in_aggregation: Expression,
+    alias_dict: dict[str, str],
+    max_array_size: int,
+    attribute_key_to_expression: Callable[[AttributeKey], Expression],
+) -> CurriedFunctionCall | FunctionCall | None:
+    function_map: dict[Function.ValueType, Callable[..., CurriedFunctionCall | FunctionCall]] = {
+        Function.FUNCTION_SUM: f.sumIfOrNull,
+        Function.FUNCTION_AVERAGE: f.avgIfOrNull,
+        Function.FUNCTION_COUNT: f.countIfOrNull,
+        Function.FUNCTION_P50: cf.quantileIfOrNull(0.5),
+        Function.FUNCTION_P75: cf.quantileIfOrNull(0.75),
+        Function.FUNCTION_P90: cf.quantileIfOrNull(0.9),
+        Function.FUNCTION_P95: cf.quantileIfOrNull(0.95),
+        Function.FUNCTION_P99: cf.quantileIfOrNull(0.99),
+        Function.FUNCTION_AVG: f.avgIfOrNull,
+        Function.FUNCTION_MAX: f.maxIfOrNull,
+        Function.FUNCTION_MIN: f.minIfOrNull,
+        Function.FUNCTION_UNIQ: f.uniqIfOrNull,
+        Function.FUNCTION_ANY: f.anyIfOrNull,
+        Function.FUNCTION_COLLECT_UNIQUE: cf.groupUniqArrayIf(max_array_size),
+        Function.FUNCTION_FIRST: f.argMinIfOrNull,
+        Function.FUNCTION_LAST: f.argMaxIfOrNull,
+    }
+
+    agg_func = function_map.get(aggregation.aggregate)
+    if agg_func is None:
+        return None
+
+    ordered_agg_sort_key = _build_ordered_agg_sort_key(aggregation, attribute_key_to_expression)
+    if ordered_agg_sort_key:
+        ranked_by_exists = get_field_existence_expression(
+            attribute_key_to_expression(aggregation.ranked_by.key)
+        )
+        condition = and_cond(field_exists, ranked_by_exists, condition_in_aggregation)
+        return agg_func(field, ordered_agg_sort_key, condition, **alias_dict)
+
+    condition = and_cond(field_exists, condition_in_aggregation)
+    if aggregation.aggregate in (Function.FUNCTION_ANY, Function.FUNCTION_COLLECT_UNIQUE):
+        return agg_func(field, condition, **alias_dict)
+
+    return f.round(agg_func(field, condition), _FLOATING_POINT_PRECISION, **alias_dict)
 
 
 def _get_ci_count(
@@ -798,7 +841,10 @@ def get_confidence_interval_column(
             use_sampling_factor=use_sampling_factor,
         ),
         Function.FUNCTION_AVG: _get_ci_avg(
-            aggregation, attribute_key_to_expression, alias, use_sampling_factor
+            aggregation,
+            attribute_key_to_expression,
+            alias,
+            use_sampling_factor,
         ),
         Function.FUNCTION_P50: _get_possible_percentiles_expression(
             aggregation, 0.5, attribute_key_to_expression, use_sampling_factor
@@ -852,6 +898,9 @@ def _array_aggregation_to_expression(
     condition_in_aggregation: Expression,
     alias_dict: dict[str, str],
 ) -> Expression:
+    # Arrays only support uniq (counting distinct elements across the array), used e.g.
+    # for crash-free user rate. The field is a native read of the typed array column(s)
+    # (element-typed key -> one column; deprecated TYPE_ARRAY -> all four concatenated).
     if aggregation.aggregate == Function.FUNCTION_UNIQ:
         return f.round(
             f.uniqArrayIfOrNull(
@@ -867,6 +916,38 @@ def _array_aggregation_to_expression(
     )
 
 
+_ORDERED_AGGREGATES = frozenset({Function.FUNCTION_FIRST, Function.FUNCTION_LAST})
+
+
+def _build_ordered_agg_sort_key(
+    aggregation: AttributeConditionalAggregation,
+    attribute_key_to_expression: Callable[[AttributeKey], Expression],
+) -> Expression | None:
+    if aggregation.aggregate not in _ORDERED_AGGREGATES:
+        return None
+
+    aggregate_name = Function.Name(aggregation.aggregate)
+    if not aggregation.HasField("ranked_by"):
+        raise BadSnubaRPCRequestException(f"{aggregate_name} requires ranked_by to be set")
+
+    ranked_by = aggregation.ranked_by
+    if ranked_by.key.type in ARRAY_TYPES:
+        raise BadSnubaRPCRequestException(
+            f"{aggregate_name} ranked_by is not supported on array attributes: {ranked_by.key.name}"
+        )
+    expression = attribute_key_to_expression(ranked_by.key)
+    if ranked_by.key.type == AttributeKey.TYPE_STRING and ranked_by.sort == RankedBy.SORT_SEMVER:
+        expression = semver_sort_key(expression)
+
+    timestamp = attribute_key_to_expression(
+        AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="sentry.timestamp")
+    )
+    item_id = attribute_key_to_expression(
+        AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")
+    )
+    return f.tuple(expression, timestamp, item_id)
+
+
 def aggregation_to_expression(
     aggregation: AttributeConditionalAggregation,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
@@ -878,66 +959,12 @@ def aggregation_to_expression(
     condition_in_aggregation = _get_condition_in_aggregation(
         aggregation, attribute_key_to_expression
     )
+    max_array_size = get_option("snuba_query_max_array_size", 1000)
 
-    if aggregation.key.type == AttributeKey.Type.TYPE_ARRAY:
+    if aggregation.key.type in ARRAY_TYPES:
         return _array_aggregation_to_expression(
             aggregation, field, condition_in_aggregation, alias_dict
         )
-
-    function_map: dict[Function.ValueType, CurriedFunctionCall | FunctionCall] = {
-        Function.FUNCTION_SUM: f.sumIfOrNull(
-            field,
-            and_cond(field_exists, condition_in_aggregation),
-        ),
-        Function.FUNCTION_AVERAGE: f.avgIfOrNull(
-            field,
-            and_cond(field_exists, condition_in_aggregation),
-        ),
-        Function.FUNCTION_COUNT: f.countIfOrNull(
-            field,
-            and_cond(field_exists, condition_in_aggregation),
-        ),
-        Function.FUNCTION_P50: cf.quantileIfOrNull(0.5)(
-            field,
-            and_cond(field_exists, condition_in_aggregation),
-        ),
-        Function.FUNCTION_P75: cf.quantileIfOrNull(0.75)(
-            field,
-            and_cond(field_exists, condition_in_aggregation),
-        ),
-        Function.FUNCTION_P90: cf.quantileIfOrNull(0.9)(
-            field,
-            and_cond(field_exists, condition_in_aggregation),
-        ),
-        Function.FUNCTION_P95: cf.quantileIfOrNull(0.95)(
-            field,
-            and_cond(field_exists, condition_in_aggregation),
-        ),
-        Function.FUNCTION_P99: cf.quantileIfOrNull(0.99)(
-            field,
-            and_cond(field_exists, condition_in_aggregation),
-        ),
-        Function.FUNCTION_AVG: f.avgIfOrNull(
-            field,
-            and_cond(field_exists, condition_in_aggregation),
-        ),
-        Function.FUNCTION_MAX: f.maxIfOrNull(
-            field,
-            and_cond(field_exists, condition_in_aggregation),
-        ),
-        Function.FUNCTION_MIN: f.minIfOrNull(
-            field,
-            and_cond(field_exists, condition_in_aggregation),
-        ),
-        Function.FUNCTION_UNIQ: f.uniqIfOrNull(
-            field,
-            and_cond(field_exists, condition_in_aggregation),
-        ),
-        Function.FUNCTION_ANY: f.anyIfOrNull(
-            field,
-            and_cond(field_exists, condition_in_aggregation),
-        ),
-    }
 
     if aggregation.extrapolation_mode in [
         ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
@@ -945,20 +972,22 @@ def aggregation_to_expression(
         ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY,
     ]:
         agg_func_expr = get_extrapolated_function(
-            aggregation, field, field_exists, attribute_key_to_expression, use_sampling_factor
+            aggregation,
+            field,
+            field_exists,
+            attribute_key_to_expression,
+            use_sampling_factor,
         )
     else:
-        agg_func_expr = function_map.get(aggregation.aggregate)
-        if agg_func_expr is not None:
-            # Don't apply round() to FUNCTION_ANY since it can return non-numeric types (e.g., strings)
-            if aggregation.aggregate == Function.FUNCTION_ANY:
-                agg_func_expr = f.anyIfOrNull(
-                    field,
-                    and_cond(field_exists, condition_in_aggregation),
-                    **alias_dict,
-                )
-            else:
-                agg_func_expr = f.round(agg_func_expr, _FLOATING_POINT_PRECISION, **alias_dict)
+        agg_func_expr = get_non_extrapolated_function(
+            aggregation,
+            field,
+            field_exists,
+            condition_in_aggregation,
+            alias_dict,
+            max_array_size,
+            attribute_key_to_expression,
+        )
 
     if agg_func_expr is None:
         raise BadSnubaRPCRequestException(f"Aggregation not specified for {aggregation.key.name}")

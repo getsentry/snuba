@@ -1,4 +1,5 @@
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Type
+from collections.abc import Sequence
+from typing import Any
 
 from sentry_protos.snuba.v1.endpoint_delete_trace_items_pb2 import (
     DeleteTraceItemsRequest,
@@ -23,18 +24,17 @@ def _extract_attribute_value(comparison_filter: ComparisonFilter) -> Any:
     value_field = comparison_filter.value.WhichOneof("value")
     if value_field == "val_str":
         return comparison_filter.value.val_str
-    elif value_field == "val_int":
+    if value_field == "val_int":
         return comparison_filter.value.val_int
-    elif value_field == "val_double":
+    if value_field == "val_double":
         return comparison_filter.value.val_double
-    elif value_field == "val_bool":
+    if value_field == "val_bool":
         return comparison_filter.value.val_bool
-    elif value_field == "val_array":
+    if value_field == "val_array":
         return [_scalar_value(elem) for elem in comparison_filter.value.val_array.values]
-    elif value_field in ("val_str_array", "val_int_array", "val_double_array", "val_float_array"):
+    if value_field in ("val_str_array", "val_int_array", "val_double_array", "val_float_array"):
         return list(getattr(comparison_filter.value, value_field).values)
-    else:
-        raise BadSnubaRPCRequestException(f"Unsupported attribute value type: {value_field}")
+    raise BadSnubaRPCRequestException(f"Unsupported attribute value type: {value_field}")
 
 
 def _trace_item_filters_to_attribute_conditions(
@@ -57,7 +57,7 @@ def _trace_item_filters_to_attribute_conditions(
     Raises:
         BadSnubaRPCRequestException: If unsupported filter types or operations are encountered
     """
-    attributes: Dict[str, Tuple[AttributeKey, List[Any]]] = {}
+    attributes: dict[str, tuple[AttributeKey, list[Any]]] = {}
 
     for filter_with_type in filters:
         # Extract the actual filter from TraceItemFilterWithType
@@ -102,11 +102,11 @@ class EndpointDeleteTraceItems(RPCEndpoint[DeleteTraceItemsRequest, DeleteTraceI
         return "v1"
 
     @classmethod
-    def request_class(cls) -> Type[DeleteTraceItemsRequest]:
+    def request_class(cls) -> type[DeleteTraceItemsRequest]:
         return DeleteTraceItemsRequest
 
     @classmethod
-    def response_class(cls) -> Type[DeleteTraceItemsResponse]:
+    def response_class(cls) -> type[DeleteTraceItemsResponse]:
         return DeleteTraceItemsResponse
 
     def _execute(self, request: DeleteTraceItemsRequest) -> DeleteTraceItemsResponse:
@@ -132,12 +132,12 @@ class EndpointDeleteTraceItems(RPCEndpoint[DeleteTraceItemsRequest, DeleteTraceI
         }
 
         # Build base conditions that apply to all deletions
-        conditions: Dict[str, List[Any]] = {
+        conditions: dict[str, list[Any]] = {
             "organization_id": [request.meta.organization_id],
             "project_id": list(request.meta.project_ids),
         }
 
-        attribute_conditions: Optional[AttributeConditions] = None
+        attribute_conditions: AttributeConditions | None = None
 
         if has_trace_ids:
             # Delete by trace_ids (no attribute filtering)

@@ -1,7 +1,7 @@
 import re
+from collections.abc import MutableSequence, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import MutableSequence, Sequence
 
 from snuba import settings
 from snuba.clickhouse.optimize.util import get_num_threads
@@ -108,19 +108,17 @@ class OptimizeScheduler:
                 cutoff_time=self.__last_midnight
                 + timedelta(hours=settings.OPTIMIZE_JOB_CUTOFF_TIME),
             )
-        else:
-            if current_time < self.__parallel_start_time:
-                return OptimizationSchedule(
-                    partitions_groups=[self._sort_partitions(partitions)],
-                    cutoff_time=self.__parallel_start_time,
-                )
-            elif current_time < self.__parallel_end_time:
-                return OptimizationSchedule(
-                    partitions_groups=self._subdivide_partitions(partitions, num_threads),
-                    cutoff_time=self.__parallel_end_time,
-                )
-            else:
-                return OptimizationSchedule(
-                    partitions_groups=[self._sort_partitions(partitions)],
-                    cutoff_time=self.__full_job_end_time,
-                )
+        if current_time < self.__parallel_start_time:
+            return OptimizationSchedule(
+                partitions_groups=[self._sort_partitions(partitions)],
+                cutoff_time=self.__parallel_start_time,
+            )
+        if current_time < self.__parallel_end_time:
+            return OptimizationSchedule(
+                partitions_groups=self._subdivide_partitions(partitions, num_threads),
+                cutoff_time=self.__parallel_end_time,
+            )
+        return OptimizationSchedule(
+            partitions_groups=[self._sort_partitions(partitions)],
+            cutoff_time=self.__full_job_end_time,
+        )

@@ -1,5 +1,3 @@
-from typing import Set, Union
-
 import pytest
 
 from snuba.clickhouse.columns import UUID, ColumnSet, UInt
@@ -8,7 +6,7 @@ from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.projects_finder import ProjectsFinder
-from snuba.query.data_source.simple import Entity
+from snuba.query.data_source.simple import Entity, LogicalDataSource
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.utils.schemas import Column as EntityColumn
@@ -65,8 +63,8 @@ TEST_CASES = [
     TEST_CASES,
 )
 def test_count_columns(
-    query: Union[Query, CompositeQuery[Entity]],
-    expected_proj: Set[int],
+    query: Query | CompositeQuery[LogicalDataSource],
+    expected_proj: set[int],
 ) -> None:
     project_finder = ProjectsFinder()
-    assert project_finder.visit(query) == expected_proj  # type: ignore
+    assert project_finder.visit(query) == expected_proj

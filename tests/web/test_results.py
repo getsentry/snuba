@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Mapping
+from collections.abc import Mapping
 
 import pytest
 
@@ -149,6 +149,89 @@ TEST_CASES = [
         ),
         {"_snuba_event_id": ["event_id"]},
         id="Incomplete mapping",
+    ),
+    pytest.param(
+        QueryResult(
+            result=Result(
+                meta=[
+                    Column(name="event_id", type="String"),
+                    Column(name="duration", type="UInt32"),
+                ],
+                data=[
+                    {"event_id": "asd", "duration": 123},
+                    {"event_id": "sdf", "duration": 321},
+                ],
+                totals={"event_id": "", "duration": 223},
+            ),
+            extra=QueryExtraData(stats={}, sql="...", experiments={}),
+        ),
+        QueryResult(
+            result=Result(
+                meta=[
+                    Column(name="event_id", type="String"),
+                    Column(name="duration", type="UInt32"),
+                ],
+                data=[
+                    {"event_id": "asd", "duration": 123},
+                    {"event_id": "sdf", "duration": 321},
+                ],
+                totals={"event_id": "", "duration": 223},
+            ),
+            extra=QueryExtraData(stats={}, sql="...", experiments={}),
+        ),
+        {"event_id": ["event_id"], "duration": ["duration"]},
+        id="Identity mapping leaves rows untouched",
+    ),
+    pytest.param(
+        QueryResult(
+            result=Result(
+                meta=[Column(name="_snuba_duration", type="UInt32")],
+                data=[{"_snuba_duration": 123}, {"_snuba_duration": 321}],
+            ),
+            extra=QueryExtraData(stats={}, sql="...", experiments={}),
+        ),
+        QueryResult(
+            result=Result(
+                meta=[
+                    Column(name="duration", type="UInt32"),
+                    Column(name="duration_ms", type="UInt32"),
+                ],
+                data=[
+                    {"duration": 123, "duration_ms": 123},
+                    {"duration": 321, "duration_ms": 321},
+                ],
+            ),
+            extra=QueryExtraData(stats={}, sql="...", experiments={}),
+        ),
+        {"_snuba_duration": ["duration", "duration_ms"]},
+        id="Fan-out: one alias to multiple names",
+    ),
+    pytest.param(
+        # A rename target that collides with an existing column name forces the
+        # new-dict fallback. The behavior (last write wins, by row iteration
+        # order) must match the original implementation.
+        QueryResult(
+            result=Result(
+                meta=[
+                    Column(name="x", type="String"),
+                    Column(name="_snuba_a", type="String"),
+                ],
+                data=[{"x": "vx", "_snuba_a": "va"}],
+            ),
+            extra=QueryExtraData(stats={}, sql="...", experiments={}),
+        ),
+        QueryResult(
+            result=Result(
+                meta=[
+                    Column(name="x", type="String"),
+                    Column(name="x", type="String"),
+                ],
+                data=[{"x": "va"}],
+            ),
+            extra=QueryExtraData(stats={}, sql="...", experiments={}),
+        ),
+        {"_snuba_a": ["x"]},
+        id="Target collides with existing column (fallback)",
     ),
 ]
 

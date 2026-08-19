@@ -1,5 +1,5 @@
+from collections.abc import Mapping
 from datetime import datetime, timedelta
-from typing import Mapping
 from unittest.mock import Mock, patch
 
 import pytest
@@ -99,8 +99,8 @@ class TestMigrationPolicies:
     )
     def test_experimental_groups(self, mock_readiness_state: Mock) -> None:
         migration_key = MigrationKey(MigrationGroup("test_migration"), "0001_create_test_table")
-        assert NonBlockingMigrationsPolicy().can_run(migration_key) == True
-        assert NonBlockingMigrationsPolicy().can_reverse(migration_key) == True
+        assert NonBlockingMigrationsPolicy().can_run(migration_key)
+        assert NonBlockingMigrationsPolicy().can_reverse(migration_key)
 
     @patch(
         "snuba.migrations.runner.Runner.get_status",
@@ -115,11 +115,11 @@ class TestMigrationPolicies:
         """
         # non-blocking migration
         migration_key = MigrationKey(MigrationGroup("events"), "0016_drop_legacy_events")
-        assert NonBlockingMigrationsPolicy().can_reverse(migration_key) == True
+        assert NonBlockingMigrationsPolicy().can_reverse(migration_key)
 
         # blocking migration
         migration_key = code_migration_key()
-        assert NonBlockingMigrationsPolicy().can_reverse(migration_key) == False
+        assert not NonBlockingMigrationsPolicy().can_reverse(migration_key)
 
     @patch(
         "snuba.migrations.runner.Runner.get_status",
@@ -139,8 +139,8 @@ class TestMigrationPolicies:
         """
         # non-blocking migration
         migration_key = MigrationKey(MigrationGroup("events"), "0016_drop_legacy_events")
-        assert NonBlockingMigrationsPolicy().can_reverse(migration_key) == True
+        assert NonBlockingMigrationsPolicy().can_reverse(migration_key)
 
         # blocking migration
         migration_key = code_migration_key()
-        assert NonBlockingMigrationsPolicy().can_reverse(migration_key) == False
+        assert not NonBlockingMigrationsPolicy().can_reverse(migration_key)

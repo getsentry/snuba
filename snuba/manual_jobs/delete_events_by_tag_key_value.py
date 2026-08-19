@@ -1,5 +1,6 @@
+from collections.abc import Mapping
 from datetime import datetime
-from typing import Any, Mapping, Optional
+from typing import Any
 
 from snuba.clickhouse.escaping import escape_string
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
@@ -12,14 +13,14 @@ class DeleteEventsByTagKeyValue(Job):
         self.__validate_job_params(job_spec.params)
         super().__init__(job_spec)
 
-    def __validate_job_params(self, params: Optional[Mapping[Any, Any]]) -> None:
+    def __validate_job_params(self, params: Mapping[Any, Any] | None) -> None:
         assert params
         assert isinstance(params["project_ids"], list)
         assert len(params["project_ids"]) > 0
         assert isinstance(params["tag_key"], str)
         assert isinstance(params["tag_value"], str)
         assert params["tag_key"] and params["tag_value"]
-        assert all([isinstance(p, int) for p in params["project_ids"]])
+        assert all(isinstance(p, int) for p in params["project_ids"])
         self._project_ids = params["project_ids"]
         self._tag_key = params["tag_key"]
         self._tag_value = params["tag_value"]

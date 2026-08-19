@@ -1,5 +1,4 @@
 import uuid
-from typing import Set
 
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.processors.physical.type_converters import (
@@ -9,7 +8,7 @@ from snuba.query.processors.physical.type_converters import (
 
 
 class UUIDColumnProcessor(BaseTypeConverter):
-    def __init__(self, columns: Set[str]) -> None:
+    def __init__(self, columns: set[str]) -> None:
         super().__init__(columns, optimize_ordering=False)
 
     def _translate_literal(self, exp: Literal) -> Literal:
@@ -17,8 +16,8 @@ class UUIDColumnProcessor(BaseTypeConverter):
             assert isinstance(exp.value, str)
             new_val = str(uuid.UUID(exp.value))
             return Literal(alias=exp.alias, value=new_val)
-        except (AssertionError, ValueError):
-            raise ColumnTypeError("Not a valid UUID string", should_report=False)
+        except (AssertionError, ValueError) as e:
+            raise ColumnTypeError("Not a valid UUID string", should_report=False) from e
 
     def _process_expressions(self, exp: Expression) -> Expression:
         if isinstance(exp, Column) and exp.column_name in self.columns:

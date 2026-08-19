@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Optional, Sequence
+from typing import Any
 
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.clusters.cluster import (
@@ -24,7 +25,7 @@ from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.replacers.replacer_processor import ReplacerProcessor
 
 
-class Storage(ABC):
+class Storage(ABC):  # noqa: B024 abstract base for storage subclasses; not meant to be instantiated directly
     """
     Storage is an abstraction that represent a DB object that stores data
     and has a schema.
@@ -41,7 +42,7 @@ class Storage(ABC):
         storage_set_key: StorageSetKey,
         schema: Schema,
         readiness_state: ReadinessState,
-        required_time_column: Optional[str] = None,
+        required_time_column: str | None = None,
     ):
         self.__storage_set_key = storage_set_key
         self.__schema = schema
@@ -51,7 +52,7 @@ class Storage(ABC):
     def get_storage_set_key(self) -> StorageSetKey:
         return self.__storage_set_key
 
-    def get_cluster(self, slice_id: Optional[int] = None) -> ClickhouseCluster:
+    def get_cluster(self, slice_id: int | None = None) -> ClickhouseCluster:
         return get_cluster(self.__storage_set_key, slice_id)
 
     def get_schema(self) -> Schema:
@@ -130,17 +131,19 @@ class ReadableTableStorage(ReadableStorage):
         storage_set_key: StorageSetKey,
         schema: Schema,
         readiness_state: ReadinessState,
-        query_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
-        deletion_settings: Optional[DeletionSettings] = None,
-        deletion_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
-        mandatory_condition_checkers: Optional[Sequence[ConditionChecker]] = None,
-        allocation_policies: Optional[list[AllocationPolicy]] = None,
-        delete_allocation_policies: Optional[list[AllocationPolicy]] = None,
-        required_time_column: Optional[str] = None,
+        query_processors: Sequence[ClickhouseQueryProcessor] | None = None,
+        deletion_settings: DeletionSettings | None = None,
+        deletion_processors: Sequence[ClickhouseQueryProcessor] | None = None,
+        mandatory_condition_checkers: Sequence[ConditionChecker] | None = None,
+        allocation_policies: list[AllocationPolicy] | None = None,
+        delete_allocation_policies: list[AllocationPolicy] | None = None,
+        required_time_column: str | None = None,
     ) -> None:
         self.__storage_key = storage_key
         self.__query_processors = query_processors or []
-        self.__deletion_settings = deletion_settings or DeletionSettings(0, [], [], 0)
+        self.__deletion_settings = deletion_settings or DeletionSettings(
+            is_enabled=0, tables=[], bulk_delete_only=False, allowed_columns=[]
+        )
         self.__deletion_processors = deletion_processors or []
         self.__mandatory_condition_checkers = mandatory_condition_checkers or []
         self.__allocation_policies = allocation_policies or []
@@ -183,16 +186,16 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         schema: Schema,
         query_processors: Sequence[ClickhouseQueryProcessor],
         stream_loader: KafkaStreamLoader,
-        mandatory_condition_checkers: Optional[Sequence[ConditionChecker]] = None,
-        allocation_policies: Optional[list[AllocationPolicy]] = None,
-        delete_allocation_policies: Optional[list[AllocationPolicy]] = None,
-        replacer_processor: Optional[ReplacerProcessor[Any]] = None,
-        deletion_settings: Optional[DeletionSettings] = None,
-        deletion_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
+        mandatory_condition_checkers: Sequence[ConditionChecker] | None = None,
+        allocation_policies: list[AllocationPolicy] | None = None,
+        delete_allocation_policies: list[AllocationPolicy] | None = None,
+        replacer_processor: ReplacerProcessor[Any] | None = None,
+        deletion_settings: DeletionSettings | None = None,
+        deletion_processors: Sequence[ClickhouseQueryProcessor] | None = None,
         writer_options: ClickhouseWriterOptions = None,
         write_format: WriteFormat = WriteFormat.JSON,
         ignore_write_errors: bool = False,
-        required_time_column: Optional[str] = None,
+        required_time_column: str | None = None,
     ) -> None:
         self.__storage_key = storage_key
         super().__init__(

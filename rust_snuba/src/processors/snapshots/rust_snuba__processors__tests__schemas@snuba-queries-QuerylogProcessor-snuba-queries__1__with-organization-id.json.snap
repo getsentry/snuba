@@ -97,7 +97,7 @@ expression: snapshot_payload
       1
     ],
     "referrer": "tagstore.__get_tag_keys_and_top_values",
-    "request_body": "{\"app_id\":\"legacy\",\"dataset\":\"events\",\"legacy\":true,\"parent_api\":\"/api/0/issues|groups/{issue_id}/tags/\",\"query\":\"MATCH (events) SELECT count() AS `count`, min(timestamp) AS `first_seen`, max(timestamp) AS `last_seen` BY tags_key, tags_value WHERE timestamp >= toDateTime('2023-02-08T21:07:12.769001') AND timestamp < toDateTime('2023-02-08T21:12:39.015094') AND project_id IN tuple(1) AND project_id IN tuple(1) AND group_id IN tuple(5) ORDER BY count DESC LIMIT 4 BY tags_key\"}",
+    "request_body": "{\n      \"legacy\": true,\n      \"query\": \"MATCH (events) SELECT count() AS `count`, min(timestamp) AS `first_seen`, max(timestamp) AS `last_seen` BY tags_key, tags_value WHERE timestamp >= toDateTime('2023-02-08T21:07:12.769001') AND timestamp < toDateTime('2023-02-08T21:12:39.015094') AND project_id IN tuple(1) AND project_id IN tuple(1) AND group_id IN tuple(5) ORDER BY count DESC LIMIT 4 BY tags_key\",\n      \"dataset\": \"events\",\n      \"app_id\": \"legacy\",\n      \"parent_api\": \"/api/0/issues|groups/{issue_id}/tags/\"\n    }",
     "request_id": "24a78d10-a013-4f2a-a636-7ba2a393b504",
     "status": "success",
     "timestamp": 1675890758

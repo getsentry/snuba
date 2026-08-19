@@ -1,6 +1,7 @@
 import logging
 import signal
-from typing import Any, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import click
 import sentry_sdk
@@ -104,7 +105,7 @@ def lw_deletions_consumer(
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
     log_level: str,
-    group_instance_id: Optional[str],
+    group_instance_id: str | None,
     no_batch: bool,
 ) -> None:
     setup_logging(log_level)
@@ -114,7 +115,7 @@ def lw_deletions_consumer(
 
     sentry_sdk.set_tag("storage", storage)
     shutdown_requested = False
-    consumer: Optional[StreamProcessor[KafkaPayload]] = None
+    consumer: StreamProcessor[KafkaPayload] | None = None
 
     def handler(signum: int, frame: Any) -> None:
         nonlocal shutdown_requested

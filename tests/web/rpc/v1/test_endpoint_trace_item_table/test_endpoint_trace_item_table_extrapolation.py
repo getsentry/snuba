@@ -26,7 +26,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.base import BaseApiTest
@@ -45,7 +45,7 @@ BASE_TIME = datetime.now().replace(
 @pytest.mark.redis_db
 class TestTraceItemTableWithExtrapolation(BaseApiTest):
     def test_aggregation_on_attribute_column_backward_compat(self) -> None:
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         attributes = {
             "custom_tag": AnyValue(string_value="blah"),
         }
@@ -77,7 +77,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             )
 
         write_raw_unprocessed_events(
-            items_storage,  # type: ignore
+            items_storage,
             messages_w_measurement + messages_no_measurement,
         )
 
@@ -157,7 +157,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         assert abs(measurement_p90 - 4) < 0.01  # weighted p90 - 4
 
     def test_aggregation_on_attribute_column(self) -> None:
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         attributes = {
             "custom_tag": AnyValue(string_value="blah"),
         }
@@ -189,7 +189,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             )
 
         write_raw_unprocessed_events(
-            items_storage,  # type: ignore
+            items_storage,
             messages_w_measurement + messages_no_measurement,
         )
 
@@ -211,6 +211,14 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                         aggregate=Function.FUNCTION_SUM,
                         key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"),
                         label="sum(custom_measurement)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                    )
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(type=AttributeKey.TYPE_INT, name="custom_measurement"),
+                        label="sum_int(custom_measurement)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     )
                 ),
@@ -252,13 +260,16 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         )
         response = EndpointTraceItemTable().execute(message)
         measurement_sum = [v.val_double for v in response.column_values[0].results][0]
-        measurement_avg = [v.val_double for v in response.column_values[1].results][0]
+        measurement_sum_int = [v.val_double for v in response.column_values[1].results][0]
+        measurement_avg = [v.val_double for v in response.column_values[2].results][0]
         measurement_count_custom_measurement = [
-            v.val_double for v in response.column_values[2].results
+            v.val_double for v in response.column_values[3].results
         ][0]
-        measurement_count_duration = [v.val_double for v in response.column_values[3].results][0]
-        measurement_p90 = [v.val_double for v in response.column_values[4].results][0]
+        measurement_count_duration = [v.val_double for v in response.column_values[4].results][0]
+        measurement_p90 = [v.val_double for v in response.column_values[5].results][0]
         assert measurement_sum == 98  # weighted sum - 0*1 + 1*2 + 2*4 + 3*8 + 4*16
+        assert measurement_sum_int == 98
+        assert measurement_sum_int == int(measurement_sum_int)
         assert (
             abs(measurement_avg - 3.16129032) < 0.000001
         )  # weighted average - (0*1 + 1*2 + 2*4 + 3*8 + 4*16) / (1+2+4+8+16)
@@ -269,7 +280,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         assert abs(measurement_p90 - 4) < 0.01  # weighted p90 - 4
 
     def test_conditional_aggregation_on_attribute_column(self) -> None:
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         messages_w_measurement, messages_no_measurement = [], []
         for i in range(5):
             start_timestamp = BASE_TIME - timedelta(minutes=i)
@@ -298,7 +309,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             )
 
         write_raw_unprocessed_events(
-            items_storage,  # type: ignore
+            items_storage,
             messages_w_measurement + messages_no_measurement,
         )
 
@@ -365,7 +376,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         assert abs(measurement_avg - 2.6) < 0.000001  # weighted average - (1*2 + 3*8) / (2+8)
 
     def test_count_reliability_backward_compat(self) -> None:
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         attributes = {
             "custom_tag": AnyValue(string_value="blah"),
         }
@@ -395,7 +406,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             )
 
         write_raw_unprocessed_events(
-            items_storage,  # type: ignore
+            items_storage,
             messages_w_measurement + messages_no_measurement,
         )
 
@@ -430,12 +441,12 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         response = EndpointTraceItemTable().execute(message)
         measurement_count = [v.val_double for v in response.column_values[0].results][0]
         print(measurement_count)
-        measurement_reliability = [v for v in response.column_values[0].reliabilities][0]
+        measurement_reliability = list(response.column_values[0].reliabilities)[0]
         assert measurement_count == 5
         assert measurement_reliability == Reliability.RELIABILITY_HIGH
 
     def test_count_reliability(self) -> None:
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         attributes = {
             "custom_tag": AnyValue(string_value="blah"),
         }
@@ -464,7 +475,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             )
 
         write_raw_unprocessed_events(
-            items_storage,  # type: ignore
+            items_storage,
             messages_w_measurement + messages_no_measurement,
         )
 
@@ -495,12 +506,12 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         )
         response = EndpointTraceItemTable().execute(message)
         measurement_count = [v.val_double for v in response.column_values[0].results][0]
-        measurement_reliability = [v for v in response.column_values[0].reliabilities][0]
+        measurement_reliability = list(response.column_values[0].reliabilities)[0]
         assert measurement_count == 5
         assert measurement_reliability == Reliability.RELIABILITY_HIGH
 
     def test_count_reliability_with_group_by_backward_compat(self) -> None:
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         messages_w_measurement, messages_no_measurement = [], []
         for i in range(5):
             start_timestamp = BASE_TIME - timedelta(minutes=i + 1)
@@ -528,7 +539,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             )
 
         write_raw_unprocessed_events(
-            items_storage,  # type: ignore
+            items_storage,
             messages_w_measurement + messages_no_measurement,
         )
 
@@ -596,29 +607,29 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         assert measurement_tags == ["foo"]
 
         measurement_sums = [v.val_double for v in response.column_values[1].results]
-        measurement_reliabilities = [v for v in response.column_values[1].reliabilities]
+        measurement_reliabilities = list(response.column_values[1].reliabilities)
         assert measurement_sums == [sum(range(5))]
         assert measurement_reliabilities == [Reliability.RELIABILITY_HIGH]
 
         measurement_avgs = [v.val_double for v in response.column_values[2].results]
-        measurement_reliabilities = [v for v in response.column_values[2].reliabilities]
+        measurement_reliabilities = list(response.column_values[2].reliabilities)
         assert len(measurement_avgs) == 1
         assert measurement_avgs[0] == sum(range(5)) / 5
         assert measurement_reliabilities == [Reliability.RELIABILITY_HIGH]
 
         measurement_counts = [v.val_double for v in response.column_values[3].results]
-        measurement_reliabilities = [v for v in response.column_values[3].reliabilities]
+        measurement_reliabilities = list(response.column_values[3].reliabilities)
         assert measurement_counts == [5]
         assert measurement_reliabilities == [Reliability.RELIABILITY_HIGH]
 
         measurement_p90s = [v.val_double for v in response.column_values[4].results]
-        measurement_reliabilities = [v for v in response.column_values[4].reliabilities]
+        measurement_reliabilities = list(response.column_values[4].reliabilities)
         assert len(measurement_p90s) == 1
         assert measurement_p90s[0] == 4
         assert measurement_reliabilities == [Reliability.RELIABILITY_LOW]
 
     def test_count_reliability_with_group_by(self) -> None:
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         messages_w_measurement, messages_no_measurement = [], []
         for i in range(5):
             start_timestamp = BASE_TIME - timedelta(minutes=i + 1)
@@ -646,7 +657,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             )
 
         write_raw_unprocessed_events(
-            items_storage,  # type: ignore
+            items_storage,
             messages_w_measurement + messages_no_measurement,
         )
 
@@ -714,23 +725,23 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         assert measurement_tags == ["foo"]
 
         measurement_sums = [v.val_double for v in response.column_values[1].results]
-        measurement_reliabilities = [v for v in response.column_values[1].reliabilities]
+        measurement_reliabilities = list(response.column_values[1].reliabilities)
         assert measurement_sums == [sum(range(5))]
         assert measurement_reliabilities == [Reliability.RELIABILITY_HIGH]
 
         measurement_avgs = [v.val_double for v in response.column_values[2].results]
-        measurement_reliabilities = [v for v in response.column_values[2].reliabilities]
+        measurement_reliabilities = list(response.column_values[2].reliabilities)
         assert len(measurement_avgs) == 1
         assert measurement_avgs[0] == sum(range(5)) / 5
         assert measurement_reliabilities == [Reliability.RELIABILITY_HIGH]
 
         measurement_counts = [v.val_double for v in response.column_values[3].results]
-        measurement_reliabilities = [v for v in response.column_values[3].reliabilities]
+        measurement_reliabilities = list(response.column_values[3].reliabilities)
         assert measurement_counts == [5]
         assert measurement_reliabilities == [Reliability.RELIABILITY_HIGH]
 
         measurement_p90s = [v.val_double for v in response.column_values[4].results]
-        measurement_reliabilities = [v for v in response.column_values[4].reliabilities]
+        measurement_reliabilities = list(response.column_values[4].reliabilities)
         assert len(measurement_p90s) == 1
         assert measurement_p90s[0] == 4
         assert measurement_reliabilities == [Reliability.RELIABILITY_LOW]
@@ -1092,7 +1103,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         ]
 
     def test_aggregation_with_nulls(self) -> None:
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         messages_a, messages_b = [], []
         for i in range(5):
             start_timestamp = BASE_TIME - timedelta(minutes=i + 1)
@@ -1117,7 +1128,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 )
             )
         write_raw_unprocessed_events(
-            items_storage,  # type: ignore
+            items_storage,
             messages_a + messages_b,
         )
 

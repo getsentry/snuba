@@ -21,7 +21,6 @@ schema:
       { name: occurrence_type_id, type: UInt, args: { size: 16 } },
       { name: detection_timestamp, type: DateTime },
 
-
       { name: resource_id, type: String, args: { schema_modifiers: [ nullable ] } },
       { name: message, type: String },
       { name: subtitle, type: String, args: { schema_modifiers: [ nullable ] } },
@@ -70,51 +69,6 @@ schema:
   dist_table_name: search_issues_dist_v2
   partition_format: [retention_days, date]
 
-allocation_policies:
-  - name: ConcurrentRateLimitAllocationPolicy
-    args:
-      required_tenant_types:
-        - organization_id
-        - referrer
-        - project_id
-      default_config_overrides:
-        is_enforced: 0
-  - name: BytesScannedWindowAllocationPolicy
-    args:
-      required_tenant_types:
-        - organization_id
-        - referrer
-      default_config_overrides:
-        is_enforced: 1
-        throttled_thread_number: 1
-        org_limit_bytes_scanned: 100000
-  - name: BytesScannedRejectingPolicy
-    args:
-      required_tenant_types:
-        - organization_id
-        - project_id
-        - referrer
-      default_config_overrides:
-        is_enforced: 0
-        is_active: 0
-
-  - name: ReferrerGuardRailPolicy
-    args:
-      required_tenant_types:
-        - referrer
-      default_config_overrides:
-        is_enforced: 0
-        is_active: 0
-
-delete_allocation_policies:
-  - name: DeleteConcurrentRateLimitAllocationPolicy
-    args:
-      required_tenant_types:
-        - referrer
-        - project_id
-      default_config_overrides:
-        is_enforced: 1
-
 query_processors:
   - processor: MappingOptimizer
     args:
@@ -140,6 +94,12 @@ query_processors:
           sentry:user: user
         contexts:
           trace.trace_id: trace_id
+  - processor: ClickhouseSettingsOverride
+    args:
+      overwrite_existing: false
+      settings:
+        max_execution_time: 25
+        timeout_before_checking_execution_speed: 0
 
 deletion_settings:
   is_enabled: 1

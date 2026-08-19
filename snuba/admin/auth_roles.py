@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod, abstractproperty
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
-from typing import Generic, Sequence, Set, TypeVar
+from typing import Generic, TypeVar
 
 from snuba import settings
 from snuba.migrations.runner import get_active_migration_groups
@@ -76,14 +77,16 @@ TOOL_RESOURCES = {
     "snql-to-sql": ToolResource("snql-to-sql"),
     "tracing": ToolResource("tracing"),
     "cardinality-analyzer": ToolResource("cardinality-analyzer"),
+    "outcomes-analyzer": ToolResource("outcomes-analyzer"),
     "production-queries": ToolResource("production-queries"),
     "system-queries": ToolResource("system-queries"),
     "sudo-system-queries": ToolResource("system-queries"),
     "clickhouse-migrations": ToolResource("clickhouse-migrations"),
     "snuba-explain": ToolResource("snuba-explain"),
     "querylog": ToolResource("querylog"),
-    "database-clusters": ToolResource("database-clusters"),
     "rpc-endpoints": ToolResource("rpc-endpoints"),
+    "clusters": ToolResource("clusters"),
+    "eap-stats": ToolResource("eap-stats"),
     "all": ToolResource("all"),
 }
 
@@ -127,7 +130,7 @@ MIGRATIONS_RESOURCES = {
 @dataclass(frozen=True)
 class Role:
     name: str
-    actions: Set[MigrationAction | ToolAction]
+    actions: set[MigrationAction | ToolAction]
 
 
 def generate_tool_test_role(tool: str) -> Role:
@@ -167,8 +170,10 @@ ROLES = {
                     TOOL_RESOURCES["clickhouse-migrations"],
                     TOOL_RESOURCES["snuba-explain"],
                     TOOL_RESOURCES["querylog"],
-                    TOOL_RESOURCES["database-clusters"],
+                    TOOL_RESOURCES["outcomes-analyzer"],
                     TOOL_RESOURCES["rpc-endpoints"],
+                    TOOL_RESOURCES["clusters"],
+                    TOOL_RESOURCES["eap-stats"],
                 ]
             )
         },
@@ -176,6 +181,10 @@ ROLES = {
     "CardinalityAnalyzer": Role(
         name="cardinality-analyzer",
         actions={InteractToolAction([TOOL_RESOURCES["cardinality-analyzer"]])},
+    ),
+    "OutcomesAnalyzer": Role(
+        name="outcomes-analyzer",
+        actions={InteractToolAction([TOOL_RESOURCES["outcomes-analyzer"]])},
     ),
     "AllMigrationsExecutor": Role(
         name="AllMigrationsExecutor",

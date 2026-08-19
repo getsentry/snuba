@@ -1,5 +1,5 @@
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import List, Sequence
 
 from snuba.clickhouse.columns import (
     UUID,
@@ -24,7 +24,7 @@ class NewColumn:
     after: str | None
 
 
-columns: List[Column[Modifiers]] = [
+columns: list[Column[Modifiers]] = [
     Column("project_id", UInt(64)),
     Column("transaction_name", String()),
     Column("timestamp", DateTime()),

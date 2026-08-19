@@ -1,5 +1,6 @@
 from abc import abstractmethod
-from typing import List, Mapping, NamedTuple, Optional
+from collections.abc import Mapping
+from typing import NamedTuple
 
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -47,14 +48,12 @@ class BaseGranularityProcessor(LogicalQueryProcessor):
     ) -> int:
         raise NotImplementedError
 
-    def find_granularities_in_expression(
-        self, expression: Optional[Expression]
-    ) -> List[MatchResult]:
+    def find_granularities_in_expression(self, expression: Expression | None) -> list[MatchResult]:
         """
         Finds all granularity conditions in an expression. Returns List[Tuple[MatchResult, int]]
         where [0] is the matched condition and [1] is highest common available granularity multiple
         """
-        matches: List[MatchResult] = []
+        matches: list[MatchResult] = []
         match = FunctionCall(
             String(ConditionFunctions.EQ),
             (

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Generator, Optional, Sequence, cast
+from collections.abc import Generator, Sequence
+from typing import Any, cast
 
 import pytest
 
 from snuba.clickhouse.http import JSONRowEncoder
-from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.pool import ClickhousePool
 from snuba.clusters.cluster import CLUSTERS, ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.consumers.types import KafkaMessageMetadata
@@ -34,7 +35,7 @@ def _drop_all_tables() -> None:
 
 
 @pytest.fixture(autouse=True)
-def setup_teardown(clickhouse_db: None) -> Generator[None, None, None]:
+def setup_teardown(clickhouse_db: None) -> Generator[None]:
     _drop_all_tables()
     yield
     _drop_all_tables()
@@ -225,8 +226,8 @@ def run_prior_migrations(
 def perform_select_query(
     columns: Sequence[str],
     table: str,
-    where: Optional[Dict[str, str]],
-    limit: Optional[str],
+    where: dict[str, str] | None,
+    limit: str | None,
     connection: ClickhousePool,
 ) -> Sequence[Any]:
     """Performs a SELECT query, with optional WHERE and LIMIT clauses

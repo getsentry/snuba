@@ -48,12 +48,14 @@ class BasicFunctionsProcessor(LogicalQueryProcessor):
                             Literal(None, 0),
                         ),
                     )
-            if isinstance(exp, CurriedFunctionCall):
-                if exp.internal_function.function_name == "top":
-                    return replace(
-                        exp,
-                        internal_function=replace(exp.internal_function, function_name="topK"),
-                    )
+            if (
+                isinstance(exp, CurriedFunctionCall)
+                and exp.internal_function.function_name == "top"
+            ):
+                return replace(
+                    exp,
+                    internal_function=replace(exp.internal_function, function_name="topK"),
+                )
             return exp
 
         query.transform_expressions(process_functions)
