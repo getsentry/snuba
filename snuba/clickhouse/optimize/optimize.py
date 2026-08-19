@@ -14,13 +14,13 @@ import structlog
 from structlog.types import EventDict, WrappedLogger
 
 from snuba import environment, util
-from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.optimize.optimize_scheduler import OptimizeScheduler
 from snuba.clickhouse.optimize.optimize_tracker import (
     NoOptimizedStateException,
     OptimizedPartitionTracker,
 )
 from snuba.clickhouse.optimize.util import MergeInfo, get_num_threads
+from snuba.clickhouse.pool import ClickhousePool
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.settings import (
@@ -397,7 +397,7 @@ def optimize_partitions(
             tracker.update_completed_partitions(partition)
 
         start = time.time()
-        clickhouse.execute(query_template, args, retryable=False)
+        clickhouse.command(query_template, args)
         duration = time.time() - start
         metrics.timing(
             "optimized_part",

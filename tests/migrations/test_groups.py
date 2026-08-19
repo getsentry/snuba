@@ -18,11 +18,7 @@ def test_build_storage_set_to_group_mapping() -> None:
     try:
         storage_set_to_group_mapping = build_storage_set_to_group_mapping()
         assert (
-            storage_set_to_group_mapping[StorageSetKey.GENERIC_METRICS_SETS]
-            == MigrationGroup.GENERIC_METRICS
-        )
-        assert (
-            storage_set_to_group_mapping[StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS]
+            storage_set_to_group_mapping[StorageSetKey.GENERIC_METRICS_COUNTERS]
             == MigrationGroup.GENERIC_METRICS
         )
         assert storage_set_to_group_mapping[StorageSetKey.EVENTS] == MigrationGroup.EVENTS

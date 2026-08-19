@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import atexit
 import json
+import logging
 import os
-from collections.abc import Iterator, Mapping, Sequence
+import re
+import time
+import uuid
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
 from datetime import datetime
 from threading import Lock
@@ -20,12 +24,14 @@ from clickhouse_connect.driver.exceptions import (
     StreamFailureError,
 )
 from clickhouse_connect.driver.httputil import all_managers, get_pool_manager
+from clickhouse_connect.driver.query import limit_re, select_re
 from sentry_sdk import traces
 from urllib3.poolmanager import PoolManager
 
 from snuba import environment, settings
+from snuba.clickhouse.error_codes import ErrorCodes
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.clickhouse.native import (
+from snuba.clickhouse.pool import (
     ClickhousePool,
     ClickhouseProfile,
     ClickhouseResult,
@@ -36,6 +42,7 @@ from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.sentry import SENTRY_OP
 
+logger = logging.getLogger("snuba.clickhouse")
 metrics = MetricsWrapper(environment.metrics, "clickhouse.connect")
 
 DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS = 60 * 60  # 1h fallback when profile timeout is None
@@ -43,10 +50,7 @@ DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
 _CLICKHOUSE_CONNECT_TRANSPORT_SETTINGS = {"X-ClickHouse-Format": "Native"}
 
 clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
-clickhouse_connect_common.set_setting(
-    "use_protocol_version",
-    get_option("clickhouse_connect_use_protocol_version", False),
-)
+clickhouse_connect_common.set_setting("use_protocol_version", True)
 
 _pool_lock = Lock()
 _pool_managers: dict[tuple[str | None, bool], PoolManager] = {}
@@ -133,6 +137,207 @@ def _coerce_temporal(value: Any, ch_type: str) -> Any:
     return parsed if inner.startswith("DateTime") else parsed.date()
 
 
+_LOW_CARDINALITY_RE = re.compile(r"^LowCardinality\((.+)\)$")
+_ARRAY_RE = re.compile(r"^Array\((.+)\)$")
+_FLOAT_RE = re.compile(r"^Float\d*$")
+# ClickHouse JSON with quote_denormals emits these as quoted strings.
+_DENORMAL_FLOAT_STRINGS = {
+    "nan": float("nan"),
+    "-nan": float("nan"),
+    "inf": float("inf"),
+    "+inf": float("inf"),
+    "infinity": float("inf"),
+    "+infinity": float("inf"),
+    "-inf": float("-inf"),
+    "-infinity": float("-inf"),
+}
+
+
+def _unwrap_type_wrappers(ch_type: str) -> str:
+    """Strip Nullable / LowCardinality wrappers ClickHouse puts around a base type."""
+    while True:
+        _, inner = unwrap_nullable_type(ch_type)
+        if inner != ch_type:
+            ch_type = inner
+            continue
+        match = _LOW_CARDINALITY_RE.match(ch_type)
+        if match is not None:
+            ch_type = match.group(1)
+            continue
+        return ch_type
+
+
+def _split_top_level(body: str) -> list[str]:
+    """Split a comma-separated type body on top-level commas only."""
+    parts: list[str] = []
+    start = 0
+    depth = 0
+    for index, char in enumerate(body):
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+        elif char == "," and depth == 0:
+            parts.append(body[start:index].strip())
+            start = index + 1
+    tail = body[start:].strip()
+    if tail:
+        parts.append(tail)
+    return parts
+
+
+def _split_map_type(ch_type: str) -> tuple[str, str] | None:
+    """Parse Map(K, V) at the top level; nested commas stay inside K or V."""
+    if not ch_type.startswith("Map(") or not ch_type.endswith(")"):
+        return None
+    parts = _split_top_level(ch_type[4:-1])
+    if len(parts) != 2:
+        return None
+    return parts[0], parts[1]
+
+
+def _parse_tuple_element_types(ch_type: str) -> list[str] | None:
+    """Parse Tuple(...) element types, named or positional.
+
+    Named forms look like ``Tuple(k Float64, b Float64)``; positional like
+    ``Tuple(Float64, Float64)``. Element names are discarded — callers want the
+    native-driver list shape, not a named object.
+    """
+    if not ch_type.startswith("Tuple(") or not ch_type.endswith(")"):
+        return None
+    body = ch_type[6:-1].strip()
+    if not body:
+        return []
+
+    element_types: list[str] = []
+    for part in _split_top_level(body):
+        # Named element: "name Type...". Type may itself contain spaces only
+        # inside parentheses (e.g. "DateTime('UTC')"), so the first bare token
+        # is the name when the remainder is a plausible type start.
+        tokens = part.split(None, 1)
+        if (
+            len(tokens) == 2
+            and tokens[0].isidentifier()
+            and (tokens[1][0].isalpha() or tokens[1].startswith("Nullable"))
+        ):
+            element_types.append(tokens[1])
+        else:
+            element_types.append(part)
+    return element_types
+
+
+def _coerce_jsoncompact_value(value: Any, ch_type: str) -> Any:
+    """Restore native-ish Python types from JSONCompact wire values.
+
+    JSONCompact + json.loads drops type fidelity the native path kept:
+    - Date/DateTime strings need datetime/date objects (then the reader ISO-formats)
+    - whole Float values arrive as JSON numbers without a decimal, so json.loads
+      makes them ints; str(1500) is "1500" while str(1500.0) is "1500.0"
+    - non-finite floats are quoted strings ("nan"/"inf") when quote_denormals is on;
+      without that CH writes null and Sentry cannot map nan->0 / inf->None
+    - named Tuples default to JSON objects; we request arrays and coerce elements
+      so simpleLinearRegression stays a list the native driver returned
+    Nested Array/Map/Tuple float elements get the same float coercion.
+    """
+    if value is None:
+        return None
+
+    # Unwrap before temporal coercion so LowCardinality(DateTime) still parses.
+    inner = _unwrap_type_wrappers(ch_type)
+    value = _coerce_temporal(value, inner)
+
+    if _FLOAT_RE.match(inner) is not None:
+        # bool is a subclass of int; leave true/false alone.
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            denormal = _DENORMAL_FLOAT_STRINGS.get(value.lower())
+            if denormal is not None:
+                return denormal
+        return value
+
+    array_match = _ARRAY_RE.match(inner)
+    if array_match is not None and isinstance(value, list):
+        elem_type = array_match.group(1)
+        return [_coerce_jsoncompact_value(item, elem_type) for item in value]
+
+    tuple_types = _parse_tuple_element_types(inner)
+    if tuple_types is not None:
+        # Prefer list wire form (named_tuples_as_objects=0). If an object still
+        # arrives, keep declaration order from the type string.
+        if isinstance(value, dict):
+            items = list(value.values())
+        elif isinstance(value, list):
+            items = value
+        else:
+            return value
+        coerced: list[Any] = []
+        for index, item in enumerate(items):
+            elem_type = tuple_types[index] if index < len(tuple_types) else ""
+            coerced.append(_coerce_jsoncompact_value(item, elem_type) if elem_type else item)
+        return coerced
+
+    map_parts = _split_map_type(inner)
+    if map_parts is not None and isinstance(value, dict):
+        _key_type, value_type = map_parts
+        return {key: _coerce_jsoncompact_value(item, value_type) for key, item in value.items()}
+
+    return value
+
+
+def _strip_trailing_semicolons(query: str) -> str:
+    """Drop trailing ``;`` so ``raw_query`` can append ``FORMAT JSONCompact``.
+
+    clickhouse-connect always does ``query += "\\n FORMAT …"``. A statement that
+    already ends with ``;`` becomes multi-statement SQL and CH rejects it.
+    """
+    return query.rstrip().rstrip(";").rstrip()
+
+
+def _apply_client_query_limit(client: Client, query: str) -> str:
+    """Mirror ``Client._prep_query``: append the client's default LIMIT.
+
+    ``raw_query`` does not apply ``query_limit`` (only ``query()`` does). Typed
+    reads go through JSONCompact / ``raw_query``, so do it here. Skip when the
+    SQL already has LIMIT or still contains SETTINGS (LIMIT after SETTINGS is
+    invalid ClickHouse).
+    """
+    query_limit = getattr(client, "query_limit", 0)
+    if not isinstance(query_limit, int) or query_limit <= 0:
+        return query
+    if select_re.search(query) is None or limit_re.search(query) is not None:
+        return query
+    if re.search(r"\bSETTINGS\b", query, re.IGNORECASE):
+        return query
+    return f"{query}\n LIMIT {query_limit}"
+
+
+def _jsoncompact_settings(
+    settings: Mapping[str, Any] | None,
+    query_id: str | None,
+    capture_trace: bool,
+) -> dict[str, Any]:
+    """Settings shared by typed JSONCompact reads.
+
+    quote_denormals keeps NaN/Inf as tokens instead of null so callers (Sentry's
+    process_value) can still distinguish empty-range nan from real nulls.
+
+    named_tuples_as_objects=0 matches the native driver: simpleLinearRegression
+    and other named Tuples arrive as arrays, not {"k": ..., "b": ...} objects.
+    """
+    json_settings: dict[str, Any] = dict(settings) if settings else {}
+    json_settings["output_format_json_quote_64bit_integers"] = 0
+    json_settings["output_format_json_quote_denormals"] = 1
+    json_settings["output_format_json_named_tuples_as_objects"] = 0
+    if query_id is not None:
+        json_settings["query_id"] = query_id
+    if capture_trace:
+        json_settings["send_logs_level"] = "trace"
+    return json_settings
+
+
 @contextmanager
 def _query_span(
     sql: str, query_id: str | None = None, name: str = "clickhouse query"
@@ -156,17 +361,20 @@ class ClickhouseConnectPool(ClickhousePool):
         host: str,
         user: str,
         password: str,
-        database: str,
-        http_port: int = DEFAULT_CLICKHOUSE_HTTP_PORT,
+        database: str | None = None,
+        port: int = DEFAULT_CLICKHOUSE_HTTP_PORT,
         secure: bool = False,
         ca_certs: str | None = None,
         verify: bool | None = False,
         connect_timeout: int = 1,
         send_receive_timeout: int | None = 35,
         client_settings: Mapping[str, Any] = {},
+        # clickhouse-connect client-side default LIMIT for SELECTs with no LIMIT.
+        # 0 disables. Kept off by default so prod query paths stay unbounded.
+        query_limit: int = 0,
     ) -> None:
         self.host = host
-        self.port = http_port
+        self.port = port
         self.user = user
         self.password = password
         self.database = database
@@ -176,8 +384,12 @@ class ClickhouseConnectPool(ClickhousePool):
         self.connect_timeout = connect_timeout
         self.send_receive_timeout = send_receive_timeout
         self.client_settings = client_settings
+        self.query_limit = query_limit
+        self._client_lock = Lock()
+        self._client_pid = os.getpid()
+        self._clients: dict[tuple[Any, ...], Client] = {}
 
-    def _new_client(self) -> Client:
+    def _new_client(self, query_limit: int | None = None) -> Client:
         connect_timeout = (
             get_option("clickhouse_connect_connect_timeout", 0) or self.connect_timeout
         )
@@ -188,33 +400,73 @@ class ClickhouseConnectPool(ClickhousePool):
                 if self.send_receive_timeout is not None
                 else DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS
             )
-        with traces.start_span(
-            name="clickhouse client",
-            attributes={
-                SENTRY_OP: "db.clickhouse",
-                sentry_sdk.consts.SPANDATA.DB_SYSTEM: "clickhouse",
-                "server.address": self.host,
-                "server.port": str(self.port),
-            },
-        ):
-            return clickhouse_connect.get_client(
-                host=self.host,
-                port=self.port,
-                username=self.user,
-                password=self.password,
-                database=self.database,
-                interface="https" if self.secure else "http",
-                secure=self.secure,
-                verify=bool(self.verify),
-                ca_cert=self.ca_certs,
-                connect_timeout=connect_timeout,
-                send_receive_timeout=send_receive_timeout,
-                settings=dict(self.client_settings),
-                pool_mgr=_shared_pool(self.ca_certs, bool(self.verify)),
-                query_limit=0,
-                autogenerate_session_id=False,
-                compress="lz4",
-            )
+        resolved_query_limit = self.query_limit if query_limit is None else query_limit
+        query_retries = get_option("clickhouse_connect_query_retries", 2)
+        # Runtime options that change how the client is built. query_limit is
+        # separate so concurrent limit variants can share one option snapshot.
+        settings_key = (connect_timeout, send_receive_timeout, query_retries)
+        cache_key = (settings_key, resolved_query_limit)
+        pid = os.getpid()
+        if pid == self._client_pid:
+            client = self._clients.get(cache_key)
+            if client is not None:
+                return client
+        else:
+            # A fork inherits Python objects and lock state, but must reuse
+            # neither. Reset before acquiring the lock in the single-threaded
+            # child, then build lazily against the child's socket pool.
+            self._client_lock = Lock()
+            self._clients = {}
+            self._client_pid = pid
+
+        stale_clients: list[Client] = []
+        with self._client_lock:
+            client = self._clients.get(cache_key)
+            if client is not None:
+                return client
+
+            # Option flip: drop clients built under older timeout/retry values
+            # so the cache cannot grow unbounded as sentry-options change.
+            # Keep same-settings query_limit variants (e.g. default + tracing).
+            stale_clients = [old for key, old in self._clients.items() if key[0] != settings_key]
+            self._clients = {
+                key: old for key, old in self._clients.items() if key[0] == settings_key
+            }
+
+            with traces.start_span(
+                name="clickhouse client",
+                attributes={
+                    SENTRY_OP: "db.clickhouse",
+                    sentry_sdk.consts.SPANDATA.DB_SYSTEM: "clickhouse",
+                    "server.address": self.host,
+                    "server.port": str(self.port),
+                },
+            ):
+                client = clickhouse_connect.get_client(
+                    host=self.host,
+                    port=self.port,
+                    username=self.user,
+                    password=self.password,
+                    database=self.database,
+                    interface="https" if self.secure else "http",
+                    secure=self.secure,
+                    verify=bool(self.verify),
+                    ca_cert=self.ca_certs,
+                    connect_timeout=connect_timeout,
+                    send_receive_timeout=send_receive_timeout,
+                    settings=dict(self.client_settings),
+                    pool_mgr=_shared_pool(self.ca_certs, bool(self.verify)),
+                    query_limit=resolved_query_limit,
+                    query_retries=query_retries,
+                    autogenerate_session_id=False,
+                    compress="lz4",
+                )
+                self._clients[cache_key] = client
+
+        for old in stale_clients:
+            with suppress(Exception):
+                old.close()
+        return client
 
     def _build_query_settings(
         self,
@@ -230,7 +482,10 @@ class ClickhouseConnectPool(ClickhousePool):
         return query_settings or None
 
     def _consume_query_result(
-        self, query_result: Any, with_column_types: bool, query_id: str | None
+        self,
+        query_result: Any,
+        with_column_types: bool,
+        query_id: str | None,
     ) -> ClickhouseResult:
         summary = query_result.summary or {}
         read_bytes = _as_int(summary.get("read_bytes"))
@@ -256,7 +511,7 @@ class ClickhouseConnectPool(ClickhousePool):
                 query_id=query_id_out,
             )
         meta = [
-            (name, column_type.name)
+            (name, str(column_type.name))
             for name, column_type in zip(
                 query_result.column_names, query_result.column_types, strict=True
             )
@@ -278,9 +533,19 @@ class ClickhouseConnectPool(ClickhousePool):
         settings: Mapping[str, Any] | None,
         columnar: bool,
         capture_trace: bool,
+        query_limit: int | None = None,
     ) -> ClickhouseResult:
-        client = self._new_client()
+        client = self._new_client(query_limit=query_limit)
         query_settings = self._build_query_settings(settings, query_id, capture_trace)
+
+        # Prefer JSONCompact whenever column types are required. Native HTTP
+        # responses omit the column header on zero-row results, which forced a
+        # second scan for meta. JSONCompact always returns meta in one request
+        # (same path as WITH TOTALS). Keep Native for untyped / columnar reads.
+        if with_column_types and not columnar:
+            return self._execute_jsoncompact(
+                client, query, params, query_id, settings, capture_trace
+            )
 
         query_result = None
         try:
@@ -299,6 +564,49 @@ class ClickhouseConnectPool(ClickhousePool):
                 with suppress(Exception):
                     query_result.close()
 
+    def _execute_jsoncompact(
+        self,
+        client: Client,
+        query: str,
+        params: Params,
+        query_id: str | None,
+        settings: Mapping[str, Any] | None,
+        capture_trace: bool,
+    ) -> ClickhouseResult:
+        # Admin tracing falls back to system.query_log using this id. Assign one
+        # client-side when missing: JSONCompact does not return query_id, and
+        # send_logs_level wire traces are empty on the HTTP path.
+        if capture_trace and not query_id:
+            query_id = uuid.uuid4().hex
+
+        json_settings = _jsoncompact_settings(settings, query_id, capture_trace)
+        query = _apply_client_query_limit(client, _strip_trailing_semicolons(query))
+
+        with _query_span(query, query_id):
+            raw = client.raw_query(
+                query,
+                parameters=_driver_params(params),
+                settings=json_settings,
+                fmt="JSONCompact",
+            )
+        payload = json.loads(raw)
+        meta = [(column["name"], column["type"]) for column in payload.get("meta", [])]
+        column_types = [ch_type for _, ch_type in meta]
+
+        def _row(values: Sequence[Any]) -> tuple[Any, ...]:
+            return tuple(
+                _coerce_jsoncompact_value(value, column_types[i]) for i, value in enumerate(values)
+            )
+
+        results = [_row(row) for row in payload.get("data", [])]
+        return ClickhouseResult(
+            results=results,
+            meta=meta,
+            profile=self._profile_from_statistics(payload),
+            trace_output="",
+            query_id=str(payload.get("query_id") or query_id or ""),
+        )
+
     def execute_with_totals(
         self,
         query: str,
@@ -308,16 +616,16 @@ class ClickhouseConnectPool(ClickhousePool):
         capture_trace: bool = False,
         robust: bool = False,
     ) -> ClickhouseResult:
-        with self._translate_clickhouse_errors():
+        def _once() -> ClickhouseResult:
             client = self._new_client()
-            json_settings: dict[str, Any] = dict(settings) if settings else {}
-            json_settings["output_format_json_quote_64bit_integers"] = 0
-            if query_id is not None:
-                json_settings["query_id"] = query_id
+            # Same client-side id rule as _execute_jsoncompact for query_log.
+            resolved_query_id = query_id or (uuid.uuid4().hex if capture_trace else None)
+            json_settings = _jsoncompact_settings(settings, resolved_query_id, capture_trace)
+            sql = _strip_trailing_semicolons(query)
 
-            with _query_span(query, query_id):
+            with _query_span(sql, resolved_query_id):
                 raw = client.raw_query(
-                    query,
+                    sql,
                     parameters=_driver_params(params),
                     settings=json_settings,
                     fmt="JSONCompact",
@@ -329,19 +637,33 @@ class ClickhouseConnectPool(ClickhousePool):
 
             def _row(values: Sequence[Any]) -> tuple[Any, ...]:
                 return tuple(
-                    _coerce_temporal(value, column_types[i]) for i, value in enumerate(values)
+                    _coerce_jsoncompact_value(value, column_types[i])
+                    for i, value in enumerate(values)
                 )
 
             results = [_row(row) for row in payload.get("data", [])]
             totals = payload.get("totals")
-            if totals:
-                results.append(_row(totals))
+            # WITH TOTALS always carries a totals array in JSONCompact. Missing or
+            # empty totals used to skip the trailing row and crash the reader
+            # with AssertionError; surface a real ClickHouse client error instead.
+            if not isinstance(totals, list) or not totals:
+                raise ClickhouseError(
+                    "WITH TOTALS response missing totals row",
+                    code=-1,
+                )
+            results.append(_row(totals))
             return ClickhouseResult(
                 results=results,
                 meta=meta,
                 profile=self._profile_from_statistics(payload),
                 trace_output="",
+                query_id=str(payload.get("query_id") or resolved_query_id or ""),
             )
+
+        if robust:
+            return self._retry_robust(_once)
+        with self._translate_clickhouse_errors():
+            return _once()
 
     @staticmethod
     def _profile_from_statistics(payload: Mapping[str, Any]) -> ClickhouseProfile:
@@ -366,9 +688,35 @@ class ClickhouseConnectPool(ClickhousePool):
             metrics.increment("stream_failure")
             raise ClickhouseError(str(e), code=-1) from e
         except ClickHouseError as e:
-            raise ClickhouseError(str(e), code=getattr(e, "code", None) or -1) from e
+            # Missing server code is not a transport failure. -1 is reserved
+            # for OperationalError / StreamFailureError / malformed HTTP bodies.
+            code = getattr(e, "code", None)
+            raise ClickhouseError(str(e), code=code if isinstance(code, int) else 0) from e
         except json.JSONDecodeError as e:
             raise ClickhouseError(f"invalid JSON response: {e}", code=-1) from e
+
+    def _retry_robust(self, operation: Callable[[], ClickhouseResult]) -> ClickhouseResult:
+        """Retry TOO_MANY_SIMULTANEOUS_QUERIES. Transport blips are urllib3's job."""
+        total_attempts = 3
+        attempts_remaining = total_attempts
+
+        while True:
+            try:
+                with self._translate_clickhouse_errors():
+                    return operation()
+            except ClickhouseError as e:
+                if e.code != ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
+                    raise
+                attempts_remaining -= 1
+                if attempts_remaining <= 0:
+                    raise
+                logger.warning(
+                    "ClickHouse query execution failed: %s (%d tries left)",
+                    str(e),
+                    attempts_remaining,
+                )
+                sleep_interval_seconds = get_option("simultaneous_queries_sleep_seconds", 0) or 1
+                time.sleep(float((total_attempts - attempts_remaining) * sleep_interval_seconds))
 
     def execute(
         self,
@@ -380,8 +728,14 @@ class ClickhouseConnectPool(ClickhousePool):
         types_check: bool = False,
         columnar: bool = False,
         capture_trace: bool = False,
-        retryable: bool = True,
+        query_limit: int | None = None,
     ) -> ClickhouseResult:
+        """Execute a ClickHouse query.
+
+        Connect/read blips are retried by urllib3 on the shared pool. Server
+        errors (including ``TOO_MANY_SIMULTANEOUS_QUERIES``) are not retried
+        here; use :meth:`execute_robust` for that.
+        """
         with self._translate_clickhouse_errors():
             return self._execute_once(
                 query,
@@ -391,6 +745,7 @@ class ClickhouseConnectPool(ClickhousePool):
                 settings,
                 columnar,
                 capture_trace,
+                query_limit=query_limit,
             )
 
     def insert(
@@ -420,6 +775,7 @@ class ClickhouseConnectPool(ClickhousePool):
                     table,
                     matrix,
                     column_names=column_names,
+                    database=self.database,
                     settings=insert_settings or None,
                 )
 
@@ -433,19 +789,47 @@ class ClickhouseConnectPool(ClickhousePool):
         types_check: bool = False,
         columnar: bool = False,
         capture_trace: bool = False,
-        retryable: bool = True,
     ) -> ClickhouseResult:
-        return self.execute(
-            query,
-            params=params,
-            with_column_types=with_column_types,
-            query_id=query_id,
-            settings=settings,
-            types_check=types_check,
-            columnar=columnar,
-            capture_trace=capture_trace,
-            retryable=retryable,
+        """Execute a ClickHouse query, retrying ``TOO_MANY_SIMULTANEOUS_QUERIES``.
+
+        Transport blips are retried by urllib3. Other server errors are raised
+        as-is.
+        """
+        return self._retry_robust(
+            lambda: self._execute_once(
+                query,
+                params,
+                with_column_types,
+                query_id,
+                settings,
+                columnar,
+                capture_trace,
+            )
         )
+
+    def command(
+        self,
+        statement: str,
+        params: Params = None,
+        settings: Mapping[str, Any] | None = None,
+        query_id: str | None = None,
+    ) -> ClickhouseResult:
+        with self._translate_clickhouse_errors():
+            client = self._new_client()
+            query_settings = self._build_query_settings(settings, query_id, False)
+            with _query_span(statement, query_id):
+                client.command(
+                    statement,
+                    parameters=_driver_params(params),
+                    settings=query_settings,
+                )
+            return ClickhouseResult(
+                results=[],
+                meta=[],
+                profile=ClickhouseProfile(blocks=0, bytes=0, elapsed=0.0, progress_bytes=0, rows=0),
+                trace_output="",
+                query_id=str(query_id or ""),
+            )
 
     def execute_explain(self, query: str) -> ClickhouseResult:
         with self._translate_clickhouse_errors():
@@ -475,4 +859,11 @@ class ClickhouseConnectPool(ClickhousePool):
         )
 
     def close(self) -> None:
-        pass
+        """Close and discard clients created by this pool."""
+        with self._client_lock:
+            clients = list(self._clients.values())
+            self._clients = {}
+
+        for client in clients:
+            with suppress(Exception):
+                client.close()

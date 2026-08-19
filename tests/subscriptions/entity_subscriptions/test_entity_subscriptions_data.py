@@ -20,9 +20,9 @@ from snuba.utils.streams.configuration_builder import get_default_kafka_configur
 from snuba.utils.streams.topics import Topic as SnubaTopic
 
 dataset = get_dataset("generic_metrics")
-entity = get_entity(EntityKey.GENERIC_METRICS_SETS)
+entity = get_entity(EntityKey.GENERIC_METRICS_COUNTERS)
 entity_key = get_entity_name(entity)
-storage = get_storage(StorageKey.GENERIC_METRICS_SETS_RAW)
+storage = get_storage(StorageKey.GENERIC_METRICS_COUNTERS_RAW)
 assert storage is not None
 assert isinstance(storage, WritableTableStorage)
 stream_loader = storage.get_table_writer().get_stream_loader()
@@ -33,7 +33,7 @@ metadata = {"organization": org_id}
 project_id = 1
 resolution_sec = 60
 time_window_sec = 60
-query = "MATCH (generic_metrics_sets) SELECT count() AS count WHERE project_id = 1"
+query = "MATCH (generic_metrics_counters) SELECT count() AS count WHERE project_id = 1"
 
 timer = Timer("test_entity_subscription_data")
 

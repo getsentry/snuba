@@ -2,7 +2,7 @@ from unittest.mock import Mock, call
 
 import pytest
 
-from snuba.clickhouse.native import ClickhouseResult
+from snuba.clickhouse.pool import ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.manual_jobs import Job, JobSpec
 from snuba.manual_jobs.create_eap_received_at_version_test import (

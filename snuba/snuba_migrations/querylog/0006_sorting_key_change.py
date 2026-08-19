@@ -3,7 +3,7 @@ import math
 import time
 from collections.abc import Sequence
 
-from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.pool import ClickhousePool
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
@@ -72,9 +72,9 @@ def update_querylog_table(clickhouse: ClickhousePool, database: str) -> None:
     [(new_row_count,)] = clickhouse.execute(f"SELECT count() FROM {TABLE_NAME_NEW}").results
     assert row_count == new_row_count
 
-    clickhouse.execute(f"RENAME TABLE {TABLE_NAME} TO {TABLE_NAME_OLD};")
-    clickhouse.execute(f"RENAME TABLE {TABLE_NAME_NEW} TO {TABLE_NAME};")
-    clickhouse.execute(f"DROP TABLE {TABLE_NAME_OLD};")
+    clickhouse.command(f"RENAME TABLE {TABLE_NAME} TO {TABLE_NAME_OLD};")
+    clickhouse.command(f"RENAME TABLE {TABLE_NAME_NEW} TO {TABLE_NAME};")
+    clickhouse.command(f"DROP TABLE {TABLE_NAME_OLD};")
     return
 
 
@@ -117,12 +117,12 @@ def cleanup(clickhouse: ClickhousePool, logger: logging.Logger) -> None:
     if table_exists(TABLE_NAME_NEW):
         logger.info(f"Dropping table {TABLE_NAME_NEW}")
         time.sleep(1)
-        clickhouse.execute(f"DROP TABLE {TABLE_NAME_NEW};")
+        clickhouse.command(f"DROP TABLE {TABLE_NAME_NEW};")
 
     if table_exists(TABLE_NAME_OLD):
         logger.info(f"Dropping table {TABLE_NAME_OLD}")
         time.sleep(1)
-        clickhouse.execute(f"DROP TABLE {TABLE_NAME_OLD};")
+        clickhouse.command(f"DROP TABLE {TABLE_NAME_OLD};")
 
 
 class Migration(migration.CodeMigration):

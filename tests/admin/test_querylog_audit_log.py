@@ -5,7 +5,7 @@ from structlog.testing import capture_logs
 
 import snuba.admin.audit_log.query
 from snuba.admin.audit_log.query import QueryExecutionStatus, audit_log
-from snuba.clickhouse.native import ClickhouseResult
+from snuba.clickhouse.pool import ClickhouseResult
 
 
 def test_audit_log_success() -> None:

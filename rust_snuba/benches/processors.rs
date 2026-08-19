@@ -54,7 +54,6 @@ fn create_factory(
             host: "test".into(),
             port: 1234,
             secure: false,
-            http_port: 1234,
             user: "test".into(),
             password: "test".into(),
             database: "test".into(),
@@ -104,6 +103,7 @@ fn create_factory(
         join_timeout_ms: None,
         health_check: "arroyo".to_string(),
         use_row_binary: false,
+        skip_write: false,
         dlq_configured: false,
     };
     Box::new(factory)

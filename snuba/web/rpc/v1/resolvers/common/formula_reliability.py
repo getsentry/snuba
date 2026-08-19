@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -17,6 +17,14 @@ class FormulaExtrapolationContext:
     average_sample_rate: float = 0
     sample_count: int = 0
     reliability: Reliability.ValueType = Reliability.RELIABILITY_UNSPECIFIED
+
+
+def _unix_seconds(value: Any) -> int:
+    if not isinstance(value, datetime):
+        value = datetime.fromisoformat(str(value))
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return int(value.timestamp())
 
 
 class FormulaReliabilityCalculator:
@@ -108,7 +116,7 @@ class FormulaReliabilityContext:
         """
         reliability_context = FormulaReliabilityContext()
 
-        reliability_context.bucket = int(datetime.fromisoformat(row["time"]).timestamp())
+        reliability_context.bucket = int(_unix_seconds(row["time"]))
 
         for formula, children in formulas_to_children.items():
             for child in children:

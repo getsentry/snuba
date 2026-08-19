@@ -102,7 +102,6 @@ def test_load_balancer(
         user="default",
         password="",
         database="default",
-        http_port=8123,
         secure=True,
         ca_certs=None,
         verify=True,

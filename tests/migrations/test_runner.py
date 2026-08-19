@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from snuba import settings
-from snuba.clickhouse.native import ClickhouseResult
+from snuba.clickhouse.pool import ClickhouseResult
 from snuba.clusters.cluster import CLUSTERS, ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.readiness_state import ReadinessState

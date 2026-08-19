@@ -7,7 +7,7 @@ from snuba.datasets.configuration.json_schema import STORAGE_VALIDATORS
 from snuba.datasets.configuration.storage_builder import build_stream_loader
 from snuba.datasets.message_filters import KafkaHeaderSelectFilter
 from snuba.datasets.processors.generic_metrics_processor import (
-    GenericSetsMetricsProcessor,
+    GenericCountersMetricsProcessor,
 )
 from snuba.subscriptions.utils import SchedulingWatermarkMode
 from snuba.utils.streams.topics import Topic
@@ -16,34 +16,34 @@ from snuba.utils.streams.topics import Topic
 def test_build_stream_loader() -> None:
     loader = build_stream_loader(
         {
-            "processor": "GenericSetsMetricsProcessor",
+            "processor": "GenericCountersMetricsProcessor",
             "default_topic": "snuba-generic-metrics",
             "pre_filter": {
                 "type": "KafkaHeaderSelectFilter",
-                "args": {"header_key": "metric_type", "header_value": "s"},
+                "args": {"header_key": "metric_type", "header_value": "c"},
             },
-            "commit_log_topic": "snuba-generic-metrics-sets-commit-log",
+            "commit_log_topic": "snuba-generic-metrics-counters-commit-log",
             "subscription_scheduler_mode": "global",
             "subscription_synchronization_timestamp": "orig_message_ts",
             "subscription_delay_seconds": 60,
-            "subscription_scheduled_topic": "scheduled-subscriptions-generic-metrics-sets",
+            "subscription_scheduled_topic": "scheduled-subscriptions-generic-metrics-counters",
             "subscription_result_topic": "generic-metrics-subscription-results",
             "dlq_topic": "snuba-dead-letter-generic-metrics",
         }
     )
-    assert isinstance(loader.get_processor(), GenericSetsMetricsProcessor)
+    assert isinstance(loader.get_processor(), GenericCountersMetricsProcessor)
     assert loader.get_default_topic_spec().topic == Topic.GENERIC_METRICS
     assert isinstance(loader.get_pre_filter(), KafkaHeaderSelectFilter)
     commit_log_topic_spec = loader.get_commit_log_topic_spec()
     assert (
         commit_log_topic_spec is not None
-        and commit_log_topic_spec.topic == Topic.GENERIC_METRICS_SETS_COMMIT_LOG
+        and commit_log_topic_spec.topic == Topic.GENERIC_METRICS_COUNTERS_COMMIT_LOG
     )
     assert loader.get_subscription_scheduler_mode() == SchedulingWatermarkMode.GLOBAL
     scheduled_topic_spec = loader.get_subscription_scheduled_topic_spec()
     assert (
         scheduled_topic_spec is not None
-        and scheduled_topic_spec.topic == Topic.SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_SETS
+        and scheduled_topic_spec.topic == Topic.SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_COUNTERS
     )
     result_topic_spec = loader.get_subscription_result_topic_spec()
     assert (

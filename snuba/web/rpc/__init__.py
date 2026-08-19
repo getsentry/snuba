@@ -6,7 +6,6 @@ from bisect import bisect_left
 from typing import Any, Generic, cast, final
 
 import sentry_sdk
-from clickhouse_driver.errors import ErrorCodes as clickhouse_errors
 from google.protobuf.message import DecodeError
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
@@ -15,6 +14,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_sdk import traces
 
 from snuba import environment
+from snuba.clickhouse.error_codes import ErrorCodes as clickhouse_errors
 from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.backends.abstract import MetricsBackend

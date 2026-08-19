@@ -107,9 +107,9 @@ def forwards(logger: logging.Logger) -> None:
             """
         )
 
-    clickhouse.execute(f"RENAME TABLE {TABLE_NAME} TO {TABLE_NAME_OLD};")
+    clickhouse.command(f"RENAME TABLE {TABLE_NAME} TO {TABLE_NAME_OLD};")
 
-    clickhouse.execute(f"RENAME TABLE {TABLE_NAME_NEW} TO {TABLE_NAME};")
+    clickhouse.command(f"RENAME TABLE {TABLE_NAME_NEW} TO {TABLE_NAME};")
 
     # Ensure each table has the same number of rows before deleting the old one
     assert (
@@ -117,7 +117,7 @@ def forwards(logger: logging.Logger) -> None:
         == clickhouse.execute(f"SELECT COUNT() FROM {TABLE_NAME_OLD} FINAL;").results
     )
 
-    clickhouse.execute(f"DROP TABLE {TABLE_NAME_OLD};")
+    clickhouse.command(f"DROP TABLE {TABLE_NAME_OLD};")
 
 
 def backwards(logger: logging.Logger) -> None:
@@ -142,12 +142,12 @@ def backwards(logger: logging.Logger) -> None:
     if table_exists(TABLE_NAME_NEW):
         logger.info(f"Dropping table {TABLE_NAME_NEW}")
         time.sleep(1)
-        clickhouse.execute(f"DROP TABLE {TABLE_NAME_NEW};")
+        clickhouse.command(f"DROP TABLE {TABLE_NAME_NEW};")
 
     if table_exists(TABLE_NAME_OLD):
         logger.info(f"Dropping table {TABLE_NAME_OLD}")
         time.sleep(1)
-        clickhouse.execute(f"DROP TABLE {TABLE_NAME_OLD};")
+        clickhouse.command(f"DROP TABLE {TABLE_NAME_OLD};")
 
 
 class Migration(migration.CodeMigration):

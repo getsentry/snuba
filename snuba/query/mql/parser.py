@@ -674,12 +674,12 @@ def parse_mql_query_body(body: str, dataset: Dataset) -> EntityQuery:
             'max(transaction.duration{dist:["dist1", "dist2"]}) by transaction'
         After visiting the parse tree, it becomes:
             InitialParseResult(
-                'expression': SelectedExpression(name='aggregate_value', expression=sum(value) AS `sum(d:transactions/duration@millisecond)`),
+                'expression': SelectedExpression(name='aggregate_value', expression=sum(value) AS `sum(c:transactions/duration@millisecond)`),
                 'formula': None,
                 'parameters': None,
                 'groupby': [SelectedExpression(name='transaction', Column('transaction')],
                 'conditions': [in(Column('dist'), tuple('dist1', 'dist2'))],
-                'mri': 'd:transactions/duration@millisecond'
+                'mri': 'c:transactions/duration@millisecond'
             )
         """
         try:
@@ -725,9 +725,6 @@ METRICS_ENTITIES = {
 
 GENERIC_ENTITIES = {
     "c": EntityKey.GENERIC_METRICS_COUNTERS,
-    "d": EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-    "s": EntityKey.GENERIC_METRICS_SETS,
-    "g": EntityKey.GENERIC_METRICS_GAUGES,
 }
 
 
@@ -833,11 +830,11 @@ def convert_formula_to_query(
     """
     Look up all the referenced entities, and create a JoinClause for each of the entities
     referenced in the formula. Then map the correct table to each of the expressions in the formula.
-    E.g. sum(d:transactions/duration) / sum(c:transactions/duration_ms) will produce a JoinClause
-    with (d: generic_metrics_distributions) -[counters]-> (c: generic_metrics_counters)
+    E.g. sum(c:transactions/duration) / sum(c:transactions/duration_ms) will produce a JoinClause
+    with (c0: generic_metrics_counters) -[counters]-> (c1: generic_metrics_counters)
     Most formulas do not operate on multiple entities, but they get the same treatment as if they
     did in order to keep consistency. In that case the table is joined on itself.
-    If a formula has only a single MRI and some scalars e.g. sum(d:transactions/duration) + 1, then
+    If a formula has only a single MRI and some scalars e.g. sum(c:transactions/duration) + 1, then
     there's no need for a JoinClause, and this returns a simple LogicalQuery.
     """
     if parsed.formula is None:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 # [ spans-clickhouse-1 ] [ 65011 ] {0.21246445055947638} <Debug> default.spans_optimized_v2_traces (aacb1a4f-32d0-49ea-8985-9c0d92a079ae) (SelectExecutor): Index `bf_attr_str_5` has dropped 0/2199 granules.
@@ -187,12 +187,13 @@ class QuerySummary:
     node_name: str
     is_distributed: bool
     query_id: str
-    execute_summaries: list[ExecuteSummary] | None = None
+    execute_summaries: list[ExecuteSummary] = field(default_factory=list)
     select_summaries: list[SelectSummary] | None = None
     index_summaries: list[IndexSummary] | None = None
     stream_summaries: list[StreamSummary] | None = None
     aggregation_summaries: list[AggregationSummary] | None = None
     sorting_summaries: list[SortingSummary] | None = None
+    query: str = ""
 
 
 @dataclass

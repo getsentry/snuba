@@ -3,7 +3,7 @@ from snuba.admin.clickhouse.common import (
     get_ro_query_node_connection,
     validate_ro_query,
 )
-from snuba.clickhouse.native import ClickhouseResult
+from snuba.clickhouse.pool import ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages.factory import get_storage

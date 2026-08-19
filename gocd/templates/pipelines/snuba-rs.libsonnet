@@ -10,6 +10,11 @@ local gocdtasks = import 'github.com/getsentry/gocd-jsonnet/libs/gocd-tasks.libs
 local saas_datadog_monitor_ids = {
   us: '311884335 311884334',
   de: '311884404 311884405',
+  s4s2: '314687721 314687720',
+  us2: '',
+  'customer-1': '314685652 314685651',
+  'customer-2': '314685913 314685914',
+  'customer-7': '314685866 314685865',
 };
 
 // Snuba deploy to ST is blocked till SaaS deploy is healthy
@@ -24,7 +29,7 @@ local saas_health_check(region) =
                 SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}',
                 DATADOG_API_KEY: '{{SECRET:[devinfra][sentry_datadog_api_key]}}',
                 DATADOG_APP_KEY: '{{SECRET:[devinfra][sentry_datadog_app_key]}}',
-                DATADOG_MONITOR_IDS: std.get(saas_datadog_monitor_ids, region, ''),
+                DATADOG_MONITOR_IDS: saas_datadog_monitor_ids[region],
                 LABEL_SELECTOR: 'service=snuba',
                 SENTRY_ENVIRONMENT: region,
               },
@@ -88,6 +93,7 @@ local deploy_canary_stage(region) =
                 SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}',
                 DATADOG_API_KEY: '{{SECRET:[devinfra][sentry_datadog_api_key]}}',
                 DATADOG_APP_KEY: '{{SECRET:[devinfra][sentry_datadog_app_key]}}',
+                DATADOG_MONITOR_IDS: saas_datadog_monitor_ids[region],
                 LABEL_SELECTOR: 'service=snuba,is_canary=true',
               },
               tasks: [
@@ -112,6 +118,7 @@ local deploy_canary_stage(region) =
                 SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}',
                 DATADOG_API_KEY: '{{SECRET:[devinfra][sentry_datadog_api_key]}}',
                 DATADOG_APP_KEY: '{{SECRET:[devinfra][sentry_datadog_app_key]}}',
+                DATADOG_MONITOR_IDS: saas_datadog_monitor_ids[region],
                 LABEL_SELECTOR: 'service=snuba,is_canary=true',
               },
               tasks: [

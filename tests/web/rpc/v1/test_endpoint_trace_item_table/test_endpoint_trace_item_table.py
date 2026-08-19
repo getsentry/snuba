@@ -6,7 +6,6 @@ from typing import Any
 from unittest.mock import MagicMock, call, patch
 
 import pytest
-from clickhouse_driver.errors import ServerException
 from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
@@ -58,6 +57,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue
 
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.protos.common import _resolve_canonical
@@ -187,8 +187,8 @@ class TestTraceItemTable(BaseApiTest):
         monkeypatch.setattr(RPCEndpoint, "metrics", property(lambda x: metrics_mock))
         with (
             patch(
-                "clickhouse_driver.client.Client.execute",
-                side_effect=ServerException(
+                "snuba.clickhouse.connect.ClickhouseConnectPool.execute",
+                side_effect=ClickhouseError(
                     "DB::Exception: Received from snuba-events-analytics-platform-1-1:1111. DB::Exception: Memory limit (for query) exceeded: would use 1.11GiB (attempt to allocate chunk of 111111 bytes), maximum: 1.11 GiB. Blahblahblahblahblahblahblah",
                     code=241,
                 ),
@@ -235,8 +235,8 @@ class TestTraceItemTable(BaseApiTest):
         monkeypatch.setattr(RPCEndpoint, "metrics", property(lambda x: metrics_mock))
         with (
             patch(
-                "clickhouse_driver.client.Client.execute",
-                side_effect=ServerException(
+                "snuba.clickhouse.connect.ClickhouseConnectPool.execute",
+                side_effect=ClickhouseError(
                     "DB::Exception: Timeout exceeded: elapsed 32.8457984 seconds, maximum: 30: Blahblahblahblahblahblahblah",
                     code=159,
                 ),

@@ -46,6 +46,7 @@ pub fn consumer(
     max_dlq_buffer_length: Option<usize>,
     join_timeout_ms: Option<u64>,
     use_row_binary: bool,
+    skip_write: bool,
 ) -> usize {
     py.allow_threads(|| {
         consumer_impl(
@@ -67,6 +68,7 @@ pub fn consumer(
             join_timeout_ms,
             health_check,
             use_row_binary,
+            skip_write,
         )
     })
 }
@@ -91,6 +93,7 @@ pub fn consumer_impl(
     join_timeout_ms: Option<u64>,
     health_check: &str,
     use_row_binary: bool,
+    skip_write: bool,
 ) -> usize {
     setup_logging();
     crate::init_sentry_options().expect("failed to initialize sentry-options");
@@ -113,13 +116,12 @@ pub fn consumer_impl(
 
     for storage in &consumer_config.storages {
         tracing::info!(
-            "Storage: {}, ClickHouse Table Name: {}, Message Processor: {:?}, ClickHouse host: {}, ClickHouse port: {}, ClickHouse HTTP port: {}, ClickHouse database: {}",
+            "Storage: {}, ClickHouse Table Name: {}, Message Processor: {:?}, ClickHouse host: {}, ClickHouse port: {}, ClickHouse database: {}",
             storage.name,
             storage.clickhouse_table_name,
             &storage.message_processor,
             storage.clickhouse_cluster.host,
             storage.clickhouse_cluster.port,
-            storage.clickhouse_cluster.http_port,
             storage.clickhouse_cluster.database,
         );
     }
@@ -176,6 +178,25 @@ pub fn consumer_impl(
         first_storage.name,
     );
 
+    if let Some(group_instance_id) = consumer_config
+        .raw_topic
+        .broker_config
+        .get("group.instance.id")
+    {
+        tracing::info!(
+            group_instance_id = %group_instance_id,
+            consumer_group = %consumer_group,
+            "Static membership enabled (KIP-345 group.instance.id)"
+        );
+    }
+
+    if skip_write {
+        tracing::warn!(
+            consumer_group = %consumer_group,
+            "ClickHouse writes disabled (--skip-write); offsets still commit"
+        );
+    }
+
     let config = KafkaConfig::new_consumer_config(
         vec![],
         consumer_group.to_owned(),
@@ -195,36 +216,40 @@ pub fn consumer_impl(
     let dlq_concurrency_config = ConcurrencyConfig::new(10);
 
     // DLQ policy applies only if we are not skipping writes, otherwise we don't want to be
-    // writing to the DLQ topics in prod.
+    // writing to the DLQ topics in prod. DlqByAge is keyed off the same flag.
+    let dlq_policy = if skip_write {
+        None
+    } else {
+        consumer_config.dlq_topic.map(|dlq_topic_config| {
+            let producer = KafkaProducer::new(KafkaConfig::new_producer_config(
+                vec![],
+                Some(dlq_topic_config.broker_config),
+            ));
 
-    // Whether a DLQ topic is configured. The DLQ-by-age strategy relies on the
-    // DLQ policy, so it is only wired into the factory when this is true.
-    let dlq_configured = consumer_config.dlq_topic.is_some();
+            let kafka_dlq_producer = Box::new(KafkaDlqProducer::new(
+                producer,
+                Topic::new(&dlq_topic_config.physical_topic_name),
+            ));
 
-    let dlq_policy = consumer_config.dlq_topic.map(|dlq_topic_config| {
-        let producer = KafkaProducer::new(KafkaConfig::new_producer_config(
-            vec![],
-            Some(dlq_topic_config.broker_config),
-        ));
+            let handle = dlq_concurrency_config.handle();
+            DlqPolicy::new(
+                handle,
+                kafka_dlq_producer,
+                DlqLimit {
+                    max_invalid_ratio: None,
+                    max_consecutive_count: None,
+                },
+                max_dlq_buffer_length,
+            )
+        })
+    };
+    let dlq_configured = dlq_policy.is_some();
 
-        let kafka_dlq_producer = Box::new(KafkaDlqProducer::new(
-            producer,
-            Topic::new(&dlq_topic_config.physical_topic_name),
-        ));
-
-        let handle = dlq_concurrency_config.handle();
-        DlqPolicy::new(
-            handle,
-            kafka_dlq_producer,
-            DlqLimit {
-                max_invalid_ratio: None,
-                max_consecutive_count: None,
-            },
-            max_dlq_buffer_length,
-        )
-    });
-
-    let commit_log_producer = if let Some(topic_config) = consumer_config.commit_log_topic {
+    // Shadow consumers (--skip-write) must not produce commit log either; that
+    // stream drives post-processing against written rows.
+    let commit_log_producer = if skip_write {
+        None
+    } else if let Some(topic_config) = consumer_config.commit_log_topic {
         let producer_config =
             KafkaConfig::new_producer_config(vec![], Some(topic_config.broker_config));
         let producer = KafkaProducer::new(producer_config);
@@ -236,7 +261,11 @@ pub fn consumer_impl(
         None
     };
 
-    let replacements_config = if let Some(topic_config) = consumer_config.replacements_topic {
+    // Shadow consumers must not produce replacements either; those mutate
+    // ClickHouse via the replacements consumer.
+    let replacements_config = if skip_write {
+        None
+    } else if let Some(topic_config) = consumer_config.replacements_topic {
         let producer_config =
             KafkaConfig::new_producer_config(vec![], Some(topic_config.broker_config));
         Some((
@@ -286,6 +315,7 @@ pub fn consumer_impl(
         join_timeout_ms,
         health_check: health_check.to_string(),
         use_row_binary,
+        skip_write,
         dlq_configured,
     };
 

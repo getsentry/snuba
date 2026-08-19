@@ -6,9 +6,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, cast
 
-from clickhouse_driver.errors import ErrorCodes
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
 
+from snuba.clickhouse.error_codes import ErrorCodes
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.datasets.entities.entity_key import EntityKey
@@ -33,7 +33,7 @@ class QueryStatus(Enum):
     TIMEOUT = "timeout"
 
 
-CLICKHOUSE_ERROR_TO_SNUBA_ERROR_MAPPINGS = {
+CLICKHOUSE_ERROR_TO_SNUBA_ERROR_MAPPINGS: dict[int, QueryStatus] = {
     ErrorCodes.TOO_SLOW: QueryStatus.TIMEOUT,
     ErrorCodes.TIMEOUT_EXCEEDED: QueryStatus.TIMEOUT,
     ErrorCodes.SOCKET_TIMEOUT: QueryStatus.TIMEOUT,
@@ -41,7 +41,7 @@ CLICKHOUSE_ERROR_TO_SNUBA_ERROR_MAPPINGS = {
 }
 
 
-def get_query_status_from_error_codes(code: ErrorCodes) -> QueryStatus | None:
+def get_query_status_from_error_codes(code: int) -> QueryStatus | None:
     return CLICKHOUSE_ERROR_TO_SNUBA_ERROR_MAPPINGS.get(code)
 
 
@@ -108,7 +108,7 @@ SLO_FOR = {
 }
 
 
-ERROR_CODE_MAPPINGS = {
+ERROR_CODE_MAPPINGS: dict[int, RequestStatus] = {
     ErrorCodes.TOO_SLOW: RequestStatus.PREDICTED_TIMEOUT,
     ErrorCodes.TIMEOUT_EXCEEDED: RequestStatus.CLICKHOUSE_TIMEOUT,
     ErrorCodes.SOCKET_TIMEOUT: RequestStatus.NETWORK_TIMEOUT,

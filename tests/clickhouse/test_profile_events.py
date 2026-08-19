@@ -6,7 +6,7 @@ from snuba.admin.clickhouse.profile_events import (
     _profile_event_query_ids,
     gather_profile_events,
 )
-from snuba.clickhouse.native import ClickhouseProfile, ClickhouseResult
+from snuba.clickhouse.pool import ClickhouseProfile, ClickhouseResult
 
 
 def test_profile_event_query_ids_from_summaries_and_root() -> None:
