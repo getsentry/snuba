@@ -9,11 +9,23 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.logical import Query
 from snuba.query.query_settings import OutcomesQuerySettings, QuerySettings
 
-# Hourly TTL is 90 days. ClickHouse drops parts after that, so route a day
-# early and include the cutoff itself to avoid querying data that may
-# already have been evicted.
-_HOURLY_RETENTION = timedelta(days=90)
-_HOURLY_RETENTION_BUFFER = timedelta(days=1)
+# Hourly table: PARTITION BY toMonday(timestamp), TTL timestamp + 90 days.
+# With ttl_only_drop_parts (ClickHouse default), a Monday partition is dropped
+# only once every row in that week has expired, so the oldest surviving
+# partition is toMonday(now - 90d). Queries that start before that Monday
+# cannot be served from hourly.
+HOURLY_RETENTION_DAYS = 90
+HOURLY_RETENTION = timedelta(days=HOURLY_RETENTION_DAYS)
+
+
+def hourly_retention_cutoff(now: datetime | None = None) -> datetime:
+    """Return the earliest timestamp still fully present in outcomes_hourly."""
+    if now is None:
+        now = datetime.now(UTC)
+    elif now.tzinfo is None:
+        now = now.replace(tzinfo=UTC)
+    expired_after = now - HOURLY_RETENTION
+    return expired_after - timedelta(days=expired_after.weekday())
 
 
 class OutcomesStorageSelector(QueryStorageSelector):
@@ -23,8 +35,9 @@ class OutcomesStorageSelector(QueryStorageSelector):
 
     Routing priority:
     1. OutcomesQuerySettings(use_daily=True) — explicit opt-in to daily.
-    2. Time-range — if the query's lower timestamp bound is at or beyond
-       hourly retention (90 days, minus a 1-day buffer), route to daily.
+    2. Time-range — if the query's lower timestamp bound is before the
+       oldest surviving hourly partition (toMonday(now - 90d)), route to
+       daily.
     3. Referrer — if the referrer starts with "billing.", route to daily
        (billing queries need 13-month retention only available in the daily
        table).
@@ -62,15 +75,12 @@ class OutcomesStorageSelector(QueryStorageSelector):
     def _route_by_time_and_referrer(
         self, query: Query, query_settings: QuerySettings
     ) -> StorageKey:
-        # Route to daily if the query reaches beyond the hourly table's
-        # retention window (~90 days).
         lower_bound, _ = get_time_range(query, "timestamp")
         if lower_bound is not None:
             lower_bound_tz = (
                 lower_bound if lower_bound.tzinfo is not None else lower_bound.replace(tzinfo=UTC)
             )
-            cutoff = datetime.now(UTC) - _HOURLY_RETENTION + _HOURLY_RETENTION_BUFFER
-            if lower_bound_tz <= cutoff:
+            if lower_bound_tz < hourly_retention_cutoff():
                 return self.daily_storage
 
         # Billing queries need 13-month retention available only in the

@@ -16,6 +16,10 @@ from snuba.clickhouse.query import Expression
 from snuba.configs.configuration import Configuration
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.entities.storage_selectors.outcomes import (
+    HOURLY_RETENTION_DAYS,
+    hourly_retention_cutoff,
+)
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.downsampled_storage_tiers import Tier
 from snuba.query import SelectedExpression
@@ -117,21 +121,20 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
     def _use_daily(self, in_msg_meta: RequestMeta) -> bool:
         """Route the outcomes estimate to the daily table when needed.
 
-        The hourly outcomes table only retains ~90 days. Use daily when the
-        requested window is longer than that *or* starts far enough back that
-        hourly data may already have been evicted. The 1-day buffer matches
-        OutcomesStorageSelector.
+        The hourly outcomes table keeps Monday partitions until every row in
+        the week has passed the 90-day TTL. Use daily when the requested
+        window is longer than that *or* starts before the oldest surviving
+        hourly partition.
         """
         if in_msg_meta.end_timestamp.seconds < in_msg_meta.start_timestamp.seconds:
             return False
         seconds_delta = in_msg_meta.end_timestamp.seconds - in_msg_meta.start_timestamp.seconds
         duration = timedelta(seconds=seconds_delta)
-        if duration.days > 90:
+        if duration.days > HOURLY_RETENTION_DAYS:
             return True
 
         start = datetime.fromtimestamp(in_msg_meta.start_timestamp.seconds, tz=UTC)
-        hourly_cutoff = datetime.now(UTC) - timedelta(days=90) + timedelta(days=1)
-        return start <= hourly_cutoff
+        return start < hourly_retention_cutoff()
 
     def get_item_types_in_query(
         self, routing_context: RoutingContext

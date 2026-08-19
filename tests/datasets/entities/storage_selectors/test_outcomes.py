@@ -5,7 +5,11 @@ import pytest
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.entities.storage_selectors.outcomes import OutcomesStorageSelector
+from snuba.datasets.entities.storage_selectors.outcomes import (
+    HOURLY_RETENTION,
+    OutcomesStorageSelector,
+    hourly_retention_cutoff,
+)
 from snuba.datasets.storage import Storage
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -23,15 +27,15 @@ OUTCOMES_ENTITY = Entity(
 DAILY = get_storage(StorageKey.OUTCOMES_DAILY)
 HOURLY = get_storage(StorageKey.OUTCOMES_HOURLY)
 
-# Frozen so cutoff / boundary cases do not drift with wall-clock time.
-# Cutoff is now - 90d + 1d = now - 89d (inclusive).
+# Frozen Thursday so the Monday-aligned cutoff is deterministic.
+# now - 90d = 2026-01-23 (Friday) -> toMonday = 2026-01-19.
 _NOW = datetime(2026, 4, 23, 12, 0, 0, tzinfo=UTC)
-_CUTOFF = _NOW - timedelta(days=89)
+_CUTOFF = hourly_retention_cutoff(_NOW)
 _OLD_START = _NOW - timedelta(days=120)
-_OLD_END = _NOW - timedelta(days=90)
+_OLD_END = _NOW - HOURLY_RETENTION
 _RECENT_START = _NOW - timedelta(days=30)
 _RECENT_END = _NOW - timedelta(days=1)
-_JUST_INSIDE_HOURLY = _CUTOFF + timedelta(seconds=1)
+_JUST_BEFORE_CUTOFF = _CUTOFF - timedelta(seconds=1)
 _NAIVE_OLD_START = datetime(2025, 12, 24, 12, 0, 0)  # 120 days before _NOW, no tz
 
 
@@ -135,19 +139,19 @@ TIMESTAMP_CASES = [
         HOURLY,
         id="recent_range_non_billing_hourly",
     ),
-    # Inclusive cutoff: start == now - 89d routes to daily
+    # Start on the oldest surviving Monday partition stays on hourly
     pytest.param(
         _query_with_timestamps(_CUTOFF, _NOW),
         HTTPQuerySettings(referrer="outcomes.timeseries"),
-        DAILY,
-        id="cutoff_inclusive_daily",
-    ),
-    # Just inside the buffered hourly window stays on hourly
-    pytest.param(
-        _query_with_timestamps(_JUST_INSIDE_HOURLY, _NOW),
-        HTTPQuerySettings(referrer="outcomes.timeseries"),
         HOURLY,
-        id="just_inside_hourly",
+        id="cutoff_monday_hourly",
+    ),
+    # Anything before that Monday is missing from hourly
+    pytest.param(
+        _query_with_timestamps(_JUST_BEFORE_CUTOFF, _NOW),
+        HTTPQuerySettings(referrer="outcomes.timeseries"),
+        DAILY,
+        id="before_cutoff_daily",
     ),
     # SNQL datetime literals are naive; still route on time range
     pytest.param(
@@ -173,9 +177,9 @@ def test_storage_selector_with_timestamps(
     """
     Hybrid routing: time-range check takes priority over referrer.
 
-    - Query start at or beyond the buffered 90-day cutoff -> daily.
-    - Query start inside the hourly window + billing referrer -> daily.
-    - Query start inside the hourly window + non-billing referrer -> hourly.
+    - Query start before toMonday(now - 90d) -> daily.
+    - Query start on or after that Monday + billing referrer -> daily.
+    - Query start on or after that Monday + non-billing referrer -> hourly.
     """
     mock_datetime.now.return_value = _NOW  # type: ignore[attr-defined]
     assert _select(query, settings) == expected_storage
