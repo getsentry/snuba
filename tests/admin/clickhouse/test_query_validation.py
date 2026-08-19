@@ -70,6 +70,29 @@ def test_table_aliased_as_left_does_not_drop_joined_tables() -> None:
         )
 
 
+def test_array_join_does_not_drop_dotted_disallowed_table() -> None:
+    # Discarding every dotted alias would hide default.secrets after ARRAY JOIN.
+    with pytest.raises(InvalidCustomQuery):
+        validate_ro_query(
+            "SELECT * FROM my_table, default.secrets ARRAY JOIN tags.key AS k",
+            allowed_tables={"my_table"},
+        )
+    with pytest.raises(InvalidCustomQuery):
+        validate_ro_query(
+            "SELECT * FROM default.secrets ARRAY JOIN tags.key AS k",
+            allowed_tables={"my_table"},
+        )
+
+
+def test_backtick_array_join_alias_does_not_drop_dotted_table() -> None:
+    # `` `array join` `` is an identifier, not an ARRAY JOIN clause.
+    with pytest.raises(InvalidCustomQuery):
+        validate_ro_query(
+            "SELECT * FROM db.disallowed AS `array join`",
+            allowed_tables={"my_table"},
+        )
+
+
 def test_replace_functions_allowed() -> None:
     # ClickHouse replace* functions should be allowed in read-only queries
     validate_ro_query("SELECT replaceAll(message, 'foo', 'bar') FROM my_table")

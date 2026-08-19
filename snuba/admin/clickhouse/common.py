@@ -267,7 +267,7 @@ def get_ro_clusterless_node_connection(
 def _end_of_sql_string_literal(sql_query: str, start: int) -> int | None:
     """Return the index just past a string literal that starts at ``start``.
 
-    ``start`` must point at the opening ``'`` or ``"``. Walks forward handling:
+    ``start`` must point at the opening ``'``, ``"``, or backtick. Walks forward handling:
     - backslash escapes (``\'``, ``\"``)
     - SQL-style doubled quotes (``''``, ``""``)
 
@@ -343,6 +343,70 @@ def _strip_sql_string_literals(sql_query: str) -> str:
     return "".join(out)
 
 
+def _strip_quoted_spans(sql_query: str) -> str:
+    """Blank quoted spans so keyword scans cannot match inside identifiers."""
+    out: list[str] = []
+    i = 0
+    n = len(sql_query)
+    while i < n:
+        ch = sql_query[i]
+        if ch in ("'", '"', "`"):
+            end = _end_of_sql_string_literal(sql_query, i)
+            if end is None:
+                out.append(sql_query[i:])
+                break
+            out.append(" ")
+            i = end
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+_SQL_TOKEN_RE = re.compile(r"[a-z_]+|[^\s]", re.IGNORECASE)
+_AS_SPLIT_RE = re.compile(r"\s+as\s+", re.IGNORECASE)
+_ARRAY_JOIN_TAIL_RE = re.compile(
+    r"\s+(.+?)(?=\s+(?:prewhere|where|group|order|limit|settings|having|union|except|intersect)\b|$)",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _array_join_clause_start(sql_query: str) -> int | None:
+    """Offset of a real ARRAY JOIN keyword, ignoring ``AS array JOIN`` aliases."""
+    tokens = list(_SQL_TOKEN_RE.finditer(_strip_quoted_spans(sql_query)))
+    for i, tok in enumerate(tokens):
+        word = tok.group(0).lower()
+        prev = tokens[i - 1].group(0).lower() if i else ""
+        nxt = tokens[i + 1].group(0).lower() if i + 1 < len(tokens) else ""
+        if word == "array" and nxt == "join" and prev != "as":
+            return tokens[i + 1].end()
+        if word == "left" and nxt == "array":
+            after = tokens[i + 2].group(0).lower() if i + 2 < len(tokens) else ""
+            if after == "join":
+                return tokens[i + 2].end()
+    return None
+
+
+def _array_join_columns(sql_query: str) -> set[str]:
+    """Column refs from a real ARRAY JOIN clause, not identifier names.
+
+    sql_metadata reports those columns as tables. Only those names should be
+    removed from the allowlist set; a dotted database.table must stay.
+    """
+    start = _array_join_clause_start(sql_query)
+    if start is None:
+        return set()
+    match = _ARRAY_JOIN_TAIL_RE.match(_strip_quoted_spans(sql_query), start)
+    if match is None:
+        return set()
+    columns: set[str] = set()
+    for part in match.group(1).split(","):
+        expr = _AS_SPLIT_RE.split(part, maxsplit=1)[0].strip()
+        if expr:
+            columns.add(expr.lower())
+    return columns
+
+
 def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) -> None:
     """
     Validates that the query is a safe read-only query.
@@ -389,14 +453,11 @@ def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) ->
     if parsed.query_type != QueryType.SELECT:
         raise InvalidCustomQuery("Only SELECT queries are allowed")
 
-    # sql_metadata treats ARRAY JOIN columns as tables. Only strip dotted
-    # column refs, and only when the query actually contains ARRAY JOIN —
-    # aliasing a table as `array`/`left` must not drop other JOIN tables.
+    # sql_metadata treats ARRAY JOIN columns as tables. Strip only the
+    # column refs from a real ARRAY JOIN clause — not every dotted alias,
+    # and not a table aliased as ``array`` / `` `array join` ``.
     tables_set = set(parsed.tables)
-    if re.search(r"\b(?:left\s+)?array\s+join\b", lowered):
-        for value in parsed.tables_aliases.values():
-            if "." in value:
-                tables_set.discard(value)
+    tables_set.difference_update(_array_join_columns(sql_query))
 
     if allowed_tables and not tables_set.issubset(allowed_tables):
         raise InvalidCustomQuery(
