@@ -61,6 +61,7 @@ async fn test_eap_pipeline() {
 
     let pipeline = EapPipeline::new(
         ProcessorStage::new(processor, ProcessorConfig::default()),
+        1, // processing_concurrency
         DlqHandler::new(
             dlq_producer,
             TopicOrPartition::Topic(Topic::new("snuba-dead-letter-items")),

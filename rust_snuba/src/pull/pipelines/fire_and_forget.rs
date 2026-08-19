@@ -21,6 +21,7 @@ use crate::pull::stages::processor_stage::ProcessorStage;
 /// replays, group_attributes.
 pub struct FireAndForgetPipeline {
     processor: ProcessorStage,
+    processing_concurrency: usize,
     rejection_handler: LogHandler,
     batch: BatchStage<PipelineBatch, PipelineBatchBuffer>,
     max_batch_time: Option<Duration>,
@@ -32,6 +33,7 @@ pub struct FireAndForgetPipeline {
 impl FireAndForgetPipeline {
     pub fn new(
         processor: ProcessorStage,
+        processing_concurrency: usize,
         batch: BatchStage<PipelineBatch, PipelineBatchBuffer>,
         max_batch_time: Option<Duration>,
         idle_timeout: Option<Duration>,
@@ -40,6 +42,7 @@ impl FireAndForgetPipeline {
     ) -> Self {
         Self {
             processor,
+            processing_concurrency,
             rejection_handler: LogHandler,
             batch,
             max_batch_time,
@@ -58,7 +61,7 @@ impl Pipeline for FireAndForgetPipeline {
         source: impl Stream<Item = StageResult<KafkaPayload>> + 'a,
     ) -> impl Stream<Item = StageResult<BatchMetadata>> + 'a {
         source
-            .apply(&self.processor)
+            .apply_concurrent(&self.processor, self.processing_concurrency)
             .apply_with_timer(&self.batch, self.idle_timeout, self.max_batch_time)
             .apply_concurrent(&self.writer, self.writer_concurrency)
             .on_reject(&self.rejection_handler)

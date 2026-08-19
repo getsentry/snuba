@@ -21,6 +21,7 @@ use crate::pull::stages::processor_stage::ProcessorStage;
 /// Covers: eap_items, generic_metrics (same shape).
 pub struct EapPipeline {
     processor: ProcessorStage,
+    processing_concurrency: usize,
     dlq_handler: DlqHandler,
     batch: BatchStage<PipelineBatch, PipelineBatchBuffer>,
     max_batch_time: Option<Duration>,
@@ -34,6 +35,7 @@ pub struct EapPipeline {
 impl EapPipeline {
     pub fn new(
         processor: ProcessorStage,
+        processing_concurrency: usize,
         dlq_handler: DlqHandler,
         batch: BatchStage<PipelineBatch, PipelineBatchBuffer>,
         max_batch_time: Option<Duration>,
@@ -45,6 +47,7 @@ impl EapPipeline {
     ) -> Self {
         Self {
             processor,
+            processing_concurrency,
             dlq_handler,
             batch,
             max_batch_time,
@@ -65,7 +68,7 @@ impl Pipeline for EapPipeline {
         source: impl Stream<Item = StageResult<KafkaPayload>> + 'a,
     ) -> impl Stream<Item = StageResult<BatchMetadata>> + 'a {
         source
-            .apply(&self.processor)
+            .apply_concurrent(&self.processor, self.processing_concurrency)
             .apply_with_timer(&self.batch, self.idle_timeout, self.max_batch_time)
             .apply_concurrent(&self.writer, self.writer_concurrency)
             .apply(&self.commit_log)

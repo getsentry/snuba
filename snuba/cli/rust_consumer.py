@@ -304,6 +304,7 @@ def rust_consumer(
             auto_offset_reset,
             no_strict_offset_reset,
             consumer_config_raw,
+            concurrency or 1,
             clickhouse_concurrency or 2,
             max_poll_interval_ms,
             dry_run or 0,

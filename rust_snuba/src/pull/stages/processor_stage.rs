@@ -30,17 +30,28 @@ impl Stage for ProcessorStage {
         &self,
         envelope: PipelineEnvelope<KafkaPayload>,
     ) -> StageResult<PipelineBatch> {
-        let metadata = KafkaMessageMetadata {
-            partition: envelope.metadata.partition.index,
-            offset: envelope.metadata.offset,
-            timestamp: envelope.metadata.timestamp,
-        };
+        let processor = self.processor;
+        let config = self.config.clone();
+        let partition = envelope.metadata.partition.index;
+        let offset = envelope.metadata.offset;
+        let timestamp = envelope.metadata.timestamp;
+        let payload = envelope.payload;
 
-        match (self.processor)(envelope.payload, metadata, &self.config) {
-            Ok(batch) if batch.rows.num_rows == 0 => StageResult::Drop {
+        let result = tokio::task::spawn_blocking(move || {
+            let metadata = KafkaMessageMetadata {
+                partition,
+                offset,
+                timestamp,
+            };
+            processor(payload, metadata, &config)
+        })
+        .await;
+
+        match result {
+            Ok(Ok(batch)) if batch.rows.num_rows == 0 => StageResult::Drop {
                 metadata: envelope.metadata,
             },
-            Ok(batch) => {
+            Ok(Ok(batch)) => {
                 let pipeline_batch = PipelineBatch::from_insert_batch(
                     batch,
                     envelope.metadata.partition.index,
@@ -53,9 +64,13 @@ impl Stage for ProcessorStage {
                     envelope.raw,
                 ))
             }
-            Err(e) => StageResult::Fail(Box::new(std::io::Error::new(
+            Ok(Err(e)) => StageResult::Fail(Box::new(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 e.to_string(),
+            ))),
+            Err(join_err) => StageResult::Fail(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("processor task panicked: {}", join_err),
             ))),
         }
     }

@@ -69,6 +69,7 @@ async fn test_fire_and_forget_pipeline(#[case] processor_name: &str, #[case] top
 
     let pipeline = FireAndForgetPipeline::new(
         ProcessorStage::new(processor, ProcessorConfig::default()),
+        1, // processing_concurrency
         BatchStage::new(PipelineBatchBuffer::new(), 2, u64::MAX),
         Some(Duration::from_secs(2)),
         None,
