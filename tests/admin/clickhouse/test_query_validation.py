@@ -132,6 +132,29 @@ def test_table_functions_rejected_via_explain() -> None:
         validate_ro_query("SELECT * FROM merge('default', '.*')", connection=conn)
 
 
+def test_empty_explain_fails_closed_with_allowlist() -> None:
+    conn = Mock()
+    conn.execute_explain.return_value = ClickhouseResult(results=[])
+    with pytest.raises(InvalidCustomQuery, match="Invalid FROM clause"):
+        validate_ro_query(
+            "SELECT * FROM secrets FORMAT Null",
+            allowed_tables={"my_table"},
+            connection=conn,
+        )
+
+
+def test_explain_strips_string_literals() -> None:
+    conn = _explain_connection("my_table")
+    validate_ro_query(
+        "SELECT * FROM my_table WHERE email = 'user@example.com'",
+        allowed_tables={"my_table"},
+        connection=conn,
+    )
+    explained = conn.execute_explain.call_args[0][0]
+    assert "user@example.com" not in explained
+    assert "EXPLAIN QUERY TREE" in explained
+
+
 def test_array_join_without_explain_fails_closed() -> None:
     # Offline, sql_metadata still reports ARRAY JOIN columns as tables.
     with pytest.raises(InvalidCustomQuery):

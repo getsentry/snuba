@@ -369,7 +369,9 @@ def _tables_from_query_tree(explain_output: str) -> set[str]:
 
 
 def _tables_from_explain(sql_query: str, connection: ClickhousePool) -> set[str]:
-    sql = sql_query.strip().rstrip(";")
+    # Literals are not needed to resolve tables. Drop them so rejected admin SQL
+    # does not land in Sentry DB spans from execute_explain.
+    sql = _strip_sql_string_literals(sql_query).strip().rstrip(";")
     result = connection.execute_explain(f"EXPLAIN QUERY TREE {sql}")
     text = "\n".join(str(row[0]) for row in result.results if row)
     return _tables_from_query_tree(text)
@@ -438,10 +440,15 @@ def validate_ro_query(
     else:
         return
 
-    if allowed_tables and not tables_set.issubset(allowed_tables):
-        raise InvalidCustomQuery(
-            f"Invalid FROM clause, only the following tables are allowed: {allowed_tables}"
-        )
+    if allowed_tables:
+        if not tables_set:
+            raise InvalidCustomQuery(
+                f"Invalid FROM clause, only the following tables are allowed: {allowed_tables}"
+            )
+        if not tables_set.issubset(allowed_tables):
+            raise InvalidCustomQuery(
+                f"Invalid FROM clause, only the following tables are allowed: {allowed_tables}"
+            )
 
 
 def format_predefined_sql(sql: str) -> str:
