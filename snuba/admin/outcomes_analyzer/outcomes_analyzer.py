@@ -41,9 +41,9 @@ def run_outcomes_query(query: str, user: str) -> ClickhouseResult:
     Validates, audit logs, and executes a read-only query against outcomes
     tables. `user` is required by the audit_log decorator.
     """
-    validate_ro_query(sql_query=query, allowed_tables=_allowed_tables())
     connection = get_ro_query_node_connection(
         StorageKey("outcomes_hourly").value,
         ClickhouseClientSettings.CARDINALITY_ANALYZER,
     )
+    validate_ro_query(sql_query=query, allowed_tables=_allowed_tables(), connection=connection)
     return _stringify_result(connection.execute(query=query, with_column_types=True))

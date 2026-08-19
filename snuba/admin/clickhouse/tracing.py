@@ -81,14 +81,13 @@ class TraceOutput:
 def run_query_and_get_trace(
     storage_name: str, query: str, settings: Mapping[str, Any] | None = None
 ) -> TraceOutput:
-    validate_ro_query(query)
+    connection = get_ro_query_node_connection(storage_name, ClickhouseClientSettings.TRACING)
+    validate_ro_query(query, connection=connection)
     query_without_settings, sql_settings, apply_query_limit = _extract_settings_clause(query)
 
     execute_settings: dict[str, Any] = dict(settings or {})
     # SQL SETTINGS win over request defaults for the same key.
     execute_settings.update(sql_settings)
-
-    connection = get_ro_query_node_connection(storage_name, ClickhouseClientSettings.TRACING)
     # Prefer clickhouse-connect's client-side query_limit. Pass it per execute so
     # concurrent requests cannot race on a shared cached pool attribute. Native
     # pools are left alone. Skip when SETTINGS remains in SQL: the driver appends

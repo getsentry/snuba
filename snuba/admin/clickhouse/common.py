@@ -5,6 +5,7 @@ import re
 from sql_metadata import Parser, QueryType  # type: ignore[import-untyped]
 
 from snuba import settings
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.pool import ClickhousePool
 from snuba.clusters.cluster import (
     DEFAULT_CLICKHOUSE_HTTP_PORT,
@@ -343,76 +344,48 @@ def _strip_sql_string_literals(sql_query: str) -> str:
     return "".join(out)
 
 
-def _strip_quoted_spans(sql_query: str) -> str:
-    """Blank quoted spans so keyword scans cannot match inside identifiers."""
-    out: list[str] = []
-    i = 0
-    n = len(sql_query)
-    while i < n:
-        ch = sql_query[i]
-        if ch in ("'", '"', "`"):
-            end = _end_of_sql_string_literal(sql_query, i)
-            if end is None:
-                out.append(sql_query[i:])
-                break
-            out.append(" ")
-            i = end
+_TABLE_NAME_RE = re.compile(r"table_name:\s*(\S+)", re.IGNORECASE)
+
+
+def _tables_from_query_tree(explain_output: str) -> set[str]:
+    """Tables ClickHouse reports for a SELECT, excluding ARRAY JOIN columns."""
+    tables: set[str] = set()
+    for raw_line in explain_output.splitlines():
+        line = raw_line.strip()
+        if line.startswith("TABLE_FUNCTION") or "table_function_name:" in line.lower():
+            raise InvalidCustomQuery("table functions are not allowed in the query")
+        match = _TABLE_NAME_RE.search(line)
+        if match is None:
             continue
-        out.append(ch)
-        i += 1
-    return "".join(out)
+        tables.add(match.group(1).rsplit(".", 1)[-1])
+    return tables
 
 
-_SQL_TOKEN_RE = re.compile(r"[a-z_]+|[^\s]", re.IGNORECASE)
-_AS_SPLIT_RE = re.compile(r"\s+as\s+", re.IGNORECASE)
-_ARRAY_JOIN_TAIL_RE = re.compile(
-    r"\s+(.+?)(?=\s+(?:prewhere|where|group|order|limit|settings|having|union|except|intersect)\b|$)",
-    re.IGNORECASE | re.DOTALL,
-)
+def _tables_from_explain(sql_query: str, connection: ClickhousePool) -> set[str]:
+    sql = sql_query.strip().rstrip(";")
+    try:
+        result = connection.execute_explain(
+            f"EXPLAIN QUERY TREE {sql} SETTINGS allow_experimental_analyzer = 1"
+        )
+    except ClickhouseError as err:
+        raise InvalidCustomQuery(err.message or "Invalid query") from err
+    text = "\n".join(str(row[0]) for row in result.results if row)
+    return _tables_from_query_tree(text)
 
 
-def _array_join_clause_start(sql_query: str) -> int | None:
-    """Offset of a real ARRAY JOIN keyword, ignoring ``AS array JOIN`` aliases."""
-    tokens = list(_SQL_TOKEN_RE.finditer(_strip_quoted_spans(sql_query)))
-    for i, tok in enumerate(tokens):
-        word = tok.group(0).lower()
-        prev = tokens[i - 1].group(0).lower() if i else ""
-        nxt = tokens[i + 1].group(0).lower() if i + 1 < len(tokens) else ""
-        if word == "array" and nxt == "join" and prev != "as":
-            return tokens[i + 1].end()
-        if word == "left" and nxt == "array":
-            after = tokens[i + 2].group(0).lower() if i + 2 < len(tokens) else ""
-            if after == "join":
-                return tokens[i + 2].end()
-    return None
-
-
-def _array_join_columns(sql_query: str) -> set[str]:
-    """Column refs from a real ARRAY JOIN clause, not identifier names.
-
-    sql_metadata reports those columns as tables. Only those names should be
-    removed from the allowlist set; a dotted database.table must stay.
-    """
-    start = _array_join_clause_start(sql_query)
-    if start is None:
-        return set()
-    match = _ARRAY_JOIN_TAIL_RE.match(_strip_quoted_spans(sql_query), start)
-    if match is None:
-        return set()
-    columns: set[str] = set()
-    for part in match.group(1).split(","):
-        expr = _AS_SPLIT_RE.split(part, maxsplit=1)[0].strip()
-        if expr:
-            columns.add(expr.lower())
-    return columns
-
-
-def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) -> None:
+def validate_ro_query(
+    sql_query: str,
+    allowed_tables: set[str] | None = None,
+    connection: ClickhousePool | None = None,
+) -> None:
     """
     Validates that the query is a safe read-only query.
 
-    If allowed_tables is provided, ensures the 'from' clause contains
-    an allowed table. All tables are allowed otherwise.
+    If allowed_tables is provided, ensures the query only reads those tables.
+    When a connection is given, table names come from ClickHouse EXPLAIN QUERY
+    TREE so ARRAY JOIN columns are not mistaken for tables. Without a
+    connection, sql_metadata is used and ARRAY JOIN columns stay in the set
+    (fail closed).
 
     Raises InvalidCustomQuery if query is invalid or not allowed.
     """
@@ -453,11 +426,13 @@ def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) ->
     if parsed.query_type != QueryType.SELECT:
         raise InvalidCustomQuery("Only SELECT queries are allowed")
 
-    # sql_metadata treats ARRAY JOIN columns as tables. Strip only the
-    # column refs from a real ARRAY JOIN clause — not every dotted alias,
-    # and not a table aliased as ``array`` / `` `array join` ``.
-    tables_set = set(parsed.tables)
-    tables_set.difference_update(_array_join_columns(sql_query))
+    if connection is not None:
+        tables_set = _tables_from_explain(sql_query, connection)
+    else:
+        # sql_metadata reports ARRAY JOIN columns as tables. Without ClickHouse
+        # to resolve them, leave those names in the set so the allowlist fails
+        # closed instead of guessing which dotted names are columns.
+        tables_set = set(parsed.tables)
 
     if allowed_tables and not tables_set.issubset(allowed_tables):
         raise InvalidCustomQuery(
