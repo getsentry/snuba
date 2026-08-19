@@ -3,12 +3,14 @@ use sentry_arroyo::processing::stream::{PipelineEnvelope, Stage, StageResult};
 
 use crate::config::ProcessorConfig;
 use crate::processors::ProcessingFunction;
-use crate::types::{InsertBatch, KafkaMessageMetadata};
+use crate::pull::batch::pipeline_batch::PipelineBatch;
+use crate::types::KafkaMessageMetadata;
 
 /// Wraps a snuba ProcessingFunction as a pull-based Stage.
 ///
-/// Takes a KafkaPayload, extracts metadata from the envelope,
-/// calls the processor function, and emits the InsertBatch.
+/// Takes a KafkaPayload, calls the processor function, and wraps
+/// the result in a PipelineBatch with commit log offsets from
+/// the envelope's partition/offset.
 pub struct ProcessorStage {
     processor: ProcessingFunction,
     config: ProcessorConfig,
@@ -22,9 +24,12 @@ impl ProcessorStage {
 
 impl Stage for ProcessorStage {
     type In = KafkaPayload;
-    type Out = InsertBatch;
+    type Out = PipelineBatch;
 
-    async fn process(&self, envelope: PipelineEnvelope<KafkaPayload>) -> StageResult<InsertBatch> {
+    async fn process(
+        &self,
+        envelope: PipelineEnvelope<KafkaPayload>,
+    ) -> StageResult<PipelineBatch> {
         let metadata = KafkaMessageMetadata {
             partition: envelope.metadata.partition.index,
             offset: envelope.metadata.offset,
@@ -32,18 +37,22 @@ impl Stage for ProcessorStage {
         };
 
         match (self.processor)(envelope.payload, metadata, &self.config) {
-            Ok(batch) if batch.rows.num_rows == 0 => {
-                // Processor returned empty rows (e.g., filtered message).
-                // Track the offset but don't emit downstream.
-                StageResult::Drop {
-                    metadata: envelope.metadata,
-                }
+            Ok(batch) if batch.rows.num_rows == 0 => StageResult::Drop {
+                metadata: envelope.metadata,
+            },
+            Ok(batch) => {
+                let pipeline_batch = PipelineBatch::from_insert_batch(
+                    batch,
+                    envelope.metadata.partition.index,
+                    envelope.metadata.offset,
+                    envelope.metadata.timestamp,
+                );
+                StageResult::Emit(PipelineEnvelope::new(
+                    pipeline_batch,
+                    envelope.metadata,
+                    envelope.raw,
+                ))
             }
-            Ok(batch) => StageResult::Emit(PipelineEnvelope::new(
-                batch,
-                envelope.metadata,
-                envelope.raw,
-            )),
             Err(e) => StageResult::Fail(Box::new(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 e.to_string(),

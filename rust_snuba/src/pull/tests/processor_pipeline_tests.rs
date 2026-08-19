@@ -8,7 +8,7 @@ use sentry_kafka_schemas::get_schema;
 
 use crate::config::ProcessorConfig;
 use crate::processors::{get_processing_function, ProcessingFunctionType};
-use crate::pull::batch::buffer::InsertBatchBuffer;
+use crate::pull::batch::buffer::PipelineBatchBuffer;
 use crate::pull::stages::clickhouse_writer_stage::ClickHouseWriterStage;
 use crate::pull::stages::processor_stage::ProcessorStage;
 use crate::pull::test_fixtures::writer::MockWriter;
@@ -70,7 +70,7 @@ async fn test_pull_pipeline(#[case] processor_name: &str, #[case] topic: &str) {
     let pipeline = Pipeline::new(
         VecSource::from_payloads(payloads),
         ProcessorStage::new(processor, ProcessorConfig::default()),
-        BatchStage::new(InsertBatchBuffer::new(), 2, u64::MAX),
+        BatchStage::new(PipelineBatchBuffer::new(), 2, u64::MAX),
         Some(Duration::from_secs(2)), // max_batch_time
         None,                         // idle_timeout
         ClickHouseWriterStage::new(Arc::clone(&writer)),
@@ -93,16 +93,14 @@ async fn test_pull_pipeline(#[case] processor_name: &str, #[case] topic: &str) {
 
     for (i, batch) in collector.batches.iter().enumerate() {
         assert!(
-            batch.len() <= 2,
-            "{processor_name}: batch {i} has {} items, expected at most 2",
-            batch.len()
+            batch.rows.num_rows > 0,
+            "{processor_name}: batch {i} has no rows"
         );
-        for (j, insert) in batch.iter().enumerate() {
-            assert!(
-                insert.rows.num_rows > 0,
-                "{processor_name}: batch {i} item {j} has no rows"
-            );
-        }
+        // Verify commit log offsets are populated
+        assert!(
+            !batch.commit_log_offsets.0.is_empty(),
+            "{processor_name}: batch {i} has no commit log offsets"
+        );
     }
 
     // Verify the writer was called

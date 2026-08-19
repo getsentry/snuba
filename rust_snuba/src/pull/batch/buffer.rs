@@ -1,30 +1,39 @@
 use sentry_arroyo::processing::stream::Buffer;
 
-use crate::types::InsertBatch;
+use super::pipeline_batch::PipelineBatch;
 
-/// Buffer for InsertBatch items. Reports byte size from the encoded row data.
-pub struct InsertBatchBuffer {
-    items: Vec<InsertBatch>,
+/// Buffer that merges PipelineBatch items into a single batch.
+/// Concatenates encoded rows and merges commit log offsets + COGS data.
+pub struct PipelineBatchBuffer {
+    batch: Option<PipelineBatch>,
 }
 
-impl InsertBatchBuffer {
+impl PipelineBatchBuffer {
     pub fn new() -> Self {
-        Self { items: Vec::new() }
+        Self { batch: None }
     }
 }
 
-impl Buffer<InsertBatch> for InsertBatchBuffer {
-    fn push(&mut self, item: InsertBatch) -> u64 {
+impl Buffer<PipelineBatch> for PipelineBatchBuffer {
+    type Output = PipelineBatch;
+
+    fn push(&mut self, item: PipelineBatch) -> u64 {
         let bytes = item.rows.encoded_rows.len() as u64;
-        self.items.push(item);
+        match &mut self.batch {
+            Some(existing) => existing.merge(item),
+            None => self.batch = Some(item),
+        }
         bytes
     }
 
     fn len(&self) -> u64 {
-        self.items.len() as u64
+        self.batch
+            .as_ref()
+            .map(|b| b.rows.num_rows as u64)
+            .unwrap_or(0)
     }
 
-    fn flush(&mut self) -> Vec<InsertBatch> {
-        std::mem::take(&mut self.items)
+    fn flush(&mut self) -> PipelineBatch {
+        self.batch.take().unwrap_or_else(|| PipelineBatch::empty())
     }
 }

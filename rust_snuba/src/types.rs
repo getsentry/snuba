@@ -20,7 +20,7 @@ pub struct CommitLogEntry {
 pub struct CommitLogOffsets(pub BTreeMap<u16, CommitLogEntry>);
 
 impl CommitLogOffsets {
-    fn merge(&mut self, other: CommitLogOffsets) {
+    pub(crate) fn merge(&mut self, other: CommitLogOffsets) {
         for (partition, other_entry) in other.0 {
             self.0
                 .entry(partition)
@@ -40,7 +40,7 @@ pub struct CogsData {
 }
 
 impl CogsData {
-    fn merge(&mut self, other: CogsData) {
+    pub(crate) fn merge(&mut self, other: CogsData) {
         for (k, v) in other.data {
             self.data
                 .entry(k)

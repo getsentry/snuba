@@ -3,13 +3,13 @@ use std::time::Instant;
 use sentry_arroyo::processing::stream::{PipelineEnvelope, Stage, StageResult};
 use sentry_arroyo::{counter, gauge, timer};
 
+use crate::pull::batch::pipeline_batch::PipelineBatch;
 use crate::pull::writer::ClickHouseWriter;
-use crate::types::InsertBatch;
 
-/// Stage that writes batched InsertBatch data to ClickHouse.
+/// Stage that writes a PipelineBatch to ClickHouse.
 ///
-/// Receives `Vec<InsertBatch>` from the batch stage, concatenates
-/// their encoded rows, and sends them via the injected writer.
+/// Receives a merged `PipelineBatch` from the batch stage and sends
+/// its encoded rows via the injected writer.
 ///
 /// Generic over the writer — use `ClickhouseClient` for production,
 /// `DryRunWriter` for testing/staging.
@@ -32,22 +32,17 @@ impl<W: ClickHouseWriter> ClickHouseWriterStage<W> {
 }
 
 impl<W: ClickHouseWriter> Stage for ClickHouseWriterStage<W> {
-    type In = Vec<InsertBatch>;
-    type Out = Vec<InsertBatch>;
+    type In = PipelineBatch;
+    type Out = PipelineBatch;
 
     async fn process(
         &self,
-        envelope: PipelineEnvelope<Vec<InsertBatch>>,
-    ) -> StageResult<Vec<InsertBatch>> {
-        // Concatenate all encoded rows from the batch.
-        let mut body = Vec::new();
-        let mut total_rows = 0;
-        for batch in &envelope.payload {
-            body.extend_from_slice(&batch.rows.encoded_rows);
-            total_rows += batch.rows.num_rows;
-        }
+        envelope: PipelineEnvelope<PipelineBatch>,
+    ) -> StageResult<PipelineBatch> {
+        let total_rows = envelope.payload.rows.num_rows;
+        let num_bytes = envelope.payload.rows.encoded_rows.len();
 
-        if body.is_empty() {
+        if num_bytes == 0 {
             tracing::debug!("skipping write of empty payload ({} rows)", total_rows);
             return StageResult::Emit(envelope);
         }
@@ -57,9 +52,11 @@ impl<W: ClickHouseWriter> Stage for ClickHouseWriterStage<W> {
             return StageResult::Emit(envelope);
         }
 
-        let num_bytes = body.len();
         let write_start = Instant::now();
 
+        // Clone the encoded rows for the writer — the envelope retains
+        // the batch with metadata for downstream handlers.
+        let body = envelope.payload.rows.encoded_rows.clone();
         let result = self.writer.write(body).await;
 
         timer!(
