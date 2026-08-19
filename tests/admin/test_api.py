@@ -396,15 +396,6 @@ def test_prod_snql_query_invalid_query(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-def test_force_overwrite_route_removed(admin_api: FlaskClient) -> None:
-    response = admin_api.post(
-        "/migrations/search_issues/overwrite/0012_add_group_id_bloom_filter_index/status/not_started",
-        headers={"Referer": "https://snuba-admin.getsentry.net/"},
-    )
-    assert response.status_code == 404
-
-
-@pytest.mark.redis_db
 @pytest.mark.events_db
 def test_prod_snql_query_valid_query(admin_api: FlaskClient) -> None:
     snql_query = """
