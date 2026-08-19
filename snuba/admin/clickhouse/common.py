@@ -344,7 +344,15 @@ def _strip_sql_string_literals(sql_query: str) -> str:
     return "".join(out)
 
 
-_TABLE_NAME_RE = re.compile(r"table_name:\s*([^\s,]+)", re.IGNORECASE)
+def _field_after(line: str, key: str) -> str | None:
+    marker = f"{key}:"
+    idx = line.lower().find(marker)
+    if idx == -1:
+        return None
+    rest = line[idx + len(marker) :].lstrip()
+    for sep in (",", " ", "\t"):
+        rest = rest.split(sep, 1)[0]
+    return rest or None
 
 
 def _tables_from_query_tree(explain_output: str) -> set[str]:
@@ -352,12 +360,12 @@ def _tables_from_query_tree(explain_output: str) -> set[str]:
     tables: set[str] = set()
     for raw_line in explain_output.splitlines():
         line = raw_line.strip()
-        if line.startswith("TABLE_FUNCTION") or "table_function_name:" in line.lower():
+        if line.startswith("TABLE_FUNCTION") or _field_after(line, "table_function_name"):
             raise InvalidCustomQuery("table functions are not allowed in the query")
-        match = _TABLE_NAME_RE.search(line)
-        if match is None:
+        name = _field_after(line, "table_name")
+        if name is None:
             continue
-        tables.add(match.group(1).rsplit(".", 1)[-1])
+        tables.add(name.rsplit(".", 1)[-1])
     return tables
 
 
