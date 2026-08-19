@@ -254,8 +254,10 @@ impl<TResult: Clone, TNext: Clone> MessageProcessor<TResult, TNext> {
 
             counter!("invalid_message");
 
-            let error: &dyn std::error::Error = error.as_ref();
-            tracing::error!(error, "Failed processing message");
+            tracing::error!(
+                error = %error_chain(error.as_ref()),
+                "Failed processing message"
+            );
 
             RunTaskError::InvalidMessage(invalid_msg)
         });
@@ -350,14 +352,24 @@ fn _validate_schema(
 
     counter!("schema_validation.failed");
 
-    let err: &dyn std::error::Error = &error;
-    tracing::warn!(error = err, "Validation error");
+    tracing::warn!(error = %error_chain(&error), "Validation error");
 
     if !enforce_schema {
         Ok(())
     } else {
         Err(error)
     }
+}
+
+fn error_chain(error: &dyn std::error::Error) -> String {
+    let mut message = error.to_string();
+    let mut source = error.source();
+    while let Some(err) = source {
+        message.push_str(": ");
+        message.push_str(&err.to_string());
+        source = err.source();
+    }
+    message
 }
 
 static IP_REGEX: LazyLock<Regex> = LazyLock::new(|| {
@@ -400,6 +412,24 @@ mod tests {
 
     use crate::types::{InsertBatch, RowData};
     use crate::Noop;
+
+    #[test]
+    fn error_chain_includes_source() {
+        let err: anyhow::Error =
+            SchemaError::InvalidMessage(sentry_kafka_schemas::ValidationError::SchemaViolation(
+                "'$.foo' is a required property".to_string(),
+            ))
+            .into();
+        let message = error_chain(err.as_ref());
+        assert!(
+            message.contains("Invalid message"),
+            "missing outer error: {message}"
+        );
+        assert!(
+            message.contains("is a required property"),
+            "missing validation cause: {message}"
+        );
+    }
 
     #[test]
     fn validate_schema() {
