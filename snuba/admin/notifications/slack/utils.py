@@ -8,6 +8,8 @@ from snuba.admin.audit_log.action import MIGRATION_ACTIONS, AuditLogAction
 def build_blocks(data: Any, action: AuditLogAction, timestamp: str, user: str) -> list[Any]:
     if action in MIGRATION_ACTIONS:
         text = build_migration_run_text(data, action)
+    elif action is AuditLogAction.RAN_MANUAL_JOB:
+        text = build_manual_job_run_text(data)
     else:
         text = f"{action.value}: {data}"
 
@@ -42,6 +44,16 @@ def build_migration_run_text(data: Any, action: AuditLogAction) -> str | None:
         return f":bangbang: *[FAILED]* :bangbang: {text}"
 
     return f":warning: {text}"
+
+
+def build_manual_job_run_text(data: Any) -> str:
+    job_kind = "ad hoc" if data.get("adhoc") == "true" else "one-shot"
+    status = data.get("status", "unknown")
+    prefix = ":bangbang: *[FAILED]* :bangbang:" if status == "failed" else ":warning:"
+    return (
+        f"{prefix} *Manual job ({job_kind}):* `{data.get('job_type')}` "
+        f"(`{data.get('job_id')}`, status={status}, params={data.get('params')})"
+    )
 
 
 def build_context(
