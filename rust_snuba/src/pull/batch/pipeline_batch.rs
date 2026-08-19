@@ -36,9 +36,14 @@ impl PipelineBatch {
         commit_log_offsets.0.insert(
             partition,
             CommitLogEntry {
-                offset,
+                // offset + 1: Kafka commit convention — the next offset to consume.
+                // Matches the push model's processor (strategies/processor.rs:62).
+                offset: offset + 1,
                 orig_message_ts: timestamp,
-                received_p99: vec![timestamp],
+                // Use origin_timestamp from the InsertBatch (sentry receive time),
+                // not the Kafka message timestamp. Matches the push model
+                // (strategies/processor.rs:64).
+                received_p99: batch.origin_timestamp.into_iter().collect(),
             },
         );
 

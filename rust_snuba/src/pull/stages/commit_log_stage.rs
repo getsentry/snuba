@@ -56,6 +56,10 @@ impl Stage for CommitLogStage {
         for (partition, entry) in &envelope.payload.commit_log_offsets.0 {
             let mut received_p99_values = entry.received_p99.clone();
             received_p99_values.sort();
+            // NOTE: This p99 calculation is copied from the push model
+            // (strategies/commit_log.rs:117). The formula `(len * 0.99)`
+            // arguably computes P100 for small arrays, but we match the
+            // existing behavior for consistency.
             let received_p99 = received_p99_values
                 .get((received_p99_values.len() as f64 * 0.99) as usize)
                 .map(|t| t.timestamp_millis() as f64 / 1000.0);
