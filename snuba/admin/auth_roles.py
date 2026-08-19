@@ -77,6 +77,7 @@ TOOL_RESOURCES = {
     "snql-to-sql": ToolResource("snql-to-sql"),
     "tracing": ToolResource("tracing"),
     "cardinality-analyzer": ToolResource("cardinality-analyzer"),
+    "outcomes-analyzer": ToolResource("outcomes-analyzer"),
     "production-queries": ToolResource("production-queries"),
     "system-queries": ToolResource("system-queries"),
     "sudo-system-queries": ToolResource("system-queries"),
@@ -85,6 +86,7 @@ TOOL_RESOURCES = {
     "querylog": ToolResource("querylog"),
     "rpc-endpoints": ToolResource("rpc-endpoints"),
     "clusters": ToolResource("clusters"),
+    "eap-stats": ToolResource("eap-stats"),
     "all": ToolResource("all"),
 }
 
@@ -168,8 +170,10 @@ ROLES = {
                     TOOL_RESOURCES["clickhouse-migrations"],
                     TOOL_RESOURCES["snuba-explain"],
                     TOOL_RESOURCES["querylog"],
+                    TOOL_RESOURCES["outcomes-analyzer"],
                     TOOL_RESOURCES["rpc-endpoints"],
                     TOOL_RESOURCES["clusters"],
+                    TOOL_RESOURCES["eap-stats"],
                 ]
             )
         },
@@ -177,6 +181,10 @@ ROLES = {
     "CardinalityAnalyzer": Role(
         name="cardinality-analyzer",
         actions={InteractToolAction([TOOL_RESOURCES["cardinality-analyzer"]])},
+    ),
+    "OutcomesAnalyzer": Role(
+        name="outcomes-analyzer",
+        actions={InteractToolAction([TOOL_RESOURCES["outcomes-analyzer"]])},
     ),
     "AllMigrationsExecutor": Role(
         name="AllMigrationsExecutor",

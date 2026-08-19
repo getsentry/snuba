@@ -227,15 +227,15 @@ class TestSubscriptionScheduler:
 
     @pytest.mark.redis_db
     @override_options("snuba", {"subscription_primary_task_builder": "immediate"})
-    def test_generic_metrics_gauges_does_not_error(self) -> None:
+    def test_generic_metrics_counters_does_not_error(self) -> None:
         subscription = Subscription(
             SubscriptionIdentifier(self.partition_id, uuid.uuid4()),
             SnQLSubscriptionData(
                 project_id=1,
-                query="MATCH (generic_metrics_gauges) SELECT max(value) AS value BY project_id, tags[3] WHERE org_id = 1 AND project_id = 1 AND metric_id = 7 AND tags[3] IN array(6,7)",
+                query="MATCH (generic_metrics_counters) SELECT sum(value) AS value BY project_id, tags[3] WHERE org_id = 1 AND project_id = 1 AND metric_id = 7 AND tags[3] IN array(6,7)",
                 time_window_sec=60,
                 resolution_sec=int(timedelta(minutes=1).total_seconds()),
-                entity=get_entity(EntityKey.GENERIC_METRICS_GAUGES),
+                entity=get_entity(EntityKey.GENERIC_METRICS_COUNTERS),
                 metadata={"organization": 1},
             ),
         )
@@ -249,12 +249,12 @@ class TestSubscriptionScheduler:
                 ScheduledSubscriptionTask(
                     self.now + timedelta(minutes=-10 + i),
                     SubscriptionWithMetadata(
-                        EntityKey.GENERIC_METRICS_GAUGES,
+                        EntityKey.GENERIC_METRICS_COUNTERS,
                         subscription,
                         self.build_tick(start, end).offsets.upper,
                     ),
                 )
                 for i in range(10)
             ],
-            entity_key=EntityKey.GENERIC_METRICS_GAUGES,
+            entity_key=EntityKey.GENERIC_METRICS_COUNTERS,
         )

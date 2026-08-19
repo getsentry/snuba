@@ -14,13 +14,13 @@ import structlog
 from structlog.types import EventDict, WrappedLogger
 
 from snuba import environment, util
-from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.optimize.optimize_scheduler import OptimizeScheduler
 from snuba.clickhouse.optimize.optimize_tracker import (
     NoOptimizedStateException,
     OptimizedPartitionTracker,
 )
 from snuba.clickhouse.optimize.util import MergeInfo, get_num_threads
+from snuba.clickhouse.pool import ClickhousePool
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.settings import (
@@ -313,9 +313,9 @@ def optimize_partition_runner(
     raise an exception which would be propagated to the caller.
 
     Details of execution flow:
-    1. start by reading configured_num_threads from the Snuba Admin runtime config
+    1. start by reading configured_num_threads from the optimize_parallel_threads sentry-option
     2. dispatches configured_num_threads threads to optimize configured_num_threads partitions (1 partition per thread)
-    3. as soon as one thread finishes, check configured_num_threads from runtime config again
+    3. as soon as one thread finishes, check configured_num_threads from the option again
     4. if configured_num_threads > number of currently active threads, dispatch more threads
     """
     scheduler = OptimizeScheduler(default_parallel_threads=default_parallel_threads)
@@ -397,7 +397,7 @@ def optimize_partitions(
             tracker.update_completed_partitions(partition)
 
         start = time.time()
-        clickhouse.execute(query_template, args, retryable=False)
+        clickhouse.command(query_template, args)
         duration = time.time() - start
         metrics.timing(
             "optimized_part",

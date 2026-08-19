@@ -5,9 +5,9 @@ from functools import partial
 from typing import NamedTuple
 
 import structlog
-from clickhouse_driver import errors
 
 from snuba import settings
+from snuba.clickhouse.error_codes import ErrorCodes
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.escaping import escape_string
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
@@ -107,7 +107,7 @@ class Runner:
 
         except ClickhouseError as e:
             # If the table wasn't created yet, no migrations have started.
-            if e.code != errors.ErrorCodes.UNKNOWN_TABLE:
+            if e.code != ErrorCodes.UNKNOWN_TABLE:
                 raise e
 
         return Status.NOT_STARTED, None
@@ -123,7 +123,7 @@ class Runner:
             ClickhouseClientSettings.MIGRATE, local_node
         )
 
-        local_node_connection.execute(
+        local_node_connection.command(
             f"ALTER TABLE {LOCAL_TABLE_NAME} UPDATE status=%(status)s WHERE migration_id=%(migration_id)s",
             {"status": new_status.value, "migration_id": migration_id},
         )
@@ -602,7 +602,7 @@ class Runner:
                 data[MigrationKey(MigrationGroup(group_name), migration_id)] = Status(status_name)
         except ClickhouseError as e:
             # If the table wasn't created yet, no migrations have started.
-            if e.code != errors.ErrorCodes.UNKNOWN_TABLE:
+            if e.code != ErrorCodes.UNKNOWN_TABLE:
                 raise e
 
         return data

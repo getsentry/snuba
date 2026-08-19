@@ -14,7 +14,7 @@ from sentry_options.testing import override_options
 from snuba.configs.configuration import Configuration, ResourceIdentifier
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
     MAX_THRESHOLD,
@@ -280,52 +280,57 @@ class TestSnQLApi(BaseApiTest):
         assert response.status_code == 400, data
 
     def test_project_rate_limiting(self) -> None:
-        policies = (
-            get_storage(StorageKey("errors")).get_allocation_policies()
-            + get_storage(StorageKey("errors_ro")).get_allocation_policies()
+        from snuba.query.allocation_policies.concurrent_rate_limit import (
+            ConcurrentRateLimitAllocationPolicy,
         )
-        concurrent_rate_limit_policies = [
-            p for p in policies if p.class_name() == "ConcurrentRateLimitAllocationPolicy"
-        ]
-        for p in concurrent_rate_limit_policies:
-            set_component_config(p, "project_override", 0, {"project_id": self.project_id})
 
-        response = self.post(
-            "/events/snql",
-            data=json.dumps(
-                {
-                    "query": """MATCH (events)
-                    SELECT platform
-                    WHERE project_id = 2
-                    AND timestamp >= toDateTime('2021-01-01')
-                    AND timestamp < toDateTime('2021-01-02')
-                    """,
-                    "tenant_ids": {"referrer": "r", "organization_id": 123},
-                }
-            ),
+        policy = ConcurrentRateLimitAllocationPolicy(
+            ResourceIdentifier(StorageKey("errors")),
+            required_tenant_types=["organization_id", "referrer", "project_id"],
+            default_config_overrides={},
         )
-        assert response.status_code == 200
-        allocation_policies = response.json["quota_allowance"]["details"]
-        assert allocation_policies["ConcurrentRateLimitAllocationPolicy"]["can_run"]
+        set_component_config(policy, "project_override", 0, {"project_id": self.project_id})
 
-        response = self.post(
-            "/events/snql",
-            data=json.dumps(
-                {
-                    "query": f"""MATCH (events)
-                    SELECT platform
-                    WHERE project_id = {self.project_id}
-                    AND timestamp >= toDateTime('2021-01-01')
-                    AND timestamp < toDateTime('2021-01-02')
-                    """,
-                    "tenant_ids": {"referrer": "r", "organization_id": 123},
-                }
-            ),
-        )
-        allocation_policies = response.json["quota_allowance"]["details"]
-        assert allocation_policies["ConcurrentRateLimitAllocationPolicy"]
-        assert not allocation_policies["ConcurrentRateLimitAllocationPolicy"]["can_run"]
-        assert response.status_code == 429
+        with patch(
+            "snuba.web.db_query._get_allocation_policies",
+            return_value=[policy],
+        ):
+            response = self.post(
+                "/events/snql",
+                data=json.dumps(
+                    {
+                        "query": """MATCH (events)
+                        SELECT platform
+                        WHERE project_id = 2
+                        AND timestamp >= toDateTime('2021-01-01')
+                        AND timestamp < toDateTime('2021-01-02')
+                        """,
+                        "tenant_ids": {"referrer": "r", "organization_id": 123},
+                    }
+                ),
+            )
+            assert response.status_code == 200
+            allocation_policies = response.json["quota_allowance"]["details"]
+            assert allocation_policies["ConcurrentRateLimitAllocationPolicy"]["can_run"]
+
+            response = self.post(
+                "/events/snql",
+                data=json.dumps(
+                    {
+                        "query": f"""MATCH (events)
+                        SELECT platform
+                        WHERE project_id = {self.project_id}
+                        AND timestamp >= toDateTime('2021-01-01')
+                        AND timestamp < toDateTime('2021-01-02')
+                        """,
+                        "tenant_ids": {"referrer": "r", "organization_id": 123},
+                    }
+                ),
+            )
+            allocation_policies = response.json["quota_allowance"]["details"]
+            assert allocation_policies["ConcurrentRateLimitAllocationPolicy"]
+            assert not allocation_policies["ConcurrentRateLimitAllocationPolicy"]["can_run"]
+            assert response.status_code == 429
 
     @patch("snuba.settings.RECORD_QUERIES", True)
     @patch("snuba.state.record_query")

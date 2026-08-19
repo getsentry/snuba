@@ -63,11 +63,11 @@ def fix_order_by(_logger: logging.Logger) -> None:
 
     clickhouse.execute(new_create_table_statement)
 
-    clickhouse.execute(f"RENAME TABLE {TABLE_NAME} TO {TABLE_NAME_OLD};")
+    clickhouse.command(f"RENAME TABLE {TABLE_NAME} TO {TABLE_NAME_OLD};")
 
-    clickhouse.execute(f"RENAME TABLE {TABLE_NAME_NEW} TO {TABLE_NAME};")
+    clickhouse.command(f"RENAME TABLE {TABLE_NAME_NEW} TO {TABLE_NAME};")
 
-    clickhouse.execute(f"DROP TABLE {TABLE_NAME_OLD};")
+    clickhouse.command(f"DROP TABLE {TABLE_NAME_OLD};")
 
 
 def ensure_drop_temporary_tables(_logger: logging.Logger) -> None:

@@ -197,7 +197,7 @@ test_data = [
 
 
 def _query_config_to_overrides(query_config: Mapping[str, Any]) -> dict[str, Any]:
-    """Translate the legacy flat runtime-config keys used by these test cases
+    """Translate the flat query_settings test keys used by these cases
     into the sentry-options dict shape _get_query_settings_from_config now reads.
     Values are stringified to match the string-typed option dicts; the
     per-prefix/per-referrer second level is JSON-encoded."""
@@ -535,61 +535,12 @@ def test_db_query_success() -> None:
             "throttled_by": {},
         },
         "details": {
-            "ReferrerGuardRailPolicy": {
+            "PassthroughPolicy": {
                 "can_run": True,
                 "max_threads": 10,
                 "max_bytes_to_read": 0,
                 "explanation": {
-                    "reason": "within limit",
-                    "policy": "referrer_guard_rail_policy",
-                    "referrer": "something",
-                    "storage_key": "errors_ro",
-                },
-                "is_throttled": False,
-                "throttle_threshold": 66,
-                "rejection_threshold": 100,
-                "quota_used": 1,
-                "quota_unit": "concurrent_queries",
-                "suggestion": NO_SUGGESTION,
-            },
-            "ConcurrentRateLimitAllocationPolicy": {
-                "can_run": True,
-                "max_threads": 10,
-                "max_bytes_to_read": 0,
-                "explanation": {
-                    "reason": "within limit",
-                    "overrides": {},
-                    "storage_key": "errors_ro",
-                },
-                "is_throttled": False,
-                "throttle_threshold": 22,
-                "rejection_threshold": 22,
-                "quota_used": 1,
-                "quota_unit": "concurrent_queries",
-                "suggestion": NO_SUGGESTION,
-            },
-            "BytesScannedRejectingPolicy": {
-                "can_run": True,
-                "max_threads": 10,
-                "max_bytes_to_read": 0,
-                "explanation": {
-                    "reason": "within_limit",
-                    "storage_key": "errors_ro",
-                },
-                "is_throttled": False,
-                "throttle_threshold": 1706666666666,
-                "rejection_threshold": 2560000000000,
-                "quota_used": 1560000000000,
-                "quota_unit": "bytes",
-                "suggestion": "no_suggestion",
-            },
-            "CrossOrgQueryAllocationPolicy": {
-                "can_run": True,
-                "max_bytes_to_read": 0,
-                "max_threads": 10,
-                "explanation": {
-                    "reason": "pass_through",
-                    "storage_key": "errors_ro",
+                    "storage_key": "default.no_storage_key",
                 },
                 "is_throttled": False,
                 "throttle_threshold": MAX_THRESHOLD,

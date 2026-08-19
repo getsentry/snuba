@@ -20,6 +20,5 @@ class MergeInfo:
 
 def get_num_threads(default_parallel_threads: int) -> int:
     # A 0 (the schema default) means "unset": fall back to the value passed via
-    # the optimize command's --parallel flag, preserving the prior runtime-config
-    # behavior where the option was only an override.
+    # the optimize command's --parallel flag.
     return (get_option(_OPTIMIZE_PARALLEL_THREADS_KEY, 0)) or default_parallel_threads

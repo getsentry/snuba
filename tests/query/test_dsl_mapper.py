@@ -289,8 +289,8 @@ query_tests = [
     pytest.param(
         LogicalQuery(
             QueryEntity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -505,7 +505,7 @@ query_tests = [
             limit=1000,
         ),
         """Query(
-        from_clause=Entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS,get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model()),
+        from_clause=Entity(EntityKey.GENERIC_METRICS_COUNTERS,get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model()),
         selected_columns=[SelectedExpression('aggregate_value', f.sum(column('value', None, '_snuba_value'), alias='_snuba_aggregate_value'))],
         array_join=None,
         condition=and_cond(f.equals(column('granularity', None, '_snuba_granularity'), literal(60)), and_cond(in_cond(column('project_id', None, '_snuba_project_id'), f.tuple(literal(1))), and_cond(in_cond(column('org_id', None, '_snuba_org_id'), f.tuple(literal(1))), and_cond(f.equals(column('use_case_id', None, '_snuba_use_case_id'), literal('transactions')), and_cond(f.greaterOrEquals(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2021, 1, 1, 0, 0))), and_cond(f.less(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2021, 1, 2, 0, 0))), and_cond(f.equals(column('metric_id', None, '_snuba_metric_id'), literal(123456)), in_cond(tags_raw['888'], f.tuple(literal('dist1'), literal('dist2')))))))))),

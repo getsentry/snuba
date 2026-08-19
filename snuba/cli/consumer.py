@@ -165,7 +165,12 @@ logger = logging.getLogger(__name__)
     "--group-instance-id",
     type=str,
     default=None,
-    help="Kafka group instance id. passing a value here will run kafka with static membership.",
+    help=(
+        "Kafka group.instance.id (KIP-345 static membership). When set, this "
+        "member keeps its partition assignment across restarts as long as it "
+        "rejoins within session.timeout.ms. Must be unique per live member of "
+        "the consumer group."
+    ),
 )
 def consumer(
     *,
@@ -204,6 +209,7 @@ def consumer(
     logger.info("Consumer Starting")
 
     storage_key = StorageKey(storage_name)
+    # Tag (not attribute): consumers have no active span; tags reach errors.
     sentry_sdk.set_tag("storage", storage_name)
 
     logger.info("Checking Clickhouse connections...")
@@ -242,6 +248,12 @@ def consumer(
         group_instance_id=group_instance_id,
         quantized_rebalance_consumer_group_delay_secs=quantized_rebalance_consumer_group_delay_secs,
     )
+
+    if group_instance_id is not None:
+        logger.info(
+            "Static membership enabled (KIP-345 group.instance.id=%s)",
+            group_instance_id,
+        )
 
     consumer_builder = ConsumerBuilder(
         consumer_config=consumer_config,

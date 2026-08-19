@@ -6,13 +6,14 @@ import time
 from typing import Any
 
 import click
-import sentry_sdk
 import structlog
+from sentry_sdk import traces
 
 from snuba.core import initialize
 from snuba.environment import metrics as environment_metrics
 from snuba.environment import setup_logging, setup_sentry
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.sentry import SENTRY_OP
 
 setup_sentry()
 
@@ -46,7 +47,13 @@ class SnubaCLI(click.MultiCommand):
         # by default. To mimic this behavior we have to do that here
         # since all of our infrastructure depends on this being the
         # case
-        with sentry_sdk.start_transaction(op="snuba_init", name=f"[cli init] {name}", sampled=True):
+        # parent_span=None => service span. No stream-mode sampled=True; obeys
+        # SENTRY_TRACE_SAMPLE_RATE. snuba_init_time metric below is unaffected.
+        with traces.start_span(
+            name=f"[cli init] {name}",
+            attributes={SENTRY_OP: "snuba_init"},
+            parent_span=None,
+        ):
             actual_command_name = name.replace("-", "_")
             ns: dict[str, click.Command] = {}
             # NOTE: WE initialize snuba before we compile the command code

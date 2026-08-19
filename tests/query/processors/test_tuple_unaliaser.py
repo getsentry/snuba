@@ -13,7 +13,6 @@ from snuba.query.expressions import (
 )
 from snuba.query.processors.physical.tuple_unaliaser import TupleUnaliaser
 from snuba.query.query_settings import HTTPQuerySettings
-from snuba.state import set_config
 from tests.query.processors.query_builders import build_query
 
 
@@ -108,9 +107,7 @@ TEST_QUERIES = [
 
 
 @pytest.mark.parametrize("input_query,expected_query", TEST_QUERIES)
-@pytest.mark.redis_db
 def test_tuple_unaliaser(input_query, expected_query):
-    set_config("tuple_unaliaser_rollout", 1)
     settings = HTTPQuerySettings()
     TupleUnaliaser().process_query(input_query, settings)
     assert input_query == expected_query

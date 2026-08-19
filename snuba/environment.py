@@ -181,24 +181,14 @@ def setup_sentry() -> None:
         release=os.getenv("SNUBA_RELEASE"),
         traces_sample_rate=settings.SENTRY_TRACE_SAMPLE_RATE,
         profiles_sample_rate=settings.SNUBA_PROFILES_SAMPLE_RATE,
-        _experiments={
-            # Turns on the metrics module
-            "enable_metrics": True,
-            # Enables sending of code locations for metrics
-            "metric_code_locations": True,
-        },
+        # Stream spans as they finish. Disables the legacy tracing API
+        # (start_span/start_transaction/update_current_span/scope.span).
+        trace_lifecycle="stream",
     )
 
     from snuba.state.sentry_options import init_options
 
     init_options()
-
-    from snuba.utils.profiler import run_ondemand_profiler
-
-    if settings.SENTRY_DSN is not None:
-        # Do not run ondemand profiler in tests, it interferes with mocked
-        # `time.sleep()` and assertions on that mock.
-        run_ondemand_profiler()
 
 
 metrics = create_metrics(

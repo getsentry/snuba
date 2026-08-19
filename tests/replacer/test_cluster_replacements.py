@@ -10,7 +10,7 @@ from typing import (
 import pytest
 from sentry_options.testing import override_options
 
-from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.pool import ClickhousePool
 from snuba.clusters import cluster
 from snuba.clusters.cluster import ClickhouseNode
 from snuba.clusters.storage_sets import StorageSetKey
@@ -33,7 +33,6 @@ from snuba.replacers.replacer_processor import (
     ReplacementMessage,
     ReplacementMessageMetadata,
 )
-from snuba.state import set_config
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from tests.clusters.fake_cluster import (
@@ -50,7 +49,6 @@ def _build_cluster(healthy: bool = True) -> FakeClickhouseCluster:
         user="default",
         password="",
         database="default",
-        http_port=8123,
         secure=False,
         ca_certs=None,
         verify=False,
@@ -227,7 +225,6 @@ def test_load_balancing(override_cluster: Callable[[bool], FakeClickhouseCluster
     Test running two replacements in a row and verify the queries
     are properly load balanced on different nodes.
     """
-    set_config("write_node_replacements_projects", "[1]")
     cluster = override_cluster(True)
 
     replacer = ReplacerWorker(
@@ -367,7 +364,6 @@ def test_local_executor(
         user="default",
         password="",
         database="default",
-        http_port=8123,
         secure=False,
         ca_certs=None,
         verify=False,

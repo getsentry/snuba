@@ -1,8 +1,9 @@
+import logging
 import uuid
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
-from typing import cast
+from typing import Any, cast
 
-import sentry_sdk
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_get_traces_pb2 import GetTracesRequest
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
@@ -25,6 +26,7 @@ from snuba.query.logical import Query
 from snuba.query.query_settings import OutcomesQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.state.sentry_options import get_mapped_option, get_option
+from snuba.utils.metrics.util import set_current_span_attributes
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     timestamp_in_range_condition,
@@ -35,12 +37,51 @@ from snuba.web.rpc.storage_routing.routing_strategies.common import (
     ITEM_TYPE_FULL_RETENTION,
     ITEM_TYPE_TO_OUTCOME_CATEGORY,
     Outcome,
+    num_items_from_outcomes_result,
 )
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
     RoutingContext,
     RoutingDecision,
 )
+
+logger = logging.getLogger(__name__)
+
+# Mirrors the retention_days sentry-option default.
+# standard: fallback when RequestMeta.standard_retention_days is unset/non-positive.
+# downsampled: 13 months (≈30.46d * 13).
+DEFAULT_RETENTION_DAYS: dict[str, dict[str, int]] = {
+    "standard": {"default": 30, "max": 90},
+    "downsampled": {"default": 396, "max": 396},
+}
+
+
+def _positive_int(value: object, fallback: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        return fallback
+    return value
+
+
+def _retention_bucket(config: Mapping[str, object], name: str) -> dict[str, int]:
+    fallback = DEFAULT_RETENTION_DAYS[name]
+    raw = config.get(name, fallback)
+    if not isinstance(raw, Mapping):
+        return dict(fallback)
+    return {
+        "default": _positive_int(raw.get("default"), fallback["default"]),
+        "max": _positive_int(raw.get("max"), fallback["max"]),
+    }
+
+
+def get_retention_days_config() -> dict[str, dict[str, int]]:
+    """Load the nested retention_days option, falling back to code defaults."""
+    # Nested object option; cast because OptionValue's static type is only one level deep.
+    raw: object = get_option("retention_days", cast(Any, DEFAULT_RETENTION_DAYS))
+    if not isinstance(raw, Mapping):
+        logger.warning("Invalid retention_days option %r; using defaults", raw)
+        return {name: dict(bucket) for name, bucket in DEFAULT_RETENTION_DAYS.items()}
+
+    return {name: _retention_bucket(raw, name) for name in DEFAULT_RETENTION_DAYS}
 
 
 def project_id_and_org_conditions(meta: RequestMeta) -> Expression:
@@ -64,7 +105,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
                 description=(
                     "Per-org override for the max ingested items threshold above which a query is "
                     "downsampled. When set to a positive value, takes precedence over the global "
-                    "OutcomesBasedRoutingStrategy.max_items_before_downsampling runtime config. "
+                    "OutcomesBasedRoutingStrategy.max_items_before_downsampling sentry-option. "
                     "Default 0 means no override (use global)."
                 ),
                 value_type=int,
@@ -196,7 +237,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             timer=routing_context.timer,
         )
         routing_context.extra_info["estimation_sql"] = res.extra.get("sql", "")
-        return cast(int, res.result.get("data", [{}])[0].get("num_items", 0))
+        return num_items_from_outcomes_result(res.result)
 
     def _get_max_items_before_downsampling(self, organization_id: int) -> int:
         per_org_override = self.get_config_value(
@@ -236,18 +277,24 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
 
         in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
 
-        thirty_one_days_ago_ts = int((datetime.now(tz=UTC) - timedelta(days=31)).timestamp())
-        older_than_thirty_days = thirty_one_days_ago_ts > in_msg_meta.start_timestamp.seconds
+        standard_retention = get_retention_days_config()["standard"]
+        requested_retention_days = in_msg_meta.standard_retention_days
+        if requested_retention_days > 0:
+            standard_retention_days = min(requested_retention_days, standard_retention["max"])
+        else:
+            standard_retention_days = standard_retention["default"]
+        standard_retention_cutoff = datetime.now(tz=UTC) - timedelta(
+            days=standard_retention_days + 1
+        )
 
         if (
-            get_option("enable_long_term_retention_downsampling", False)
-            and older_than_thirty_days
+            standard_retention_cutoff.timestamp() > in_msg_meta.start_timestamp.seconds
             and in_msg_meta.trace_item_type not in ITEM_TYPE_FULL_RETENTION
         ):
             routing_decision.tier = Tier.TIER_8
 
-        sentry_sdk.update_current_span(
-            attributes={
+        set_current_span_attributes(
+            {
                 "downsampling_mode": (
                     "highest_accuracy" if self._is_highest_accuracy_mode(in_msg_meta) else "normal"
                 ),
@@ -297,8 +344,8 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         elif ingested_items > max_items_before_downsampling * 100:
             routing_decision.tier = Tier.TIER_512
 
-        sentry_sdk.update_current_span(
-            attributes={
+        set_current_span_attributes(
+            {
                 "ingested_items": ingested_items,
                 "max_items_before_downsampling": max_items_before_downsampling,
                 "tier": routing_decision.tier.name,

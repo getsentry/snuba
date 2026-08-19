@@ -7,6 +7,7 @@ use serde_json::Value;
 pub struct ProcessorConfig {
     pub env_config: EnvConfig,
     pub storage_name: String,
+    pub eap_items_emit_received_at: bool,
 }
 
 #[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -97,7 +98,6 @@ pub struct ClickhouseConfig {
     pub host: String,
     pub port: u16,
     pub secure: bool,
-    pub http_port: u16,
     pub user: String,
     pub password: String,
     pub database: String,

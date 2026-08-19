@@ -1,15 +1,10 @@
 from __future__ import annotations
 
 import logging
-import os
-import time
-from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Mapping
 from functools import partial
 from typing import (
     Any,
-    Protocol,
-    SupportsFloat,
 )
 
 import simplejson as json
@@ -18,7 +13,6 @@ from confluent_kafka import Message as KafkaMessage
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
 
 from snuba import environment, settings
-from snuba.redis import RedisClientKey, get_redis_client
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.topics import Topic
@@ -27,11 +21,8 @@ metrics = MetricsWrapper(environment.metrics, "snuba.state")
 logger = logging.getLogger("snuba.state")
 
 kfk: Producer | None = None
-rds = get_redis_client(RedisClientKey.CONFIG)
 
 ratelimit_prefix = "snuba-ratelimit:"
-config_hash = "snuba-config"
-rate_limit_config_key = "snuba-ratelimit-config:"
 
 # Rate Limiting and Deduplication
 
@@ -50,177 +41,6 @@ def _kafka_producer() -> Producer:
             )
         )
     return kfk
-
-
-@dataclass(frozen=True)
-class MismatchedTypeException(Exception):
-    key: str
-    original_type: type[Any]
-    new_type: type[Any]
-
-
-class ConfigKeyCallable(Protocol):  # Necessary for typing the memoize
-    def __call__(self, config_key: str = config_hash) -> Any:
-        pass
-
-
-class memoize:
-    """
-    Simple expiring memoizer for state functions that takes a config key.
-    """
-
-    def __init__(self, timeout: int = 1) -> None:
-        self.timeout = timeout
-        self.saved: dict[str, Any] = {}
-        self.at: dict[str, float] = {}
-
-    def __call__(self, func: ConfigKeyCallable) -> ConfigKeyCallable:
-        def wrapper(config_key: str = config_hash) -> Any:
-            now = time.time()
-            at = self.at.get(config_key, 0.0)
-            if now > at + self.timeout or config_key not in self.saved:
-                self.saved[config_key], self.at[config_key] = (
-                    func(config_key=config_key),
-                    now,
-                )
-            return self.saved[config_key]
-
-        def clear() -> None:
-            self.saved.clear()
-            self.at.clear()
-
-        wrapper.clear = clear  # type: ignore[attr-defined]
-        return wrapper
-
-
-def get_typed_value(value: Any) -> Any:
-    # Return the given value based on its correct type
-    # It supports the following types: int, float, string
-    if value is None:
-        return None
-    try:
-        assert isinstance(value, (str, int))
-        return int(value)
-    except (ValueError, AssertionError):
-        try:
-            assert isinstance(value, (str, SupportsFloat))
-            return float(value)
-        except (ValueError, AssertionError):
-            return value
-
-
-def set_config(
-    key: str,
-    value: Any | None,
-    force: bool = False,
-    config_key: str = config_hash,
-) -> None:
-    value = get_typed_value(value)
-    enc_value = f"{value}".encode() if value is not None else None
-    try:
-        enc_original_value = rds.hget(config_key, key)
-        if enc_original_value is not None and value is not None:
-            original_value = get_typed_value(enc_original_value.decode("utf-8"))
-            if value == original_value and type(value) is type(original_value):
-                return
-
-            if not force and type(value) is not type(original_value):
-                raise MismatchedTypeException(key, type(original_value), type(value))
-
-        if value is None:
-            rds.hdel(config_key, key)
-        else:
-            rds.hset(config_key, key, enc_value)
-        logger.info(f"Successfully changed option {key} to {value}")
-    except MismatchedTypeException as exc:
-        logger.exception(
-            f"Mismatched types for {exc.key}: Original type: {exc.original_type}, New type: {exc.new_type}"
-        )
-        raise exc
-    except Exception as ex:
-        logger.exception(ex)
-
-
-def set_configs(
-    values: Mapping[str, Any | None],
-    force: bool = False,
-    config_key: str = config_hash,
-) -> None:
-    for k, v in values.items():
-        set_config(k, v, force=force, config_key=config_key)
-
-
-def get_int_config(
-    key: str, default: int | None = None, config_key: str = config_hash
-) -> int | None:
-    config = _get_config(key, default, config_key)
-    return int(config) if config is not None else None
-
-
-def get_float_config(
-    key: str, default: float | None = None, config_key: str = config_hash
-) -> float | None:
-    config = _get_config(key, default, config_key)
-    return float(config) if config is not None else None
-
-
-def get_str_config(
-    key: str, default: str | None = None, config_key: str = config_hash
-) -> str | None:
-    config = _get_config(key, default, config_key)
-    return str(config) if config is not None else None
-
-
-# To be deprecated, use get_int_config, get_float_config, get_str_config instead
-def get_config(key: str, default: Any | None = None, config_key: str = config_hash) -> Any | None:
-    return _get_config(key, default, config_key)
-
-
-def _get_config(key: str, default: Any | None = None, config_key: str = config_hash) -> Any | None:
-    return get_all_configs(config_key=config_key).get(key, default)
-
-
-def get_configs(
-    key_defaults: Iterable[tuple[str, Any | None]], config_key: str = config_hash
-) -> Sequence[Any | None]:
-    all_confs = get_all_configs(config_key=config_key)
-    return [all_confs.get(k, d) for k, d in key_defaults]
-
-
-def get_all_configs(config_key: str = config_hash) -> Mapping[str, Any | None]:
-    return dict(get_raw_configs(config_key=config_key).items())
-
-
-@memoize(settings.CONFIG_MEMOIZE_TIMEOUT)
-def get_raw_configs(config_key: str = config_hash) -> Mapping[str, Any | None]:
-    try:
-        all_configs = rds.hgetall(config_key)
-        configs = {
-            k.decode("utf-8"): get_typed_value(v.decode("utf-8"))
-            for k, v in all_configs.items()
-            if v is not None
-        }
-        if os.environ.get("SENTRY_SINGLE_TENANT"):
-            # Single Tenant has this overriding CONFIG_STATE.
-            for k, v in settings.CONFIG_STATE.items():
-                configs[k] = v
-        return configs
-    except Exception as ex:
-        logger.exception(ex)
-        if os.environ.get("SENTRY_SINGLE_TENANT"):
-            return settings.CONFIG_STATE
-        return {}
-
-
-def delete_config(key: str, config_key: str = config_hash) -> None:
-    set_config(key, None, config_key=config_key)
-
-
-def get_uncached_config(key: str, config_key: str = config_hash) -> Any | None:
-    value = rds.hget(config_key, key.encode("utf-8"))
-    if value is not None:
-        return get_typed_value(value.decode("utf-8"))
-    return None
 
 
 # Query Recording
@@ -246,6 +66,9 @@ def _record_query_delivery_callback(error: KafkaError | None, message: KafkaMess
 
 
 def record_query(query_metadata: snuba_queries_v1.Querylog) -> None:
+    if not settings.RECORD_QUERIES:
+        return
+
     try:
         producer = _kafka_producer()
         data = safe_dumps(query_metadata)

@@ -63,6 +63,8 @@ pub struct ConsumerStrategyFactoryV2 {
     pub join_timeout_ms: Option<u64>,
     pub health_check: String,
     pub use_row_binary: bool,
+    /// When true, process messages but do not INSERT into ClickHouse.
+    pub skip_write: bool,
     // Whether this consumer has a DLQ topic configured. The DLQ-by-age strategy
     // is only inserted when true, since without a DLQ policy an InvalidMessage
     // is logged and silently dropped by arroyo (losing data).
@@ -90,6 +92,14 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
     }
 
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
+        let processor_name = self
+            .storage_config
+            .message_processor
+            .python_class_name
+            .as_str();
+        let eap_items_emit_received_at = processor_name == "EAPItemsProcessor"
+            && crate::processors::eap_items::emit_received_at();
+
         // RowBinary storages: the processor swap (JSON → RowBinary sibling) and
         // the column list the RowBinary writer needs, both used below.
         let (process_fn_override, insert_columns): (
@@ -97,18 +107,15 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             Option<&'static [&'static str]>,
         ) = if self.use_row_binary {
             tracing::info!("Using RowBinary wire format");
-            let processor_name = self
-                .storage_config
-                .message_processor
-                .python_class_name
-                .as_str();
             let (func, columns): (
                 crate::processors::ProcessingFunction,
                 &'static [&'static str],
             ) = match processor_name {
                 "EAPItemsProcessor" => (
                     crate::processors::eap_items::process_message_row_binary,
-                    crate::processors::eap_items::EAPItemRow::COLUMN_NAMES,
+                    crate::processors::eap_items::EAPItemRow::column_names(
+                        eap_items_emit_received_at,
+                    ),
                 ),
                 name => panic!("RowBinary not supported for processor: {name}"),
             };
@@ -139,8 +146,8 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
 
         // Produce cogs if generic metrics AND we are not skipping writes AND record_cogs is true
         let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<()>>> =
-            match (self.env_config.record_cogs, cogs_label) {
-                (true, Some(resource_id)) => Box::new(RecordCogs::new(
+            match (self.env_config.record_cogs, self.skip_write, cogs_label) {
+                (true, false, Some(resource_id)) => Box::new(RecordCogs::new(
                     next_step,
                     resource_id,
                     self.accountant_topic_config.broker_config.clone(),
@@ -162,7 +169,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                     next_step,
                     self.storage_config.clickhouse_cluster.clone(),
                     self.storage_config.clickhouse_table_name.clone(),
-                    false,
+                    self.skip_write,
                     &self.clickhouse_concurrency,
                     self.storage_config.name.clone(),
                     columns,
@@ -172,7 +179,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                     next_step,
                     self.storage_config.clickhouse_cluster.clone(),
                     self.storage_config.clickhouse_table_name.clone(),
-                    false,
+                    self.skip_write,
                     &self.clickhouse_concurrency,
                     self.storage_config.name.clone(),
                 ))
@@ -230,17 +237,22 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                 true,
                 Some(processors::ProcessingFunctionType::ProcessingFunctionWithReplacements(func)),
             ) => {
-                let (replacements_config, replacements_destination) =
-                    self.replacements_config.clone().unwrap();
-
-                let producer = KafkaProducer::new(replacements_config);
-                let replacements_step = ProduceReplacements::new(
-                    next_step,
-                    producer,
-                    replacements_destination,
-                    &self.replacements_concurrency,
-                    false,
-                );
+                let replacements_step = if self.skip_write {
+                    ProduceReplacements::skipping(next_step)
+                } else {
+                    let (replacements_config, replacements_destination) =
+                        self.replacements_config.clone().expect(
+                            "replacements topic required for processors that emit replacements",
+                        );
+                    let producer = KafkaProducer::new(replacements_config);
+                    ProduceReplacements::new(
+                        next_step,
+                        producer,
+                        replacements_destination,
+                        &self.replacements_concurrency,
+                        false,
+                    )
+                };
 
                 make_rust_processor_with_replacements(
                     replacements_step,
@@ -251,6 +263,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                     config::ProcessorConfig {
                         env_config: self.env_config.clone(),
                         storage_name: self.storage_config.name.clone(),
+                        eap_items_emit_received_at,
                     },
                     self.stop_at_timestamp,
                 )
@@ -269,6 +282,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                     config::ProcessorConfig {
                         env_config: self.env_config.clone(),
                         storage_name: self.storage_config.name.clone(),
+                        eap_items_emit_received_at,
                     },
                     self.stop_at_timestamp,
                 )

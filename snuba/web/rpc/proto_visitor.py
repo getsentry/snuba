@@ -171,43 +171,35 @@ class ProtoVisitor(ABC):  # noqa: B024 dynamic visit dispatch via __getattr__; A
 def _convert_aggregation_to_conditional_aggregation(
     input: Column | AggregationComparisonFilter | TimeSeriesExpression,
 ) -> None:
-    if input.HasField("aggregation"):
-        aggregation = input.aggregation
-        input.ClearField("aggregation")
-        match aggregation.WhichOneof("default_value"):
-            case None:
-                input.conditional_aggregation.CopyFrom(
-                    AttributeConditionalAggregation(
-                        aggregate=aggregation.aggregate,
-                        key=aggregation.key,
-                        label=aggregation.label,
-                        extrapolation_mode=aggregation.extrapolation_mode,
-                    )
-                )
-            case "default_value_double":
-                input.conditional_aggregation.CopyFrom(
-                    AttributeConditionalAggregation(
-                        aggregate=aggregation.aggregate,
-                        key=aggregation.key,
-                        label=aggregation.label,
-                        extrapolation_mode=aggregation.extrapolation_mode,
-                        default_value_double=aggregation.default_value_double,
-                    )
-                )
-            case "default_value_int64":
-                input.conditional_aggregation.CopyFrom(
-                    AttributeConditionalAggregation(
-                        aggregate=aggregation.aggregate,
-                        key=aggregation.key,
-                        label=aggregation.label,
-                        extrapolation_mode=aggregation.extrapolation_mode,
-                        default_value_int64=aggregation.default_value_int64,
-                    )
-                )
-            case default:
-                raise BadSnubaRPCRequestException(
-                    f"Unknown default_value in formula. Expected default_value_double or default_value_int64 but got {default}"
-                )
+    if not input.HasField("aggregation"):
+        return
+
+    input_agg = input.aggregation
+    input.ClearField("aggregation")
+
+    conditional_aggregation = AttributeConditionalAggregation(
+        aggregate=input_agg.aggregate,
+        key=input_agg.key,
+        label=input_agg.label,
+        extrapolation_mode=input_agg.extrapolation_mode,
+    )
+
+    if input_agg.HasField("ranked_by"):
+        conditional_aggregation.ranked_by.CopyFrom(input_agg.ranked_by)
+
+    match input_agg.WhichOneof("default_value"):
+        case None:
+            pass
+        case "default_value_double":
+            conditional_aggregation.default_value_double = input_agg.default_value_double
+        case "default_value_int64":
+            conditional_aggregation.default_value_int64 = input_agg.default_value_int64
+        case default:
+            raise BadSnubaRPCRequestException(
+                f"Unknown default_value in formula. Expected default_value_double or default_value_int64 but got {default}"
+            )
+
+    input.conditional_aggregation.CopyFrom(conditional_aggregation)
 
 
 class AggregationToConditionalAggregationVisitor(ProtoVisitor):
@@ -271,3 +263,23 @@ class GetExpressionAggregationsVisitor(ProtoVisitor):
             self.aggregations.append(expression_wrapper.underlying_proto.aggregation)
         elif expression_wrapper.underlying_proto.HasField("conditional_aggregation"):
             self.aggregations.append(expression_wrapper.underlying_proto.conditional_aggregation)
+
+
+class GetColumnAggregationsVisitor(ProtoVisitor):
+    """Collect conditional_aggregation nodes under columns, including nested formulas."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.aggregations: list[AttributeConditionalAggregation] = []
+
+    def visit_ColumnWrapper(self, column_wrapper: ColumnWrapper) -> None:
+        column = column_wrapper.underlying_proto
+        if column.HasField("conditional_aggregation"):
+            self.aggregations.append(column.conditional_aggregation)
+
+    def visit_AggregationComparisonFilterWrapper(
+        self, aggregation_comparison_filter_wrapper: AggregationComparisonFilterWrapper
+    ) -> None:
+        comparison_filter = aggregation_comparison_filter_wrapper.underlying_proto
+        if comparison_filter.HasField("conditional_aggregation"):
+            self.aggregations.append(comparison_filter.conditional_aggregation)

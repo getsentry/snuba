@@ -28,6 +28,7 @@ from flask import (
 from flask import request as http_request
 from flask_compress import Compress
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
+from sentry_sdk import traces
 from werkzeug import Response as WerkzeugResponse
 from werkzeug.exceptions import InternalServerError
 
@@ -45,7 +46,11 @@ from snuba.datasets.factory import InvalidDatasetError, get_dataset_name
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import StorageNotAvailable, WritableTableStorage
 from snuba.query.allocation_policies import AllocationPolicyViolations
-from snuba.query.exceptions import InvalidQueryException, QueryPlanException
+from snuba.query.exceptions import (
+    InvalidQueryException,
+    QueryPlanException,
+    TooManyDeleteRowsException,
+)
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import all_redis_clients
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
@@ -60,6 +65,7 @@ from snuba.utils.health_info import (
 )
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.util import with_span
+from snuba.utils.sentry import SENTRY_OP, set_tag_and_attribute
 from snuba.web import QueryException, QueryTooLongException
 from snuba.web.bulk_delete_query import delete_from_storage as bulk_delete_from_storage
 from snuba.web.constants import get_http_status_for_clickhouse_error
@@ -92,18 +98,18 @@ def truncate_dataset(dataset: Dataset) -> None:
 
                 table = schema.get_local_table_name()
 
-                clickhouse.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table}")
+                clickhouse.command(f"TRUNCATE TABLE IF EXISTS {database}.{table}")
 
 
 def _add_compression_attrs(response: Response) -> Response:
-    # TODO: update to attributes once we update the sdk
-    # leaving these as tags so I can aggregate by them in the meantime
-    sentry_sdk.set_tag("snuba.req_accept_encoding", http_request.headers.get("Accept-Encoding"))
-    sentry_sdk.set_tag("snuba.resp_encoding", response.headers.get("Content-Encoding"))
-    sentry_sdk.set_tag("snuba.resp_mime_type", response.mimetype)
-    span = sentry_sdk.get_current_span()
-    if span is not None:
-        span.set_data("snuba.resp_content_length", response.content_length)
+    set_tag_and_attribute(
+        "snuba.req_accept_encoding", http_request.headers.get("Accept-Encoding") or ""
+    )
+    set_tag_and_attribute("snuba.resp_encoding", response.headers.get("Content-Encoding") or "")
+    set_tag_and_attribute("snuba.resp_mime_type", response.mimetype or "")
+    span = traces.get_current_span()
+    if span is not None and response.content_length is not None:
+        span.set_attribute("snuba.resp_content_length", response.content_length)
     return response
 
 
@@ -232,7 +238,7 @@ def health() -> Response:
 
 
 def parse_request_body(http_request: Request) -> dict[str, Any]:
-    with sentry_sdk.start_span(description="parse_request_body", op="parse"):
+    with traces.start_span(name="parse_request_body", attributes={SENTRY_OP: "parse"}):
         metrics.timing("http_request_body_length", len(http_request.data))
         try:
             body = json.loads(http_request.data)
@@ -243,49 +249,37 @@ def parse_request_body(http_request: Request) -> dict[str, Any]:
 
 
 def _trace_transaction(dataset_name: str) -> None:
-    span = sentry_sdk.get_current_span()
-    if span:
-        span.set_tag("dataset", dataset_name)
-        span.set_tag("referrer", http_request.referrer)
+    # Scope-level so every span in the request inherits them. Normalize missing
+    # Referer once so the transaction name and referrer tag/attribute agree.
+    referrer = http_request.referrer or ""
+    set_tag_and_attribute("dataset", dataset_name)
+    set_tag_and_attribute("referrer", referrer)
 
-    scope = sentry_sdk.get_current_scope()
-    if scope.transaction:
-        scope.set_transaction_name(
-            f"{scope.transaction.name}__{dataset_name}__{http_request.referrer}"
-        )
-        scope.transaction.set_tag("dataset", dataset_name)
-        scope.transaction.set_tag("referrer", http_request.referrer)
+    # scope.transaction is None in stream mode; rebuild the name from the
+    # endpoint (Flask's default transaction_style) and rename via the scope.
+    endpoint = http_request.url_rule.endpoint if http_request.url_rule else "unknown"
+    sentry_sdk.get_current_scope().set_transaction_name(f"{endpoint}__{dataset_name}__{referrer}")
 
 
 def _set_snql_api_error_tags(body: dict[str, Any], http_referrer: str | None) -> None:
-    """Set Sentry tags for SnQL API error tracking.
+    """Annotate SnQL API errors with source, referrer, and tenant_ids.
 
-    Tags all errors in the SnQL API with:
-    - source: snql_api
-    - referrer: from HTTP header or request body
-    - tenant_ids: as context and individual tags
-
-    This function is wrapped in a try-except to ensure that any failure
-    in setting tags does not crash the API request.
+    Failures here must not crash the request.
     """
     try:
-        sentry_sdk.set_tag("source", "snql_api")
+        set_tag_and_attribute("source", "snql_api")
 
-        # Extract and tag referrer
         referrer = http_referrer or body.get("tenant_ids", {}).get("referrer", "<unknown>")
-        sentry_sdk.set_tag("referrer", referrer)
+        set_tag_and_attribute("referrer", referrer)
 
-        # Extract and set tenant_ids as context for better error tracking
         tenant_ids = body.get("tenant_ids", {})
         if tenant_ids:
             sentry_sdk.set_context("tenant_ids", tenant_ids)
-            # Also set individual tenant_id tags for easier filtering
             for key, value in tenant_ids.items():
-                if key != "referrer":  # Skip referrer as it's already a tag
-                    sentry_sdk.set_tag(f"tenant_id.{key}", str(value))
+                if key != "referrer":
+                    set_tag_and_attribute(f"tenant_id.{key}", str(value))
     except Exception as e:
-        # Log the error but don't let it crash the API request
-        logger.warning("Failed to set Sentry tags for SnQL API", exc_info=e)
+        logger.warning("Failed to set Sentry tags/attributes for SnQL API", exc_info=e)
 
 
 @application.route("/query", methods=["GET", "POST"])
@@ -356,6 +350,7 @@ def storage_delete(*, storage: WritableTableStorage, timer: Timer) -> Response |
             InvalidJsonRequestException,
             DeletesNotEnabledError,
             InvalidQueryException,
+            TooManyDeleteRowsException,
         ) as error:
             details = {
                 "type": "invalid_query",

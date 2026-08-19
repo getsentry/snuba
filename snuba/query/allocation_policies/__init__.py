@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import json
 import os
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, cast
 
-import sentry_sdk
 from redis.exceptions import TimeoutError as RedisTimeoutError
+from sentry_sdk import traces
 
 from snuba import environment, settings
 from snuba.configs.configuration import (
@@ -20,11 +21,9 @@ from snuba.configs.configuration import (
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import import_submodules_in_directory
+from snuba.utils.sentry import SENTRY_OP
 from snuba.utils.serializable_exception import JsonSerializable, SerializableException
 from snuba.web import QueryResult
-
-CAPMAN_PREFIX = "capman"
-CAPMAN_HASH = "capman"
 
 IS_ACTIVE = "is_active"
 IS_ENFORCED = "is_enforced"
@@ -217,8 +216,8 @@ class AllocationPolicy(ConfigurableComponent, ABC):
     Configurations
     ==============
 
-    AllocationPolicy Configurations are a way to update live flags without shipping code changes. Very similar to runtime config
-    (uses it under the hood) but with key differences and restrictions on what they can be.
+    AllocationPolicy Configurations are a way to update live flags without shipping code changes. Values are
+    sourced from the ``configurable_component_overrides`` sentry-option (then each config's code default).
 
     Any configuration definition that exists in your sub class' `_additional_config_definitions()` will appear in the
     Capacity Management Snuba Admin UI for the policy. From there you can modify the live values to alter how your policy works.
@@ -319,10 +318,9 @@ class AllocationPolicy(ConfigurableComponent, ABC):
 
 
     NOTE:
-    - You should no longer use `snuba.state.{get,set}_config()` for runtime configs for a specific Policy. Use the
-        `self.{get,set}_config_value()` methods on the policy itself instead! The only exception here is if you need to access or
-        set some sort of global runtime config which would show up in the runtime config UI instead of Capacity Management.
-    - If for some reason you find yourself needing to use a global config from snuba.state, consider adding it as a property to
+    - Use the `self.get_config_value()` methods on the policy itself for policy-specific config. Global
+        toggles live as sentry-options under the ``snuba`` namespace.
+    - If for some reason you find yourself needing a new global option, consider adding it as a property to
         this base class since it should be universally useful across policies. An example of this is the `max_threads` property.
 
 
@@ -335,10 +333,8 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         are also policy decisions
     * Every allocation policy takes a `storage_key` in its init. The storage_key is like a pseudo-tenant. In different
         environments, storages may be co-located on the same cluster. To facilitate resource sharing, every allocation policy
-        knows which storage_key it is serving. This is used to create unique keys for saving the config values.
+        knows which storage_key it is serving. This is used to create unique keys for config values.
         See `_build_config_key()` for more info.
-    * Reiterating that you should no longer use `snuba.state.{get,set}_config()` for runtime configs for a specific Policy. Refer to the Configurations
-        section of this docstring for more info.
     """
 
     def __init__(
@@ -381,9 +377,6 @@ class AllocationPolicy(ConfigurableComponent, ABC):
             required_tenant_types=[],
             default_config_overrides={},
         )
-
-    def _get_hash(self) -> str:
-        return CAPMAN_HASH
 
     @property
     def metrics(self) -> MetricsWrapper:
@@ -451,11 +444,12 @@ class AllocationPolicy(ConfigurableComponent, ABC):
     def get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
-        with sentry_sdk.start_span(
-            op="allocation_policy.get_quota_allowance", name=self.__class__.__name__
+        with traces.start_span(
+            name=self.__class__.__name__,
+            attributes={SENTRY_OP: "allocation_policy.get_quota_allowance"},
         ) as span:
             for t, tid in tenant_ids.items():
-                span.set_data(f"tenant_ids.{t}", str(tid))
+                span.set_attribute(f"tenant_ids.{t}", str(tid))
             try:
                 if not self.is_active:
                     allowance = QuotaAllowance(
@@ -515,7 +509,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                         "max_threads": str(allowance.max_threads),
                     },
                 )
-                span.set_data("db_request_throttled", True)
+                span.set_attribute("db_request_throttled", True)
             if not self.is_enforced:
                 allowance = QuotaAllowance(
                     can_run=True,
@@ -531,7 +525,11 @@ class AllocationPolicy(ConfigurableComponent, ABC):
             # make sure we always know which storage key we rejected a query from
             allowance.explanation["storage_key"] = self._resource_identifier.value
             for k, v in allowance.to_dict().items():
-                span.set_data(f"quota_allowance.{k}", v)
+                # Attributes only accept scalars; stringify nested values.
+                span.set_attribute(
+                    f"quota_allowance.{k}",
+                    v if isinstance(v, (str, int, float, bool)) else json.dumps(v, default=repr),
+                )
             return allowance
 
     @abstractmethod

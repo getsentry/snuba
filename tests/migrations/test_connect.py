@@ -2,16 +2,21 @@ from __future__ import annotations
 
 from functools import reduce
 from typing import Any
+from unittest import mock
 
 import pytest
 
+from snuba.clickhouse.errors import ClickhouseError
+from snuba.clickhouse.pool import ClickhouseResult
 from snuba.clusters import cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.readiness_state import ReadinessState
 from snuba.migrations.connect import (
+    check_clickhouse_connections,
     get_clickhouse_clusters_for_migration_group,
     get_clusters_for_readiness_states,
 )
+from snuba.migrations.errors import InvalidClickhouseVersion
 from snuba.migrations.groups import MigrationGroup
 
 _ALL_STORAGE_SET_KEYS = {s.value for s in StorageSetKey}
@@ -23,7 +28,6 @@ _QUERYLOG_CLUSTER = cluster.ClickhouseCluster(
     user="",
     password="",
     database="default",
-    http_port=420,
     secure=False,
     ca_certs=None,
     verify=False,
@@ -39,7 +43,6 @@ _EVENTS_CLUSTER = cluster.ClickhouseCluster(
     user="",
     password="",
     database="default",
-    http_port=420,
     secure=False,
     ca_certs=None,
     verify=False,
@@ -55,7 +58,6 @@ _REST_CLUSTER = cluster.ClickhouseCluster(
     user="",
     password="",
     database="default",
-    http_port=420,
     secure=False,
     ca_certs=None,
     verify=False,
@@ -133,3 +135,78 @@ def test_get_clusters_for_readiness_states(
         reduce(set.union, [rc.get_storage_set_keys() for rc in result_clusters])
         == expected_storage_set_keys
     )
+
+
+def _cluster_with_pool(pool: mock.Mock) -> mock.Mock:
+    cluster_mock = mock.Mock()
+    cluster_mock.get_query_connection.return_value = pool
+    return cluster_mock
+
+
+def _pool_returning_version(version: str = "23.8.11.29") -> mock.Mock:
+    pool = mock.Mock()
+    pool.execute.return_value = ClickhouseResult(results=[[version]])
+    return pool
+
+
+def test_check_clickhouse_connections_retries_transient_errors_then_succeeds() -> None:
+    pool = mock.Mock()
+    pool.execute.side_effect = [
+        ClickhouseError("connection reset by peer", code=-1),
+        ClickhouseResult(results=[["23.8.11.29"]]),
+    ]
+
+    with mock.patch("snuba.migrations.connect.time.sleep") as sleep:
+        check_clickhouse_connections(
+            [_cluster_with_pool(pool)], max_attempts=3, retry_delay_seconds=0
+        )
+
+    assert pool.execute.call_count == 2
+    sleep.assert_called_once_with(0)
+
+
+def test_check_clickhouse_connections_retries_are_per_cluster() -> None:
+    flaky = mock.Mock()
+    flaky.execute.side_effect = [
+        ClickhouseError("connection reset by peer", code=-1),
+        ClickhouseResult(results=[["23.8.11.29"]]),
+    ]
+
+    with mock.patch("snuba.migrations.connect.time.sleep"):
+        check_clickhouse_connections(
+            [_cluster_with_pool(flaky), _cluster_with_pool(_pool_returning_version())],
+            max_attempts=2,
+            retry_delay_seconds=0,
+        )
+
+    assert flaky.execute.call_count == 2
+
+
+def test_check_clickhouse_connections_raises_after_max_attempts() -> None:
+    pool = mock.Mock()
+    pool.execute.side_effect = ClickhouseError("connection reset by peer", code=-1)
+
+    with (
+        mock.patch("snuba.migrations.connect.time.sleep"),
+        pytest.raises(ClickhouseError, match="connection reset by peer"),
+    ):
+        check_clickhouse_connections(
+            [_cluster_with_pool(pool)], max_attempts=3, retry_delay_seconds=0
+        )
+
+    assert pool.execute.call_count == 3
+
+
+def test_check_clickhouse_connections_does_not_retry_invalid_version() -> None:
+    pool = _pool_returning_version("10.0.0.0")
+
+    with (
+        mock.patch("snuba.migrations.connect.time.sleep") as sleep,
+        pytest.raises(InvalidClickhouseVersion),
+    ):
+        check_clickhouse_connections(
+            [_cluster_with_pool(pool)], max_attempts=5, retry_delay_seconds=0
+        )
+
+    assert pool.execute.call_count == 1
+    sleep.assert_not_called()

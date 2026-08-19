@@ -3,7 +3,7 @@ import hashlib
 import json
 import os
 import traceback
-from collections.abc import Callable, Generator, Sequence
+from collections.abc import Callable, Generator, Mapping, Sequence
 from typing import (
     Any,
 )
@@ -11,11 +11,12 @@ from typing import (
 import pytest
 from snuba_sdk.legacy import json_to_snql
 
-from snuba import settings, state
+from snuba import settings
 from snuba.clusters.cluster import (
     ClickhouseClientSettings,
     ClickhouseCluster,
     ClickhouseNode,
+    build_pool,
 )
 from snuba.core.initialize import initialize_snuba
 from snuba.datasets.factory import reset_dataset_factory
@@ -55,37 +56,90 @@ def pytest_configure() -> None:
     initialize_snuba()
 
 
+def _bootstrap_cluster_nodes(cluster: Mapping[str, Any]) -> list[ClickhouseNode]:
+    """Resolve local + distributed nodes without requiring the target DB to exist.
+
+    Multi-node discovery queries system.clusters. clickhouse-connect probes
+    system.settings with the client database attached, so open that pool with
+    database=None. Single-node clusters just return the configured query host.
+    """
+    host = cluster["host"]
+    port = cluster["port"]
+    user = cluster.get("user", "default")
+    password = cluster.get("password", "")
+    secure = cluster.get("secure", False)
+    ca_certs = cluster.get("ca_certs")
+    verify = cluster.get("verify")
+
+    if cluster["single_node"]:
+        return [ClickhouseNode(host, port)]
+
+    from snuba.clusters.cluster import DEFAULT_CLICKHOUSE_HTTP_PORT
+
+    discovery = build_pool(
+        ClickhouseClientSettings.INTERNAL,
+        ClickhouseNode(host, port),
+        user,
+        password,
+        None,
+        secure,
+        ca_certs,
+        verify,
+    )
+    seen: set[tuple[str, int, int | None, int | None]] = set()
+    nodes: list[ClickhouseNode] = []
+    for cluster_name in (
+        cluster.get("cluster_name"),
+        cluster.get("distributed_cluster_name"),
+    ):
+        if not cluster_name:
+            continue
+        rows = discovery.execute(
+            "select host_name, port, shard_num, replica_num from system.clusters "
+            "where cluster=%(cluster_name)s",
+            {"cluster_name": cluster_name},
+        ).results
+        for host_name, _tcp_port, shard, replica in rows:
+            key = (host_name, DEFAULT_CLICKHOUSE_HTTP_PORT, shard, replica)
+            if key in seen:
+                continue
+            seen.add(key)
+            nodes.append(
+                ClickhouseNode(
+                    host_name=host_name,
+                    port=DEFAULT_CLICKHOUSE_HTTP_PORT,
+                    shard=shard,
+                    replica=replica,
+                )
+            )
+    return nodes
+
+
 @pytest.fixture(scope="session")
 def create_databases() -> None:
     for cluster in settings.CLUSTERS:
-        clickhouse_cluster = ClickhouseCluster(
-            host=cluster["host"],
-            port=cluster["port"],
-            user="default",
-            password="",
-            database="default",
-            http_port=cluster["http_port"],
-            secure=cluster["secure"],
-            ca_certs=cluster["ca_certs"],
-            verify=cluster["verify"],
-            storage_sets=cluster["storage_sets"],
-            single_node=cluster["single_node"],
-            cluster_name=cluster.get("cluster_name", None),
-            distributed_cluster_name=(cluster.get("distributed_cluster_name", None)),
-        )
-
         database_name = cluster["database"]
-        nodes = [
-            *clickhouse_cluster.get_local_nodes(),
-            *clickhouse_cluster.get_distributed_nodes(),
-        ]
+        user = cluster.get("user", "default")
+        password = cluster.get("password", "")
+        secure = cluster.get("secure", False)
+        ca_certs = cluster.get("ca_certs")
+        verify = cluster.get("verify")
 
-        for node in nodes:
-            connection = clickhouse_cluster.get_node_connection(
-                ClickhouseClientSettings.MIGRATE, node
+        for node in _bootstrap_cluster_nodes(cluster):
+            # CREATE/DROP DATABASE must not attach the target DB: it does not
+            # exist yet, and clickhouse-connect probes it at client construction.
+            connection = build_pool(
+                ClickhouseClientSettings.MIGRATE,
+                node,
+                user,
+                password,
+                None,
+                secure,
+                ca_certs,
+                verify,
             )
-            connection.execute(f"DROP DATABASE IF EXISTS {database_name};")
-            connection.execute(f"CREATE DATABASE {database_name};")
+            connection.command(f"DROP DATABASE IF EXISTS {database_name};")
+            connection.command(f"CREATE DATABASE {database_name};")
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[Any]) -> None:
@@ -150,10 +204,6 @@ def block_redis_db(monkeypatch: pytest.MonkeyPatch) -> Generator[None]:
     for key in _redis_clients:
         monkeypatch.setattr(_redis_clients[key], "execute_command", blocked)
 
-    # Patch out Snuba settings so that random config access does not hit redis
-    # (setting config still requires redis_db marker)
-    monkeypatch.setattr("snuba.state.get_raw_configs", dict)
-
     yield
 
     blocked.snuba_test_teardown()
@@ -185,10 +235,6 @@ def redis_db(request: pytest.FixtureRequest) -> Generator[None]:
 
     for redis_client in all_redis_clients():
         redis_client.flushdb()
-
-    # Drop the in-memory memoize cache of Redis-backed configs so stale entries
-    # from a prior redis_db test don't survive the flush above.
-    state.get_raw_configs.clear()  # type: ignore[attr-defined]
 
     yield
 
@@ -318,24 +364,38 @@ def _clear_db() -> None:
 
 
 def _drop_tables() -> None:
-    clusters: set[ClickhouseCluster] = set()
-    for storage_key in get_all_storage_keys():
-        storage = get_storage(storage_key)
-        cluster = storage.get_cluster()
-        clusters.add(cluster)
+    # Discover every node before dropping anything. Multi-cluster configs share
+    # one physical DB name; the first DROP would break get_local_nodes() on the
+    # next cluster if discovery still attached that database.
+    planned: list[tuple[str, str, str, bool, str | None, bool | None, ClickhouseNode]] = []
+    seen_nodes: set[tuple[str, str, int]] = set()
+    for cluster_cfg in settings.CLUSTERS:
+        database_name = cluster_cfg["database"]
+        user = cluster_cfg.get("user", "default")
+        password = cluster_cfg.get("password", "")
+        secure = cluster_cfg.get("secure", False)
+        ca_certs = cluster_cfg.get("ca_certs")
+        verify = cluster_cfg.get("verify")
+        for node in _bootstrap_cluster_nodes(cluster_cfg):
+            key = (database_name, node.host_name, node.port)
+            if key in seen_nodes:
+                continue
+            seen_nodes.add(key)
+            planned.append((database_name, user, password, secure, ca_certs, verify, node))
 
-    for cluster in clusters:
-        database_name = cluster.get_database()
-
-        nodes = [
-            *cluster.get_local_nodes(),
-            *cluster.get_distributed_nodes(),
-        ]
-
-        for node in nodes:
-            connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
-            connection.execute(f"DROP DATABASE IF EXISTS {database_name};")
-            connection.execute(f"CREATE DATABASE {database_name};")
+    for database_name, user, password, secure, ca_certs, verify, node in planned:
+        connection = build_pool(
+            ClickhouseClientSettings.MIGRATE,
+            node,
+            user,
+            password,
+            None,
+            secure,
+            ca_certs,
+            verify,
+        )
+        connection.command(f"DROP DATABASE IF EXISTS {database_name};")
+        connection.command(f"CREATE DATABASE {database_name};")
 
 
 @pytest.fixture
@@ -442,24 +502,3 @@ def _build_snql_post_methods(
         return test_app.post(endpoint, data=data, headers={"referer": referrer})
 
     return simple_post
-
-
-SnubaSetConfig = Callable[[str, Any], None]
-
-
-@pytest.fixture
-def snuba_set_config(request: pytest.FixtureRequest) -> SnubaSetConfig:
-    finalizers_registered = set()
-
-    def set_config(key: str, value: Any) -> None:
-        # should register finalizer only once because 1) we don't have to undo
-        # every single value change step-by-step 2) teardown-order via pytest
-        # finalizers is poorly understood
-        if key not in finalizers_registered:
-            finalizers_registered.add(key)
-            old_value = state.get_config(key)
-            request.addfinalizer(lambda: state.set_config(key, old_value))
-
-        state.set_config(key, value)
-
-    return set_config

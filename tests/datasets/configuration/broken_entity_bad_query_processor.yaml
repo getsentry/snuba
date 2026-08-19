@@ -1,6 +1,6 @@
 version: v1
 kind: entity
-name: generic_metrics_sets
+name: generic_metrics_counters
 
 schema:
   [
@@ -35,7 +35,7 @@ schema:
   ]
 
 storages:
-  - storage: generic_metrics_sets
+  - storage: generic_metrics_counters
     translation_mappers:
       functions:
         - mapper: FunctionNameMapper
@@ -61,7 +61,7 @@ storages:
           to_nested_col_table:
           to_nested_col_name: tags
           value_subcolumn_name: indexed_value
-  - storage: generic_metrics_sets_raw
+  - storage: generic_metrics_counters_raw
     is_writable: true
     translation_mappers:
       functions:
@@ -92,7 +92,7 @@ storages:
 storage_selector:
   selector: SimpleQueryStorageSelector
   args:
-    storage: generic_metrics_sets
+    storage: generic_metrics_counters
 
 query_processors:
   -

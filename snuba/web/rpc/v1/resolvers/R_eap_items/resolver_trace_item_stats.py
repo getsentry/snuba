@@ -64,6 +64,8 @@ _DEFAULT_ROW_LIMIT = 10_000
 MAX_BUCKETS = 100
 DEFAULT_BUCKETS = 10
 
+MAX_REQUEST_ATTRIBUTES = 500
+
 COUNT_LABEL = "count()"
 LAST_SEEN_LABEL = "last_seen"
 
@@ -290,6 +292,11 @@ class ResolverTraceItemStatsEAPItems(ResolverTraceItemStats):
             if requested_type.HasField("attribute_distributions"):
                 if requested_type.attribute_distributions.max_buckets > MAX_BUCKETS:
                     raise BadSnubaRPCRequestException(f"Max allowed buckets is {MAX_BUCKETS}.")
+
+                if len(requested_type.attribute_distributions.attributes) > MAX_REQUEST_ATTRIBUTES:
+                    raise BadSnubaRPCRequestException(
+                        f"Max allowed attributes is {MAX_REQUEST_ATTRIBUTES}."
+                    )
 
                 query = _build_attr_distribution_query(
                     in_msg, requested_type.attribute_distributions

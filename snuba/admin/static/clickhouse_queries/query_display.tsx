@@ -79,7 +79,8 @@ function QueryDisplay(props: {
       return {
         ...prevQuery,
         host: hostStringIP,
-        port: 9000,
+        // Manual host entry defaults to ClickHouse HTTP, not the old native port.
+        port: 8123,
       };
     });
   }

@@ -275,45 +275,12 @@ def devserver(*, bootstrap: bool, workers: bool, log_level: str) -> None:
                 ],
             ),
             (
-                "generic-metrics-distributions-consumer",
-                [
-                    "snuba",
-                    "rust-consumer",
-                    "--storage=generic_metrics_distributions_raw",
-                    "--consumer-group=snuba-gen-metrics-distributions-consumers",
-                    *COMMON_RUST_CONSUMER_DEV_OPTIONS,
-                    f"--log-level={log_level}",
-                ],
-            ),
-            (
-                "generic-metrics-sets-consumer",
-                [
-                    "snuba",
-                    "rust-consumer",
-                    "--storage=generic_metrics_sets_raw",
-                    "--consumer-group=snuba-gen-metrics-sets-consumers",
-                    *COMMON_RUST_CONSUMER_DEV_OPTIONS,
-                    f"--log-level={log_level}",
-                ],
-            ),
-            (
                 "generic-metrics-counters-consumer",
                 [
                     "snuba",
                     "rust-consumer",
                     "--storage=generic_metrics_counters_raw",
                     "--consumer-group=snuba-gen-metrics-counters-consumers",
-                    *COMMON_RUST_CONSUMER_DEV_OPTIONS,
-                    f"--log-level={log_level}",
-                ],
-            ),
-            (
-                "generic-metrics-gauges-consumer",
-                [
-                    "snuba",
-                    "rust-consumer",
-                    "--storage=generic_metrics_gauges_raw",
-                    "--consumer-group=snuba-gen-metrics-gauges-consumers",
                     *COMMON_RUST_CONSUMER_DEV_OPTIONS,
                     f"--log-level={log_level}",
                 ],
@@ -349,32 +316,6 @@ def devserver(*, bootstrap: bool, workers: bool, log_level: str) -> None:
                         ],
                     ),
                     (
-                        "subscriptions-scheduler-generic-metrics-distributions",
-                        [
-                            "snuba",
-                            "subscriptions-scheduler",
-                            "--entity=generic_metrics_distributions",
-                            "--consumer-group=snuba-generic-metrics-distributions-subscriptions-schedulers",
-                            "--followed-consumer-group=snuba-gen-metrics-distributions-consumers",
-                            "--auto-offset-reset=latest",
-                            f"--log-level={log_level}",
-                            "--schedule-ttl=10",
-                        ],
-                    ),
-                    (
-                        "subscriptions-scheduler-generic-metrics-sets",
-                        [
-                            "snuba",
-                            "subscriptions-scheduler",
-                            "--entity=generic_metrics_sets",
-                            "--consumer-group=snuba-generic-metrics-sets-subscriptions-schedulers",
-                            "--followed-consumer-group=snuba-gen-metrics-sets-consumers",
-                            "--auto-offset-reset=latest",
-                            f"--log-level={log_level}",
-                            "--schedule-ttl=10",
-                        ],
-                    ),
-                    (
                         "subscriptions-scheduler-generic-metrics-counters",
                         [
                             "snuba",
@@ -382,19 +323,6 @@ def devserver(*, bootstrap: bool, workers: bool, log_level: str) -> None:
                             "--entity=generic_metrics_counters",
                             "--consumer-group=snuba-generic-metrics-counters-subscriptions-schedulers",
                             "--followed-consumer-group=snuba-gen-metrics-counters-consumers",
-                            "--auto-offset-reset=latest",
-                            f"--log-level={log_level}",
-                            "--schedule-ttl=10",
-                        ],
-                    ),
-                    (
-                        "subscriptions-scheduler-generic-metrics-gauges",
-                        [
-                            "snuba",
-                            "subscriptions-scheduler",
-                            "--entity=generic_metrics_gauges",
-                            "--consumer-group=snuba-generic-metrics-gauges-subscriptions-schedulers",
-                            "--followed-consumer-group=snuba-gen-metrics-gauges-consumers",
                             "--auto-offset-reset=latest",
                             f"--log-level={log_level}",
                             "--schedule-ttl=10",

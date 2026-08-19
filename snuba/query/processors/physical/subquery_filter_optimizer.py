@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query
@@ -125,7 +125,7 @@ class SubqueryFilterOptimizer(ClickhouseQueryProcessor):
                 )
             )
 
-    def __match_existence_predicate(self, cond: Expression) -> Optional[Expression]:
+    def __match_existence_predicate(self, cond: Expression) -> Expression | None:
         """
         If ``cond`` is a positive-existence HAVING condition of the form
         ``sum(<pred>) <op> <literal>`` where ``<pred>`` references only

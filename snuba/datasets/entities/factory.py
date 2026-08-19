@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from glob import glob
 
-import sentry_sdk
+from sentry_sdk import traces
 
 from snuba import settings
 from snuba.datasets.configuration.entity_builder import build_entity_from_config
@@ -13,12 +13,13 @@ from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.datasets.storages.factory import initialize_storage_factory
 from snuba.datasets.table_storage import TableWriter
 from snuba.utils.config_component_factory import ConfigComponentFactory
+from snuba.utils.sentry import SENTRY_OP
 from snuba.utils.serializable_exception import SerializableException
 
 
 class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
     def __init__(self) -> None:
-        with sentry_sdk.start_span(op="initialize", description="Entity Factory"):
+        with traces.start_span(name="Entity Factory", attributes={SENTRY_OP: "initialize"}):
             initialize_storage_factory()
             self._entity_map: dict[EntityKey, PluggableEntity] = {}
             self._name_map: dict[type[Entity], EntityKey] = {}

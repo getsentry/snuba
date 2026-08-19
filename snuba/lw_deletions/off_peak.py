@@ -18,8 +18,8 @@ class OffPeakProcessingStrategy(ProcessingStrategy[KafkaPayload]):
     configurable off-peak hours. Outside those hours, raises MessageRejected
     to apply backpressure so messages accumulate in Kafka.
 
-    Controlled via runtime config (Redis-backed):
-      - lw_deletions_offpeak_enabled (int, default 0): feature toggle
+    Controlled via sentry-options:
+      - lw_deletions_offpeak_enabled (bool, default false): feature toggle
       - lw_deletions_offpeak_start (int, default 0): start hour UTC, inclusive
       - lw_deletions_offpeak_end (int, default 24): end hour UTC, exclusive
     """

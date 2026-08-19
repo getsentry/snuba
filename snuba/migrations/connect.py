@@ -5,7 +5,7 @@ from collections.abc import Sequence
 import structlog
 from packaging import version
 
-from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.pool import ClickhousePool
 from snuba.clusters.cluster import (
     ClickhouseClientSettings,
     ClickhouseCluster,
@@ -71,38 +71,39 @@ def get_clusters_for_readiness_states(
 
 def check_clickhouse_connections(
     clusters: Sequence[ClickhouseCluster],
+    *,
+    max_attempts: int = 60,
+    retry_delay_seconds: float = 1.0,
 ) -> None:
     """
     Ensure that we can establish a connection with every cluster.
     """
-    attempts = 0
-
     for cluster in clusters:
         clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
 
-        while True:
+        for attempt in range(max_attempts):
             try:
-                logger.debug(
-                    "Attempting to connect to Clickhouse cluster %s (attempt %d)",
-                    cluster,
-                    attempts,
-                )
                 check_clickhouse(clickhouse)
                 break
             except InvalidClickhouseVersion as e:
                 logger.error(e)
                 raise
             except Exception as e:
-                logger.error(
+                logger.debug(
                     "Connection to Clickhouse cluster %s failed (attempt %d)",
                     cluster,
-                    attempts,
+                    attempt,
                     exc_info=e,
                 )
-                attempts += 1
-                if attempts == 60:
+                if attempt + 1 >= max_attempts:
+                    logger.error(
+                        "Connection to Clickhouse cluster %s failed after %d attempts",
+                        cluster,
+                        max_attempts,
+                        exc_info=e,
+                    )
                     raise
-                time.sleep(1)
+                time.sleep(retry_delay_seconds)
 
 
 def check_clickhouse(clickhouse: ClickhousePool) -> None:
@@ -161,9 +162,9 @@ def check_for_inactive_replicas(clusters: list[ClickhouseCluster]) -> None:
     inactive_replica_info = []
     for cluster in clusters:
         for node in cluster.get_local_nodes():
-            if (node.host_name, node.native_port) in checked_nodes:
+            if (node.host_name, node.port) in checked_nodes:
                 continue
-            checked_nodes.add((node.host_name, node.native_port))
+            checked_nodes.add((node.host_name, node.port))
             conn = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
             tables_with_inactive = conn.execute(
                 f"SELECT table, total_replicas, active_replicas FROM system.replicas "
@@ -197,9 +198,9 @@ def get_column_states() -> ColumnStatesMapType:
         except UndefinedClickhouseCluster:
             continue
         for node in (*local_nodes, *distributed_nodes, query_node):
-            if (node.host_name, node.native_port) in checked_nodes:
+            if (node.host_name, node.port) in checked_nodes:
                 continue
-            checked_nodes.add((node.host_name, node.native_port))
+            checked_nodes.add((node.host_name, node.port))
 
             conn = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
             column_types = conn.execute(
@@ -208,6 +209,6 @@ def get_column_states() -> ColumnStatesMapType:
 
             for row in column_types:
                 table, col_name, type = row
-                column_states[(node.host_name, node.native_port, table, col_name)] = type
+                column_states[(node.host_name, node.port, table, col_name)] = type
 
     return column_states

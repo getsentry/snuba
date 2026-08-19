@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from abc import ABC
 from collections.abc import Callable
@@ -22,6 +23,7 @@ from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageCon
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_sdk import traces
 
 from snuba import environment, settings
 from snuba.configs.configuration import (
@@ -50,10 +52,13 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import record_query
 from snuba.state.sentry_options import get_mapped_option, get_option
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.metrics.util import set_current_span_attributes
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import import_submodules_in_directory
+from snuba.utils.sentry import SENTRY_OP
 from snuba.web import QueryException, QueryResult
 from snuba.web.rpc.common.exceptions import RPCAllocationPolicyException
+from snuba.web.rpc.common.query_info import extract_query_info, extract_query_info_tags
 from snuba.web.rpc.storage_routing.common import extract_message_meta
 from snuba.web.rpc.storage_routing.load_retriever import LoadInfo, get_cluster_loadinfo
 
@@ -62,7 +67,6 @@ _START_ESTIMATION_MARK = "start_sampling_in_storage_estimation"
 _END_ESTIMATION_MARK = "end_sampling_in_storage_estimation"
 DEFAULT_STORAGE_ROUTING_CONFIG_PREFIX = "StorageRouting"
 MetricsBackendType = Callable[[str, int | float, dict[str, str] | None, str | None], None]
-CBRS_HASH = "cbrs"
 RoutedRequestType = TimeSeriesRequest | TraceItemTableRequest
 ClickhouseQuerySettings = dict[str, Any]
 
@@ -176,6 +180,7 @@ class RoutingDecision:
             "clickhouse_settings": self.clickhouse_settings,
             "result_info": query_result,
             "routed_tier": self.tier.name,
+            "query_info": extract_query_info(self.routing_context.in_msg),
             "allocation_policies_recommendations": {
                 key: quota_allowance.to_dict()
                 for key, quota_allowance in self.routing_context.allocation_policies_recommendations.items()
@@ -210,7 +215,9 @@ def get_stats_dict(
 def _construct_hacky_querylog_payload(
     strategy: BaseRoutingStrategy, routing_decision: RoutingDecision
 ) -> snuba_queries_v1.Querylog:
-    cur_span = sentry_sdk.get_current_span()
+    # Propagation context has a trace id even with no active/sampled span.
+    propagation_context = sentry_sdk.get_current_scope().get_active_propagation_context()
+    trace_id = propagation_context.trace_id if propagation_context is not None else ""
     assert routing_decision.routing_context is not None
     query_result = routing_decision.routing_context.query_result or QueryResult(
         {}, {"stats": {}, "sql": "", "experiments": {}}
@@ -247,7 +254,7 @@ def _construct_hacky_querylog_payload(
                 "end_timestamp": in_message_meta.end_timestamp.seconds,
                 "stats": get_stats_dict(routing_decision),
                 "status": "0",
-                "trace_id": cur_span.trace_id if cur_span else "",
+                "trace_id": trace_id or "",
                 "profile": {
                     "time_range": None,
                     "table": "eap_items",
@@ -305,11 +312,21 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             self._get_overridden_additional_config_defaults(default_config_overrides)
         )
 
-    def _get_hash(self) -> str:
-        return CBRS_HASH
-
     def _get_default_config_definitions(self) -> list[Configuration]:
         return cast(list[Configuration], self._default_config_definitions)
+
+    def _capture_routing_failure(
+        self,
+        error: Exception,
+        fingerprint_key: str,
+        failure_type_tag: str,
+    ) -> None:
+        exception_name = type(error).__name__
+        with sentry_sdk.push_scope() as scope:
+            scope.set_tag("routing_strategy", self.class_name())
+            scope.set_tag(failure_type_tag, exception_name)
+            scope.fingerprint = [fingerprint_key, exception_name]
+            sentry_sdk.capture_exception(error)
 
     def _get_default_routing_decision_tier(self) -> Tier:
         tier_int = get_option("default_tier", 1)
@@ -408,7 +425,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             "value": value,
             "tags": tags,
         }
-        sentry_sdk.update_current_span(attributes={name: value})
+        set_current_span_attributes({name: value})
 
     def _update_routing_decision(
         self,
@@ -459,17 +476,18 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         recommendations: dict[str, QuotaAllowance] = {}
         for allocation_policy in self.get_allocation_policies():
             allocation_policy_name = allocation_policy.class_name()
-            with sentry_sdk.start_span(
-                op="allocation_policy.get_quota_allowance",
-                description=allocation_policy_name,
+            with traces.start_span(
+                name=allocation_policy_name,
+                attributes={SENTRY_OP: "allocation_policy.get_quota_allowance"},
             ) as span:
                 recommendations[allocation_policy_name] = allocation_policy.get_quota_allowance(
                     routing_context.tenant_ids,
                     routing_context.query_id,
                 )
-                span.set_data(
+                # QuotaAllowance isn't a valid attribute value; serialize it.
+                span.set_attribute(
                     f"{allocation_policy_name}_quota_allowance",
-                    recommendations[allocation_policy_name],
+                    json.dumps(recommendations[allocation_policy_name].to_dict(), default=repr),
                 )
         return recommendations
 
@@ -481,7 +499,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
 
         default_tier = self._get_default_routing_decision_tier()
 
-        with sentry_sdk.start_span(op="decide_tier") as span:
+        with traces.start_span(name="decide_tier", attributes={SENTRY_OP: "decide_tier"}) as span:
             try:
                 routing_context.timer.mark(_START_ESTIMATION_MARK)
 
@@ -529,19 +547,25 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 )
 
             except Exception as e:
-                # log some error metrics
-                self.metrics.increment("estimation_failure")
-                sentry_sdk.capture_message(f"Error getting routing decision: {e}")
+                self.metrics.increment(
+                    "estimation_failure",
+                    tags={"exception_name": type(e).__name__},
+                )
+                if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
+                    raise e
+
+                self._capture_routing_failure(
+                    e,
+                    fingerprint_key="routing-estimation-failure",
+                    failure_type_tag="estimation_failure_type",
+                )
                 routing_decision = RoutingDecision(
                     routing_context=routing_context,
                     strategy=OutcomesBasedRoutingStrategy(),
                     tier=default_tier,
                     can_run=True,
                 )
-
-                if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
-                    raise e
-            span.set_data("decided_tier", routing_decision.tier)
+            span.set_attribute("decided_tier", routing_decision.tier.name)
             return routing_decision
 
     @final
@@ -552,10 +576,12 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             self.update_allocation_policies_balances(routing_decision, error)
 
             # these metrics are meant to track reject/throttle/success decisions, so they get emitted even if the query did not run successfully after routing
+            query_info_tags = extract_query_info_tags(routing_decision.routing_context.in_msg)
             tags = {
                 "strategy": self.class_name(),
                 "resource_identifier": routing_decision.strategy.resource_identifier.value,
                 "referrer": cast(str, routing_decision.routing_context.tenant_ids["referrer"]),
+                **query_info_tags,
             }
             if not routing_decision.can_run:
                 self.metrics.increment("rejected_query", tags=tags)
@@ -570,13 +596,14 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 {}, {"stats": {}, "sql": "", "experiments": {}}
             )
             profile = query_result.result.get("profile", {}) or {}
+            cost_tags = {"tier": routing_decision.tier.name, **query_info_tags}
             if elapsed := profile.get("elapsed"):
                 self._record_value_in_span_and_DD(
                     routing_context=routing_decision.routing_context,
                     metrics_backend_func=self.metrics.timing,
                     name="query_timing",
                     value=elapsed,
-                    tags={"tier": routing_decision.tier.name},
+                    tags=cost_tags,
                 )
             if bytes_scanned := profile.get("progress_bytes"):
                 self._record_value_in_span_and_DD(
@@ -584,14 +611,22 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                     metrics_backend_func=self.metrics.timing,
                     name="query_bytes_scanned",
                     value=bytes_scanned,
-                    tags={"tier": routing_decision.tier.name},
+                    tags=cost_tags,
                 )
             record_query(_construct_hacky_querylog_payload(self, routing_decision))
         except Exception as e:
-            self.metrics.increment("after_execute_failure")
-            sentry_sdk.capture_message(f"Error in routing strategy after execute: {e}")
+            self.metrics.increment(
+                "after_execute_failure",
+                tags={"exception_name": type(e).__name__},
+            )
             if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
                 raise e
+
+            self._capture_routing_failure(
+                e,
+                fingerprint_key="routing-after-execute-failure",
+                failure_type_tag="after_execute_failure_type",
+            )
 
     @final
     def update_allocation_policies_balances(
@@ -634,8 +669,8 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
 
     def _get_time_budget_ms(self) -> int:
         """
-        Get the time budget for the query, Each strategy can have its own
-        time budget overridden or can default to a global one set in runtime config
+        Get the time budget for the query. Each strategy can have its own
+        time budget overridden or can default to a global one set in sentry-options
         """
         default = 8000
         return (

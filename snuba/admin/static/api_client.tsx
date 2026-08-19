@@ -23,10 +23,15 @@ import {
 } from "SnubaAdmin/snql_to_sql/types";
 
 import { QuerylogRequest, QuerylogResult } from "SnubaAdmin/querylog/types";
+import { EapStatsRequest, EapStatsResult } from "SnubaAdmin/eap_stats/types";
 import {
   CardinalityQueryRequest,
   CardinalityQueryResult,
 } from "SnubaAdmin/cardinality_analyzer/types";
+import {
+  OutcomesQueryRequest,
+  OutcomesQueryResult,
+} from "SnubaAdmin/outcomes_analyzer/types";
 
 import { AutoReplacementsBypassProjectsData } from "SnubaAdmin/auto_replacements_bypass_projects/types";
 
@@ -52,10 +57,15 @@ interface Client {
   getPredefinedQuerylogOptions: () => Promise<[PredefinedQuery]>;
   getQuerylogSchema: () => Promise<QuerylogResult>;
   executeQuerylogQuery: (req: QuerylogRequest) => Promise<QuerylogResult>;
+  runEapStats: (req: EapStatsRequest) => Promise<EapStatsResult>;
   getPredefinedCardinalityQueryOptions: () => Promise<[PredefinedQuery]>;
   executeCardinalityQuery: (
     req: CardinalityQueryRequest,
   ) => Promise<CardinalityQueryResult>;
+  getPredefinedOutcomesQueryOptions: () => Promise<[PredefinedQuery]>;
+  executeOutcomesQuery: (
+    req: OutcomesQueryRequest,
+  ) => Promise<OutcomesQueryResult>;
   getAllMigrationGroups: () => Promise<MigrationGroupResult[]>;
   runMigration: (req: RunMigrationRequest) => Promise<RunMigrationResult>;
   getAllowedTools: () => Promise<AllowedTools>;
@@ -282,12 +292,44 @@ function Client(): Client {
         }
       });
     },
+    runEapStats: (req: EapStatsRequest) => {
+      const url = baseUrl + "eap_stats";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        body: JSON.stringify(req),
+      }).then((resp) => {
+        if (resp.ok) {
+          return resp.json();
+        } else {
+          return resp.json().then(Promise.reject.bind(Promise));
+        }
+      });
+    },
     getPredefinedCardinalityQueryOptions: () => {
       const url = baseUrl + "cardinality_queries";
       return fetch(url).then((resp) => resp.json());
     },
     executeCardinalityQuery: (query: CardinalityQueryRequest) => {
       const url = baseUrl + "cardinality_query";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        body: JSON.stringify(query),
+      }).then((resp) => {
+        if (resp.ok) {
+          return resp.json();
+        } else {
+          return resp.json().then(Promise.reject.bind(Promise));
+        }
+      });
+    },
+    getPredefinedOutcomesQueryOptions: () => {
+      const url = baseUrl + "outcomes_queries";
+      return fetch(url).then((resp) => resp.json());
+    },
+    executeOutcomesQuery: (query: OutcomesQueryRequest) => {
+      const url = baseUrl + "outcomes_query";
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "POST",

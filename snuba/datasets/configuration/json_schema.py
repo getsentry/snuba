@@ -4,9 +4,10 @@ from copy import deepcopy
 from typing import Any
 
 import fastjsonschema
-import sentry_sdk
+from sentry_sdk import traces
 
 from snuba import settings
+from snuba.utils.sentry import SENTRY_OP
 
 # Snubadocs are automatically generated from this file. When adding new schemas or individual keys,
 # please ensure you add a description key in the same level and succinctly describe the property.
@@ -864,17 +865,17 @@ V1_MIGRATION_GROUP_SCHEMA = {
 }
 
 if settings.VALIDATE_DATASET_YAMLS_ON_STARTUP:
-    with sentry_sdk.start_span(op="compile", description="Storage Validators"):
+    with traces.start_span(name="Storage Validators", attributes={SENTRY_OP: "compile"}):
         STORAGE_VALIDATORS = {
             "readable_storage": fastjsonschema.compile(V1_READABLE_STORAGE_SCHEMA),
             "writable_storage": fastjsonschema.compile(V1_WRITABLE_STORAGE_SCHEMA),
             "cdc_storage": fastjsonschema.compile(V1_CDC_STORAGE_SCHEMA),
         }
 
-    with sentry_sdk.start_span(op="compile", description="Entity Validators"):
+    with traces.start_span(name="Entity Validators", attributes={SENTRY_OP: "compile"}):
         ENTITY_VALIDATORS = {"entity": fastjsonschema.compile(V1_ENTITY_SCHEMA)}
 
-    with sentry_sdk.start_span(op="compile", description="Dataset Validators"):
+    with traces.start_span(name="Dataset Validators", attributes={SENTRY_OP: "compile"}):
         DATASET_VALIDATORS = {"dataset": fastjsonschema.compile(V1_DATASET_SCHEMA)}
 else:
     STORAGE_VALIDATORS = {}

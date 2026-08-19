@@ -254,17 +254,11 @@ impl<TResult: Clone, TNext: Clone> MessageProcessor<TResult, TNext> {
 
             counter!("invalid_message");
 
-            sentry::with_scope(
-                |scope| {
-                    let payload = String::from_utf8_lossy(payload);
-                    let payload_as_value: serde_json::Value =
-                        serde_json::from_str(&payload).unwrap_or(payload.into());
-                    scope.set_extra("payload", payload_as_value);
-                },
-                || {
-                    let error: &dyn std::error::Error = error.as_ref();
-                    tracing::error!(error, "Failed processing message");
-                },
+            let error: &dyn std::error::Error = error.as_ref();
+            tracing::error!(
+                error,
+                error_chain = %error_chain(error),
+                "Failed processing message"
             );
 
             RunTaskError::InvalidMessage(invalid_msg)
@@ -360,15 +354,11 @@ fn _validate_schema(
 
     counter!("schema_validation.failed");
 
-    sentry::with_scope(
-        |scope| {
-            let payload = String::from_utf8_lossy(payload).into();
-            scope.set_extra("payload", payload)
-        },
-        || {
-            let error: &dyn std::error::Error = &error;
-            tracing::warn!(error, "Validation error");
-        },
+    let err: &dyn std::error::Error = &error;
+    tracing::warn!(
+        error = err,
+        error_chain = %error_chain(err),
+        "Validation error"
     );
 
     if !enforce_schema {
@@ -376,6 +366,17 @@ fn _validate_schema(
     } else {
         Err(error)
     }
+}
+
+fn error_chain(error: &dyn std::error::Error) -> String {
+    let mut message = error.to_string();
+    let mut source = error.source();
+    while let Some(err) = source {
+        message.push_str(": ");
+        message.push_str(&err.to_string());
+        source = err.source();
+    }
+    message
 }
 
 static IP_REGEX: LazyLock<Regex> = LazyLock::new(|| {
@@ -412,12 +413,30 @@ mod tests {
     use chrono::Utc;
     use sentry_arroyo::backends::kafka::types::KafkaPayload;
     use sentry_arroyo::processing::strategies::{
-        CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
+        CommitRequest, InvalidMessageReason, ProcessingStrategy, StrategyError, SubmitError,
     };
     use sentry_arroyo::types::{Message, Partition, Topic};
 
     use crate::types::{InsertBatch, RowData};
     use crate::Noop;
+
+    #[test]
+    fn error_chain_includes_source() {
+        let err: anyhow::Error =
+            SchemaError::InvalidMessage(sentry_kafka_schemas::ValidationError::SchemaViolation(
+                "'$.foo' is a required property".to_string(),
+            ))
+            .into();
+        let message = error_chain(err.as_ref());
+        assert!(
+            message.contains("Invalid message"),
+            "missing outer error: {message}"
+        );
+        assert!(
+            message.contains("is a required property"),
+            "missing validation cause: {message}"
+        );
+    }
 
     #[test]
     fn validate_schema() {
@@ -458,6 +477,88 @@ mod tests {
 
         strategy.submit(message).unwrap(); // Does not error
         let _ = strategy.join(None);
+    }
+
+    #[test]
+    fn process_failure_rejects_invalid_message() {
+        fn failing_processor(
+            _payload: KafkaPayload,
+            _metadata: KafkaMessageMetadata,
+            _config: &ProcessorConfig,
+        ) -> anyhow::Result<InsertBatch> {
+            anyhow::bail!("synthetic process failure")
+        }
+
+        let partition = Partition::new(Topic::new("test"), 0);
+        let offset = 17;
+        let concurrency = ConcurrencyConfig::new(1);
+        let mut strategy = make_rust_processor(
+            Noop,
+            failing_processor,
+            "outcomes",
+            false,
+            &concurrency,
+            ProcessorConfig::default(),
+            None,
+        );
+
+        let payload = KafkaPayload::new(None, None, Some(b"{}".to_vec()));
+        let message = Message::new_broker_message(payload, partition, offset, Utc::now());
+
+        strategy.submit(message).unwrap();
+        let err = strategy
+            .join(None)
+            .expect_err("process failure should surface as InvalidMessage");
+
+        match err {
+            StrategyError::InvalidMessage(invalid) => {
+                assert_eq!(invalid.partition, partition);
+                assert_eq!(invalid.offset, offset);
+                assert_eq!(invalid.reason, InvalidMessageReason::Invalid);
+            }
+            other => panic!("unexpected strategy error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn schema_validation_failure_rejects_invalid_message() {
+        fn noop_processor(
+            _payload: KafkaPayload,
+            _metadata: KafkaMessageMetadata,
+            _config: &ProcessorConfig,
+        ) -> anyhow::Result<InsertBatch> {
+            Ok(InsertBatch::default())
+        }
+
+        let partition = Partition::new(Topic::new("test"), 0);
+        let offset = 23;
+        let concurrency = ConcurrencyConfig::new(1);
+        let mut strategy = make_rust_processor(
+            Noop,
+            noop_processor,
+            "outcomes",
+            true,
+            &concurrency,
+            ProcessorConfig::default(),
+            None,
+        );
+
+        let payload = KafkaPayload::new(None, None, Some(b"{}".to_vec()));
+        let message = Message::new_broker_message(payload, partition, offset, Utc::now());
+
+        strategy.submit(message).unwrap();
+        let err = strategy
+            .join(None)
+            .expect_err("schema validation failure should surface as InvalidMessage");
+
+        match err {
+            StrategyError::InvalidMessage(invalid) => {
+                assert_eq!(invalid.partition, partition);
+                assert_eq!(invalid.offset, offset);
+                assert_eq!(invalid.reason, InvalidMessageReason::Invalid);
+            }
+            other => panic!("unexpected strategy error: {other:?}"),
+        }
     }
 
     /// The commit log offset produced by the processor must use next-to-consume

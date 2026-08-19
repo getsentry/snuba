@@ -5,7 +5,8 @@ from unittest.mock import patch
 import pytest
 
 from snuba import settings
-from snuba.clickhouse.native import ClickhouseNativePool, ClickhouseResult
+from snuba.clickhouse.connect import ClickhouseConnectPool
+from snuba.clickhouse.pool import ClickhouseResult
 from snuba.clusters import cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.storages.factory import get_storage
@@ -33,7 +34,6 @@ REDUCED_CONFIG = [
         "user": "default",
         "password": "",
         "database": "default",
-        "http_port": 8123,
         "storage_sets": ENABLED_STORAGE_SETS,
         "single_node": True,
     },
@@ -43,7 +43,6 @@ REDUCED_CONFIG = [
         "user": "default",
         "password": "",
         "database": "default",
-        "http_port": 8123,
         "storage_sets": {"transactions"},
         "single_node": False,
         "cluster_name": "clickhouse_hosts",
@@ -58,7 +57,6 @@ FULL_CONFIG = [
         "user": "default",
         "password": "",
         "database": "default",
-        "http_port": 8123,
         "secure": False,
         "ca_certs": None,
         "verify": False,
@@ -71,7 +69,6 @@ FULL_CONFIG = [
         "user": "default",
         "password": "",
         "database": "default",
-        "http_port": 8123,
         "secure": False,
         "ca_certs": None,
         "verify": False,
@@ -91,9 +88,8 @@ SLICED_CLUSTERS_CONFIG = [
         "user": "default",
         "password": "",
         "database": "default",
-        "http_port": 8123,
         "secure": False,
-        "storage_set_slices": {("generic_metrics_distributions", 0)},
+        "storage_set_slices": {("generic_metrics_counters", 0)},
         "single_node": True,
     },
     {
@@ -102,9 +98,8 @@ SLICED_CLUSTERS_CONFIG = [
         "user": "default",
         "password": "",
         "database": "slice_1_default",
-        "http_port": 8124,
         "secure": False,
-        "storage_set_slices": {("generic_metrics_distributions", 1)},
+        "storage_set_slices": {("generic_metrics_counters", 1)},
         "single_node": True,
     },
 ]
@@ -186,13 +181,16 @@ def test_disabled_cluster() -> None:
 @pytest.mark.clickhouse_db
 def test_get_local_nodes() -> None:
     importlib.reload(cluster)
-    with patch.object(ClickhouseNativePool, "execute") as execute:
+    with patch.object(ClickhouseConnectPool, "execute") as execute:
         execute.return_value = ClickhouseResult([("host_1", 9000, 1, 1), ("host_2", 9000, 2, 1)])
 
         local_cluster = get_storage(StorageKey("errors")).get_cluster()
         assert len(local_cluster.get_local_nodes()) == 1
         assert local_cluster.get_local_nodes()[0].host_name == "host_1"
-        assert local_cluster.get_local_nodes()[0].native_port == 9000
+        # Single-node clusters return the configured query-node port (FULL_CONFIG
+        # still uses the legacy 9000 fixture value). Discovered multi-node replicas
+        # rewrite to DEFAULT_CLICKHOUSE_HTTP_PORT (8123) instead.
+        assert local_cluster.get_local_nodes()[0].port == 9000
         assert local_cluster.get_local_nodes()[0].shard is None
         assert local_cluster.get_local_nodes()[0].replica is None
 
@@ -204,18 +202,17 @@ def test_get_local_nodes() -> None:
 
 @pytest.mark.clickhouse_db
 def test_discovered_nodes_use_default_http_port() -> None:
-    # The cluster's configured http_port is an Envoy intercept port that only
+    # The cluster's configured port is an Envoy intercept port that only
     # fronts the cluster endpoint (query node). Nodes discovered via
     # system.clusters are addressed directly (bypassing Envoy) and must carry
     # the well-known default HTTP port instead.
-    envoy_http_port = 8158
+    envoy_port = 8158
     distributed_cluster = cluster.ClickhouseCluster(
         "host_query",
-        9000,
+        envoy_port,
         "default",
         "",
         "default",
-        envoy_http_port,
         False,
         None,
         False,
@@ -225,55 +222,37 @@ def test_discovered_nodes_use_default_http_port() -> None:
         distributed_cluster_name="dist_hosts",
     )
 
-    with patch.object(ClickhouseNativePool, "execute") as execute:
+    with patch.object(ClickhouseConnectPool, "execute") as execute:
         execute.return_value = ClickhouseResult([("host_1", 9000, 1, 1), ("host_2", 9000, 2, 1)])
         local_nodes = distributed_cluster.get_local_nodes()
 
     # The cluster endpoint keeps the Envoy intercept port ...
-    assert distributed_cluster.get_http_port() == envoy_http_port
+    assert distributed_cluster.get_port() == envoy_port
     # ... but directly-addressed nodes use the default HTTP port.
     assert len(local_nodes) == 2
-    assert all(node.http_port == cluster.DEFAULT_CLICKHOUSE_HTTP_PORT for node in local_nodes)
+    assert all(node.port == cluster.DEFAULT_CLICKHOUSE_HTTP_PORT for node in local_nodes)
 
 
 @pytest.mark.clickhouse_db
-def test_cache_connections() -> None:
+def test_build_pool_uses_cluster_credentials() -> None:
     cluster_1 = cluster.ClickhouseCluster(
         "127.0.0.1",
-        8000,
+        8001,
         "default",
         "",
         "default",
-        8001,
         False,
         None,
         False,
         {"events"},
         True,
     )
-
-    cluster_2 = cluster.ClickhouseCluster(
+    cluster_ro = cluster.ClickhouseCluster(
         "127.0.0.1",
-        8000,
-        "default",
-        "",
-        "default",
         8001,
-        False,
-        None,
-        False,
-        {"transactions"},
-        True,
-    )
-
-    # Same node but different user
-    cluster_3 = cluster.ClickhouseCluster(
-        "127.0.0.1",
-        8000,
         "readonly",
         "",
         "default",
-        8001,
         False,
         None,
         False,
@@ -281,43 +260,47 @@ def test_cache_connections() -> None:
         True,
     )
 
-    assert cluster_1.get_query_connection(
-        cluster.ClickhouseClientSettings.QUERY
-    ) == cluster_1.get_query_connection(cluster.ClickhouseClientSettings.QUERY)
-
-    assert cluster_1.get_node_connection(
-        cluster.ClickhouseClientSettings.OPTIMIZE,
-        cluster.ClickhouseNode("127.0.0.1", 8002),
-    ) == cluster_1.get_node_connection(
-        cluster.ClickhouseClientSettings.OPTIMIZE,
-        cluster.ClickhouseNode("127.0.0.1", 8002),
+    pool = cluster_1.get_query_connection(cluster.ClickhouseClientSettings.QUERY)
+    assert pool.host == "127.0.0.1"
+    assert pool.port == 8001
+    assert pool.user == "default"
+    assert cluster_1.get_query_connection(cluster.ClickhouseClientSettings.QUERY) is pool
+    assert (
+        cluster_ro.get_query_connection(cluster.ClickhouseClientSettings.QUERY).user == "readonly"
     )
 
-    assert cluster_1.get_query_connection(
-        cluster.ClickhouseClientSettings.QUERY
-    ) == cluster_2.get_query_connection(cluster.ClickhouseClientSettings.QUERY)
-
-    # Does not share a connection since user is different
-    assert cluster_1.get_query_connection(
-        cluster.ClickhouseClientSettings.QUERY
-    ) != cluster_3.get_query_connection(cluster.ClickhouseClientSettings.QUERY)
+    different_host = cluster.build_pool(
+        cluster.ClickhouseClientSettings.QUERY,
+        cluster.ClickhouseNode("127.0.0.2", 8001),
+        "default",
+        "",
+        "default",
+    )
+    different_port = cluster.build_pool(
+        cluster.ClickhouseClientSettings.QUERY,
+        cluster.ClickhouseNode("127.0.0.1", 8002),
+        "default",
+        "",
+        "default",
+    )
+    assert different_host is not pool
+    assert different_port is not pool
+    assert (different_host.host, different_host.port) == ("127.0.0.2", 8001)
+    assert (different_port.host, different_port.port) == ("127.0.0.1", 8002)
 
 
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
-def test_get_node_connection_selects_driver() -> None:
-    from sentry_options.testing import override_options
-
+def test_get_node_connection_uses_connect_pool() -> None:
     from snuba.clickhouse.connect import ClickhouseConnectPool
-    from snuba.clickhouse.native import ClickhouseNativePool, ClickhouseReader
+    from snuba.clickhouse.reader import ClickhouseReader
 
     test_cluster = cluster.ClickhouseCluster(
         "127.0.0.1",
-        8000,
+        8001,
         "default",
         "",
         "default",
-        8001,
         False,
         None,
         False,
@@ -325,25 +308,9 @@ def test_get_node_connection_selects_driver() -> None:
         True,
     )
 
-    # The driver is selected at the pool level; the reader is the single
-    # driver-agnostic ClickhouseReader regardless.
-    # Default: native pool.
-    with override_options("snuba", {"use_clickhouse_connect_driver": False}):
-        native_pool = test_cluster.get_query_connection(cluster.ClickhouseClientSettings.QUERY)
-        assert isinstance(native_pool, ClickhouseNativePool)
-        assert isinstance(test_cluster.get_reader(), ClickhouseReader)
-
-    # Flip on: HTTP pool.
-    with override_options("snuba", {"use_clickhouse_connect_driver": True}):
-        http_pool = test_cluster.get_query_connection(cluster.ClickhouseClientSettings.QUERY)
-        assert isinstance(http_pool, ClickhouseConnectPool)
-
-    # Flip back: native pool again.
-    with override_options("snuba", {"use_clickhouse_connect_driver": False}):
-        assert isinstance(
-            test_cluster.get_query_connection(cluster.ClickhouseClientSettings.QUERY),
-            ClickhouseNativePool,
-        )
+    pool = test_cluster.get_query_connection(cluster.ClickhouseClientSettings.QUERY)
+    assert isinstance(pool, ClickhouseConnectPool)
+    assert isinstance(test_cluster.get_reader(), ClickhouseReader)
 
 
 @patch("snuba.settings.SLICED_CLUSTERS", SLICED_CLUSTERS_CONFIG)
@@ -351,14 +318,14 @@ def test_get_node_connection_selects_driver() -> None:
 def test_sliced_cluster() -> None:
     importlib.reload(cluster)
 
-    res_cluster = cluster.get_cluster(StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS, 1)
+    res_cluster = cluster.get_cluster(StorageSetKey.GENERIC_METRICS_COUNTERS, 1)
 
     assert res_cluster.is_single_node()
     assert res_cluster.get_database() == "slice_1_default"
     assert res_cluster.get_host() == "host_slice"
     assert res_cluster.get_port() == 9001
 
-    res_cluster_default = cluster.get_cluster(StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS, 0)
+    res_cluster_default = cluster.get_cluster(StorageSetKey.GENERIC_METRICS_COUNTERS, 0)
 
     assert res_cluster_default.is_single_node()
     assert res_cluster_default.get_database() == "default"

@@ -40,7 +40,7 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
 
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      - uses: astral-sh/setup-uv@ae62891fec2bb8e7d6c99fc78c9fec3a63790f8d # v10.0.0
         with:
           enable-cache: false
 
@@ -71,7 +71,7 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
 
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      - uses: astral-sh/setup-uv@ae62891fec2bb8e7d6c99fc78c9fec3a63790f8d # v10.0.0
         with:
           # we just cache the venv-dir directly in action-setup-venv
           enable-cache: false
@@ -160,7 +160,7 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
 
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      - uses: astral-sh/setup-uv@ae62891fec2bb8e7d6c99fc78c9fec3a63790f8d # v10.0.0
         with:
           # we just cache the venv-dir directly in action-setup-venv
           enable-cache: false
@@ -453,7 +453,6 @@ jobs:
             -e DEBUG=1 \
             -e DEFAULT_BROKERS=kafka:9093 \
             -e CLICKHOUSE_HOST=clickhouse \
-            -e CLICKHOUSE_PORT=9000 \
             -e CLICKHOUSE_HTTP_PORT=8123 \
             -e REDIS_HOST=redis \
             -e REDIS_PORT=6379 \
@@ -578,8 +577,8 @@ jobs:
           export CLICKHOUSE_IMAGE=ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:${{matrix.version}}
           SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=test docker compose -f docker-compose.gcb.yml run --rm ${{ matrix.test_type }}
 
-  distroless-smoke-test:
-    name: Distroless image smoke test
+  image-smoke-test:
+    name: Image smoke test
     needs: [snuba-image]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -590,44 +589,44 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
-      - name: Build distroless image
+      - name: Build production image
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
-          target: application-distroless
+          target: application
           load: true
-          tags: snuba-distroless:test
+          tags: snuba:test
           cache-from: type=registry,ref=ghcr.io/getsentry/snuba-ci:buildcache
 
       - name: Verify --help works
-        run: docker run --rm snuba-distroless:test --help
+        run: docker run --rm snuba:test --help
 
       - name: Verify subcommand resolution (api)
         # Exercises the docker_entrypoint.py path where args[0] does NOT
         # start with "-". This is the default self-hosted snuba-api
         # invocation and the path that previously fell through to a
         # FileNotFoundError when the snuba --help probe timed out.
-        run: docker run --rm snuba-distroless:test api --help
+        run: docker run --rm snuba:test api --help
 
       - name: Verify subcommand resolution (rust-consumer)
         # rust-consumer is what every self-hosted consumer service runs.
-        run: docker run --rm snuba-distroless:test rust-consumer --help
+        run: docker run --rm snuba:test rust-consumer --help
 
       - name: Verify Python imports
         run: |
-          docker run --rm --entrypoint python3 snuba-distroless:test \
+          docker run --rm --entrypoint python3 snuba:test \
             -c "import snuba, rust_snuba, confluent_kafka; print('OK')"
 
       - name: Verify jemalloc LD_PRELOAD is active
         run: |
-          docker run --rm --entrypoint python3 snuba-distroless:test \
+          docker run --rm --entrypoint python3 snuba:test \
             -c "import ctypes; ctypes.CDLL('libjemalloc.so.2'); print('jemalloc OK')"
 
       - name: Verify no shell available
         run: |
-          # This should fail — distroless has no /bin/sh
-          if docker run --rm --entrypoint /bin/sh snuba-distroless:test -c "echo hi" 2>/dev/null; then
-            echo "ERROR: /bin/sh should not be available in distroless image"
+          # This should fail — the production image has no /bin/sh
+          if docker run --rm --entrypoint /bin/sh snuba:test -c "echo hi" 2>/dev/null; then
+            echo "ERROR: /bin/sh should not be available in the production image"
             exit 1
           else
             echo "OK: /bin/sh is not available"

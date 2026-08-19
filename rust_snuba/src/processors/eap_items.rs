@@ -4,7 +4,7 @@ use chrono::Datelike;
 use chrono::Utc;
 use prost::Message;
 use seq_macro::seq;
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 use std::collections::{BTreeMap, HashMap};
 use uuid::Uuid;
 
@@ -34,6 +34,7 @@ use crate::types::{item_type_name, InsertBatch, ItemTypeMetrics, KafkaMessageMet
 /// messages after a grace window prevents that pressure without
 /// over-eagerly dropping current-week stragglers.
 const DLQ_GRACE_PERIOD_MIN_KEY: &str = "eap_items_dlq_grace_period_min";
+const EMIT_RECEIVED_AT_KEY: &str = "eap_items_emit_received_at";
 
 /// Precision factor for sampling_factor calculations to compensate for floating point errors
 const SAMPLING_FACTOR_PRECISION: f64 = 1e6;
@@ -47,7 +48,11 @@ struct ProcessedItem {
     cogs_data: CogsData,
 }
 
-fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Result<ProcessedItem> {
+fn process_eap_item(
+    msg: KafkaPayload,
+    metadata: &KafkaMessageMetadata,
+    config: &ProcessorConfig,
+) -> anyhow::Result<ProcessedItem> {
     let payload: &[u8] = msg.payload().context("Expected payload")?;
     let trace_item = TraceItem::decode(payload)?;
     let origin_timestamp = trace_item
@@ -92,6 +97,15 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
 
     eap_item.retention_days = retention_days;
     eap_item.downsampled_retention_days = downsampled_retention_days;
+    if config.eap_items_emit_received_at {
+        eap_item.received_at = Some(
+            metadata
+                .timestamp
+                .timestamp_millis()
+                .try_into()
+                .context("Kafka broker timestamp must be non-negative")?,
+        );
+    }
     eap_item.attributes.insert_int(
         "sentry._internal.ingested_at".into(),
         Utc::now().timestamp_millis(),
@@ -149,6 +163,14 @@ fn get_dlq_grace_period_min(storage_name: &str) -> Option<i64> {
         .filter(|&n| n >= 0)
 }
 
+pub(crate) fn emit_received_at() -> bool {
+    options("snuba")
+        .ok()
+        .and_then(|o| o.get(EMIT_RECEIVED_AT_KEY).ok())
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+}
+
 /// Most recent Monday 00:00 UTC at or before `now` — the active weekly
 /// partition boundary used by `toMonday(timestamp)` in ClickHouse.
 fn prior_partition_boundary(now: DateTime<Utc>) -> DateTime<Utc> {
@@ -182,10 +204,10 @@ fn should_dlq(event_ts: DateTime<Utc>, now: DateTime<Utc>, grace_min: i64) -> Op
 
 pub fn process_message(
     msg: KafkaPayload,
-    _metadata: KafkaMessageMetadata,
+    metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
-    let processed = process_eap_item(msg, config)?;
+    let processed = process_eap_item(msg, &metadata, config)?;
     let mut batch = InsertBatch::from_rows([processed.eap_item], processed.origin_timestamp)?;
     batch.item_type_metrics = Some(processed.item_type_metrics);
     batch.cogs_data = Some(processed.cogs_data);
@@ -194,10 +216,10 @@ pub fn process_message(
 
 pub fn process_message_row_binary(
     msg: KafkaPayload,
-    _metadata: KafkaMessageMetadata,
+    metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
-    let processed = process_eap_item(msg, config)?;
+    let processed = process_eap_item(msg, &metadata, config)?;
     let row = EAPItemRow::try_from(processed.eap_item)?;
 
     // Encode the row to RowBinary bytes inline so the wide typed struct (~80
@@ -227,10 +249,10 @@ pub(crate) struct EAPItemRowBatch {
 #[cfg(test)]
 pub(crate) fn process_message_row_binary_typed(
     msg: KafkaPayload,
-    _metadata: KafkaMessageMetadata,
+    metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<EAPItemRowBatch> {
-    let processed = process_eap_item(msg, config)?;
+    let processed = process_eap_item(msg, &metadata, config)?;
     Ok(EAPItemRowBatch {
         rows: vec![EAPItemRow::try_from(processed.eap_item)?],
         cogs_data: Some(processed.cogs_data),
@@ -266,6 +288,9 @@ struct EAPItem {
 
     retention_days: Option<u16>,
     downsampled_retention_days: Option<u16>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    received_at: Option<u64>,
 }
 
 impl TryFrom<TraceItem> for EAPItem {
@@ -309,6 +334,7 @@ impl TryFrom<TraceItem> for EAPItem {
             sampling_weight: 1,
             client_sample_rate: 1.0,
             server_sample_rate: 1.0,
+            received_at: None,
         };
 
         for (key, value) in from.attributes {
@@ -548,7 +574,20 @@ pub struct EAPItemRow {
     attributes_array_int: Vec<(String, Vec<i64>)>,
     attributes_array_float: Vec<(String, Vec<f64>)>,
     attributes_array_bool: Vec<(String, Vec<bool>)>,
+
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "serialize_optional_u64"
+    )]
+    received_at: Option<u64>,
 }
+}
+
+fn serialize_optional_u64<S>(value: &Option<u64>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_u64(value.unwrap_or_default())
 }
 
 seq_attrs! {
@@ -595,6 +634,43 @@ impl EAPItemRow {
         "attributes_array_float",
         "attributes_array_bool",
     ];
+
+    pub(crate) const COLUMN_NAMES_WITH_RECEIVED_AT: &'static [&'static str] = &[
+        "organization_id",
+        "project_id",
+        "item_type",
+        "timestamp",
+        "trace_id",
+        "session_id",
+        "ai_conversation_id",
+        "item_id",
+        "indexed_name",
+        "sampling_weight",
+        "sampling_factor",
+        "client_sample_rate",
+        "server_sample_rate",
+        "retention_days",
+        "downsampled_retention_days",
+        "attributes_bool",
+        "attributes_int",
+        #(
+        concat!("attributes_string_", stringify!(N)),
+        concat!("attributes_float_", stringify!(N)),
+        )*
+        "attributes_array_string",
+        "attributes_array_int",
+        "attributes_array_float",
+        "attributes_array_bool",
+        "received_at",
+    ];
+
+    pub(crate) fn column_names(emit_received_at: bool) -> &'static [&'static str] {
+        if emit_received_at {
+            Self::COLUMN_NAMES_WITH_RECEIVED_AT
+        } else {
+            Self::COLUMN_NAMES
+        }
+    }
 }
 }
 
@@ -640,6 +716,7 @@ impl TryFrom<EAPItem> for EAPItemRow {
                     .into_iter()
                     .collect(),
                 attributes_array_bool: item.attributes.attributes_array_bool.into_iter().collect(),
+                received_at: item.received_at,
             });
         }
     }
@@ -650,6 +727,7 @@ impl TryFrom<EAPItem> for EAPItemRow {
 mod tests {
     use std::time::SystemTime;
 
+    use chrono::TimeZone;
     use prost_types::Timestamp;
     use sentry_options::testing::override_options;
     use sentry_protos::snuba::v1::any_value::Value;
@@ -1093,6 +1171,90 @@ mod tests {
         assert_eq!(names[98], "attributes_array_int");
         assert_eq!(names[99], "attributes_array_float");
         assert_eq!(names[100], "attributes_array_bool");
+
+        let names_with_received_at = EAPItemRow::COLUMN_NAMES_WITH_RECEIVED_AT;
+        assert_eq!(names_with_received_at.len(), 102);
+        assert_eq!(&names_with_received_at[..101], names);
+        assert_eq!(names_with_received_at[101], "received_at");
+        assert_eq!(EAPItemRow::column_names(false), names);
+        assert_eq!(EAPItemRow::column_names(true), names_with_received_at);
+    }
+
+    #[test]
+    fn test_emit_received_at_option_defaults_off() {
+        init_options();
+        assert!(!emit_received_at());
+
+        let _guard = override_options(&[("snuba", EMIT_RECEIVED_AT_KEY, json!(true))]).unwrap();
+        assert!(emit_received_at());
+    }
+
+    #[test]
+    fn test_received_at_is_omitted_by_default() {
+        let trace_item = generate_trace_item(Uuid::new_v4());
+        let mut payload_bytes = Vec::new();
+        trace_item.encode(&mut payload_bytes).unwrap();
+        let metadata = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: Utc.timestamp_millis_opt(1_745_562_493_123).unwrap(),
+        };
+
+        let json_batch = process_message(
+            KafkaPayload::new(None, None, Some(payload_bytes.clone())),
+            metadata.clone(),
+            &ProcessorConfig::default(),
+        )
+        .unwrap();
+        let json_row: serde_json::Value =
+            serde_json::from_slice(&json_batch.rows.encoded_rows).unwrap();
+        assert!(json_row.get("received_at").is_none());
+
+        let row_binary_batch = process_message_row_binary_typed(
+            KafkaPayload::new(None, None, Some(payload_bytes)),
+            metadata,
+            &ProcessorConfig::default(),
+        )
+        .unwrap();
+        assert_eq!(row_binary_batch.rows[0].received_at, None);
+    }
+
+    #[test]
+    fn test_received_at_row_binary_is_raw_uint64() {
+        let trace_item = generate_trace_item(Uuid::new_v4());
+        let mut payload_bytes = Vec::new();
+        trace_item.encode(&mut payload_bytes).unwrap();
+        let metadata = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: Utc.timestamp_millis_opt(1_745_562_493_123).unwrap(),
+        };
+        let enabled_config = ProcessorConfig {
+            eap_items_emit_received_at: true,
+            ..Default::default()
+        };
+
+        let disabled = process_message_row_binary(
+            KafkaPayload::new(None, None, Some(payload_bytes.clone())),
+            metadata.clone(),
+            &ProcessorConfig::default(),
+        )
+        .unwrap();
+        let enabled = process_message_row_binary(
+            KafkaPayload::new(None, None, Some(payload_bytes)),
+            metadata,
+            &enabled_config,
+        )
+        .unwrap();
+
+        assert_eq!(
+            enabled.rows.encoded_rows.len(),
+            disabled.rows.encoded_rows.len() + std::mem::size_of::<u64>()
+        );
+        assert_eq!(
+            enabled.rows.encoded_rows[enabled.rows.encoded_rows.len() - 8..],
+            1_745_562_493_123_u64.to_le_bytes()
+        );
     }
 
     #[test]
@@ -1683,19 +1845,22 @@ mod tests {
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,
-            timestamp: DateTime::from(SystemTime::now()),
+            timestamp: Utc.timestamp_millis_opt(1_745_562_493_123).unwrap(),
+        };
+        let config = ProcessorConfig {
+            eap_items_emit_received_at: true,
+            ..Default::default()
         };
 
         // Process through JSON path
         let json_payload = KafkaPayload::new(None, None, Some(payload_bytes.clone()));
-        let json_batch = process_message(json_payload, meta.clone(), &ProcessorConfig::default())
-            .expect("JSON path should succeed");
+        let json_batch =
+            process_message(json_payload, meta.clone(), &config).expect("JSON path should succeed");
 
         // Process through RowBinary path
         let rb_payload = KafkaPayload::new(None, None, Some(payload_bytes));
-        let rb_batch =
-            process_message_row_binary_typed(rb_payload, meta, &ProcessorConfig::default())
-                .expect("RowBinary path should succeed");
+        let rb_batch = process_message_row_binary_typed(rb_payload, meta, &config)
+            .expect("RowBinary path should succeed");
 
         // Parse the JSON output
         let json_str =
@@ -1745,6 +1910,12 @@ mod tests {
             rb_row.downsampled_retention_days,
             "downsampled_retention_days mismatch"
         );
+        assert_eq!(
+            json_row["received_at"].as_u64(),
+            rb_row.received_at,
+            "received_at mismatch"
+        );
+        assert_eq!(rb_row.received_at, Some(1_745_562_493_123));
 
         // Compare trace_id (JSON serializes as hyphenated UUID string)
         let json_trace_id = Uuid::parse_str(json_row["trace_id"].as_str().unwrap()).unwrap();
@@ -1926,12 +2097,12 @@ mod tests {
     #[tokio::test]
     async fn test_row_binary_clickhouse_insert() {
         let host = std::env::var("CLICKHOUSE_HOST").unwrap_or("127.0.0.1".to_string());
-        let http_port: u16 = std::env::var("CLICKHOUSE_HTTP_PORT")
+        let port: u16 = std::env::var("CLICKHOUSE_HTTP_PORT")
             .unwrap_or("8123".to_string())
             .parse()
             .unwrap();
         let database = std::env::var("CLICKHOUSE_DATABASE").unwrap_or("default".to_string());
-        let base_url = format!("http://{host}:{http_port}");
+        let base_url = format!("http://{host}:{port}");
 
         let http = reqwest::Client::new();
 

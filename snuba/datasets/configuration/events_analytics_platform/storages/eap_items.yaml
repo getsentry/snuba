@@ -141,8 +141,6 @@ query_processors:
         timeout_before_checking_execution_speed: 0
         distributed_product_mode: global
 
-delete_allocation_policies: []
-
 deletion_settings:
   is_enabled: 1
   max_rows_to_delete: 2000000

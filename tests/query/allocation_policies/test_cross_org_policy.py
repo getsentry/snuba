@@ -19,7 +19,7 @@ class TestCrossOrgQueryAllocationPolicy:
     def test_policy_pass_basic(self):
         policy = CrossOrgQueryAllocationPolicy.from_kwargs(
             **{
-                "storage_key": "generic_metrics_distributions",
+                "storage_key": "generic_metrics_counters",
                 "required_tenant_types": ["referrer"],
                 "cross_org_referrer_limits": {
                     "statistical_detectors": {
@@ -36,7 +36,7 @@ class TestCrossOrgQueryAllocationPolicy:
         assert unimportant_allowance.max_threads == 10
         assert unimportant_allowance.explanation == {
             "reason": "pass_through",
-            "storage_key": "generic_metrics_distributions",
+            "storage_key": "generic_metrics_counters",
         }
         cross_org_allowance = policy.get_quota_allowance(
             tenant_ids={"referrer": "statistical_detectors"}, query_id="2"
@@ -61,7 +61,7 @@ class TestCrossOrgQueryAllocationPolicy:
         "config",
         [
             {
-                "storage_key": "generic_metrics_distributions",
+                "storage_key": "generic_metrics_counters",
                 "required_tenant_types": ["referrer"],
                 "cross_org_referrer_limits": {
                     "statistical_detectors": {
@@ -70,7 +70,7 @@ class TestCrossOrgQueryAllocationPolicy:
                 },
             },
             {
-                "storage_key": "generic_metrics_distributions",
+                "storage_key": "generic_metrics_counters",
                 "required_tenant_types": ["referrer"],
                 "cross_org_referrer_limits": {
                     "statistical_detectors": {
@@ -79,7 +79,7 @@ class TestCrossOrgQueryAllocationPolicy:
                 },
             },
             {
-                "storage_key": "generic_metrics_distributions",
+                "storage_key": "generic_metrics_counters",
                 "required_tenant_types": ["referrer"],
                 "cross_org_referrer_limits": {
                     "statistical_detectors": {"max_threads": {}, "concurrent_limit": 2},
@@ -95,7 +95,7 @@ class TestCrossOrgQueryAllocationPolicy:
     def test_override(self):
         policy = CrossOrgQueryAllocationPolicy.from_kwargs(
             **{
-                "storage_key": "generic_metrics_distributions",
+                "storage_key": "generic_metrics_counters",
                 "required_tenant_types": ["referrer"],
                 "cross_org_referrer_limits": {
                     "statistical_detectors": {
@@ -138,7 +138,7 @@ class TestCrossOrgQueryAllocationPolicy:
     def test_throttle_cross_org_query_with_unregistered_referrer(self):
         policy = CrossOrgQueryAllocationPolicy.from_kwargs(
             **{
-                "storage_key": "generic_metrics_distributions",
+                "storage_key": "generic_metrics_counters",
                 "required_tenant_types": ["referrer"],
                 "cross_org_referrer_limits": {
                     "statistical_detectors": {
@@ -162,5 +162,5 @@ class TestCrossOrgQueryAllocationPolicy:
         assert not allowance.can_run
         assert (
             allowance.explanation["cross_org_query"]
-            == "This referrer is not registered for the current storage generic_metrics_distributions, if you want to increase its limits, register it in the yaml of the CrossOrgQueryAllocationPolicy"
+            == "This referrer is not registered for the current storage generic_metrics_counters, if you want to increase its limits, register it in the yaml of the CrossOrgQueryAllocationPolicy"
         )

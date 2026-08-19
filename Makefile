@@ -60,8 +60,7 @@ install-rs-dev:
 .PHONY: install-rs-dev
 
 snubadocs:
-	uv pip install -U -r ./docs-requirements.txt
-	uv run sphinx-build -W -b html docs/source docs/build
+	uv run --locked --no-default-groups --group docs sphinx-build -W -b html docs/source docs/build
 
 build-admin:
 	cd snuba/admin && yarn install && yarn run build
@@ -80,8 +79,7 @@ validate-configs:
 	uv run python snuba/validate_configs.py
 
 generate-config-docs:
-	uv pip install -r ./docs-requirements.txt
-	uv run python -m snuba.datasets.configuration.generate_config_docs
+	uv run --locked --no-default-groups --group docs python -m snuba.datasets.configuration.generate_config_docs
 
 watch-rust-snuba:
 	which cargo-watch || cargo install cargo-watch

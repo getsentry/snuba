@@ -2,8 +2,7 @@
 
 from typing import Any
 
-from clickhouse_driver.errors import ErrorCodes
-
+from snuba.clickhouse.error_codes import ErrorCodes
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.querylog.query_metadata import (
     SLO,

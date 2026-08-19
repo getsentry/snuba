@@ -2,7 +2,7 @@
 
 eval $(regions-project-env-vars --region="${SENTRY_REGION}")
 
-IMAGE_TAG="${GO_REVISION_SNUBA_REPO}-distroless"
+IMAGE_TAG="${GO_REVISION_SNUBA_REPO}"
 
 /devinfra/scripts/get-cluster-credentials \
 && k8s-deploy \
@@ -11,10 +11,9 @@ IMAGE_TAG="${GO_REVISION_SNUBA_REPO}-distroless"
   --container-name="consumer" \
   --container-name="eap-accepted-outcomes-consumer" \
   --container-name="eap-items-consumer" \
+  --container-name="eap-items-md-consumer" \
   --container-name="errors-replacer" \
   --container-name="generic-metrics-counters-consumer" \
-  --container-name="generic-metrics-distributions-consumer" \
-  --container-name="generic-metrics-sets-consumer" \
   --container-name="llm-proxy-cost-consumer" \
   --container-name="loadbalancer-outcomes-consumer" \
   --container-name="metrics-consumer" \
@@ -25,4 +24,9 @@ IMAGE_TAG="${GO_REVISION_SNUBA_REPO}-distroless"
   --container-name="profiling-functions-consumer" \
   --container-name="querylog-consumer" \
   --container-name="replays-consumer" \
-  --container-name="transactions-consumer-new"
+  --container-name="transactions-consumer-new" \
+&& k8s-deploy \
+  --label-selector="${LABEL_SELECTOR}" \
+  --image="us-docker.pkg.dev/sentryio/snuba-mr/image:${IMAGE_TAG}" \
+  --type="statefulset" \
+  --container-name="eap-items-sts-consumer"

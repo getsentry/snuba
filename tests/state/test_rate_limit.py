@@ -3,10 +3,12 @@ from __future__ import annotations
 import time
 import uuid
 from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from unittest.mock import patch
 
 import pytest
+import time_machine
 from sentry_options.testing import override_options
 
 from snuba import state
@@ -18,7 +20,6 @@ from snuba.state.rate_limit import (
     RateLimitStats,
     RateLimitStatsContainer,
     rate_limit,
-    set_rate_limit_config,
 )
 
 
@@ -105,19 +106,21 @@ class TestRateLimit:
     def test_per_second_limit(self, rate_limit_shards: Any) -> None:
         bucket = uuid.uuid4()
         rate_limit_params = RateLimitParameters("foo", str(bucket), 1, None)
+        base = datetime(2020, 1, 1, tzinfo=UTC)
+
         # Create 30 queries at time 0, should all be allowed
-        with patch.object(state.time, "time", lambda: 0):  # type: ignore[attr-defined]
+        with time_machine.travel(base, tick=False):
             for _ in range(30):
                 with rate_limit(rate_limit_params) as stats:
                     assert stats is not None
 
         # Create another 30 queries at time 30, should also be allowed
-        with patch.object(state.time, "time", lambda: 30):  # type: ignore[attr-defined]
+        with time_machine.travel(base + timedelta(seconds=30), tick=False):
             for _ in range(30):
                 with rate_limit(rate_limit_params) as stats:
                     assert stats is not None
 
-        with patch.object(state.time, "time", lambda: 60):  # type: ignore[attr-defined]
+        with time_machine.travel(base + timedelta(seconds=60), tick=False):
             # 1 more query should be allowed at T60 because it does not make the previous
             # rate exceed 1/sec until it has finished.
             with rate_limit(rate_limit_params) as stats:
@@ -130,7 +133,7 @@ class TestRateLimit:
         # Another query at time 61 should be allowed because the first 30 queries
         # have fallen out of the lookback window
         with (
-            patch.object(state.time, "time", lambda: 61),  # type: ignore[attr-defined]
+            time_machine.travel(base + timedelta(seconds=61), tick=False),
             rate_limit(rate_limit_params) as stats,
         ):
             assert stats is not None
@@ -246,15 +249,3 @@ def test_rate_limit_failures(vals: tuple[int, int, int], rate_limit_shards: Any)
             bucket, now - state.rate_lookback_s, now + state.rate_lookback_s
         )
         assert count == 0
-
-
-@pytest.mark.redis_db
-def test_rate_limit_interface() -> None:
-    ps_key = "project_per_second_limit_36"
-    ct_key = "project_concurrent_limit_36"
-
-    set_rate_limit_config(ps_key, 23)
-    set_rate_limit_config(ct_key, 46)
-
-    assert state.get_uncached_config(ps_key) == 23
-    assert state.get_uncached_config(ct_key) == 46

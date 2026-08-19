@@ -1,8 +1,7 @@
 #!/bin/bash
 
 checks-datadog-monitor-status \
-  140973101
+  ${DATADOG_MONITOR_IDS}
 
-
-# Above monitor IDs 140973101 map to following monitors:
-# Snuba API Health Check is Failing
+# DATADOG_MONITOR_IDS are the region deploy-pipeline gates
+# (crashloop + API error rate), tagged deploy-pipeline:true.
