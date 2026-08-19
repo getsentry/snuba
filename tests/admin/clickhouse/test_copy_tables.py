@@ -4,8 +4,10 @@ import pytest
 
 from snuba.admin.clickhouse.common import _get_storage, get_clusterless_node_connection
 from snuba.admin.clickhouse.copy_tables import (
+    InvalidClusterName,
     copy_tables,
     get_create_table_statements,
+    validate_cluster_name,
     verify_tables_on_replicas,
 )
 from snuba.clusters.cluster import ClickhouseClientSettings
@@ -279,3 +281,40 @@ def test_verify_tables_on_replicas() -> None:
 
     assert verified_count == 0
     assert ["nonexistent_table_xyz"] in missing_hosts.values()
+
+
+@pytest.mark.parametrize(
+    "cluster_name",
+    [
+        "cluster",
+        "Cluster_1",
+        "snuba-events",
+        "a",
+        "A-b_c-123",
+        "x" * 128,
+    ],
+)
+def test_validate_cluster_name_accepts_identifier_shape(cluster_name: str) -> None:
+    assert validate_cluster_name(cluster_name) == cluster_name
+
+
+@pytest.mark.parametrize(
+    "cluster_name",
+    [
+        "",
+        "foo'",
+        "foo'; DROP TABLE x; --",
+        "cluster') OR 1=1 --",
+        'cluster"',
+        "cluster`name`",
+        "cluster name",
+        "cluster.name",
+        "cluster/name",
+        "cluster;name",
+        "cluster\\name",
+        "x" * 129,
+    ],
+)
+def test_validate_cluster_name_rejects_quote_breaking_names(cluster_name: str) -> None:
+    with pytest.raises(InvalidClusterName):
+        validate_cluster_name(cluster_name)

@@ -14,6 +14,7 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
 
 from snuba import settings
 from snuba.admin.auth import USER_HEADER_KEY
+from snuba.admin.auth_roles import ROLES
 from snuba.admin.clickhouse.clusters import TABLES_DATABASE
 from snuba.datasets.factory import get_enabled_dataset_names
 from snuba.web.rpc import RPCEndpoint
@@ -116,6 +117,65 @@ def test_run_copy_table_query_invalid_node_returns_400(admin_api: FlaskClient) -
     data = json.loads(response.data)
     assert data["error"]["type"] == "request"
     assert "attacker.example.com" in data["error"]["message"]
+
+
+@pytest.mark.redis_db
+def test_run_copy_table_query_dry_run_without_sudo(admin_api: FlaskClient) -> None:
+    dry_run_resp = {
+        "source_host": "127.0.0.1",
+        "tables": "errors_local",
+        "cluster_name": "no cluster",
+        "dry_run": True,
+    }
+    with (
+        mock.patch(
+            "snuba.admin.auth.DEFAULT_ROLES",
+            [ROLES["ProductTools"]],
+        ),
+        mock.patch(
+            "snuba.admin.views.copy_tables",
+            return_value=dry_run_resp,
+        ) as copy_tables,
+    ):
+        response = admin_api.post(
+            "/run_copy_table_query",
+            headers={"Content-Type": "application/json"},
+            data=json.dumps(
+                {
+                    "storage": "errors",
+                    "source_host": "127.0.0.1",
+                    "dry_run": True,
+                }
+            ),
+        )
+    assert response.status_code == 200
+    assert json.loads(response.data) == dry_run_resp
+    copy_tables.assert_called_once()
+
+
+@pytest.mark.redis_db
+def test_run_copy_table_query_without_sudo_returns_400(admin_api: FlaskClient) -> None:
+    with (
+        mock.patch(
+            "snuba.admin.auth.DEFAULT_ROLES",
+            [ROLES["ProductTools"]],
+        ),
+        mock.patch("snuba.admin.views.copy_tables") as copy_tables,
+    ):
+        response = admin_api.post(
+            "/run_copy_table_query",
+            headers={"Content-Type": "application/json"},
+            data=json.dumps(
+                {
+                    "storage": "errors",
+                    "source_host": "127.0.0.1",
+                    "dry_run": False,
+                }
+            ),
+        )
+    assert response.status_code == 400
+    assert json.loads(response.data) == {"error": "Cannot sudo"}
+    copy_tables.assert_not_called()
 
 
 @pytest.mark.redis_db
