@@ -146,6 +146,31 @@ def test_replays_message_processor() -> None:
             assert parsed_rust_message | parsed_python_message == parsed_rust_message
 
 
+@patch("snuba.settings.DEFAULT_RETENTION_DAYS", 100)
+@patch("snuba.settings.VALID_RETENTION_DAYS", {30, 60, 100})
+def test_rust_compat_processor_honors_retention_settings() -> None:
+    """Python retention settings must reach RustCompatProcessor via process_message."""
+    example = next(
+        data
+        for ex in sentry_kafka_schemas.iter_examples("events")
+        if isinstance((data := ex.load()), list) and len(data) >= 3 and data[1] == "insert"
+    )
+    example[2]["retention_days"] = 100
+
+    processed = ErrorsProcessor().process_message(
+        example,
+        KafkaMessageMetadata(
+            offset=1,
+            partition=0,
+            timestamp=datetime.utcfromtimestamp(int(time.time())),
+        ),
+    )
+
+    assert isinstance(processed, InsertBatch)
+    assert processed.rows
+    assert processed.rows[0]["retention_days"] == 100
+
+
 def test_eap_items_received_at_from_broker_timestamp() -> None:
     payload = next(iter(sentry_kafka_schemas.iter_examples("snuba-items"))).load()
     broker_timestamp = datetime.fromtimestamp(1_745_562_493.123, tz=UTC)

@@ -359,7 +359,7 @@ type PyInsert = PyObject;
 /// replacement: (key/project_id, value)
 type PyReplacement = (PyObject, PyObject);
 
-#[pyfunction(signature = (name, value, partition, offset, millis_since_epoch, eap_items_emit_received_at=false))]
+#[pyfunction(signature = (name, value, partition, offset, millis_since_epoch, eap_items_emit_received_at=false, env_config=None))]
 pub fn process_message(
     py: Python,
     name: &str,
@@ -368,6 +368,7 @@ pub fn process_message(
     offset: u64,
     millis_since_epoch: i64,
     eap_items_emit_received_at: bool,
+    env_config: Option<&str>,
 ) -> PyResult<(Option<PyInsert>, Option<PyReplacement>)> {
     // XXX: Currently only takes the message payload and metadata. This assumes
     // key and headers are not used for message processing
@@ -382,7 +383,13 @@ pub fn process_message(
         offset,
         timestamp,
     };
+    let env_config = match env_config {
+        Some(raw) => serde_json::from_str(raw)
+            .map_err(|e| SnubaRustError::new_err(format!("invalid env_config: {e:?}")))?,
+        None => config::EnvConfig::default(),
+    };
     let processor_config = config::ProcessorConfig {
+        env_config,
         eap_items_emit_received_at: name == "EAPItemsProcessor" && eap_items_emit_received_at,
         ..Default::default()
     };

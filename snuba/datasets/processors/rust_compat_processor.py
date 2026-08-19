@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import asdict
 from datetime import UTC
 from typing import Any
 
@@ -28,6 +29,10 @@ class RustCompatProcessor(DatasetMessageProcessor):
             payload = message
         else:
             payload = json.dumps(message).encode("utf8")
+        # Imported lazily: consumer_config imports WritableTableStorage, which
+        # imports DatasetMessageProcessor and would otherwise cycle at import time.
+        from snuba.consumers.consumer_config import _resolve_env_config
+
         insert_payload, replacement_payload = self.__process_message(
             self.__processor_name,
             payload,
@@ -36,6 +41,7 @@ class RustCompatProcessor(DatasetMessageProcessor):
             int(metadata.timestamp.replace(tzinfo=UTC).timestamp() * 1000),
             self.__processor_name == "EAPItemsProcessor"
             and get_option("eap_items_emit_received_at", False),
+            json.dumps(asdict(_resolve_env_config())),
         )
 
         if insert_payload is not None:
