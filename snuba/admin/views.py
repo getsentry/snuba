@@ -1109,7 +1109,7 @@ def execute_job(job_id: str) -> Response:
 
     audit_log.record(
         g.user.email,
-        AuditLogAction.RAN_MANUAL_JOB,
+        AuditLogAction.RAN_ADHOC_MANUAL_JOB,
         {
             "job_id": job_spec.job_id,
             "job_type": job_spec.job_type,

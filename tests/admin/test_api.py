@@ -772,7 +772,7 @@ def test_execute_job_reports_parameters_and_user(admin_api: FlaskClient) -> None
     assert response.data.decode() == "finished"
     audit_log.record.assert_called_once_with(
         "operator@sentry.io",
-        AuditLogAction.RAN_MANUAL_JOB,
+        AuditLogAction.RAN_ADHOC_MANUAL_JOB,
         {
             "job_id": "abc1234",
             "job_type": "ToyJob",
@@ -798,7 +798,7 @@ def test_failed_execute_job_is_reported(admin_api: FlaskClient) -> None:
     assert json.loads(response.data) == {"error": "failed as requested"}
     audit_log.record.assert_called_once_with(
         "unknown",
-        AuditLogAction.RAN_MANUAL_JOB,
+        AuditLogAction.RAN_ADHOC_MANUAL_JOB,
         {
             "job_id": "abc1234",
             "job_type": "ToyJob",
