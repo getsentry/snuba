@@ -47,7 +47,7 @@ def build_migration_run_text(data: Any, action: AuditLogAction) -> str | None:
 
 
 def build_manual_job_run_text(data: Any) -> str:
-    job_kind = "ad hoc" if data.get("adhoc") == "true" else "one-shot"
+    job_kind = "ad hoc" if data.get("adhoc") else "one-shot"
     status = data.get("status", "unknown")
     prefix = ":bangbang: *[FAILED]* :bangbang:" if status == "failed" else ":warning:"
     return (
