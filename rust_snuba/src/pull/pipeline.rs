@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use futures::Stream;
 use sentry_arroyo::processing::stream::{BatchStage, PipelineExt, PullSource, StageResult};
 
 use super::batch::buffer::PipelineBatchBuffer;
@@ -7,7 +8,6 @@ use super::batch::pipeline_batch::PipelineBatch;
 use super::stages::clickhouse_writer_stage::ClickHouseWriterStage;
 use super::stages::noop_stage::NoopStage;
 use super::stages::processor_stage::ProcessorStage;
-use super::writer::ClickHouseWriter;
 
 /// A fully wired snuba consumer pipeline.
 ///
@@ -15,31 +15,28 @@ use super::writer::ClickHouseWriter;
 /// not a factory. The caller (test setup, main, factory function)
 /// is responsible for constructing the concrete stages.
 ///
-/// Generic over `W` (ClickHouse writer) — use `DryRunWriter` for
-/// testing/staging, `ClickhouseClient` for production.
-///
 /// Pipeline shape:
 ///   Source → Processor → Batch → Writer → CommitLog → COGS
-pub struct Pipeline<W: ClickHouseWriter> {
+pub struct Pipeline {
     source: Box<dyn PullSource>,
     processor: ProcessorStage,
     batch: BatchStage<PipelineBatch, PipelineBatchBuffer>,
     max_batch_time: Option<Duration>,
     idle_timeout: Option<Duration>,
-    writer: ClickHouseWriterStage<W>,
+    writer: ClickHouseWriterStage,
     writer_concurrency: usize,
     commit_log: NoopStage<PipelineBatch>,
     cogs: NoopStage<PipelineBatch>,
 }
 
-impl<W: ClickHouseWriter> Pipeline<W> {
+impl Pipeline {
     pub fn new(
         source: impl PullSource + 'static,
         processor: ProcessorStage,
         batch: BatchStage<PipelineBatch, PipelineBatchBuffer>,
         max_batch_time: Option<Duration>,
         idle_timeout: Option<Duration>,
-        writer: ClickHouseWriterStage<W>,
+        writer: ClickHouseWriterStage,
         writer_concurrency: usize,
     ) -> Self {
         Self {
@@ -55,7 +52,7 @@ impl<W: ClickHouseWriter> Pipeline<W> {
         }
     }
 
-    pub fn stream(&self) -> impl futures::stream::Stream<Item = StageResult<PipelineBatch>> + '_ {
+    pub fn stream(&self) -> impl Stream<Item = StageResult<PipelineBatch>> + '_ {
         self.source
             .stream()
             .apply(&self.processor)

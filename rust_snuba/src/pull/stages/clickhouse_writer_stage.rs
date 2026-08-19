@@ -11,27 +11,31 @@ use crate::pull::writer::ClickHouseWriter;
 /// Receives a merged `PipelineBatch` from the batch stage and sends
 /// its encoded rows via the injected writer.
 ///
-/// Generic over the writer — use `ClickhouseClient` for production,
-/// `DryRunWriter` for testing/staging.
-pub struct ClickHouseWriterStage<W: ClickHouseWriter> {
-    writer: W,
+/// The writer is stored as `Box<dyn ClickHouseWriter>` — no generics.
+/// Use `ClickhouseClient` for production, `DryRunWriter` for staging,
+/// `MockWriter` for tests.
+pub struct ClickHouseWriterStage {
+    writer: Box<dyn ClickHouseWriter>,
     skip_write: bool,
 }
 
-impl<W: ClickHouseWriter> ClickHouseWriterStage<W> {
-    pub fn new(writer: W) -> Self {
+impl ClickHouseWriterStage {
+    pub fn new(writer: impl ClickHouseWriter + 'static) -> Self {
         Self {
-            writer,
+            writer: Box::new(writer),
             skip_write: false,
         }
     }
 
-    pub fn with_skip_write(writer: W, skip_write: bool) -> Self {
-        Self { writer, skip_write }
+    pub fn with_skip_write(writer: impl ClickHouseWriter + 'static, skip_write: bool) -> Self {
+        Self {
+            writer: Box::new(writer),
+            skip_write,
+        }
     }
 }
 
-impl<W: ClickHouseWriter> Stage for ClickHouseWriterStage<W> {
+impl Stage for ClickHouseWriterStage {
     type In = PipelineBatch;
     type Out = PipelineBatch;
 
@@ -54,8 +58,6 @@ impl<W: ClickHouseWriter> Stage for ClickHouseWriterStage<W> {
 
         let write_start = Instant::now();
 
-        // Clone the encoded rows for the writer — the envelope retains
-        // the batch with metadata for downstream handlers.
         let body = envelope.payload.rows.encoded_rows.clone();
         let result = self.writer.write(body).await;
 

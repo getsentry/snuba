@@ -1,3 +1,5 @@
+use std::future::Future;
+use std::pin::Pin;
 use std::time::Duration;
 
 use crate::strategies::clickhouse::writer_v2::lz4_compress;
@@ -21,27 +23,30 @@ impl DryRunWriter {
 }
 
 impl ClickHouseWriter for DryRunWriter {
-    async fn write(&self, body: Vec<u8>) -> anyhow::Result<()> {
-        let raw_bytes = body.len();
+    fn write(
+        &self,
+        body: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send + '_>> {
+        Box::pin(async move {
+            let raw_bytes = body.len();
 
-        // Real CPU cost: ClickHouse native LZ4 compression with CityHash128
-        // checksums — same function the production writer uses.
-        let compressed = lz4_compress(&body);
-        let compressed_bytes = compressed.len();
-        drop(compressed);
+            let compressed = lz4_compress(&body);
+            let compressed_bytes = compressed.len();
+            drop(compressed);
 
-        if !self.latency.is_zero() {
-            tokio::time::sleep(self.latency).await;
-        }
+            if !self.latency.is_zero() {
+                tokio::time::sleep(self.latency).await;
+            }
 
-        tracing::info!(
-            raw_bytes,
-            compressed_bytes,
-            "dry-run: would have written {} bytes ({} compressed) to ClickHouse",
-            raw_bytes,
-            compressed_bytes,
-        );
+            tracing::info!(
+                raw_bytes,
+                compressed_bytes,
+                "dry-run: would have written {} bytes ({} compressed) to ClickHouse",
+                raw_bytes,
+                compressed_bytes,
+            );
 
-        Ok(())
+            Ok(())
+        })
     }
 }
