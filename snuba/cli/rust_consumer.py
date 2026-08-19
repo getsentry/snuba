@@ -215,6 +215,18 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     type=click.Choice(["v1", "v2"]),
     help="DEPRECATED: value is ignored.",
 )
+@click.option(
+    "--use-pull-consumer",
+    is_flag=True,
+    default=False,
+    help="Use the experimental pull-based consumer pipeline.",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Run the pull consumer without writing to ClickHouse or producing to Kafka.",
+)
 def rust_consumer(
     *,
     storage_names: Sequence[str],
@@ -251,6 +263,8 @@ def rust_consumer(
     use_row_binary: bool,
     skip_write: bool,
     consumer_version: str | None,
+    use_pull_consumer: bool,
+    dry_run: bool,
 ) -> None:
     """
     Experimental alternative to `snuba consumer`
@@ -281,6 +295,18 @@ def rust_consumer(
     import rust_snuba
 
     os.environ["RUST_LOG"] = log_level.lower()
+
+    if use_pull_consumer:
+        exitcode = rust_snuba.pull_consumer(  # type: ignore[attr-defined]
+            consumer_group,
+            auto_offset_reset,
+            no_strict_offset_reset,
+            consumer_config_raw,
+            clickhouse_concurrency or 2,
+            max_poll_interval_ms,
+            dry_run,
+        )
+        sys.exit(exitcode)
 
     if not async_inserts:
         # we don't want to allow increasing this if

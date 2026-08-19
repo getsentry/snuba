@@ -1,8 +1,9 @@
 use std::time::Duration;
 
 use futures::Stream;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::processing::stream::{
-    BatchStage, DlqHandler, PipelineExt, PullSource, StageResult,
+    BatchStage, DlqHandler, Pipeline, PipelineExt, StageResult,
 };
 
 use crate::pull::batch::batch_metadata::BatchMetadata;
@@ -15,11 +16,10 @@ use crate::pull::stages::processor_stage::ProcessorStage;
 
 /// Pipeline for EAP items — includes DLQ, commit log, and COGS stages.
 ///
-/// Source → Processor → [DLQ rejections] → Batch → Writer → CommitLog → COGS
+/// Processor → [DLQ rejections] → Batch → Writer → CommitLog → COGS
 ///
 /// Covers: eap_items, generic_metrics (same shape).
 pub struct EapPipeline {
-    source: Box<dyn PullSource>,
     processor: ProcessorStage,
     dlq_handler: DlqHandler,
     batch: BatchStage<PipelineBatch, PipelineBatchBuffer>,
@@ -33,7 +33,6 @@ pub struct EapPipeline {
 
 impl EapPipeline {
     pub fn new(
-        source: impl PullSource + 'static,
         processor: ProcessorStage,
         dlq_handler: DlqHandler,
         batch: BatchStage<PipelineBatch, PipelineBatchBuffer>,
@@ -45,7 +44,6 @@ impl EapPipeline {
         cogs: CogsStage,
     ) -> Self {
         Self {
-            source: Box::new(source),
             processor,
             dlq_handler,
             batch,
@@ -57,10 +55,16 @@ impl EapPipeline {
             cogs,
         }
     }
+}
 
-    pub fn stream(&self) -> impl Stream<Item = StageResult<BatchMetadata>> + '_ {
-        self.source
-            .stream()
+impl Pipeline for EapPipeline {
+    type Output = BatchMetadata;
+
+    fn stream<'a>(
+        &'a self,
+        source: impl Stream<Item = StageResult<KafkaPayload>> + 'a,
+    ) -> impl Stream<Item = StageResult<BatchMetadata>> + 'a {
+        source
             .apply(&self.processor)
             .apply_with_timer(&self.batch, self.idle_timeout, self.max_batch_time)
             .apply_concurrent(&self.writer, self.writer_concurrency)

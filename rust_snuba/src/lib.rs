@@ -26,6 +26,7 @@ mod metrics;
 mod options;
 mod processors;
 mod pull;
+mod pull_consumer;
 mod rebalancing;
 mod strategies;
 mod types;
@@ -36,6 +37,7 @@ use pyo3::prelude::*;
 fn rust_snuba(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(consumer::consumer, m)?)?;
     m.add_function(wrap_pyfunction!(consumer::process_message, m)?)?;
+    m.add_function(wrap_pyfunction!(pull_consumer::pull_consumer, m)?)?;
     m.add_function(wrap_pyfunction!(
         accepted_outcomes_consumer::accepted_outcomes_consumer,
         m

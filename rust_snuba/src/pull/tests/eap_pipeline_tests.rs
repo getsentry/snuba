@@ -2,7 +2,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
-use sentry_arroyo::processing::stream::{BatchStage, DlqHandler, PipelineExt};
+use sentry_arroyo::processing::stream::{
+    BatchStage, DlqHandler, Pipeline, PipelineExt, PullSource,
+};
 use sentry_arroyo::types::{Topic, TopicOrPartition};
 use sentry_kafka_schemas::get_schema;
 
@@ -51,13 +53,13 @@ async fn test_eap_pipeline() {
         })
         .collect();
 
+    let source = VecSource::from_payloads(payloads);
     let writer = Arc::new(MockWriter::new());
     let (dlq_producer, _dlq_calls) = MockProducer::new();
     let (commit_log_producer, commit_log_calls) = MockProducer::new();
     let (cogs_producer, _cogs_calls) = MockProducer::new();
 
     let pipeline = EapPipeline::new(
-        VecSource::from_payloads(payloads),
         ProcessorStage::new(processor, ProcessorConfig::default()),
         DlqHandler::new(
             dlq_producer,
@@ -82,7 +84,7 @@ async fn test_eap_pipeline() {
     );
 
     let mut collector = TestCollector::new();
-    let result = pipeline.stream().run(&mut collector).await;
+    let result = pipeline.stream(source.stream()).run(&mut collector).await;
 
     assert!(result.is_ok(), "pipeline failed: {:?}", result.err());
     assert!(!collector.batches.is_empty(), "no batches produced");

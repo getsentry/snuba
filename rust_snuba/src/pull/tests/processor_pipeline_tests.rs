@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use rstest::rstest;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
-use sentry_arroyo::processing::stream::{BatchStage, PipelineExt};
+use sentry_arroyo::processing::stream::{BatchStage, Pipeline, PipelineExt, PullSource};
 use sentry_kafka_schemas::get_schema;
 
 use crate::config::ProcessorConfig;
@@ -64,10 +64,10 @@ async fn test_fire_and_forget_pipeline(#[case] processor_name: &str, #[case] top
         })
         .collect();
 
+    let source = VecSource::from_payloads(payloads);
     let writer = Arc::new(MockWriter::new());
 
     let pipeline = FireAndForgetPipeline::new(
-        VecSource::from_payloads(payloads),
         ProcessorStage::new(processor, ProcessorConfig::default()),
         BatchStage::new(PipelineBatchBuffer::new(), 2, u64::MAX),
         Some(Duration::from_secs(2)),
@@ -77,7 +77,7 @@ async fn test_fire_and_forget_pipeline(#[case] processor_name: &str, #[case] top
     );
 
     let mut collector = TestCollector::new();
-    let result = pipeline.stream().run(&mut collector).await;
+    let result = pipeline.stream(source.stream()).run(&mut collector).await;
 
     assert!(
         result.is_ok(),
