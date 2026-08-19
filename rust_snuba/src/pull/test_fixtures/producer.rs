@@ -6,6 +6,7 @@ use sentry_arroyo::types::TopicOrPartition;
 
 /// Record of a single produce call.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ProduceCall {
     pub destination: String,
     pub key: Option<Vec<u8>>,
@@ -41,7 +42,7 @@ impl Producer<KafkaPayload> for MockProducer {
         payload: KafkaPayload,
     ) -> Result<(), ProducerError> {
         self.calls.lock().unwrap().push(ProduceCall {
-            destination: format!("{:?}", destination),
+            destination: format!("{destination:?}"),
             key: payload.key().cloned(),
             payload: payload.payload().cloned(),
         });

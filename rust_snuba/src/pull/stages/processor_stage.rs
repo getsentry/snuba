@@ -77,10 +77,9 @@ impl Stage for ProcessorStage {
                     reason: RejectionReason::Invalid,
                 }
             }
-            Err(join_err) => StageResult::Fail(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("processor task panicked: {}", join_err),
-            ))),
+            Err(join_err) => StageResult::Fail(Box::new(std::io::Error::other(format!(
+                "processor task panicked: {join_err}"
+            )))),
         }
     }
 

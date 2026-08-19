@@ -67,6 +67,7 @@ pub fn pull_consumer(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn pull_consumer_impl(
     consumer_group: &str,
     auto_offset_reset: &str,
@@ -218,6 +219,7 @@ fn pull_consumer_impl(
     exit_code
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_fire_and_forget(
     source: &KafkaSource,
     processor: crate::processors::ProcessingFunction,

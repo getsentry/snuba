@@ -34,6 +34,6 @@ impl Buffer<PipelineBatch> for PipelineBatchBuffer {
     }
 
     fn flush(&mut self) -> PipelineBatch {
-        self.batch.take().unwrap_or_else(|| PipelineBatch::empty())
+        self.batch.take().unwrap_or_else(PipelineBatch::empty)
     }
 }
