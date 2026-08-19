@@ -51,6 +51,11 @@ def base_insert_event(
 
 
 class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
+    @pytest.fixture(autouse=True)
+    def enable_storage_deletes(self) -> Any:
+        with override_options("snuba", {"storage_deletes_enabled": True}):
+            yield
+
     @pytest.fixture
     def test_entity(self) -> str | tuple[str, str]:
         return "search_issues"
