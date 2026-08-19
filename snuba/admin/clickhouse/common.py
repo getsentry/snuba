@@ -370,13 +370,9 @@ def _strip_trailing_settings(sql: str) -> str:
 
 def _tables_from_explain(sql_query: str, connection: ClickhousePool) -> set[str]:
     # Trailing user SETTINGS stay out of the SQL so EXPLAIN is one statement.
-    # Analyzer settings go through the driver settings dict.
     sql = _strip_trailing_settings(sql_query.strip().rstrip(";"))
     try:
-        result = connection.execute_explain(
-            f"EXPLAIN QUERY TREE {sql}",
-            settings={"allow_experimental_analyzer": 1},
-        )
+        result = connection.execute_explain(f"EXPLAIN QUERY TREE {sql}")
     except ClickhouseError as err:
         raise InvalidCustomQuery(err.message or "Invalid query") from err
     text = "\n".join(str(row[0]) for row in result.results if row)
