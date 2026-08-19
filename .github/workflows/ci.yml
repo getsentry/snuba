@@ -467,16 +467,16 @@ jobs:
 
       - name: Run snuba CI tests
         working-directory: sentry
-        # monolith acceptance tests contain some js
-        env:
-          PYTEST_ADDOPTS: "-k 'not __In' -m snuba_ci -n ${{ env.XDIST_WORKERS }} --dist=loadfile -vv"
-        run: make test-python-ci
+        run: |
+          export PYTEST_ADDOPTS="$PYTEST_ADDOPTS -k 'not __In' -m snuba_ci -n $XDIST_WORKERS --dist=loadfile -vv"
+          make test-python-ci
 
       - name: Run full tests
+        if: needs.files-changed.outputs.api_changes == 'true'
         working-directory: sentry
-        env:
-          PYTEST_ADDOPTS: "-k 'not __In' -m snuba -n ${{ env.XDIST_WORKERS }} --dist=loadfile -vv"
-        run: make test-python-ci
+        run: |
+          export PYTEST_ADDOPTS="$PYTEST_ADDOPTS -k 'not __In' -m snuba -n $XDIST_WORKERS --dist=loadfile -vv"
+          make test-python-ci
 
   clickhouse-versions:
     needs: [linting, snuba-image, docker-deps]
