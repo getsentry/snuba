@@ -223,9 +223,11 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
 )
 @click.option(
     "--dry-run",
-    is_flag=True,
-    default=False,
-    help="Run the pull consumer without writing to ClickHouse or producing to Kafka.",
+    type=int,
+    default=None,
+    is_flag=False,
+    flag_value=50,
+    help="Dry-run mode. Optionally specify simulated CH write latency in ms (default: 50).",
 )
 def rust_consumer(
     *,
@@ -264,7 +266,7 @@ def rust_consumer(
     skip_write: bool,
     consumer_version: str | None,
     use_pull_consumer: bool,
-    dry_run: bool,
+    dry_run: int | None,
 ) -> None:
     """
     Experimental alternative to `snuba consumer`
@@ -304,7 +306,7 @@ def rust_consumer(
             consumer_config_raw,
             clickhouse_concurrency or 2,
             max_poll_interval_ms,
-            dry_run,
+            dry_run or 0,
         )
         sys.exit(exitcode)
 

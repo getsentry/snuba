@@ -50,7 +50,7 @@ pub fn pull_consumer(
     consumer_config_raw: &str,
     clickhouse_concurrency: usize,
     max_poll_interval_ms: usize,
-    dry_run: bool,
+    dry_run_latency_ms: u64,
 ) -> usize {
     py.allow_threads(|| {
         pull_consumer_impl(
@@ -60,7 +60,7 @@ pub fn pull_consumer(
             consumer_config_raw,
             clickhouse_concurrency,
             max_poll_interval_ms,
-            dry_run,
+            dry_run_latency_ms,
         )
     })
 }
@@ -72,7 +72,7 @@ fn pull_consumer_impl(
     consumer_config_raw: &str,
     clickhouse_concurrency: usize,
     max_poll_interval_ms: usize,
-    dry_run: bool,
+    dry_run_latency_ms: u64,
 ) -> usize {
     setup_logging();
     crate::init_sentry_options().expect("failed to initialize sentry-options");
@@ -133,11 +133,14 @@ fn pull_consumer_impl(
         return 1;
     }
 
+    let dry_run = dry_run_latency_ms > 0;
+
     tracing::info!(
         storage = storage.name,
         processor = processor_name.as_str(),
         pipeline = if is_eap { "eap" } else { "fire_and_forget" },
         dry_run,
+        dry_run_latency_ms,
         "Starting pull consumer",
     );
 
@@ -186,7 +189,7 @@ fn pull_consumer_impl(
                 max_batch_size,
                 max_batch_time,
                 clickhouse_concurrency,
-                dry_run,
+                dry_run_latency_ms,
             )
             .await
         } else {
@@ -198,7 +201,7 @@ fn pull_consumer_impl(
                 max_batch_size,
                 max_batch_time,
                 clickhouse_concurrency,
-                dry_run,
+                dry_run_latency_ms,
             )
             .await
         };
@@ -218,11 +221,12 @@ async fn run_fire_and_forget(
     max_batch_size: u64,
     max_batch_time: Duration,
     clickhouse_concurrency: usize,
-    dry_run: bool,
+    dry_run_latency_ms: u64,
 ) -> usize {
+    let dry_run = dry_run_latency_ms > 0;
     loop {
         let writer = if dry_run {
-            ClickHouseWriterStage::new(DryRunWriter::new(Duration::from_millis(50)))
+            ClickHouseWriterStage::new(DryRunWriter::new(Duration::from_millis(dry_run_latency_ms)))
         } else {
             ClickHouseWriterStage::new(ClickhouseClient::new(
                 &storage.clickhouse_cluster,
@@ -269,14 +273,15 @@ async fn run_eap(
     max_batch_size: u64,
     max_batch_time: Duration,
     clickhouse_concurrency: usize,
-    dry_run: bool,
+    dry_run_latency_ms: u64,
 ) -> usize {
+    let dry_run = dry_run_latency_ms > 0;
     let processor_name = &storage.message_processor.python_class_name;
     let source_topic_name = &consumer_config.raw_topic.physical_topic_name;
 
     loop {
         let writer = if dry_run {
-            ClickHouseWriterStage::new(DryRunWriter::new(Duration::from_millis(50)))
+            ClickHouseWriterStage::new(DryRunWriter::new(Duration::from_millis(dry_run_latency_ms)))
         } else {
             ClickHouseWriterStage::new(ClickhouseClient::new(
                 &storage.clickhouse_cluster,
