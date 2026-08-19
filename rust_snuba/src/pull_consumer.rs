@@ -153,7 +153,6 @@ fn pull_consumer_impl(
         Some(consumer_config.raw_topic.broker_config.clone()),
     );
     let topic = Topic::new(&consumer_config.raw_topic.physical_topic_name);
-    let source = KafkaSource::new(kafka_config, &[topic]);
 
     let processor_config = ProcessorConfig {
         env_config: env_config.clone(),
@@ -171,7 +170,11 @@ fn pull_consumer_impl(
         .expect("failed to build tokio runtime");
 
     let exit_code = rt.block_on(async {
-        if is_eap {
+        // KafkaSource must be created inside the tokio runtime
+        // (rdkafka's StreamConsumer requires a reactor)
+        let source = KafkaSource::new(kafka_config, &[topic]);
+
+        let result = if is_eap {
             run_eap(
                 &source,
                 processor,
@@ -198,10 +201,12 @@ fn pull_consumer_impl(
                 dry_run,
             )
             .await
-        }
+        };
+
+        source.shutdown();
+        result
     });
 
-    source.shutdown();
     exit_code
 }
 
