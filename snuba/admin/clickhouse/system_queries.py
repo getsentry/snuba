@@ -223,11 +223,12 @@ def is_query_using_only_system_tables(
 
     for line in explain_query_tree_result.results:
         line = line[0].strip()
-        # We don't allow table functions (except clusterAllReplicas/merge) for now as the clickhouse analyzer isn't good enough yet to resolve those tables
+        # clusterAllReplicas is allowed only when EXPLAIN resolves its table
+        # argument to a system.* table below. merge() and other table functions
+        # can reach non-system tables the analyzer does not resolve here.
         if (
             line.startswith("TABLE_FUNCTION")
             and "table_function_name: clusterAllReplicas" not in line
-            and "table_function_name: merge" not in line
         ):
             return False
         if line.startswith("TABLE"):
