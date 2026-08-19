@@ -11,8 +11,6 @@ jobs:
   build:
     name: "build sourcemaps"
     runs-on: ubuntu-latest
-    env:
-      SENTRY_AUTH_TOKEN: ${{ secrets.SNUBA_SENTRY_SOURCEMAP_KEY }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         name: Checkout code
@@ -23,3 +21,6 @@ jobs:
           node-version-file: snuba/admin/package.json
       - name: Build admin sourcemaps
         run: make build-admin
+        env:
+          # Only trusted master pushes may upload sourcemaps.
+          SENTRY_AUTH_TOKEN: ${{ github.event_name == 'push' && secrets.SNUBA_SENTRY_SOURCEMAP_KEY || '' }}
