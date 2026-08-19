@@ -606,7 +606,7 @@ def test_uncaught_exception_returns_json_500(admin_api: FlaskClient) -> None:
 
     assert response.status_code == 500
     assert response.headers["Content-Type"] == "application/json"
-    assert json.loads(response.data) == {"error": {"type": "unknown", "message": "boom"}}
+    assert json.loads(response.data) == {"error": {"type": "unknown", "message": "Internal error"}}
 
 
 @pytest.mark.redis_db
