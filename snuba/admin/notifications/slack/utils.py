@@ -50,9 +50,11 @@ def build_manual_job_run_text(data: Any) -> str:
     job_kind = "ad hoc" if data.get("adhoc") else "one-shot"
     status = data.get("status", "unknown")
     prefix = ":bangbang: *[FAILED]* :bangbang:" if status == "failed" else ":warning:"
+    # Omit params: they can contain organization_ids, project_ids, and other
+    # customer identifiers that should not land in Slack history.
     return (
         f"{prefix} *Manual job ({job_kind}):* `{data.get('job_type')}` "
-        f"(`{data.get('job_id')}`, status={status}, params={data.get('params')})"
+        f"(`{data.get('job_id')}`, status={status})"
     )
 
 
