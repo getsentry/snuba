@@ -1,10 +1,10 @@
 use sentry_arroyo::processing::stream::{MessageMetadata, PipelineEnvelope, StreamCollector};
 
-use crate::pull::batch::pipeline_batch::PipelineBatch;
+use crate::pull::batch::batch_metadata::BatchMetadata;
 
-/// Test collector that captures emitted batches for assertions.
+/// Test collector that captures emitted batch metadata for assertions.
 pub struct TestCollector {
-    pub batches: Vec<PipelineBatch>,
+    pub batches: Vec<BatchMetadata>,
 }
 
 impl TestCollector {
@@ -15,8 +15,8 @@ impl TestCollector {
     }
 }
 
-impl StreamCollector<PipelineBatch> for TestCollector {
-    fn on_emit(&mut self, envelope: &PipelineEnvelope<PipelineBatch>) {
+impl StreamCollector<BatchMetadata> for TestCollector {
+    fn on_emit(&mut self, envelope: &PipelineEnvelope<BatchMetadata>) {
         self.batches.push(envelope.payload.clone());
     }
 

@@ -3,62 +3,55 @@ use std::time::Instant;
 use sentry_arroyo::processing::stream::{PipelineEnvelope, Stage, StageResult};
 use sentry_arroyo::{counter, gauge, timer};
 
+use crate::pull::batch::batch_metadata::BatchMetadata;
 use crate::pull::batch::pipeline_batch::PipelineBatch;
 use crate::pull::writer::ClickHouseWriter;
 
 /// Stage that writes a PipelineBatch to ClickHouse.
 ///
-/// Receives a merged `PipelineBatch` from the batch stage and sends
-/// its encoded rows via the injected writer.
-///
-/// The writer is stored as `Box<dyn ClickHouseWriter>` — no generics.
-/// Use `ClickhouseClient` for production, `DryRunWriter` for staging,
-/// `MockWriter` for tests.
+/// Consumes the row data and constructs `BatchMetadata` with
+/// commit log offsets, COGS data, and write stats for downstream
+/// handlers. Row bytes are freed after the write.
 pub struct ClickHouseWriterStage {
     writer: Box<dyn ClickHouseWriter>,
-    skip_write: bool,
 }
 
 impl ClickHouseWriterStage {
     pub fn new(writer: impl ClickHouseWriter + 'static) -> Self {
         Self {
             writer: Box::new(writer),
-            skip_write: false,
-        }
-    }
-
-    pub fn with_skip_write(writer: impl ClickHouseWriter + 'static, skip_write: bool) -> Self {
-        Self {
-            writer: Box::new(writer),
-            skip_write,
         }
     }
 }
 
 impl Stage for ClickHouseWriterStage {
     type In = PipelineBatch;
-    type Out = PipelineBatch;
+    type Out = BatchMetadata;
 
     async fn process(
         &self,
         envelope: PipelineEnvelope<PipelineBatch>,
-    ) -> StageResult<PipelineBatch> {
+    ) -> StageResult<BatchMetadata> {
         let total_rows = envelope.payload.rows.num_rows;
         let num_bytes = envelope.payload.rows.encoded_rows.len();
+        let body = envelope.payload.rows.encoded_rows;
+        let commit_log_offsets = envelope.payload.commit_log_offsets;
+        let cogs_data = envelope.payload.cogs_data;
 
         if num_bytes == 0 {
             tracing::debug!("skipping write of empty payload ({} rows)", total_rows);
-            return StageResult::Emit(envelope);
-        }
-
-        if self.skip_write {
-            tracing::info!("skipping write of {} rows (skip_write=true)", total_rows);
-            return StageResult::Emit(envelope);
+            let metadata = BatchMetadata {
+                commit_log_offsets,
+                cogs_data,
+            };
+            return StageResult::Emit(PipelineEnvelope::new(
+                metadata,
+                envelope.metadata,
+                envelope.raw,
+            ));
         }
 
         let write_start = Instant::now();
-
-        let body = envelope.payload.rows.encoded_rows.clone();
         let result = self.writer.write(body).await;
 
         timer!(
@@ -79,7 +72,16 @@ impl Stage for ClickHouseWriterStage {
                     bytes = num_bytes,
                     "wrote batch to ClickHouse"
                 );
-                StageResult::Emit(envelope)
+
+                let metadata = BatchMetadata {
+                    commit_log_offsets,
+                    cogs_data,
+                };
+                StageResult::Emit(PipelineEnvelope::new(
+                    metadata,
+                    envelope.metadata,
+                    envelope.raw,
+                ))
             }
             Err(e) => {
                 tracing::error!("ClickHouse write failed: {}", e);

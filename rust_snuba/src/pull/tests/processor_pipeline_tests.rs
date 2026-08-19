@@ -91,14 +91,10 @@ async fn test_pull_pipeline(#[case] processor_name: &str, #[case] topic: &str) {
         "{processor_name}: no batches produced"
     );
 
-    for (i, batch) in collector.batches.iter().enumerate() {
-        assert!(
-            batch.rows.num_rows > 0,
-            "{processor_name}: batch {i} has no rows"
-        );
+    for (i, batch_meta) in collector.batches.iter().enumerate() {
         // Verify commit log offsets are populated
         assert!(
-            !batch.commit_log_offsets.0.is_empty(),
+            !batch_meta.commit_log_offsets.0.is_empty(),
             "{processor_name}: batch {i} has no commit log offsets"
         );
     }
