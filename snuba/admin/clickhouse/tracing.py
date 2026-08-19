@@ -85,8 +85,11 @@ def run_query_and_get_trace(
     query_without_settings, sql_settings, apply_query_limit = _extract_settings_clause(query)
 
     execute_settings: dict[str, Any] = dict(settings or {})
-    # SQL SETTINGS win over request defaults for the same key.
+    # SQL SETTINGS win over request defaults for the same key, except query_id:
+    # a caller-chosen id can point summarize_from_query_log at another query.
+    sql_settings.pop("query_id", None)
     execute_settings.update(sql_settings)
+    execute_settings.pop("query_id", None)
 
     connection = get_ro_query_node_connection(storage_name, ClickhouseClientSettings.TRACING)
     # Prefer clickhouse-connect's client-side query_limit. Pass it per execute so

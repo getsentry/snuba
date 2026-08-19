@@ -408,6 +408,41 @@ def test_run_query_and_get_trace_uses_query_log_when_wire_trace_empty() -> None:
     assert output.executed_query == "SELECT 1 LIMIT 10000"
 
 
+def test_run_query_and_get_trace_drops_caller_query_id() -> None:
+    # A SETTINGS query_id would otherwise make summarize_from_query_log read
+    # another query's system.query_log rows.
+    connection = MagicMock()
+    connection.query_limit = 0
+    connection.execute.return_value = ClickhouseResult(
+        results=[(1,)],
+        meta=[("count()", "UInt64")],
+        trace_output="",
+        query_id="server-assigned",
+    )
+
+    with (
+        patch(
+            "snuba.admin.clickhouse.tracing.get_ro_query_node_connection",
+            return_value=connection,
+        ),
+        patch("snuba.admin.clickhouse.tracing.validate_ro_query"),
+        patch(
+            "snuba.admin.clickhouse.tracing.summarize_from_query_log",
+            return_value=TracingSummary({}),
+        ),
+    ):
+        run_query_and_get_trace(
+            "errors_ro",
+            "SELECT 1 SETTINGS query_id='attacker', max_threads = 4",
+            settings={"query_id": "also-attacker", "log_profile_events": 1},
+        )
+
+    execute_settings = connection.execute.call_args.kwargs["settings"]
+    assert "query_id" not in execute_settings
+    assert execute_settings == {"log_profile_events": 1, "max_threads": "4"}
+    assert connection.execute.call_args.kwargs["query"] == "SELECT 1"
+
+
 def test_run_query_and_get_trace_disables_query_limit_when_settings_remain() -> None:
     connection = MagicMock()
     # Simulate a connect pool (has query_limit attr) without mutating it.
