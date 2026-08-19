@@ -55,7 +55,6 @@ from snuba.clusters.cluster import ClickhouseClientSettings
             memory DESC
         """,
         "SELECT hostname(), avg(query_duration_ms) FROM clusterAllReplicas('default', system.query_log) GROUP BY hostname()",
-        "SELECT count() FROM merge('system', '.*settings')",
     ],
 )
 @pytest.mark.events_db
@@ -75,6 +74,7 @@ def test_is_valid_system_query(sql_query: str) -> None:
         "SELECT 1; SELECT 2;"  # no multiple statements
         "SELECT * FROM system.clusters c INNER JOIN my_table m ON c.cluster == m.something",  # no join
         "SELECT * from system.as1",  # invalid system table format
+        "SELECT * FROM merge('default', 'errors.*')",  # merge() can reach non-system tables
         """SELECT
             count() as nb_query,
             user,
