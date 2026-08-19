@@ -1093,20 +1093,33 @@ def get_job_specs() -> Response:
 @check_tool_perms(tools=[AdminTools.MANUAL_JOBS])
 def execute_job(job_id: str) -> Response:
     job_specs = list_job_specs()
-    job_status = None
     try:
-        job_status = run_job(job_specs[job_id])
-    except Exception as e:
-        return make_response(
-            jsonify(
-                {
-                    "error": str(e),
-                }
-            ),
-            500,
-        )
+        job_spec = job_specs[job_id]
+    except KeyError:
+        return make_response(jsonify({"error": f"Unknown job id '{job_id}'"}), 404)
 
-    return make_response(job_status, 200)
+    try:
+        job_status = run_job(job_spec)
+    except Exception as e:
+        status = "failed"
+        response = make_response(jsonify({"error": str(e)}), 500)
+    else:
+        status = str(job_status)
+        response = make_response(job_status, 200)
+
+    audit_log.record(
+        g.user.email,
+        AuditLogAction.RAN_MANUAL_JOB,
+        {
+            "job_id": job_spec.job_id,
+            "job_type": job_spec.job_type,
+            "status": status,
+            "adhoc": False,
+            "params": json.dumps(job_spec.params or {}, sort_keys=True),
+        },
+        notify=True,
+    )
+    return response
 
 
 @application.route("/job-specs/<job_id>/logs", methods=["GET"])
@@ -1165,6 +1178,22 @@ def run_job_by_type(job_type: str) -> Response:
     except Exception as e:
         # The runner records status/logs under job_id before raising, so hand
         # it back to let operators inspect the failed run's logs.
-        return make_response(jsonify({"error": str(e), "job_id": job_id}), 500)
+        status = "failed"
+        response = make_response(jsonify({"error": str(e), "job_id": job_id}), 500)
+    else:
+        status = str(job_status)
+        response = make_response(jsonify({"job_id": job_id, "status": job_status}), 200)
 
-    return make_response(jsonify({"job_id": job_id, "status": job_status}), 200)
+    audit_log.record(
+        g.user.email,
+        AuditLogAction.RAN_MANUAL_JOB,
+        {
+            "job_id": job_id,
+            "job_type": job_type,
+            "status": status,
+            "adhoc": True,
+            "params": json.dumps(params, sort_keys=True),
+        },
+        notify=True,
+    )
+    return response

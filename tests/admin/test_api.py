@@ -13,9 +13,11 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
 )
 
 from snuba import settings
+from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.auth import USER_HEADER_KEY
-from snuba.admin.auth_roles import ROLES
+from snuba.admin.auth_roles import DEFAULT_ROLES, ROLES
 from snuba.admin.clickhouse.clusters import TABLES_DATABASE
+from snuba.admin.user import AdminUser
 from snuba.datasets.factory import get_enabled_dataset_names
 from snuba.web.rpc import RPCEndpoint
 
@@ -701,6 +703,126 @@ def test_run_job_by_type_is_repeatable(admin_api: FlaskClient) -> None:
         job_ids.add(body["job_id"])
     # A fresh job id per run is what makes it repeatable.
     assert len(job_ids) == 2
+
+
+@pytest.mark.redis_db
+def test_run_job_by_type_reports_parameters_and_user(admin_api: FlaskClient) -> None:
+    params = {"message": "hello", "nested": {"enabled": True}}
+    user = AdminUser(email="operator@sentry.io", id="123", roles=DEFAULT_ROLES)
+    with (
+        mock.patch("snuba.admin.views.audit_log") as audit_log,
+        mock.patch("snuba.admin.views.authorize_request", return_value=user),
+    ):
+        response = admin_api.post(
+            "/job-types/ToyJob/run",
+            data=json.dumps({"params": params}),
+            headers={"Content-Type": "application/json"},
+        )
+
+    assert response.status_code == 200
+    job_id = json.loads(response.data)["job_id"]
+    audit_log.record.assert_called_once_with(
+        "operator@sentry.io",
+        AuditLogAction.RAN_MANUAL_JOB,
+        {
+            "job_id": job_id,
+            "job_type": "ToyJob",
+            "status": "finished",
+            "adhoc": True,
+            "params": json.dumps(params, sort_keys=True),
+        },
+        notify=True,
+    )
+
+
+@pytest.mark.redis_db
+def test_failed_run_job_by_type_is_reported(admin_api: FlaskClient) -> None:
+    params = {"fail": True}
+    with mock.patch("snuba.admin.views.audit_log") as audit_log:
+        response = admin_api.post(
+            "/job-types/ToyJob/run",
+            data=json.dumps({"params": params}),
+            headers={"Content-Type": "application/json"},
+        )
+
+    assert response.status_code == 500
+    job_id = json.loads(response.data)["job_id"]
+    audit_log.record.assert_called_once_with(
+        "unknown",
+        AuditLogAction.RAN_MANUAL_JOB,
+        {
+            "job_id": job_id,
+            "job_type": "ToyJob",
+            "status": "failed",
+            "adhoc": True,
+            "params": json.dumps(params, sort_keys=True),
+        },
+        notify=True,
+    )
+
+
+@pytest.mark.redis_db
+def test_execute_job_reports_parameters_and_user(admin_api: FlaskClient) -> None:
+    user = AdminUser(email="operator@sentry.io", id="123", roles=DEFAULT_ROLES)
+    with (
+        mock.patch("snuba.admin.views.audit_log") as audit_log,
+        mock.patch("snuba.admin.views.authorize_request", return_value=user),
+    ):
+        response = admin_api.post("/job-specs/abc1234")
+
+    assert response.status_code == 200
+    assert response.data.decode() == "finished"
+    audit_log.record.assert_called_once_with(
+        "operator@sentry.io",
+        AuditLogAction.RAN_MANUAL_JOB,
+        {
+            "job_id": "abc1234",
+            "job_type": "ToyJob",
+            "status": "finished",
+            "adhoc": False,
+            "params": json.dumps({"p1": "value1"}, sort_keys=True),
+        },
+        notify=True,
+    )
+
+
+@pytest.mark.redis_db
+def test_failed_execute_job_is_reported(admin_api: FlaskClient) -> None:
+    with (
+        mock.patch("snuba.admin.views.audit_log") as audit_log,
+        mock.patch(
+            "snuba.admin.views.run_job",
+            side_effect=RuntimeError("failed as requested"),
+        ),
+    ):
+        response = admin_api.post("/job-specs/abc1234")
+
+    assert response.status_code == 500
+    assert json.loads(response.data) == {"error": "failed as requested"}
+    audit_log.record.assert_called_once_with(
+        "unknown",
+        AuditLogAction.RAN_MANUAL_JOB,
+        {
+            "job_id": "abc1234",
+            "job_type": "ToyJob",
+            "status": "failed",
+            "adhoc": False,
+            "params": json.dumps({"p1": "value1"}, sort_keys=True),
+        },
+        notify=True,
+    )
+
+
+@pytest.mark.redis_db
+def test_execute_job_unknown_id_returns_404_without_notify(
+    admin_api: FlaskClient,
+) -> None:
+    with mock.patch("snuba.admin.views.audit_log") as audit_log:
+        response = admin_api.post("/job-specs/not-a-real-job")
+
+    assert response.status_code == 404
+    assert json.loads(response.data) == {"error": "Unknown job id 'not-a-real-job'"}
+    audit_log.record.assert_not_called()
 
 
 @pytest.mark.redis_db

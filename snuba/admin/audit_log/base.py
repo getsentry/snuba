@@ -25,7 +25,7 @@ class AuditLog:
         self,
         user: str,
         action: AuditLogAction,
-        data: Mapping[str, str | int],
+        data: Mapping[str, str | int | bool],
         notify: bool | None = False,
     ) -> None:
         timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
