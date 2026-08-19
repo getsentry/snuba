@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import re
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -11,6 +12,7 @@ from uuid import UUID
 import structlog
 
 from snuba.admin.clickhouse.common import (
+    InvalidCustomQuery,
     get_ro_query_node_connection,
     validate_ro_query,
 )
@@ -90,6 +92,13 @@ def run_query_and_get_trace(
     sql_settings.pop("query_id", None)
     execute_settings.update(sql_settings)
     execute_settings.pop("query_id", None)
+    # The SETTINGS splitter does not respect quoted commas. If extraction failed
+    # and leftover SQL still names query_id, refuse rather than let ClickHouse
+    # honor the caller-chosen id.
+    if not apply_query_limit and re.search(
+        r"\bquery_id\b", query_without_settings, flags=re.IGNORECASE
+    ):
+        raise InvalidCustomQuery("query_id is not allowed in SETTINGS")
 
     connection = get_ro_query_node_connection(storage_name, ClickhouseClientSettings.TRACING)
     # Prefer clickhouse-connect's client-side query_limit. Pass it per execute so
