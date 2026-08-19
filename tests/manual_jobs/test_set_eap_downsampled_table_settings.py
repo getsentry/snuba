@@ -82,6 +82,28 @@ def test_rejects_non_downsampled_eap_local_table(
         _build_job(monkeypatch, table_name)
 
 
+def test_untrusted_table_name_param_does_not_overwrite_validated_table(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("snuba.manual_jobs._set_job_type", Mock())
+    job = SetEAPDownsampledTableSettings(
+        JobSpec(
+            job_id="set-eap-settings",
+            job_type="SetEAPDownsampledTableSettings",
+            params={
+                "table_name": "eap_items_1_downsample_8_local",
+                "_table_name": "events_local",
+            },
+        )
+    )
+
+    assert job._table_name == "eap_items_1_downsample_8_local"
+    assert job._get_query(None) == (
+        "ALTER TABLE eap_items_1_downsample_8_local MODIFY SETTING "
+        "enable_block_number_column = 1, enable_block_offset_column = 1;"
+    )
+
+
 def test_execute_uses_eap_local_cluster(monkeypatch: pytest.MonkeyPatch) -> None:
     job = _build_job(monkeypatch, "eap_items_1_downsample_64_local")
     connection = Mock()
