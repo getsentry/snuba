@@ -69,8 +69,10 @@ class FakeClickhousePool(ClickhousePool):
         self.__queries.append(statement)
         return ClickhouseResult([])
 
-    def execute_explain(self, query: str) -> ClickhouseResult:
-        return self.execute(query, with_column_types=True)
+    def execute_explain(
+        self, query: str, settings: Mapping[str, Any] | None = None
+    ) -> ClickhouseResult:
+        return self.execute(query, with_column_types=True, settings=settings)
 
     def execute_with_totals(
         self,

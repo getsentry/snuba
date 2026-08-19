@@ -51,8 +51,10 @@ class _StubPool(ClickhousePool):
     ) -> ClickhouseResult:
         return ClickhouseResult()
 
-    def execute_explain(self, query: str) -> ClickhouseResult:
-        return self.execute(query)
+    def execute_explain(
+        self, query: str, settings: Mapping[str, Any] | None = None
+    ) -> ClickhouseResult:
+        return self.execute(query, settings=settings)
 
     def execute_with_totals(
         self,

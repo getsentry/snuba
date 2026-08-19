@@ -73,7 +73,9 @@ class ClickhousePool(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def execute_explain(self, query: str) -> ClickhouseResult:
+    def execute_explain(
+        self, query: str, settings: Mapping[str, Any] | None = None
+    ) -> ClickhouseResult:
         raise NotImplementedError
 
     @abstractmethod

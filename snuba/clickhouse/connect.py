@@ -831,11 +831,14 @@ class ClickhouseConnectPool(ClickhousePool):
                 query_id=str(query_id or ""),
             )
 
-    def execute_explain(self, query: str) -> ClickhouseResult:
+    def execute_explain(
+        self, query: str, settings: Mapping[str, Any] | None = None
+    ) -> ClickhouseResult:
         with self._translate_clickhouse_errors():
             client = self._new_client()
+            query_settings = self._build_query_settings(settings, None, False)
             with _query_span(query):
-                output = client.command(query)
+                output = client.command(query, settings=query_settings)
             return self._explain_result(output)
 
     @staticmethod

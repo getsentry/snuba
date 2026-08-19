@@ -130,10 +130,10 @@ def test_explain_strips_existing_settings_clause() -> None:
         allowed_tables={"my_table"},
         connection=conn,
     )
-    explained = conn.execute_explain.call_args[0][0]
-    assert explained.count("SETTINGS") == 1
-    assert "allow_experimental_analyzer" in explained
-    assert "max_threads" not in explained
+    explained, kwargs = conn.execute_explain.call_args
+    assert "SETTINGS" not in explained[0]
+    assert "max_threads" not in explained[0]
+    assert kwargs["settings"] == {"allow_experimental_analyzer": 1}
 
 
 def test_array_join_without_explain_fails_closed() -> None:
