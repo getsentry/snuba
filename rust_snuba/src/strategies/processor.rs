@@ -254,8 +254,10 @@ impl<TResult: Clone, TNext: Clone> MessageProcessor<TResult, TNext> {
 
             counter!("invalid_message");
 
+            let error: &dyn std::error::Error = error.as_ref();
             tracing::error!(
-                error = %error_chain(error.as_ref()),
+                error,
+                error_chain = %error_chain(error),
                 "Failed processing message"
             );
 
@@ -352,7 +354,12 @@ fn _validate_schema(
 
     counter!("schema_validation.failed");
 
-    tracing::warn!(error = %error_chain(&error), "Validation error");
+    let err: &dyn std::error::Error = &error;
+    tracing::warn!(
+        error = err,
+        error_chain = %error_chain(err),
+        "Validation error"
+    );
 
     if !enforce_schema {
         Ok(())
