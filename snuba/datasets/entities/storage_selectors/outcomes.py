@@ -9,9 +9,11 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.logical import Query
 from snuba.query.query_settings import OutcomesQuerySettings, QuerySettings
 
-# Queries starting earlier than this threshold are routed to the daily table
-# because the hourly table only retains ~90 days of data.
-_DAILY_THRESHOLD = timedelta(days=90)
+# Hourly TTL is 90 days. ClickHouse drops parts after that, so route a day
+# early and include the cutoff itself to avoid querying data that may
+# already have been evicted.
+_HOURLY_RETENTION = timedelta(days=90)
+_HOURLY_RETENTION_BUFFER = timedelta(days=1)
 
 
 class OutcomesStorageSelector(QueryStorageSelector):
@@ -20,14 +22,17 @@ class OutcomesStorageSelector(QueryStorageSelector):
     daily outcomes tables.
 
     Routing priority:
-    1. OutcomesQuerySettings — honours the explicit use_daily flag.
-    2. Time-range — if the query's lower timestamp bound is older than 90
-       days, route to daily (the hourly table does not retain data that far
-       back).
+    1. OutcomesQuerySettings(use_daily=True) — explicit opt-in to daily.
+    2. Time-range — if the query's lower timestamp bound is at or beyond
+       hourly retention (90 days, minus a 1-day buffer), route to daily.
     3. Referrer — if the referrer starts with "billing.", route to daily
        (billing queries need 13-month retention only available in the daily
        table).
     4. Default — hourly.
+
+    OutcomesQuerySettings(use_daily=False) is not an opt-out: it falls
+    through to time-range and referrer routing so old windows still reach
+    the daily table.
     """
 
     def __init__(self) -> None:
@@ -40,10 +45,8 @@ class OutcomesStorageSelector(QueryStorageSelector):
         query_settings: QuerySettings,
         storage_connections: Sequence[EntityStorageConnection],
     ) -> EntityStorageConnection:
-        if isinstance(query_settings, OutcomesQuerySettings):
-            outcomes_key = (
-                self.daily_storage if query_settings.get_use_daily() else self.hourly_storage
-            )
+        if isinstance(query_settings, OutcomesQuerySettings) and query_settings.get_use_daily():
+            outcomes_key = self.daily_storage
         else:
             outcomes_key = self._route_by_time_and_referrer(query, query_settings)
 
@@ -66,13 +69,13 @@ class OutcomesStorageSelector(QueryStorageSelector):
             lower_bound_tz = (
                 lower_bound if lower_bound.tzinfo is not None else lower_bound.replace(tzinfo=UTC)
             )
-            cutoff = datetime.now(UTC) - _DAILY_THRESHOLD
-            if lower_bound_tz < cutoff:
+            cutoff = datetime.now(UTC) - _HOURLY_RETENTION + _HOURLY_RETENTION_BUFFER
+            if lower_bound_tz <= cutoff:
                 return self.daily_storage
 
         # Billing queries need 13-month retention available only in the
         # daily table. The referrer is set by sentry's UsageService.
-        if hasattr(query_settings, "referrer") and query_settings.referrer.startswith("billing."):
+        if query_settings.referrer.startswith("billing."):
             return self.daily_storage
 
         return self.hourly_storage

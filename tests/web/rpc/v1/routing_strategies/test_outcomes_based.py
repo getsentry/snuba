@@ -91,6 +91,20 @@ def test_outcomes_based_routing_queries_daily_table() -> None:
     assert routing_decision.can_run
 
 
+def test_use_daily_when_window_starts_beyond_hourly_retention() -> None:
+    """A short window that starts past hourly TTL still uses the daily table."""
+    strategy = OutcomesBasedRoutingStrategy()
+    end = datetime.now(UTC) - timedelta(days=95)
+    start = end - timedelta(days=7)
+    in_msg_meta = _get_request_meta(start=start, end=end)
+    assert strategy._use_daily(in_msg_meta=in_msg_meta)
+
+    recent_end = datetime.now(UTC)
+    recent_start = recent_end - timedelta(days=7)
+    recent_meta = _get_request_meta(start=recent_start, end=recent_end)
+    assert not strategy._use_daily(in_msg_meta=recent_meta)
+
+
 @pytest.mark.eap
 @pytest.mark.redis_db
 def test_item_type_full_retention() -> None:

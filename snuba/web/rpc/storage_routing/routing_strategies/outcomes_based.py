@@ -69,11 +69,23 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         ]
 
     def _use_daily(self, in_msg_meta: RequestMeta) -> bool:
+        """Route the outcomes estimate to the daily table when needed.
+
+        The hourly outcomes table only retains ~90 days. Use daily when the
+        requested window is longer than that *or* starts far enough back that
+        hourly data may already have been evicted. The 1-day buffer matches
+        OutcomesStorageSelector.
+        """
         if in_msg_meta.end_timestamp.seconds < in_msg_meta.start_timestamp.seconds:
             return False
         seconds_delta = in_msg_meta.end_timestamp.seconds - in_msg_meta.start_timestamp.seconds
         duration = timedelta(seconds=seconds_delta)
-        return duration.days > 90
+        if duration.days > 90:
+            return True
+
+        start = datetime.fromtimestamp(in_msg_meta.start_timestamp.seconds, tz=UTC)
+        hourly_cutoff = datetime.now(UTC) - timedelta(days=90) + timedelta(days=1)
+        return start <= hourly_cutoff
 
     def get_item_types_in_query(
         self, routing_context: RoutingContext
