@@ -74,7 +74,6 @@ def test_is_valid_system_query(sql_query: str) -> None:
         "SELECT 1; SELECT 2;"  # no multiple statements
         "SELECT * FROM system.clusters c INNER JOIN my_table m ON c.cluster == m.something",  # no join
         "SELECT * from system.as1",  # invalid system table format
-        "SELECT * FROM merge('default', 'errors.*')",  # merge() can reach non-system tables
         """SELECT
             count() as nb_query,
             user,
@@ -110,6 +109,20 @@ def test_invalid_system_query(sql_query: str) -> None:
             sql_query,
             False,
         )
+
+
+@pytest.mark.events_db
+def test_merge_table_function_is_rejected() -> None:
+    # merge() is valid ClickHouse SQL. EXPLAIN succeeds, then
+    # is_query_using_only_system_tables returns False because the analyzer
+    # does not resolve merge() to system.* tables.
+    assert not is_valid_system_query(
+        settings.CLUSTERS[0]["host"],
+        int(settings.CLUSTERS[0]["port"]),
+        "errors",
+        "SELECT * FROM merge('default', 'errors.*')",
+        False,
+    )
 
 
 @pytest.mark.parametrize(
