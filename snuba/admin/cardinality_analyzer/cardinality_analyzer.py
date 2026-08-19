@@ -45,17 +45,19 @@ def run_metrics_query(query: str, user: str) -> ClickhouseResult:
         "generic_metric_counters_meta_tag_values_dist",
     }
 
+    allowed_tables = (
+        {cast(TableSchema, schema).get_table_name() for schema in schemas}
+        | raw_tables
+        | meta_tables
+    )
+    validate_ro_query(sql_query=query)
     connection = get_ro_query_node_connection(
         StorageKey("generic_metrics_counters").value,
         ClickhouseClientSettings.CARDINALITY_ANALYZER,
     )
     validate_ro_query(
         sql_query=query,
-        allowed_tables=(
-            {cast(TableSchema, schema).get_table_name() for schema in schemas}
-            | raw_tables
-            | meta_tables
-        ),
+        allowed_tables=allowed_tables,
         connection=connection,
     )
     return _stringify_result(__run_query(query, connection))

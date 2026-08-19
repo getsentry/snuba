@@ -31,12 +31,14 @@ def run_querylog_query(
     """
     schema = get_storage(StorageKey.QUERYLOG).get_schema()
     assert isinstance(schema, TableSchema)
+    allowed_tables = {schema.get_table_name(), "clickhouse_queries"}
+    validate_ro_query(sql_query=query)
     connection = get_ro_query_node_connection(
         StorageKey.QUERYLOG.value, ClickhouseClientSettings.QUERYLOG
     )
     validate_ro_query(
         sql_query=query,
-        allowed_tables={schema.get_table_name(), "clickhouse_queries"},
+        allowed_tables=allowed_tables,
         connection=connection,
     )
     return __run_querylog_query(query, connection, max_threads=max_threads)

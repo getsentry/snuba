@@ -56,7 +56,13 @@ def test_stringify_result() -> None:
     )
 
 
-def test_rejects_disallowed_table() -> None:
+@mock.patch("snuba.admin.outcomes_analyzer.outcomes_analyzer.get_ro_query_node_connection")
+def test_rejects_disallowed_table(mock_conn: mock.MagicMock) -> None:
+    mock_pool = mock.MagicMock()
+    mock_pool.execute_explain.return_value = ClickhouseResult(
+        results=[("TABLE id: 0, table_name: system.parts",)]
+    )
+    mock_conn.return_value = mock_pool
     with pytest.raises(InvalidCustomQuery):
         run_outcomes_query("SELECT count() FROM system.parts", "test@sentry.io")
 

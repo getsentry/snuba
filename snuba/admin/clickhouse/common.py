@@ -432,6 +432,9 @@ def validate_ro_query(
     if parsed.query_type != QueryType.SELECT:
         raise InvalidCustomQuery("Only SELECT queries are allowed")
 
+    if not allowed_tables:
+        return
+
     if connection is not None:
         tables_set = _tables_from_explain(sql_query, connection)
     else:
@@ -440,7 +443,7 @@ def validate_ro_query(
         # closed instead of guessing which dotted names are columns.
         tables_set = set(parsed.tables)
 
-    if allowed_tables and not tables_set.issubset(allowed_tables):
+    if not tables_set.issubset(allowed_tables):
         raise InvalidCustomQuery(
             f"Invalid FROM clause, only the following tables are allowed: {allowed_tables}"
         )
