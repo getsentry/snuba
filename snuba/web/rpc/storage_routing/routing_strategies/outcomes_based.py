@@ -121,20 +121,14 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
     def _use_daily(self, in_msg_meta: RequestMeta) -> bool:
         """Route the outcomes estimate to the daily table when needed.
 
-        The hourly outcomes table keeps Monday partitions until every row in
-        the week has passed the 90-day TTL. Use daily when the requested
-        window is longer than that *or* starts before the oldest surviving
-        hourly partition.
+        The hourly outcomes table retains 90 days. Use daily when the
+        requested window is longer than that *or* starts before now - 90d.
         """
-        if in_msg_meta.end_timestamp.seconds < in_msg_meta.start_timestamp.seconds:
-            return False
-        seconds_delta = in_msg_meta.end_timestamp.seconds - in_msg_meta.start_timestamp.seconds
-        duration = timedelta(seconds=seconds_delta)
-        if duration.days > HOURLY_RETENTION_DAYS:
-            return True
-
         start = datetime.fromtimestamp(in_msg_meta.start_timestamp.seconds, tz=UTC)
-        return start < hourly_retention_cutoff()
+        end = datetime.fromtimestamp(in_msg_meta.end_timestamp.seconds, tz=UTC)
+        if end < start:
+            return False
+        return (end - start).days > HOURLY_RETENTION_DAYS or start < hourly_retention_cutoff()
 
     def get_item_types_in_query(
         self, routing_context: RoutingContext

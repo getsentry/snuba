@@ -6,7 +6,6 @@ import pytest
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entities.storage_selectors.outcomes import (
-    HOURLY_RETENTION,
     OutcomesStorageSelector,
     hourly_retention_cutoff,
 )
@@ -27,12 +26,11 @@ OUTCOMES_ENTITY = Entity(
 DAILY = get_storage(StorageKey.OUTCOMES_DAILY)
 HOURLY = get_storage(StorageKey.OUTCOMES_HOURLY)
 
-# Frozen Thursday so the Monday-aligned cutoff is deterministic.
-# now - 90d = 2026-01-23 (Friday) -> toMonday = 2026-01-19.
+# Frozen so cutoff / boundary cases do not drift with wall-clock time.
 _NOW = datetime(2026, 4, 23, 12, 0, 0, tzinfo=UTC)
 _CUTOFF = hourly_retention_cutoff(_NOW)
 _OLD_START = _NOW - timedelta(days=120)
-_OLD_END = _NOW - HOURLY_RETENTION
+_OLD_END = _CUTOFF
 _RECENT_START = _NOW - timedelta(days=30)
 _RECENT_END = _NOW - timedelta(days=1)
 _JUST_BEFORE_CUTOFF = _CUTOFF - timedelta(seconds=1)
@@ -139,14 +137,14 @@ TIMESTAMP_CASES = [
         HOURLY,
         id="recent_range_non_billing_hourly",
     ),
-    # Start on the oldest surviving Monday partition stays on hourly
+    # Start exactly at now - 90d is still within hourly retention
     pytest.param(
         _query_with_timestamps(_CUTOFF, _NOW),
         HTTPQuerySettings(referrer="outcomes.timeseries"),
         HOURLY,
-        id="cutoff_monday_hourly",
+        id="cutoff_hourly",
     ),
-    # Anything before that Monday is missing from hourly
+    # Anything older than now - 90d goes to daily
     pytest.param(
         _query_with_timestamps(_JUST_BEFORE_CUTOFF, _NOW),
         HTTPQuerySettings(referrer="outcomes.timeseries"),
@@ -177,9 +175,9 @@ def test_storage_selector_with_timestamps(
     """
     Hybrid routing: time-range check takes priority over referrer.
 
-    - Query start before toMonday(now - 90d) -> daily.
-    - Query start on or after that Monday + billing referrer -> daily.
-    - Query start on or after that Monday + non-billing referrer -> hourly.
+    - Query start older than now - 90d -> daily.
+    - Query start within 90 days + billing referrer -> daily.
+    - Query start within 90 days + non-billing referrer -> hourly.
     """
     mock_datetime.now.return_value = _NOW  # type: ignore[attr-defined]
     assert _select(query, settings) == expected_storage
