@@ -270,10 +270,8 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         if result_or_error.error:
             return
         bytes_scanned = self._get_bytes_scanned_in_query(tenant_ids, result_or_error)
-        query_result = result_or_error.query_result
-        assert query_result is not None
         if bytes_scanned is None:
-            logging.error("No bytes scanned in query_result %s", query_result)
+            logging.error("No bytes scanned in query_result for query_id %s", query_id)
             return
         if bytes_scanned == 0:
             return
