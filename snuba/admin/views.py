@@ -21,10 +21,11 @@ from snuba import settings
 from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.audit_log.base import AuditLog
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
+from snuba.admin.auth_roles import ExecuteSudoSystemQuery
 from snuba.admin.cardinality_analyzer.cardinality_analyzer import run_metrics_query
 from snuba.admin.clickhouse.clusters import get_cluster_info
 from snuba.admin.clickhouse.common import InvalidCustomQuery, InvalidNodeError
-from snuba.admin.clickhouse.copy_tables import copy_tables
+from snuba.admin.clickhouse.copy_tables import InvalidClusterName, copy_tables
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.clickhouse.predefined_cardinality_analyzer_queries import (
@@ -59,7 +60,7 @@ from snuba.admin.tool_policies import (
     get_user_allowed_tools,
 )
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.clickhouse.native import ClickhouseResult
+from snuba.clickhouse.pool import ClickhouseResult
 from snuba.datasets.factory import InvalidDatasetError, get_enabled_dataset_names
 from snuba.manual_jobs import Job, JobSpec
 from snuba.manual_jobs.runner import (
@@ -71,7 +72,6 @@ from snuba.manual_jobs.runner import (
 from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
 from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner
-from snuba.migrations.status import Status
 from snuba.query.exceptions import InvalidQueryException
 from snuba.replacers.replacements_and_expiry import (
     get_config_auto_replacements_bypass_projects,
@@ -121,7 +121,7 @@ def handle_http_exception(exception: HTTPException) -> HTTPException:
 def handle_uncaught_exception(exception: Exception) -> Response:
     logger.error(exception, exc_info=True)
     return Response(
-        json.dumps({"error": {"type": "unknown", "message": str(exception)}}),
+        json.dumps({"error": {"type": "unknown", "message": "Internal error"}}),
         500,
         {"Content-Type": "application/json"},
     )
@@ -241,32 +241,6 @@ def run_migration(group: str, migration_id: str) -> Response:
 @check_tool_perms(tools=[AdminTools.MIGRATIONS])
 def reverse_migration(group: str, migration_id: str) -> Response:
     return run_or_reverse_migration(group=group, action="reverse", migration_id=migration_id)
-
-
-@application.route(
-    "/migrations/<group>/overwrite/<migration_id>/status/<new_status>",
-    methods=["POST"],
-)
-@check_tool_perms(tools=[AdminTools.MIGRATIONS])
-def force_overwrite_migration_status(group: str, migration_id: str, new_status: str) -> Response:
-    try:
-        migration_group = MigrationGroup(group)
-    except ValueError as err:
-        logger.error(err, exc_info=True)
-        return make_response(jsonify({"error": "Group not found"}), 400)
-
-    runner.force_overwrite_status(migration_group, migration_id, Status(new_status))
-    user = request.headers.get(USER_HEADER_KEY)
-
-    audit_log.record(
-        user or "",
-        AuditLogAction.FORCE_MIGRATION_OVERWRITE,
-        {"group": group, "migration": migration_id, "new_status": new_status},
-        notify=True,
-    )
-
-    res = {"status": "OK"}
-    return make_response(jsonify(res), 200)
 
 
 @check_migration_perms
@@ -407,7 +381,7 @@ def auto_replacements_bypass_projects() -> Response:
 # Sample cURL command:
 #
 # curl -X POST \
-#  -d '{"host": "127.0.0.1", "port": 9000, "sql": "select count() from system.parts;", storage: "errors", sudo: false}' \
+#  -d '{"host": "127.0.0.1", "port": 8123, "sql": "select count() from system.parts;", storage: "errors", sudo: false}' \
 #  -H 'Content-Type: application/json' \
 #  http://127.0.0.1:1219/run_clickhouse_system_query
 @application.route("/run_clickhouse_system_query", methods=["POST"])
@@ -478,6 +452,15 @@ def copy_table_query() -> Response:
         skip_on_cluster = req.get("skip_on_cluster", False)
         cluster_name_override = req.get("cluster_name")
 
+        if not dry_run:
+            can_sudo = any(
+                isinstance(action, ExecuteSudoSystemQuery)
+                for role in g.user.roles
+                for action in role.actions
+            )
+            if not can_sudo:
+                raise UnauthorizedForSudo()
+
         resp = copy_tables(
             source_host=source_host,
             storage_name=storage,
@@ -531,6 +514,20 @@ def copy_table_query() -> Response:
             ),
             400,
         )
+    except InvalidClusterName as err:
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "request",
+                        "message": err.message or "Invalid cluster name",
+                    }
+                }
+            ),
+            400,
+        )
+    except UnauthorizedForSudo as err:
+        return make_response(jsonify({"error": err.message or "Cannot sudo"}), 400)
 
     try:
         return make_response(jsonify(resp), 200)
@@ -1069,20 +1066,33 @@ def get_job_specs() -> Response:
 @check_tool_perms(tools=[AdminTools.MANUAL_JOBS])
 def execute_job(job_id: str) -> Response:
     job_specs = list_job_specs()
-    job_status = None
     try:
-        job_status = run_job(job_specs[job_id])
-    except Exception as e:
-        return make_response(
-            jsonify(
-                {
-                    "error": str(e),
-                }
-            ),
-            500,
-        )
+        job_spec = job_specs[job_id]
+    except KeyError:
+        return make_response(jsonify({"error": f"Unknown job id '{job_id}'"}), 404)
 
-    return make_response(job_status, 200)
+    try:
+        job_status = run_job(job_spec)
+    except Exception as e:
+        status = "failed"
+        response = make_response(jsonify({"error": str(e)}), 500)
+    else:
+        status = str(job_status)
+        response = make_response(job_status, 200)
+
+    audit_log.record(
+        g.user.email,
+        AuditLogAction.RAN_MANUAL_JOB,
+        {
+            "job_id": job_spec.job_id,
+            "job_type": job_spec.job_type,
+            "status": status,
+            "adhoc": False,
+            "params": json.dumps(job_spec.params or {}, sort_keys=True),
+        },
+        notify=True,
+    )
+    return response
 
 
 @application.route("/job-specs/<job_id>/logs", methods=["GET"])
@@ -1141,6 +1151,22 @@ def run_job_by_type(job_type: str) -> Response:
     except Exception as e:
         # The runner records status/logs under job_id before raising, so hand
         # it back to let operators inspect the failed run's logs.
-        return make_response(jsonify({"error": str(e), "job_id": job_id}), 500)
+        status = "failed"
+        response = make_response(jsonify({"error": str(e), "job_id": job_id}), 500)
+    else:
+        status = str(job_status)
+        response = make_response(jsonify({"job_id": job_id, "status": job_status}), 200)
 
-    return make_response(jsonify({"job_id": job_id, "status": job_status}), 200)
+    audit_log.record(
+        g.user.email,
+        AuditLogAction.RAN_MANUAL_JOB,
+        {
+            "job_id": job_id,
+            "job_type": job_type,
+            "status": status,
+            "adhoc": True,
+            "params": json.dumps(params, sort_keys=True),
+        },
+        notify=True,
+    )
+    return response

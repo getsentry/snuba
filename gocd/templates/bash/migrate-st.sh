@@ -9,7 +9,7 @@
 eval $(regions-project-env-vars --region="${SENTRY_REGION}")
 /devinfra/scripts/get-cluster-credentials
 
-IMAGE_TAG="${GO_REVISION_SNUBA_REPO}-distroless"
+IMAGE_TAG="${GO_REVISION_SNUBA_REPO}"
 
 k8s-spawn-job \
   --label-selector="service=${SNUBA_SERVICE_NAME}" \

@@ -10,7 +10,7 @@ from typing import (
 import pytest
 from sentry_options.testing import override_options
 
-from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.pool import ClickhousePool
 from snuba.clusters import cluster
 from snuba.clusters.cluster import ClickhouseNode
 from snuba.clusters.storage_sets import StorageSetKey
@@ -49,7 +49,6 @@ def _build_cluster(healthy: bool = True) -> FakeClickhouseCluster:
         user="default",
         password="",
         database="default",
-        http_port=8123,
         secure=False,
         ca_certs=None,
         verify=False,
@@ -365,7 +364,6 @@ def test_local_executor(
         user="default",
         password="",
         database="default",
-        http_port=8123,
         secure=False,
         ca_certs=None,
         verify=False,

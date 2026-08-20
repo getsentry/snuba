@@ -2097,12 +2097,12 @@ mod tests {
     #[tokio::test]
     async fn test_row_binary_clickhouse_insert() {
         let host = std::env::var("CLICKHOUSE_HOST").unwrap_or("127.0.0.1".to_string());
-        let http_port: u16 = std::env::var("CLICKHOUSE_HTTP_PORT")
+        let port: u16 = std::env::var("CLICKHOUSE_HTTP_PORT")
             .unwrap_or("8123".to_string())
             .parse()
             .unwrap();
         let database = std::env::var("CLICKHOUSE_DATABASE").unwrap_or("default".to_string());
-        let base_url = format!("http://{host}:{http_port}");
+        let base_url = format!("http://{host}:{port}");
 
         let http = reqwest::Client::new();
 
@@ -2212,30 +2212,18 @@ mod tests {
         let data = body["data"].as_array().expect("data array");
         assert_eq!(data.len(), 1, "no rows found for org_id={unique_org_id}");
         let row = &data[0];
-        assert_eq!(
-            row["organization_id"]
-                .as_str()
-                .unwrap()
-                .parse::<u64>()
-                .unwrap(),
-            unique_org_id
-        );
-        assert_eq!(
-            row["project_id"].as_str().unwrap().parse::<u64>().unwrap(),
-            1
-        );
-        assert_eq!(
-            row["item_type"].as_u64().unwrap() as u8,
-            TraceItemType::Span as u8
-        );
-        assert_eq!(
-            row["sampling_weight"]
-                .as_str()
-                .unwrap()
-                .parse::<u64>()
-                .unwrap(),
-            1
-        );
+        // FORMAT JSON quotes integers as strings on 25.8 (and 64-bit ints already
+        // did this on 25.3). Accept either shape.
+        let json_u64 = |value: &serde_json::Value| -> u64 {
+            value
+                .as_u64()
+                .or_else(|| value.as_str().and_then(|s| s.parse().ok()))
+                .unwrap_or_else(|| panic!("expected JSON integer, got {value:?}"))
+        };
+        assert_eq!(json_u64(&row["organization_id"]), unique_org_id);
+        assert_eq!(json_u64(&row["project_id"]), 1);
+        assert_eq!(json_u64(&row["item_type"]) as u8, TraceItemType::Span as u8);
+        assert_eq!(json_u64(&row["sampling_weight"]), 1);
 
         // Clean up. POST with an empty body (rather than no body) so reqwest
         // emits Content-Length: 0 and ClickHouse 25.x doesn't reject with 411.

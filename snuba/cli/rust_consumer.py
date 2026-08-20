@@ -119,7 +119,13 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     "--group-instance-id",
     type=str,
     default=None,
-    help="Kafka group instance id. passing a value here will run kafka with static membership.",
+    help=(
+        "Kafka group.instance.id (KIP-345 static membership). When set, this "
+        "member keeps its partition assignment across restarts as long as it "
+        "rejoins within session.timeout.ms. Must be unique per live member of "
+        "the consumer group (e.g. one id per single-replica Deployment). "
+        "Tune session.timeout.ms via Kafka broker/topic consumer config."
+    ),
 )
 @click.option(
     "--python-max-queue-depth",
@@ -193,10 +199,35 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     help="Use RowBinary format for ClickHouse inserts instead of JSONEachRow. Currently only supported for EAPItemsProcessor.",
 )
 @click.option(
+    "--skip-write/--no-skip-write",
+    "skip_write",
+    is_flag=True,
+    default=False,
+    help=(
+        "Skip ClickHouse inserts, commit-log produce, replacements produce, "
+        "COGS, and DLQ produce. Still consumes Kafka and commits offsets. Use "
+        "for shadow / soak consumers that must not write production tables."
+    ),
+)
+@click.option(
     "--consumer-version",
     default="v2",
     type=click.Choice(["v1", "v2"]),
     help="DEPRECATED: value is ignored.",
+)
+@click.option(
+    "--use-pull-consumer",
+    is_flag=True,
+    default=False,
+    help="Use the experimental pull-based consumer pipeline.",
+)
+@click.option(
+    "--dry-run",
+    type=int,
+    default=None,
+    is_flag=False,
+    flag_value=50,
+    help="Dry-run mode. Optionally specify simulated CH write latency in ms (default: 50).",
 )
 def rust_consumer(
     *,
@@ -232,7 +263,10 @@ def rust_consumer(
     quantized_rebalance_consumer_group_delay_secs: int | None,
     join_timeout_ms: int | None,
     use_row_binary: bool,
+    skip_write: bool,
     consumer_version: str | None,
+    use_pull_consumer: bool,
+    dry_run: int | None,
 ) -> None:
     """
     Experimental alternative to `snuba consumer`
@@ -264,6 +298,19 @@ def rust_consumer(
 
     os.environ["RUST_LOG"] = log_level.lower()
 
+    if use_pull_consumer:
+        exitcode = rust_snuba.pull_consumer(  # type: ignore[attr-defined]
+            consumer_group,
+            auto_offset_reset,
+            no_strict_offset_reset,
+            consumer_config_raw,
+            concurrency or 1,
+            clickhouse_concurrency or 2,
+            max_poll_interval_ms,
+            dry_run or 0,
+        )
+        sys.exit(exitcode)
+
     if not async_inserts:
         # we don't want to allow increasing this if
         # we aren't using async inserts since that will increase
@@ -289,6 +336,7 @@ def rust_consumer(
         max_dlq_buffer_length,
         join_timeout_ms,
         use_row_binary,
+        skip_write,
     )
 
     sys.exit(exitcode)

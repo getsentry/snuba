@@ -1,7 +1,7 @@
 import pytest
 
 from snuba.admin.cardinality_analyzer.cardinality_analyzer import _stringify_result
-from snuba.clickhouse.native import ClickhouseResult
+from snuba.clickhouse.pool import ClickhouseResult
 
 
 @pytest.mark.parametrize(

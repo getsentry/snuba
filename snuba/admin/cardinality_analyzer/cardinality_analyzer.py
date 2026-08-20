@@ -5,7 +5,7 @@ from snuba.admin.clickhouse.common import (
     get_ro_query_node_connection,
     validate_ro_query,
 )
-from snuba.clickhouse.native import ClickhouseResult
+from snuba.clickhouse.pool import ClickhousePool, ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages.factory import get_storage
@@ -45,27 +45,28 @@ def run_metrics_query(query: str, user: str) -> ClickhouseResult:
         "generic_metric_counters_meta_tag_values_dist",
     }
 
-    validate_ro_query(
+    allowed_tables = (
+        {cast(TableSchema, schema).get_table_name() for schema in schemas}
+        | raw_tables
+        | meta_tables
+    )
+    connection = validate_ro_query(
         sql_query=query,
-        allowed_tables=(
-            {cast(TableSchema, schema).get_table_name() for schema in schemas}
-            | raw_tables
-            | meta_tables
+        allowed_tables=allowed_tables,
+        get_connection=lambda: get_ro_query_node_connection(
+            StorageKey("generic_metrics_counters").value,
+            ClickhouseClientSettings.CARDINALITY_ANALYZER,
         ),
     )
-    return _stringify_result(__run_query(query))
+    assert connection is not None
+    return _stringify_result(__run_query(query, connection))
 
 
-def __run_query(query: str) -> ClickhouseResult:
+def __run_query(query: str, connection: ClickhousePool) -> ClickhouseResult:
     """
     Runs given Query against metrics distributions in ClickHouse. This function assumes valid
     query and does not validate/sanitize query or response data.
     """
-    connection = get_ro_query_node_connection(
-        StorageKey("generic_metrics_counters").value,
-        ClickhouseClientSettings.CARDINALITY_ANALYZER,
-    )
-
     query_result = connection.execute(
         query=query,
         with_column_types=True,

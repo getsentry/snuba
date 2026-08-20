@@ -95,7 +95,7 @@ def _get_node_versions(
     for node in nodes:
         info: NodeVersionInfo = {
             "host": node.host_name,
-            "port": node.native_port,
+            "port": node.port,
             "version": None,
             "error": None,
         }

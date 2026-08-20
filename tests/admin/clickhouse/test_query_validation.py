@@ -1,12 +1,35 @@
+from unittest.mock import Mock
+
 import pytest
 
 from snuba.admin.clickhouse.common import InvalidCustomQuery, validate_ro_query
+from snuba.clickhouse.pool import ClickhouseResult
+
+
+def _explain_connection(*tables: str) -> Mock:
+    conn = Mock()
+    text = "\n".join(f"TABLE id: 0, table_name: {table}" for table in tables)
+    conn.execute_explain.return_value = ClickhouseResult(
+        results=[(line,) for line in text.splitlines()]
+    )
+    return conn
 
 
 def test_select_query() -> None:
     validate_ro_query("SELECT * FROM my_table")
     with pytest.raises(InvalidCustomQuery):
         validate_ro_query("INSERT INTO my_table (col) VALUES ('value')")
+
+
+def test_disallowed_query_does_not_open_connection() -> None:
+    opened = Mock(side_effect=AssertionError("connection opened before validation"))
+    with pytest.raises(InvalidCustomQuery):
+        validate_ro_query(
+            "ALTER TABLE my_table DELETE WHERE 1",
+            allowed_tables={"my_table"},
+            get_connection=opened,
+        )
+    opened.assert_not_called()
 
 
 def test_multiple_queries() -> None:
@@ -18,23 +41,28 @@ def test_allowed_tables() -> None:
     validate_ro_query(
         "SELECT * FROM my_table, other_table",
         allowed_tables={"my_table", "other_table"},
+        connection=_explain_connection("my_table", "other_table"),
     )
     with pytest.raises(InvalidCustomQuery):
         validate_ro_query(
             "SELECT * FROM my_table, other_table",
             allowed_tables={"my_table"},
+            connection=_explain_connection("my_table", "other_table"),
         )
 
 
 def test_allowed_tables_with_array_join() -> None:
+    # ClickHouse EXPLAIN QUERY TREE reports the real table, not ARRAY JOIN columns.
     validate_ro_query(
         "SELECT * FROM my_table ARRAY JOIN tags.key AS tag_key, tags.raw_value AS tag_value",
         allowed_tables={"my_table"},
+        connection=_explain_connection("my_table"),
     )
     with pytest.raises(InvalidCustomQuery):
         validate_ro_query(
             "SELECT * FROM my_table, other_table ARRAY JOIN tags.key AS tag_key, tags.raw_value AS tag_value",
             allowed_tables={"my_table"},
+            connection=_explain_connection("my_table", "other_table"),
         )
 
 
@@ -42,10 +70,95 @@ def test_allowed_tables_with_left_array_join() -> None:
     validate_ro_query(
         "SELECT * FROM my_table LEFT ARRAY JOIN tags.key AS tag_key, tags.raw_value AS tag_value",
         allowed_tables={"my_table"},
+        connection=_explain_connection("my_table"),
     )
     with pytest.raises(InvalidCustomQuery):
         validate_ro_query(
             "SELECT * FROM my_table, other_table LEFT ARRAY JOIN tags.key AS tag_key, tags.raw_value AS tag_value",
+            allowed_tables={"my_table"},
+            connection=_explain_connection("my_table", "other_table"),
+        )
+
+
+def test_table_aliased_as_array_does_not_drop_joined_tables() -> None:
+    with pytest.raises(InvalidCustomQuery):
+        validate_ro_query(
+            "SELECT * FROM my_table AS array JOIN other_table",
+            allowed_tables={"my_table"},
+            connection=_explain_connection("my_table", "other_table"),
+        )
+
+
+def test_table_aliased_as_left_does_not_drop_joined_tables() -> None:
+    with pytest.raises(InvalidCustomQuery):
+        validate_ro_query(
+            "SELECT * FROM my_table AS left JOIN other_table",
+            allowed_tables={"my_table"},
+            connection=_explain_connection("my_table", "other_table"),
+        )
+
+
+def test_array_join_does_not_drop_dotted_disallowed_table() -> None:
+    with pytest.raises(InvalidCustomQuery):
+        validate_ro_query(
+            "SELECT * FROM my_table, default.secrets ARRAY JOIN tags.key AS k",
+            allowed_tables={"my_table"},
+            connection=_explain_connection("my_table", "secrets"),
+        )
+    with pytest.raises(InvalidCustomQuery):
+        validate_ro_query(
+            "SELECT * FROM default.secrets ARRAY JOIN tags.key AS k",
+            allowed_tables={"my_table"},
+            connection=_explain_connection("secrets"),
+        )
+
+
+def test_backtick_array_join_alias_does_not_drop_dotted_table() -> None:
+    with pytest.raises(InvalidCustomQuery):
+        validate_ro_query(
+            "SELECT * FROM db.disallowed AS `array join`",
+            allowed_tables={"my_table"},
+            connection=_explain_connection("disallowed"),
+        )
+
+
+def test_explain_table_name_ignores_trailing_dump_fields() -> None:
+    conn = Mock()
+    conn.execute_explain.return_value = ClickhouseResult(
+        results=[("TABLE id: 0, table_name: my_table, alias: t",)]
+    )
+    validate_ro_query(
+        "SELECT * FROM my_table FINAL",
+        allowed_tables={"my_table"},
+        connection=conn,
+    )
+
+
+def test_table_functions_rejected_via_explain() -> None:
+    conn = Mock()
+    conn.execute_explain.return_value = ClickhouseResult(
+        results=[("TABLE_FUNCTION table_function_name: merge",)]
+    )
+    with pytest.raises(InvalidCustomQuery, match="table functions"):
+        validate_ro_query("SELECT * FROM merge('default', '.*')", connection=conn)
+
+
+def test_empty_explain_fails_closed_with_allowlist() -> None:
+    conn = Mock()
+    conn.execute_explain.return_value = ClickhouseResult(results=[])
+    with pytest.raises(InvalidCustomQuery, match="Invalid FROM clause"):
+        validate_ro_query(
+            "SELECT * FROM secrets FORMAT Null",
+            allowed_tables={"my_table"},
+            connection=conn,
+        )
+
+
+def test_array_join_without_explain_fails_closed() -> None:
+    # Offline, sql_metadata still reports ARRAY JOIN columns as tables.
+    with pytest.raises(InvalidCustomQuery):
+        validate_ro_query(
+            "SELECT * FROM my_table ARRAY JOIN tags.key AS tag_key",
             allowed_tables={"my_table"},
         )
 

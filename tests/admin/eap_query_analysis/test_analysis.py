@@ -31,7 +31,7 @@ from snuba.admin.eap_query_analysis.analysis import (
     analyze_eap_queries,
     result_to_dict,
 )
-from snuba.clickhouse.native import ClickhouseResult
+from snuba.clickhouse.pool import ClickhouseResult
 
 
 def _meta() -> RequestMeta:

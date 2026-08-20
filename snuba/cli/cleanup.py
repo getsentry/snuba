@@ -14,7 +14,7 @@ from snuba.environment import setup_logging, setup_sentry
 @click.option(
     "--clickhouse-port",
     type=int,
-    help="Clickhouse native port to write to.",
+    help="ClickHouse port identifying the target node.",
 )
 @click.option(
     "--clickhouse-secure",
@@ -67,8 +67,8 @@ def cleanup(
     setup_sentry()
 
     from snuba.cleanup import logger, run_cleanup
-    from snuba.clickhouse.native import ClickhousePool
-    from snuba.clusters.cluster import ClickhouseNode, connection_cache
+    from snuba.clickhouse.pool import ClickhousePool
+    from snuba.clusters.cluster import ClickhouseNode, build_pool
 
     storage = get_writable_storage(StorageKey(storage_name))
 
@@ -82,12 +82,10 @@ def cleanup(
 
     connection: ClickhousePool
     if clickhouse_host and clickhouse_port:
-        # Go through the shared connection cache so the driver (native vs
-        # clickhouse-connect/HTTP) is selected by the use_clickhouse_connect_driver sentry-option, behind
-        # the abstract ClickhousePool type.
-        connection = connection_cache.get_node_connection(
+        # --clickhouse-port is the HTTP connect port.
+        connection = build_pool(
             ClickhouseClientSettings.CLEANUP,
-            ClickhouseNode(clickhouse_host, clickhouse_port, http_port=cluster.get_http_port()),
+            ClickhouseNode(clickhouse_host, clickhouse_port),
             clickhouse_user,
             clickhouse_password,
             database,

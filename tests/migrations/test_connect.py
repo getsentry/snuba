@@ -7,7 +7,7 @@ from unittest import mock
 import pytest
 
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.clickhouse.native import ClickhouseResult
+from snuba.clickhouse.pool import ClickhouseResult
 from snuba.clusters import cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.readiness_state import ReadinessState
@@ -28,7 +28,6 @@ _QUERYLOG_CLUSTER = cluster.ClickhouseCluster(
     user="",
     password="",
     database="default",
-    http_port=420,
     secure=False,
     ca_certs=None,
     verify=False,
@@ -44,7 +43,6 @@ _EVENTS_CLUSTER = cluster.ClickhouseCluster(
     user="",
     password="",
     database="default",
-    http_port=420,
     secure=False,
     ca_certs=None,
     verify=False,
@@ -60,7 +58,6 @@ _REST_CLUSTER = cluster.ClickhouseCluster(
     user="",
     password="",
     database="default",
-    http_port=420,
     secure=False,
     ca_certs=None,
     verify=False,
@@ -146,7 +143,7 @@ def _cluster_with_pool(pool: mock.Mock) -> mock.Mock:
     return cluster_mock
 
 
-def _pool_returning_version(version: str = "23.8.11.29") -> mock.Mock:
+def _pool_returning_version(version: str = "25.8.16.10001") -> mock.Mock:
     pool = mock.Mock()
     pool.execute.return_value = ClickhouseResult(results=[[version]])
     return pool
@@ -156,7 +153,7 @@ def test_check_clickhouse_connections_retries_transient_errors_then_succeeds() -
     pool = mock.Mock()
     pool.execute.side_effect = [
         ClickhouseError("connection reset by peer", code=-1),
-        ClickhouseResult(results=[["23.8.11.29"]]),
+        ClickhouseResult(results=[["25.8.16.10001"]]),
     ]
 
     with mock.patch("snuba.migrations.connect.time.sleep") as sleep:
@@ -172,7 +169,7 @@ def test_check_clickhouse_connections_retries_are_per_cluster() -> None:
     flaky = mock.Mock()
     flaky.execute.side_effect = [
         ClickhouseError("connection reset by peer", code=-1),
-        ClickhouseResult(results=[["23.8.11.29"]]),
+        ClickhouseResult(results=[["25.8.16.10001"]]),
     ]
 
     with mock.patch("snuba.migrations.connect.time.sleep"):
@@ -200,8 +197,13 @@ def test_check_clickhouse_connections_raises_after_max_attempts() -> None:
     assert pool.execute.call_count == 3
 
 
-def test_check_clickhouse_connections_does_not_retry_invalid_version() -> None:
-    pool = _pool_returning_version("10.0.0.0")
+@pytest.mark.parametrize(
+    "version",
+    ["10.0.0.0", "23.8.11.29", "25.3.8.10041"],
+    ids=["ancient", "former-min-23.8", "former-supported-25.3"],
+)
+def test_check_clickhouse_connections_does_not_retry_invalid_version(version: str) -> None:
+    pool = _pool_returning_version(version)
 
     with (
         mock.patch("snuba.migrations.connect.time.sleep") as sleep,

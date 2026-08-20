@@ -225,16 +225,15 @@ jobs:
             .
 
       - name: Publish snuba-ci image to artifacts
-      # we publish to github artifacts separately so that third-party
-      # contributions also work, as all the test jobs need this image.
-      # otherwise third-party contributors would have to provide a working,
-      # authenticated GHCR, which seems impossible to ensure in the general
-      # case.
+        # we publish to github artifacts separately so that third-party
+        # contributions also work, as all the test jobs need this image.
+        # otherwise third-party contributors would have to provide a working,
+        # authenticated GHCR, which seems impossible to ensure in the general
+        # case.
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: snuba-ci
           path: /tmp/snuba-ci.tar
-
 
   docker-deps:
     name: Warm Docker dependency image cache
@@ -259,7 +258,7 @@ jobs:
             docker load --input /tmp/docker-deps/deps.tar
           fi
           images=(
-            "ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.3.8.10041.altinitystable"
+            "ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.16.10001.altinitystable"
             "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:6.2.0"
             "ghcr.io/getsentry/image-mirror-confluentinc-cp-zookeeper:6.2.0"
             "ghcr.io/getsentry/docker-redis-cluster:7.0.10"
@@ -331,7 +330,7 @@ jobs:
             docker load --input /tmp/docker-deps/deps.tar
           fi
           images=(
-            "ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.3.8.10041.altinitystable"
+            "ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.16.10001.altinitystable"
             "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:6.2.0"
             "ghcr.io/getsentry/image-mirror-confluentinc-cp-zookeeper:6.2.0"
             "ghcr.io/getsentry/docker-redis-cluster:7.0.10"
@@ -439,7 +438,10 @@ jobs:
         uses: ./.github/actions/setup-sentry
         with:
           workdir: sentry
-          mode: minimal
+          # backend-ci includes objectstore + symbolicator so full sentry
+          # tests marked @requires_objectstore (e.g. minidump) can run.
+          # minimal is only postgres+snuba and fails those tests.
+          mode: backend-ci
 
       - name: Start snuba
         run: |
@@ -453,7 +455,6 @@ jobs:
             -e DEBUG=1 \
             -e DEFAULT_BROKERS=kafka:9093 \
             -e CLICKHOUSE_HOST=clickhouse \
-            -e CLICKHOUSE_PORT=9000 \
             -e CLICKHOUSE_HTTP_PORT=8123 \
             -e REDIS_HOST=redis \
             -e REDIS_PORT=6379 \
@@ -466,54 +467,18 @@ jobs:
       - name: Bootstrap per-worker Snuba instances
         run: python3 sentry/.github/workflows/scripts/bootstrap-snuba.py
 
-      - name: Run snuba tests
-        if: needs.files-changed.outputs.api_changes == 'false'
+      - name: Run snuba CI tests
         working-directory: sentry
         run: |
-          # Only these dirs carry the `snuba_ci` marker; collecting all of tests/ just to find them is wasteful.
-          pytest -k 'not __In' \
-            tests/sentry/snuba \
-            tests/sentry/workflow_engine/endpoints \
-            tests/snuba/rules/conditions \
-            -m snuba_ci \
-            -n "$XDIST_WORKERS" --dist=loadfile --reuse-db \
-            -vv
+          export PYTEST_ADDOPTS="$PYTEST_ADDOPTS -k 'not __In' -m snuba_ci -n $XDIST_WORKERS --dist=loadfile -vv"
+          make test-python-ci
 
       - name: Run full tests
         if: needs.files-changed.outputs.api_changes == 'true'
         working-directory: sentry
         run: |
-          pytest -k 'not __In' \
-              tests/snuba \
-              tests/sentry/snuba \
-              tests/sentry/eventstream/kafka \
-              tests/sentry/post_process_forwarder \
-              tests/sentry/services/eventstore/snuba \
-              tests/sentry/search/events \
-              tests/sentry/event_manager \
-              tests/sentry/api/endpoints/test_organization_profiling_functions.py \
-              tests/sentry/integrations/slack/test_unfurl.py \
-              tests/sentry/uptime/endpoints/test_project_uptime_alert_check_index.py \
-              tests/sentry/uptime/endpoints/test_organization_uptime_stats.py \
-              tests/sentry/api/endpoints/test_organization_traces.py \
-              tests/sentry/api/endpoints/test_organization_spans_fields.py \
-              tests/sentry/api/endpoints/test_organization_ai_conversations.py \
-              tests/sentry/api/endpoints/test_organization_ai_conversation_details.py \
-              tests/sentry/sentry_metrics/querying \
-              -n "$XDIST_WORKERS" --dist=loadfile --reuse-db \
-              -vv
-
-      - name: Run CI module tests
-        if: needs.files-changed.outputs.api_changes == 'true'
-        working-directory: sentry
-        run: |
-          pytest -k 'not __In' \
-            tests/sentry/snuba \
-            tests/sentry/workflow_engine/endpoints \
-            tests/snuba/rules/conditions \
-            -m snuba_ci \
-            -n "$XDIST_WORKERS" --dist=loadfile --reuse-db \
-            -vv
+          export PYTEST_ADDOPTS="$PYTEST_ADDOPTS -k 'not __In' -m 'snuba and not snuba_ci' -n $XDIST_WORKERS --dist=loadfile -vv"
+          make test-python-ci
 
   clickhouse-versions:
     needs: [linting, snuba-image, docker-deps]
@@ -525,7 +490,6 @@ jobs:
       matrix:
         version:
           [
-            "25.3.8.10041.altinitystable",
             "25.8.16.10001.altinitystable",
           ]
         test_type: [snuba-test, snuba-test-migrations]
@@ -578,8 +542,8 @@ jobs:
           export CLICKHOUSE_IMAGE=ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:${{matrix.version}}
           SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=test docker compose -f docker-compose.gcb.yml run --rm ${{ matrix.test_type }}
 
-  distroless-smoke-test:
-    name: Distroless image smoke test
+  image-smoke-test:
+    name: Image smoke test
     needs: [snuba-image]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -590,44 +554,44 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
-      - name: Build distroless image
+      - name: Build production image
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
-          target: application-distroless
+          target: application
           load: true
-          tags: snuba-distroless:test
+          tags: snuba:test
           cache-from: type=registry,ref=ghcr.io/getsentry/snuba-ci:buildcache
 
       - name: Verify --help works
-        run: docker run --rm snuba-distroless:test --help
+        run: docker run --rm snuba:test --help
 
       - name: Verify subcommand resolution (api)
         # Exercises the docker_entrypoint.py path where args[0] does NOT
         # start with "-". This is the default self-hosted snuba-api
         # invocation and the path that previously fell through to a
         # FileNotFoundError when the snuba --help probe timed out.
-        run: docker run --rm snuba-distroless:test api --help
+        run: docker run --rm snuba:test api --help
 
       - name: Verify subcommand resolution (rust-consumer)
         # rust-consumer is what every self-hosted consumer service runs.
-        run: docker run --rm snuba-distroless:test rust-consumer --help
+        run: docker run --rm snuba:test rust-consumer --help
 
       - name: Verify Python imports
         run: |
-          docker run --rm --entrypoint python3 snuba-distroless:test \
+          docker run --rm --entrypoint python3 snuba:test \
             -c "import snuba, rust_snuba, confluent_kafka; print('OK')"
 
       - name: Verify jemalloc LD_PRELOAD is active
         run: |
-          docker run --rm --entrypoint python3 snuba-distroless:test \
+          docker run --rm --entrypoint python3 snuba:test \
             -c "import ctypes; ctypes.CDLL('libjemalloc.so.2'); print('jemalloc OK')"
 
       - name: Verify no shell available
         run: |
-          # This should fail — distroless has no /bin/sh
-          if docker run --rm --entrypoint /bin/sh snuba-distroless:test -c "echo hi" 2>/dev/null; then
-            echo "ERROR: /bin/sh should not be available in distroless image"
+          # This should fail — the production image has no /bin/sh
+          if docker run --rm --entrypoint /bin/sh snuba:test -c "echo hi" 2>/dev/null; then
+            echo "ERROR: /bin/sh should not be available in the production image"
             exit 1
           else
             echo "OK: /bin/sh is not available"

@@ -1,5 +1,8 @@
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+from snuba.admin.clickhouse.common import InvalidCustomQuery
 from snuba.admin.clickhouse.trace_log_parsing import ExecuteSummary, QuerySummary, TracingSummary
 from snuba.admin.clickhouse.tracing import (
     MAX_TRACING_QUERY_LIMIT,
@@ -10,7 +13,7 @@ from snuba.admin.clickhouse.tracing import (
     scrub_row,
     summarize_from_query_log,
 )
-from snuba.clickhouse.native import ClickhouseResult
+from snuba.clickhouse.pool import ClickhouseResult
 
 
 def test_scrub() -> None:
@@ -33,6 +36,13 @@ def test_extract_settings_clause_moves_settings() -> None:
     # Malformed trailing SETTINGS: leave SQL alone and disable driver LIMIT append.
     body, settings, apply_limit = _extract_settings_clause("SELECT 1 SETTINGS max_threads")
     assert body == "SELECT 1 SETTINGS max_threads"
+    assert settings == {}
+    assert apply_limit is False
+
+    # Quoted commas are not treated as setting separators, so extraction fails closed.
+    quoted = "SELECT 1 SETTINGS query_id = 'foo,bar'"
+    body, settings, apply_limit = _extract_settings_clause(quoted)
+    assert body == quoted
     assert settings == {}
     assert apply_limit is False
 
@@ -374,7 +384,10 @@ def test_run_query_and_get_trace_uses_query_log_when_wire_trace_empty() -> None:
             "snuba.admin.clickhouse.tracing.get_ro_query_node_connection",
             return_value=connection,
         ),
-        patch("snuba.admin.clickhouse.tracing.validate_ro_query"),
+        patch(
+            "snuba.admin.clickhouse.tracing.validate_ro_query",
+            return_value=connection,
+        ),
         patch(
             "snuba.admin.clickhouse.tracing.summarize_from_query_log",
             return_value=query_log_summary,
@@ -408,6 +421,75 @@ def test_run_query_and_get_trace_uses_query_log_when_wire_trace_empty() -> None:
     assert output.executed_query == "SELECT 1 LIMIT 10000"
 
 
+def test_run_query_and_get_trace_drops_caller_query_id() -> None:
+    # A SETTINGS query_id would otherwise make summarize_from_query_log read
+    # another query's system.query_log rows.
+    connection = MagicMock()
+    connection.query_limit = 0
+    connection.execute.return_value = ClickhouseResult(
+        results=[(1,)],
+        meta=[("count()", "UInt64")],
+        trace_output="",
+        query_id="server-assigned",
+    )
+
+    with (
+        patch(
+            "snuba.admin.clickhouse.tracing.get_ro_query_node_connection",
+            return_value=connection,
+        ),
+        patch(
+            "snuba.admin.clickhouse.tracing.validate_ro_query",
+            return_value=connection,
+        ),
+        patch(
+            "snuba.admin.clickhouse.tracing.summarize_from_query_log",
+            return_value=TracingSummary({}),
+        ),
+    ):
+        run_query_and_get_trace(
+            "errors_ro",
+            "SELECT 1 SETTINGS query_id='attacker', max_threads = 4",
+            settings={"query_id": "also-attacker", "log_profile_events": 1},
+        )
+
+    execute_settings = connection.execute.call_args.kwargs["settings"]
+    assert "query_id" not in execute_settings
+    assert execute_settings == {"log_profile_events": 1, "max_threads": "4"}
+    assert connection.execute.call_args.kwargs["query"] == "SELECT 1"
+
+
+def test_run_query_and_get_trace_rejects_unparsed_query_id_settings() -> None:
+    # A quoted comma breaks the SETTINGS splitter, so query_id would otherwise
+    # remain in the SQL sent to ClickHouse.
+    connection = MagicMock()
+    connection.query_limit = 0
+    connection.execute.return_value = ClickhouseResult(
+        results=[(1,)],
+        meta=[("count()", "UInt64")],
+        trace_output="",
+        query_id="server-assigned",
+    )
+
+    with (
+        patch(
+            "snuba.admin.clickhouse.tracing.get_ro_query_node_connection",
+            return_value=connection,
+        ),
+        patch(
+            "snuba.admin.clickhouse.tracing.validate_ro_query",
+            return_value=connection,
+        ),
+        pytest.raises(InvalidCustomQuery, match="query_id is not allowed in SETTINGS"),
+    ):
+        run_query_and_get_trace(
+            "errors_ro",
+            "SELECT 1 SETTINGS join_algorithm = 'hash,parallel_hash', query_id = 'foo,bar'",
+        )
+
+    connection.execute.assert_not_called()
+
+
 def test_run_query_and_get_trace_disables_query_limit_when_settings_remain() -> None:
     connection = MagicMock()
     # Simulate a connect pool (has query_limit attr) without mutating it.
@@ -424,7 +506,10 @@ def test_run_query_and_get_trace_disables_query_limit_when_settings_remain() -> 
             "snuba.admin.clickhouse.tracing.get_ro_query_node_connection",
             return_value=connection,
         ),
-        patch("snuba.admin.clickhouse.tracing.validate_ro_query"),
+        patch(
+            "snuba.admin.clickhouse.tracing.validate_ro_query",
+            return_value=connection,
+        ),
         patch(
             "snuba.admin.clickhouse.tracing.summarize_from_query_log",
             return_value=TracingSummary({}),
@@ -457,7 +542,10 @@ def test_run_query_and_get_trace_keeps_native_wire_trace() -> None:
             "snuba.admin.clickhouse.tracing.get_ro_query_node_connection",
             return_value=connection,
         ),
-        patch("snuba.admin.clickhouse.tracing.validate_ro_query"),
+        patch(
+            "snuba.admin.clickhouse.tracing.validate_ro_query",
+            return_value=connection,
+        ),
         patch(
             "snuba.admin.clickhouse.tracing.summarize_from_query_log",
             return_value=TracingSummary({}),

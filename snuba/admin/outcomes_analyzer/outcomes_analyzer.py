@@ -5,7 +5,7 @@ from snuba.admin.clickhouse.common import (
     get_ro_query_node_connection,
     validate_ro_query,
 )
-from snuba.clickhouse.native import ClickhouseResult
+from snuba.clickhouse.pool import ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages.factory import get_storage
@@ -41,9 +41,13 @@ def run_outcomes_query(query: str, user: str) -> ClickhouseResult:
     Validates, audit logs, and executes a read-only query against outcomes
     tables. `user` is required by the audit_log decorator.
     """
-    validate_ro_query(sql_query=query, allowed_tables=_allowed_tables())
-    connection = get_ro_query_node_connection(
-        StorageKey("outcomes_hourly").value,
-        ClickhouseClientSettings.CARDINALITY_ANALYZER,
+    connection = validate_ro_query(
+        sql_query=query,
+        allowed_tables=_allowed_tables(),
+        get_connection=lambda: get_ro_query_node_connection(
+            StorageKey("outcomes_hourly").value,
+            ClickhouseClientSettings.CARDINALITY_ANALYZER,
+        ),
     )
+    assert connection is not None
     return _stringify_result(connection.execute(query=query, with_column_types=True))

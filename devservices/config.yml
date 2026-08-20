@@ -41,7 +41,7 @@ x-programs:
 
 services:
   clickhouse:
-    image: ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.3.8.10041.altinitystable
+    image: ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.16.10001.altinitystable
     ulimits:
       nofile:
         soft: 262144
@@ -69,7 +69,7 @@ services:
     restart: unless-stopped
 
   snuba:
-    image: ghcr.io/getsentry/snuba:nightly-distroless
+    image: ghcr.io/getsentry/snuba:nightly
     ports:
       - 127.0.0.1:1218:1218
       - 127.0.0.1:1219:1219
@@ -86,7 +86,6 @@ services:
       SNUBA_SETTINGS: docker
       DEBUG: 1
       CLICKHOUSE_HOST: clickhouse
-      CLICKHOUSE_PORT: 9000
       CLICKHOUSE_HTTP_PORT: 8123
       DEFAULT_BROKERS: kafka:9093
       REDIS_HOST: redis
@@ -108,7 +107,7 @@ services:
       - orchestrator=devservices
     restart: unless-stopped
   profiles-consumer:
-    image: ghcr.io/getsentry/snuba:nightly-distroless
+    image: ghcr.io/getsentry/snuba:nightly
     command: [
           rust-consumer,
           --storage=profiles,
@@ -123,7 +122,6 @@ services:
       SNUBA_SETTINGS: docker
       DEBUG: 1
       CLICKHOUSE_HOST: clickhouse
-      CLICKHOUSE_PORT: 9000
       CLICKHOUSE_HTTP_PORT: 8123
       DEFAULT_BROKERS: kafka:9093
       REDIS_HOST: redis
@@ -137,7 +135,7 @@ services:
       - orchestrator=devservices
     restart: unless-stopped
   profile-chunks-consumer:
-    image: ghcr.io/getsentry/snuba:nightly-distroless
+    image: ghcr.io/getsentry/snuba:nightly
     command: [
           rust-consumer,
           --storage=profile_chunks,
@@ -152,7 +150,6 @@ services:
       SNUBA_SETTINGS: docker
       DEBUG: 1
       CLICKHOUSE_HOST: clickhouse
-      CLICKHOUSE_PORT: 9000
       CLICKHOUSE_HTTP_PORT: 8123
       DEFAULT_BROKERS: kafka:9093
       REDIS_HOST: redis
@@ -166,7 +163,7 @@ services:
       - orchestrator=devservices
     restart: unless-stopped
   functions-consumer:
-    image: ghcr.io/getsentry/snuba:nightly-distroless
+    image: ghcr.io/getsentry/snuba:nightly
     command: [
           rust-consumer,
           --storage=functions_raw,
@@ -181,7 +178,6 @@ services:
       SNUBA_SETTINGS: docker
       DEBUG: 1
       CLICKHOUSE_HOST: clickhouse
-      CLICKHOUSE_PORT: 9000
       CLICKHOUSE_HTTP_PORT: 8123
       DEFAULT_BROKERS: kafka:9093
       REDIS_HOST: redis
@@ -195,7 +191,7 @@ services:
       - orchestrator=devservices
     restart: unless-stopped
   metrics-consumer:
-    image: ghcr.io/getsentry/snuba:nightly-distroless
+    image: ghcr.io/getsentry/snuba:nightly
     command: [
           rust-consumer,
           --storage=metrics_raw,
@@ -210,7 +206,6 @@ services:
       SNUBA_SETTINGS: docker
       DEBUG: 1
       CLICKHOUSE_HOST: clickhouse
-      CLICKHOUSE_PORT: 9000
       CLICKHOUSE_HTTP_PORT: 8123
       DEFAULT_BROKERS: kafka:9093
       REDIS_HOST: redis
@@ -223,8 +218,9 @@ services:
     labels:
       - orchestrator=devservices
     restart: unless-stopped
+
   generic-metrics-counters-consumer:
-    image: ghcr.io/getsentry/snuba:nightly-distroless
+    image: ghcr.io/getsentry/snuba:nightly
     command: [
           rust-consumer,
           --storage=generic_metrics_counters_raw,
@@ -239,7 +235,6 @@ services:
       SNUBA_SETTINGS: docker
       DEBUG: 1
       CLICKHOUSE_HOST: clickhouse
-      CLICKHOUSE_PORT: 9000
       CLICKHOUSE_HTTP_PORT: 8123
       DEFAULT_BROKERS: kafka:9093
       REDIS_HOST: redis
@@ -252,6 +247,7 @@ services:
     labels:
       - orchestrator=devservices
     restart: unless-stopped
+
 
 volumes:
   clickhouse-data:

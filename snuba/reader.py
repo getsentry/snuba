@@ -49,13 +49,28 @@ def transform_rows(result: Result, transformer: Callable[[Row], Row]) -> None:
 
 
 NULLABLE_RE = re.compile(r"^Nullable\((.+)\)$")
+LOW_CARDINALITY_RE = re.compile(r"^LowCardinality\((.+)\)$")
 
 
 def unwrap_nullable_type(type: str) -> tuple[bool, str]:
-    match = NULLABLE_RE.match(type)
-    if match is not None:
-        return True, match.groups()[0]
-    return False, type
+    """Strip Nullable / LowCardinality wrappers around a base ClickHouse type.
+
+    Returns whether the original type was nullable, plus the innermost type.
+    LowCardinality is opaque for value transforms (DateTime formatting, UUID
+    stringification) so strip it the same way we strip Nullable.
+    """
+    is_nullable = False
+    while True:
+        match = NULLABLE_RE.match(type)
+        if match is not None:
+            is_nullable = True
+            type = match.group(1)
+            continue
+        match = LOW_CARDINALITY_RE.match(type)
+        if match is not None:
+            type = match.group(1)
+            continue
+        return is_nullable, type
 
 
 T = TypeVar("T")

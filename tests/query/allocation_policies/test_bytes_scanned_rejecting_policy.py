@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import pytest
-from clickhouse_driver import errors
 
+from snuba.clickhouse.error_codes import ErrorCodes
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.configs.configuration import ResourceIdentifier
 from snuba.datasets.storages.storage_key import StorageKey
@@ -500,7 +500,7 @@ def test_penalize_timeout(policy: BytesScannedRejectingPolicy) -> None:
     # timneout exception is thrown, the penalization is greater than the quota, therefore
     # next query should be rejected
     timeout_exception = QueryException()
-    timeout_exception.__cause__ = ClickhouseError(code=errors.ErrorCodes.TIMEOUT_EXCEEDED)
+    timeout_exception.__cause__ = ClickhouseError(code=ErrorCodes.TIMEOUT_EXCEEDED)
     policy.update_quota_balance(tenant_ids, QUERY_ID, QueryResultOrError(None, timeout_exception))
 
     allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)

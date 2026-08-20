@@ -48,6 +48,19 @@ impl ProduceReplacements {
             skip_produce,
         }
     }
+
+    /// Drop replacements without constructing a Kafka producer.
+    /// Used by `--skip-write` shadow consumers.
+    pub fn skipping<N>(next_step: N) -> Self
+    where
+        N: ProcessingStrategy<BytesInsertBatch<RowData>> + 'static,
+    {
+        ProduceReplacements {
+            next_step: Box::new(next_step),
+            inner: Box::new(Noop {}),
+            skip_produce: true,
+        }
+    }
 }
 
 impl ProcessingStrategy<InsertOrReplacement<BytesInsertBatch<RowData>>> for ProduceReplacements {
@@ -172,5 +185,52 @@ mod tests {
         strategy.join(None).unwrap();
 
         assert_eq!(produced_payloads.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn skip_produce_drops_replacements() {
+        let next_step = TestStrategy::new();
+        let produced_payloads = Arc::new(Mutex::new(vec![]));
+        let producer = MockProducer {
+            payloads: produced_payloads.clone(),
+        };
+        let destination = Topic::new("test");
+        let concurrency = ConcurrencyConfig::new(10);
+        let mut strategy =
+            ProduceReplacements::new(next_step, producer, destination, &concurrency, true);
+
+        strategy
+            .submit(Message::new_any_message(
+                InsertOrReplacement::Replacement(ReplacementData {
+                    key: "1".as_bytes().to_vec(),
+                    value: "{\"project_id\":1}".as_bytes().to_vec(),
+                }),
+                BTreeMap::new(),
+            ))
+            .unwrap();
+
+        strategy.poll().unwrap();
+        strategy.join(None).unwrap();
+
+        assert_eq!(produced_payloads.lock().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn skipping_constructor_drops_replacements() {
+        let next_step = TestStrategy::new();
+        let mut strategy = ProduceReplacements::skipping(next_step);
+
+        strategy
+            .submit(Message::new_any_message(
+                InsertOrReplacement::Replacement(ReplacementData {
+                    key: "1".as_bytes().to_vec(),
+                    value: "{\"project_id\":1}".as_bytes().to_vec(),
+                }),
+                BTreeMap::new(),
+            ))
+            .unwrap();
+
+        strategy.poll().unwrap();
+        strategy.join(None).unwrap();
     }
 }

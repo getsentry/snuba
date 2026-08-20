@@ -4,7 +4,6 @@ import logging
 import time
 from typing import Any, cast
 
-from clickhouse_driver import errors
 from sentry_redis_tools.sliding_windows_rate_limiter import (
     GrantedQuota,
     Quota,
@@ -12,6 +11,7 @@ from sentry_redis_tools.sliding_windows_rate_limiter import (
     RequestedQuota,
 )
 
+from snuba.clickhouse.error_codes import ErrorCodes
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.configs.configuration import Configuration
 from snuba.query.allocation_policies import (
@@ -414,7 +414,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
         if result_or_error.error:
             if (
                 isinstance(result_or_error.error.__cause__, ClickhouseError)
-                and result_or_error.error.__cause__.code == errors.ErrorCodes.TIMEOUT_EXCEEDED
+                and result_or_error.error.__cause__.code == ErrorCodes.TIMEOUT_EXCEEDED
             ):
                 return int(self.get_config_value("clickhouse_timeout_bytes_scanned_penalization"))
             return 0

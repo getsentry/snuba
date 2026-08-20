@@ -73,7 +73,7 @@ function VersionSummary(props: { clusters: ClusterData[] }) {
   return (
     <Group spacing="xs">
       <Text size="sm">ClickHouse versions in use:</Text>
-      {[...versions].sort().map((version) => (
+      {Array.from(versions).sort().map((version) => (
         <Badge
           key={version}
           color={version === "unknown" ? "red" : "blue"}

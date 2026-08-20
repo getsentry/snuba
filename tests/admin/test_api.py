@@ -13,8 +13,11 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
 )
 
 from snuba import settings
+from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.auth import USER_HEADER_KEY
+from snuba.admin.auth_roles import DEFAULT_ROLES, ROLES
 from snuba.admin.clickhouse.clusters import TABLES_DATABASE
+from snuba.admin.user import AdminUser
 from snuba.datasets.factory import get_enabled_dataset_names
 from snuba.web.rpc import RPCEndpoint
 
@@ -116,6 +119,65 @@ def test_run_copy_table_query_invalid_node_returns_400(admin_api: FlaskClient) -
     data = json.loads(response.data)
     assert data["error"]["type"] == "request"
     assert "attacker.example.com" in data["error"]["message"]
+
+
+@pytest.mark.redis_db
+def test_run_copy_table_query_dry_run_without_sudo(admin_api: FlaskClient) -> None:
+    dry_run_resp = {
+        "source_host": "127.0.0.1",
+        "tables": "errors_local",
+        "cluster_name": "no cluster",
+        "dry_run": True,
+    }
+    with (
+        mock.patch(
+            "snuba.admin.auth.DEFAULT_ROLES",
+            [ROLES["ProductTools"]],
+        ),
+        mock.patch(
+            "snuba.admin.views.copy_tables",
+            return_value=dry_run_resp,
+        ) as copy_tables,
+    ):
+        response = admin_api.post(
+            "/run_copy_table_query",
+            headers={"Content-Type": "application/json"},
+            data=json.dumps(
+                {
+                    "storage": "errors",
+                    "source_host": "127.0.0.1",
+                    "dry_run": True,
+                }
+            ),
+        )
+    assert response.status_code == 200
+    assert json.loads(response.data) == dry_run_resp
+    copy_tables.assert_called_once()
+
+
+@pytest.mark.redis_db
+def test_run_copy_table_query_without_sudo_returns_400(admin_api: FlaskClient) -> None:
+    with (
+        mock.patch(
+            "snuba.admin.auth.DEFAULT_ROLES",
+            [ROLES["ProductTools"]],
+        ),
+        mock.patch("snuba.admin.views.copy_tables") as copy_tables,
+    ):
+        response = admin_api.post(
+            "/run_copy_table_query",
+            headers={"Content-Type": "application/json"},
+            data=json.dumps(
+                {
+                    "storage": "errors",
+                    "source_host": "127.0.0.1",
+                    "dry_run": False,
+                }
+            ),
+        )
+    assert response.status_code == 400
+    assert json.loads(response.data) == {"error": "Cannot sudo"}
+    copy_tables.assert_not_called()
 
 
 @pytest.mark.redis_db
@@ -264,7 +326,7 @@ def test_clickhouse_clusters(admin_api: FlaskClient) -> None:
     assert len(data) == len(settings.CLUSTERS)
     for cluster, configured in zip(data, settings.CLUSTERS, strict=True):
         assert cluster["error"] is None, cluster["error"]
-        # The version of the ClickHouse the tests run against, e.g. 23.8.11.29
+        # The version of the ClickHouse the tests run against, e.g. 25.8.16.10001
         assert all(node["version"] for node in cluster["query_node_versions"])
         assert all(node["version"] for node in cluster["storage_node_versions"])
         assert cluster["host"] == configured["host"]
@@ -405,24 +467,6 @@ def test_prod_snql_query_invalid_query(admin_api: FlaskClient) -> None:
     assert response.status_code == 400
     data = json.loads(response.data)
     assert data["error"]["message"] == "Rule 'query_exp' didn't match at '' (line 1, column 1)."
-
-
-@pytest.mark.redis_db
-@pytest.mark.events_db
-def test_force_overwrite(admin_api: FlaskClient) -> None:
-    migration_id = "0012_add_group_id_bloom_filter_index"
-    migrations = json.loads(admin_api.get("/migrations/search_issues/list").data)
-    downgraded_migration = [m for m in migrations if m.get("migration_id") == migration_id][0]
-    assert downgraded_migration["status"] == "completed"
-
-    response = admin_api.post(
-        f"/migrations/search_issues/overwrite/{migration_id}/status/not_started",
-        headers={"Referer": "https://snuba-admin.getsentry.net/"},
-    )
-    assert response.status_code == 200
-    migrations = json.loads(admin_api.get("/migrations/search_issues/list").data)
-    downgraded_migration = [m for m in migrations if m.get("migration_id") == migration_id][0]
-    assert downgraded_migration["status"] == "not_started"
 
 
 @pytest.mark.redis_db
@@ -618,7 +662,7 @@ def test_uncaught_exception_returns_json_500(admin_api: FlaskClient) -> None:
 
     assert response.status_code == 500
     assert response.headers["Content-Type"] == "application/json"
-    assert json.loads(response.data) == {"error": {"type": "unknown", "message": "boom"}}
+    assert json.loads(response.data) == {"error": {"type": "unknown", "message": "Internal error"}}
 
 
 @pytest.mark.redis_db
@@ -653,6 +697,126 @@ def test_run_job_by_type_is_repeatable(admin_api: FlaskClient) -> None:
         job_ids.add(body["job_id"])
     # A fresh job id per run is what makes it repeatable.
     assert len(job_ids) == 2
+
+
+@pytest.mark.redis_db
+def test_run_job_by_type_reports_parameters_and_user(admin_api: FlaskClient) -> None:
+    params = {"message": "hello", "nested": {"enabled": True}}
+    user = AdminUser(email="operator@sentry.io", id="123", roles=DEFAULT_ROLES)
+    with (
+        mock.patch("snuba.admin.views.audit_log") as audit_log,
+        mock.patch("snuba.admin.views.authorize_request", return_value=user),
+    ):
+        response = admin_api.post(
+            "/job-types/ToyJob/run",
+            data=json.dumps({"params": params}),
+            headers={"Content-Type": "application/json"},
+        )
+
+    assert response.status_code == 200
+    job_id = json.loads(response.data)["job_id"]
+    audit_log.record.assert_called_once_with(
+        "operator@sentry.io",
+        AuditLogAction.RAN_MANUAL_JOB,
+        {
+            "job_id": job_id,
+            "job_type": "ToyJob",
+            "status": "finished",
+            "adhoc": True,
+            "params": json.dumps(params, sort_keys=True),
+        },
+        notify=True,
+    )
+
+
+@pytest.mark.redis_db
+def test_failed_run_job_by_type_is_reported(admin_api: FlaskClient) -> None:
+    params = {"fail": True}
+    with mock.patch("snuba.admin.views.audit_log") as audit_log:
+        response = admin_api.post(
+            "/job-types/ToyJob/run",
+            data=json.dumps({"params": params}),
+            headers={"Content-Type": "application/json"},
+        )
+
+    assert response.status_code == 500
+    job_id = json.loads(response.data)["job_id"]
+    audit_log.record.assert_called_once_with(
+        "unknown",
+        AuditLogAction.RAN_MANUAL_JOB,
+        {
+            "job_id": job_id,
+            "job_type": "ToyJob",
+            "status": "failed",
+            "adhoc": True,
+            "params": json.dumps(params, sort_keys=True),
+        },
+        notify=True,
+    )
+
+
+@pytest.mark.redis_db
+def test_execute_job_reports_parameters_and_user(admin_api: FlaskClient) -> None:
+    user = AdminUser(email="operator@sentry.io", id="123", roles=DEFAULT_ROLES)
+    with (
+        mock.patch("snuba.admin.views.audit_log") as audit_log,
+        mock.patch("snuba.admin.views.authorize_request", return_value=user),
+    ):
+        response = admin_api.post("/job-specs/abc1234")
+
+    assert response.status_code == 200
+    assert response.data.decode() == "finished"
+    audit_log.record.assert_called_once_with(
+        "operator@sentry.io",
+        AuditLogAction.RAN_MANUAL_JOB,
+        {
+            "job_id": "abc1234",
+            "job_type": "ToyJob",
+            "status": "finished",
+            "adhoc": False,
+            "params": json.dumps({"p1": "value1"}, sort_keys=True),
+        },
+        notify=True,
+    )
+
+
+@pytest.mark.redis_db
+def test_failed_execute_job_is_reported(admin_api: FlaskClient) -> None:
+    with (
+        mock.patch("snuba.admin.views.audit_log") as audit_log,
+        mock.patch(
+            "snuba.admin.views.run_job",
+            side_effect=RuntimeError("failed as requested"),
+        ),
+    ):
+        response = admin_api.post("/job-specs/abc1234")
+
+    assert response.status_code == 500
+    assert json.loads(response.data) == {"error": "failed as requested"}
+    audit_log.record.assert_called_once_with(
+        "unknown",
+        AuditLogAction.RAN_MANUAL_JOB,
+        {
+            "job_id": "abc1234",
+            "job_type": "ToyJob",
+            "status": "failed",
+            "adhoc": False,
+            "params": json.dumps({"p1": "value1"}, sort_keys=True),
+        },
+        notify=True,
+    )
+
+
+@pytest.mark.redis_db
+def test_execute_job_unknown_id_returns_404_without_notify(
+    admin_api: FlaskClient,
+) -> None:
+    with mock.patch("snuba.admin.views.audit_log") as audit_log:
+        response = admin_api.post("/job-specs/not-a-real-job")
+
+    assert response.status_code == 404
+    assert json.loads(response.data) == {"error": "Unknown job id 'not-a-real-job'"}
+    audit_log.record.assert_not_called()
 
 
 @pytest.mark.redis_db

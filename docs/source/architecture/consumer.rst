@@ -162,6 +162,39 @@ Since the consumer is launched from the Python CLI, it will find the Python
 interpreter already initialized, and does not have to re-import Snuba again
 (except in subprocesses)
 
+Static membership (KIP-345)
+---------------------------
+
+Both ``snuba consumer`` and ``snuba rust-consumer`` accept
+``--group-instance-id``. When set, Snuba passes ``group.instance.id`` into the
+librdkafka consumer config. Kafka then treats the process as a **static
+member**: after a restart it rejoins with the same id and keeps the same
+partitions as long as it returns within ``session.timeout.ms`` (no stop-the-world
+rebalance for that bounce).
+
+This is the application-side half of multi-Deployment (or StatefulSet) rollouts
+where each pod has a fixed identity, e.g. ops ``static_membership`` for
+``eap-items-consumer`` (one single-replica Deployment per member, Recreate
+strategy, ``--group-instance-id snuba-eap-items-consumer-<idx>``).
+
+Requirements / caveats:
+
+* **Uniqueness.** Two live members of the same consumer group must never share
+  an id (broker returns ``FENCED_INSTANCE_ID``). Deployments that keep a fixed
+  id must use ``Recreate`` (or equivalent terminate-before-create), not a rolling
+  surge.
+* **session.timeout.ms.** Controls how long a member can be gone before its
+  partitions are reassigned. Snuba does not expose a dedicated CLI flag; set it
+  via Kafka broker/topic consumer config (and keep
+  ``max.poll.interval.ms >= session.timeout.ms``). ``--max-poll-interval-ms`` on
+  the CLI only lowers session timeout when it is under 45s (librdkafka default).
+* **Concurrency.** ``--concurrency`` on ``rust-consumer`` is in-process worker
+  threads for message processing, not multiple Kafka members. One process still
+  equals one ``group.instance.id``.
+* **Observability.** When static membership is enabled the Rust consumer logs
+  the resolved ``group.instance.id`` at startup.
+
+
 Signal-handling is a bit tricky. Since no Python code runs for the majority of
 the consumer's lifetime, Python's signal handlers cannot run. This also means
 that the Rust consumer has to register its own handler for ``Ctrl-C``, but

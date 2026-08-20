@@ -234,12 +234,12 @@ test_expressions = [
     (
         DangerousRawSQL(None, "arrayReduce('sumIf', arr, cond)"),
         "arrayReduce('sumIf', arr, cond)",
-        "arrayReduce('sumIf', arr, cond)",
+        "arrayReduce('$S', arr, cond)",
     ),  # DangerousRawSQL with ClickHouse-specific syntax
     (
         DangerousRawSQL(None, "field->'key'"),
         "field->'key'",
-        "field->'key'",
+        "field->'$S'",
     ),  # DangerousRawSQL with special characters (not escaped)
     (
         FunctionCall(
@@ -252,7 +252,7 @@ test_expressions = [
             ),
         ),
         "if(condition > 0, t1.col1, 0)",
-        "if(condition > 0, t1.col1, -1337)",
+        "if(condition > -1337, t1.col1, -1337)",
     ),  # DangerousRawSQL in function call
     (DangerousRawSQL(None, ""), "", ""),  # Empty DangerousRawSQL (edge case)
 ]
@@ -294,6 +294,19 @@ def test_aliases() -> None:
 
     expected = "f1((tag(table1.column1) AS `tag[something]`), `tag[something]`, `tag[something]`)"
     assert f.accept(ClickhouseExpressionFormatter()) == expected
+
+
+def test_anonymized_alias_reuse_redacts_tag_key() -> None:
+    # Reused aliases must stay anonymized; otherwise later references re-emit
+    # the original tag key (e.g. email) into sql_anonymized.
+    col1 = Column("tags[email]", "table1", "column1")
+    col2 = Column("tags[email]", "table1", "column1")
+
+    pc = ParsingContext()
+    visitor = ExpressionFormatterAnonymized(pc)
+
+    assert col1.accept(visitor) == "(table1.column1 AS `tags[$A]`)"
+    assert col2.accept(visitor) == "`tags[$A]`"
 
 
 test_escaped = [

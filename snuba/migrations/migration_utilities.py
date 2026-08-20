@@ -1,8 +1,21 @@
-from snuba.clickhouse.native import ClickhousePool
+import re
+
+from snuba.clickhouse.pool import ClickhousePool
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 
 ClickhouseVersion = tuple[int, int]
+
+# SAMPLE BY <identifier> or SAMPLE BY <fn>(...)
+_SAMPLE_BY_RE = re.compile(
+    r"\s+SAMPLE BY\s+\S+(?:\([^)]*\))?",
+    re.IGNORECASE,
+)
+
+
+def strip_sample_by_clause(create_table_statement: str) -> str:
+    """Remove a SAMPLE BY clause from a ClickHouse SHOW CREATE TABLE statement."""
+    return _SAMPLE_BY_RE.sub("", create_table_statement, count=1)
 
 
 def get_clickhouse_version_for_storage_set(

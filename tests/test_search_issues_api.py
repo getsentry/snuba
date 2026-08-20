@@ -452,4 +452,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         )
         data = json.loads(response.data)
 
-        assert datetime.fromisoformat(data["data"][0]["timestamp_ms"]) == now_ms
+        # Reader ISO-formats DateTime64 as UTC-aware; compare on the same clock.
+        assert (
+            datetime.fromisoformat(data["data"][0]["timestamp_ms"]).replace(tzinfo=None) == now_ms
+        )
