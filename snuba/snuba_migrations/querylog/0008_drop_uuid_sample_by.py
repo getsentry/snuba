@@ -1,5 +1,4 @@
 import logging
-import math
 import time
 from collections.abc import Sequence
 
@@ -21,41 +20,35 @@ ILLEGAL_SAMPLE_BY = "request_id"
 
 
 def update_querylog_table(clickhouse: ClickhousePool, database: str) -> None:
-    ((curr_sampling_key,),) = clickhouse.execute(
+    ((sampling_key,),) = clickhouse.execute(
         f"SELECT sampling_key FROM system.tables WHERE name = '{TABLE_NAME}' AND database = '{database}'"
     ).results
 
-    if curr_sampling_key != ILLEGAL_SAMPLE_BY:
+    if sampling_key != ILLEGAL_SAMPLE_BY:
         return
 
-    ((curr_create_table_statement,),) = clickhouse.execute(
+    ((create_table_statement,),) = clickhouse.execute(
         f"SHOW CREATE TABLE {database}.{TABLE_NAME}"
     ).results
 
     new_create_table_statement = strip_sample_by_clause(
-        curr_create_table_statement.replace(TABLE_NAME, TABLE_NAME_NEW)
+        create_table_statement.replace(TABLE_NAME, TABLE_NAME_NEW)
     )
     assert "SAMPLE BY" not in new_create_table_statement.upper()
-
     clickhouse.execute(new_create_table_statement)
 
     [(row_count,)] = clickhouse.execute(f"SELECT count() FROM {TABLE_NAME}").results
     batch_size = 100000
-    batch_count = math.ceil(row_count / batch_size)
-
-    orderby = "toStartOfDay(timestamp), request_id"
-
-    for i in range(batch_count):
-        skip = batch_size * i
+    for offset in range(0, row_count, batch_size):
         insert_op = operations.InsertIntoSelect(
             storage_set=StorageSetKey.QUERYLOG,
             dest_table_name=TABLE_NAME_NEW,
             dest_columns=["*"],
             src_table_name=TABLE_NAME,
             src_columns=["*"],
-            order_by=orderby,
+            order_by="toStartOfDay(timestamp), request_id",
             limit=batch_size,
-            offset=skip,
+            offset=offset,
             target=operations.OperationTarget.LOCAL,
         )
         clickhouse.execute(insert_op.format_sql())
@@ -69,13 +62,6 @@ def update_querylog_table(clickhouse: ClickhousePool, database: str) -> None:
 
 
 def forwards(logger: logging.Logger) -> None:
-    """
-    Recreate querylog_local without SAMPLE BY request_id on every local node.
-
-    ClickHouse cannot ALTER SAMPLE BY, so this copies data into a new table.
-    Clusters whose querylog_local has no sampling key (or a non-UUID one) are
-    left unchanged.
-    """
     cluster = get_cluster(StorageSetKey.QUERYLOG)
 
     for node in cluster.get_local_nodes():

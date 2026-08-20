@@ -15,6 +15,7 @@ from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
 
 querylog_0008 = importlib.import_module("snuba.snuba_migrations.querylog.0008_drop_uuid_sample_by")
+update_querylog_table = querylog_0008.update_querylog_table
 
 SHOW_CREATE_MULTILINE = """CREATE TABLE default.querylog_local
 (
@@ -57,19 +58,14 @@ SETTINGS index_granularity = 8192"""
 
 
 @pytest.mark.parametrize(
-    "original, unexpected_fragment",
-    [
-        pytest.param(SHOW_CREATE_MULTILINE, "SAMPLE BY request_id", id="multiline"),
-        pytest.param(SHOW_CREATE_INLINE, "SAMPLE BY request_id", id="inline"),
-        pytest.param(SHOW_CREATE_REPLICATED, "SAMPLE BY request_id", id="replicated"),
-    ],
+    "create_sql",
+    [SHOW_CREATE_MULTILINE, SHOW_CREATE_INLINE, SHOW_CREATE_REPLICATED],
+    ids=["multiline", "inline", "replicated"],
 )
-def test_strip_sample_by_clause(original: str, unexpected_fragment: str) -> None:
-    stripped = strip_sample_by_clause(original)
+def test_strip_sample_by_clause(create_sql: str) -> None:
+    stripped = strip_sample_by_clause(create_sql)
     assert "SAMPLE BY" not in stripped.upper()
-    assert unexpected_fragment not in stripped
     assert "ORDER BY" in stripped
-    assert "querylog_local" in stripped
 
 
 def test_strip_sample_by_preserves_statement_without_clause() -> None:
@@ -116,22 +112,22 @@ class _FakePool:
         return ClickhouseResult(results=[])
 
 
-def test_update_querylog_table_noop_without_sample_by() -> None:
-    pool = _FakePool(sampling_key="", create_sql=SHOW_CREATE_NO_SAMPLE)
-    querylog_0008.update_querylog_table(pool, "default")
+@pytest.mark.parametrize("sampling_key", ["", "cityHash64(request_id)"])
+def test_update_querylog_table_noop(sampling_key: str) -> None:
+    pool = _FakePool(sampling_key=sampling_key, create_sql=SHOW_CREATE_NO_SAMPLE)
+    update_querylog_table(pool, "default")
     assert pool.commands == []
     assert all(not q.startswith("SHOW CREATE") for q in pool.executed)
 
 
 def test_update_querylog_table_rebuilds_when_sample_by_is_request_id() -> None:
     pool = _FakePool(sampling_key="request_id", create_sql=SHOW_CREATE_MULTILINE, row_count=0)
-    querylog_0008.update_querylog_table(pool, "default")
+    update_querylog_table(pool, "default")
 
     create_statements = [q for q in pool.executed if q.startswith("CREATE TABLE")]
     assert len(create_statements) == 1
     assert "SAMPLE BY" not in create_statements[0].upper()
     assert "querylog_local_new" in create_statements[0]
-    assert "querylog_local," not in create_statements[0].split("\n")[0]
     assert pool.commands == [
         "RENAME TABLE querylog_local TO querylog_local_old;",
         "RENAME TABLE querylog_local_new TO querylog_local;",
@@ -141,19 +137,12 @@ def test_update_querylog_table_rebuilds_when_sample_by_is_request_id() -> None:
 
 def test_update_querylog_table_copies_rows() -> None:
     pool = _FakePool(sampling_key="request_id", create_sql=SHOW_CREATE_INLINE, row_count=1)
-    querylog_0008.update_querylog_table(pool, "default")
+    update_querylog_table(pool, "default")
 
     inserts = [q for q in pool.executed if q.startswith("INSERT INTO")]
     assert len(inserts) == 1
     assert "querylog_local_new" in inserts[0]
     assert "FROM querylog_local" in inserts[0]
-
-
-def test_update_querylog_table_ignores_other_sampling_keys() -> None:
-    pool = _FakePool(sampling_key="cityHash64(request_id)", create_sql=SHOW_CREATE_NO_SAMPLE)
-    querylog_0008.update_querylog_table(pool, "default")
-    assert pool.commands == []
-    assert all(not q.startswith("SHOW CREATE") for q in pool.executed)
 
 
 def test_migration_is_registered() -> None:

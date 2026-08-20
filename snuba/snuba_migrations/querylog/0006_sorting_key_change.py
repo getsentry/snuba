@@ -34,10 +34,7 @@ def update_querylog_table(clickhouse: ClickhousePool, database: str) -> None:
             curr_sorting_key, new_sorting_key
         )
 
-    # SAMPLE BY request_id is a UUID and is illegal on ClickHouse >= 21.9.
-    # Drop it while rebuilding so this migration can run on current ClickHouse.
-    # Remaining tables are cleaned up by 0008_drop_uuid_sample_by.
-    # See https://github.com/getsentry/snuba/issues/7216
+    # UUID SAMPLE BY is illegal on ClickHouse >= 21.9; drop it while rebuilding.
     if curr_sampling_key == "request_id":
         new_create_table_statement = strip_sample_by_clause(new_create_table_statement)
         assert "SAMPLE BY" not in new_create_table_statement.upper()
