@@ -1,6 +1,5 @@
 from collections.abc import Sequence
 
-from snuba.clickhouse.pool import ClickhousePool
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
@@ -14,42 +13,6 @@ TABLE_NAME = "querylog_local"
 ILLEGAL_SAMPLE_BY = "request_id"
 
 
-def _local_connection() -> ClickhousePool | None:
-    cluster = get_cluster(StorageSetKey.QUERYLOG)
-    nodes = cluster.get_local_nodes()
-    if not nodes:
-        return None
-    return cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, nodes[0])
-
-
-def drop_sample_by_ops() -> Sequence[operations.SqlOperation]:
-    """Return REMOVE SAMPLE BY, or [] if the clause is already gone / table missing."""
-    clickhouse = _local_connection()
-    if clickhouse is None:
-        return []
-
-    database = get_cluster(StorageSetKey.QUERYLOG).get_database()
-    sampling_key_rows = clickhouse.execute(
-        f"SELECT sampling_key FROM system.tables WHERE name = '{TABLE_NAME}' AND database = '{database}'"
-    ).results
-    if not sampling_key_rows:
-        return []
-    ((sampling_key,),) = sampling_key_rows
-    if sampling_key != ILLEGAL_SAMPLE_BY:
-        return []
-
-    return [RemoveSampleBy()]
-
-
-class RemoveSampleBy(operations.SqlOperation):
-    def __init__(self) -> None:
-        super().__init__(StorageSetKey.QUERYLOG, target=operations.OperationTarget.LOCAL)
-
-    def format_sql(self) -> str:
-        on_cluster = self._get_on_cluster_clause()
-        return f"ALTER TABLE {TABLE_NAME}{on_cluster} REMOVE SAMPLE BY;"
-
-
 class DropUuidSampleBy(operations.SqlOperation):
     """Inspects ClickHouse at execute time, then removes SAMPLE BY if it is illegal."""
 
@@ -57,11 +20,24 @@ class DropUuidSampleBy(operations.SqlOperation):
         super().__init__(StorageSetKey.QUERYLOG, target=operations.OperationTarget.LOCAL)
 
     def format_sql(self) -> str:
-        return "ALTER TABLE querylog_local REMOVE SAMPLE BY if sampling_key is request_id"
+        on_cluster = self._get_on_cluster_clause()
+        return f"ALTER TABLE {TABLE_NAME}{on_cluster} REMOVE SAMPLE BY;"
 
     def execute(self) -> None:
-        for op in drop_sample_by_ops():
-            op.execute()
+        cluster = get_cluster(StorageSetKey.QUERYLOG)
+        nodes = cluster.get_local_nodes()
+        if not nodes:
+            return
+
+        clickhouse = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, nodes[0])
+        sampling_key_rows = clickhouse.execute(
+            "SELECT sampling_key FROM system.tables "
+            f"WHERE name = '{TABLE_NAME}' AND database = '{cluster.get_database()}'"
+        ).results
+        if not sampling_key_rows or sampling_key_rows[0][0] != ILLEGAL_SAMPLE_BY:
+            return
+
+        super().execute()
 
 
 class Migration(migration.ClickhouseNodeMigration):
