@@ -69,7 +69,7 @@ impl Stage for ClickHouseWriterStage {
                 gauge!("insertions.batch_flush_bytes", num_bytes as i64);
                 gauge!("insertions.batch_flush_msgs", total_rows as i64);
                 if let Ok(latency) = (Utc::now() - earliest_kafka_ts).to_std() {
-                    timer!("insertions.latency_ms", latency);
+                    timer!("insertions.max_latency_ms", latency);
                 }
 
                 tracing::info!(
