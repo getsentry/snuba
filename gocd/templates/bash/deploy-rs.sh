@@ -26,4 +26,9 @@ IMAGE_TAG="${GO_REVISION_SNUBA_REPO}"
   --container-name="replays-consumer" \
   --container-name="transactions-consumer-new" \
   --container-name="hackweek-pull-outcomes-consumer" \
-  --container-name="hackweek-pull-eap-items-consumer"
+  --container-name="hackweek-pull-eap-items-consumer" \
+&& k8s-deploy \
+  --label-selector="${LABEL_SELECTOR}" \
+  --image="us-docker.pkg.dev/sentryio/snuba-mr/image:${IMAGE_TAG}" \
+  --type="statefulset" \
+  --container-name="eap-items-sts-consumer"
