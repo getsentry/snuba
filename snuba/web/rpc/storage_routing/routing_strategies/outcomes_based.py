@@ -16,6 +16,10 @@ from snuba.clickhouse.query import Expression
 from snuba.configs.configuration import Configuration
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.entities.storage_selectors.outcomes import (
+    HOURLY_RETENTION_DAYS,
+    hourly_retention_cutoff,
+)
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.downsampled_storage_tiers import Tier
 from snuba.query import SelectedExpression
@@ -115,11 +119,16 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         ]
 
     def _use_daily(self, in_msg_meta: RequestMeta) -> bool:
-        if in_msg_meta.end_timestamp.seconds < in_msg_meta.start_timestamp.seconds:
+        """Route the outcomes estimate to the daily table when needed.
+
+        The hourly outcomes table retains 90 days. Use daily when the
+        requested window is longer than that *or* starts before now - 90d.
+        """
+        start = datetime.fromtimestamp(in_msg_meta.start_timestamp.seconds, tz=UTC)
+        end = datetime.fromtimestamp(in_msg_meta.end_timestamp.seconds, tz=UTC)
+        if end < start:
             return False
-        seconds_delta = in_msg_meta.end_timestamp.seconds - in_msg_meta.start_timestamp.seconds
-        duration = timedelta(seconds=seconds_delta)
-        return duration.days > 90
+        return (end - start).days > HOURLY_RETENTION_DAYS or start < hourly_retention_cutoff()
 
     def get_item_types_in_query(
         self, routing_context: RoutingContext

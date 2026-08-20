@@ -438,7 +438,10 @@ jobs:
         uses: ./.github/actions/setup-sentry
         with:
           workdir: sentry
-          mode: minimal
+          # backend-ci includes objectstore + symbolicator so full sentry
+          # tests marked @requires_objectstore (e.g. minidump) can run.
+          # minimal is only postgres+snuba and fails those tests.
+          mode: backend-ci
 
       - name: Start snuba
         run: |
