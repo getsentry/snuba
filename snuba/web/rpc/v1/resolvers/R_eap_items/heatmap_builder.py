@@ -285,13 +285,7 @@ class HeatmapBuilder:
 
     def build(self) -> Heatmap:
         heatmap = self.heatmap
-        if (
-            heatmap.x_attribute.type == AttributeKey.TYPE_INT
-            and heatmap.num_x_buckets > self.MAX_BUCKETS
-        ) or (
-            heatmap.y_attribute.type == AttributeKey.TYPE_INT
-            and heatmap.num_y_buckets > self.MAX_BUCKETS
-        ):
+        if heatmap.num_x_buckets > self.MAX_BUCKETS or heatmap.num_y_buckets > self.MAX_BUCKETS:
             raise BadSnubaRPCRequestException(f"Max allowed buckets is {self.MAX_BUCKETS}.")
         if heatmap.num_y_buckets <= 0:
             raise BadSnubaRPCRequestException("Number of y buckets must be greater than 0.")
