@@ -58,3 +58,12 @@ def test_or_branch_with_allowed_project_ids() -> None:
         body={"query": query, "dataset": "events"},
         dataset=get_dataset("events"),
     )
+
+
+def test_and_of_or_cannot_hide_disallowed_project_id() -> None:
+    query = """MATCH (events) SELECT time, group_id, count() AS event_count BY time, group_id WHERE timestamp >= toDateTime('2023-11-20T16:02:34.565803') AND timestamp < toDateTime('2023-11-27T16:02:34.565803') AND (project_id = 1 OR project_id = 42069) AND (project_id = 1 OR platform = 'x') HAVING event_count > 1 ORDER BY time ASC GRANULARITY 3600"""
+    with pytest.raises(InvalidQueryException, match="Cannot access the following project ids"):
+        prod_queries._validate_projects_in_query(
+            body={"query": query, "dataset": "events"},
+            dataset=get_dataset("events"),
+        )
