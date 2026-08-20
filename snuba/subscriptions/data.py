@@ -231,6 +231,11 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
         request_class.meta.end_timestamp.CopyFrom(end_time_proto)
 
         request_class.meta.referrer = referrer
+        del request_class.meta.project_ids[:]
+        request_class.meta.project_ids.append(self.project_id)
+        organization_id = self.metadata.get("organization")
+        if organization_id is not None:
+            request_class.meta.organization_id = int(organization_id)
 
         request_class.granularity_secs = self.time_window_sec
 

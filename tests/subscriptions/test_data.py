@@ -1,3 +1,4 @@
+import base64
 from datetime import datetime
 
 import pytest
@@ -230,3 +231,41 @@ class TestBuildRequest(BaseSubscriptionTest, TestBuildRequestBase):
         exception: type[Exception] | None,
     ) -> None:
         self.compare_conditions(subscription, exception, "count", expected_value)
+
+
+def test_rpc_build_request_rebinds_project_and_org() -> None:
+    stored = TimeSeriesRequest(
+        meta=RequestMeta(
+            project_ids=[999],
+            organization_id=888,
+            cogs_category="something",
+            referrer="something",
+            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+        ),
+        aggregations=[
+            AttributeAggregation(
+                aggregate=Function.FUNCTION_COUNT,
+                key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="my.float.field"),
+                label="count",
+                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+            ),
+        ],
+    )
+    subscription = RPCSubscriptionData(
+        project_id=1,
+        time_window_sec=3600,
+        resolution_sec=60,
+        time_series_request=base64.b64encode(stored.SerializeToString()).decode("utf-8"),
+        request_name="TimeSeriesRequest",
+        request_version="v1",
+        entity=get_entity(EntityKey.EAP_ITEMS),
+        metadata={"organization": 1},
+    )
+    request = subscription.build_request(
+        None,  # type: ignore[arg-type]
+        datetime.utcnow(),
+        None,
+        Timer("test"),
+    )
+    assert list(request.meta.project_ids) == [1]
+    assert request.meta.organization_id == 1
