@@ -14,7 +14,7 @@ def test_schema_default_is_quantized() -> None:
     config = get_retention_days_config()
     assert config == DEFAULT_RETENTION_DAYS
     assert config["standard"] == {"default": 30, "max": 90}
-    assert config["downsampled"] == {"default": 390, "max": 390}
+    assert config["downsampled"] == {"default": 396, "max": 396}
 
 
 @pytest.mark.parametrize(

@@ -33,14 +33,20 @@ impl RetentionKind {
 }
 
 fn retention_max(kind: RetentionKind) -> u16 {
-    options("snuba")
+    let raw = options("snuba")
         .ok()
         .and_then(|o| o.get("retention_days").ok())
         .and_then(|v| v.get(kind.option_key()).cloned())
         .and_then(|entry| entry.get("max").and_then(|n| n.as_u64()))
         .and_then(|n| u16::try_from(n).ok())
         .filter(|&n| n > 0)
-        .unwrap_or_else(|| kind.default_max())
+        .unwrap_or_else(|| kind.default_max());
+    let quantized = raw / RETENTION_QUANTUM * RETENTION_QUANTUM;
+    if quantized == 0 {
+        RETENTION_QUANTUM
+    } else {
+        quantized
+    }
 }
 
 /// Snap ``value`` to a positive multiple of 30 and clamp it to ``kind``'s max.
@@ -115,6 +121,7 @@ pub struct StringToIntDatetime64(
 pub struct SilencedDLQMessage;
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
     use sentry_options::testing::override_options;

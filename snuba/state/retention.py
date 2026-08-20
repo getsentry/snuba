@@ -19,13 +19,14 @@ logger = logging.getLogger(__name__)
 RETENTION_QUANTUM = 30
 RetentionKind = Literal["standard", "downsampled"]
 
-# Mirrors the retention_days sentry-option default.
+# Mirrors the retention_days sentry-option default. Write-path enforcement
+# snaps each max down to a multiple of RETENTION_QUANTUM (396 -> 390).
 # standard.default: query-path fallback when RequestMeta.standard_retention_days is unset.
 # standard.max: write-path fallback / clamp for missing or over-max event retention.
-# downsampled: 13 months, quantized to RETENTION_QUANTUM.
+# downsampled: 13 months.
 DEFAULT_RETENTION_DAYS: dict[str, dict[str, int]] = {
     "standard": {"default": 30, "max": 90},
-    "downsampled": {"default": 390, "max": 390},
+    "downsampled": {"default": 396, "max": 396},
 }
 
 
@@ -65,7 +66,7 @@ def quantize_retention_days(value: int | None, kind: RetentionKind = "standard")
     above the configured max are clamped first, then quantized down.
     """
     bucket = get_retention_days_config()[kind]
-    maximum = bucket["max"]
+    maximum = bucket["max"] // RETENTION_QUANTUM * RETENTION_QUANTUM or RETENTION_QUANTUM
 
     if not isinstance(value, int) or value <= 0:
         return maximum

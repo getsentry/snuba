@@ -110,24 +110,13 @@ pub struct MessageProcessorConfig {
     pub python_module: String,
 }
 
-#[derive(Clone, Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug, Default)]
 #[serde(deny_unknown_fields)]
 pub struct EnvConfig {
     pub sentry_dsn: Option<String>,
     pub dogstatsd_socket_path: Option<String>,
     pub record_cogs: bool,
     pub project_stacktrace_blacklist: Vec<u64>,
-}
-
-impl Default for EnvConfig {
-    fn default() -> Self {
-        Self {
-            sentry_dsn: None,
-            dogstatsd_socket_path: None,
-            record_cogs: false,
-            project_stacktrace_blacklist: Vec::new(),
-        }
-    }
 }
 
 #[cfg(test)]
