@@ -32,7 +32,9 @@ def snuba_api() -> FlaskClient:
     return application.test_client()
 
 
-def test_drop_rejected_when_not_testing(snuba_api: FlaskClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_drop_rejected_when_not_testing(
+    snuba_api: FlaskClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr("snuba.web.views.settings.TESTING", False)
     response = snuba_api.post("/tests/events/drop")
     assert response.status_code == 403
