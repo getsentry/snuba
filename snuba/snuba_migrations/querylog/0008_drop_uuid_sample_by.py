@@ -13,49 +13,32 @@ TABLE_NAME = "querylog_local"
 TABLE_NAME_NEW = "querylog_local_new"
 TABLE_NAME_OLD = "querylog_local_old"
 
+# Pre-ClickHouse 21.9 allowed SAMPLE BY on UUID columns. querylog_local used
+# SAMPLE BY request_id (a UUID). ClickHouse now rejects that type, so SHOW CREATE
+# / cluster expansion fails with ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER.
+# See https://github.com/getsentry/snuba/issues/7216
+ILLEGAL_SAMPLE_BY = "request_id"
+
 
 def update_querylog_table(clickhouse: ClickhousePool, database: str) -> None:
+    ((curr_sampling_key,),) = clickhouse.execute(
+        f"SELECT sampling_key FROM system.tables WHERE name = '{TABLE_NAME}' AND database = '{database}'"
+    ).results
+
+    if curr_sampling_key != ILLEGAL_SAMPLE_BY:
+        return
+
     ((curr_create_table_statement,),) = clickhouse.execute(
         f"SHOW CREATE TABLE {database}.{TABLE_NAME}"
     ).results
 
-    new_sorting_key = "dataset, referrer, toStartOfDay(timestamp), request_id"
+    new_create_table_statement = strip_sample_by_clause(
+        curr_create_table_statement.replace(TABLE_NAME, TABLE_NAME_NEW)
+    )
+    assert "SAMPLE BY" not in new_create_table_statement.upper()
 
-    ((curr_sampling_key, curr_sorting_key),) = clickhouse.execute(
-        f"SELECT sampling_key, sorting_key FROM system.tables WHERE name = '{TABLE_NAME}' AND database = '{database}'"
-    ).results
-
-    new_create_table_statement = curr_create_table_statement.replace(TABLE_NAME, TABLE_NAME_NEW)
-
-    # Switch the sorting key
-    if curr_sorting_key != new_sorting_key:
-        assert new_create_table_statement.count(curr_sorting_key) == 1
-        new_create_table_statement = new_create_table_statement.replace(
-            curr_sorting_key, new_sorting_key
-        )
-
-    # SAMPLE BY request_id is a UUID and is illegal on ClickHouse >= 21.9.
-    # Drop it while rebuilding so this migration can run on current ClickHouse.
-    # Remaining tables are cleaned up by 0008_drop_uuid_sample_by.
-    # See https://github.com/getsentry/snuba/issues/7216
-    if curr_sampling_key == "request_id":
-        new_create_table_statement = strip_sample_by_clause(new_create_table_statement)
-        assert "SAMPLE BY" not in new_create_table_statement.upper()
-
-    # Update the timestamp column
-    # Clickhouse 20 does not support altering a column in the primary key so we need to do it here
-    new_timestamp_type = "`timestamp` DateTime CODEC(T64, ZSTD(1))"
-    if new_create_table_statement.count(new_timestamp_type) == 0:
-        assert new_create_table_statement.count("`timestamp` DateTime") == 1
-        new_create_table_statement = new_create_table_statement.replace(
-            "`timestamp` DateTime", new_timestamp_type
-        )
-    assert new_timestamp_type in new_create_table_statement
-
-    # Create the new table
     clickhouse.execute(new_create_table_statement)
 
-    # Copy the data over
     [(row_count,)] = clickhouse.execute(f"SELECT count() FROM {TABLE_NAME}").results
     batch_size = 100000
     batch_count = math.ceil(row_count / batch_size)
@@ -67,9 +50,9 @@ def update_querylog_table(clickhouse: ClickhousePool, database: str) -> None:
         insert_op = operations.InsertIntoSelect(
             storage_set=StorageSetKey.QUERYLOG,
             dest_table_name=TABLE_NAME_NEW,
-            dest_columns=["*"],  # All columns
+            dest_columns=["*"],
             src_table_name=TABLE_NAME,
-            src_columns=["*"],  # All columns
+            src_columns=["*"],
             order_by=orderby,
             limit=batch_size,
             offset=skip,
@@ -77,21 +60,21 @@ def update_querylog_table(clickhouse: ClickhousePool, database: str) -> None:
         )
         clickhouse.execute(insert_op.format_sql())
 
-    # Ensure each table has the same number of rows before deleting the old one
     [(new_row_count,)] = clickhouse.execute(f"SELECT count() FROM {TABLE_NAME_NEW}").results
     assert row_count == new_row_count
 
     clickhouse.command(f"RENAME TABLE {TABLE_NAME} TO {TABLE_NAME_OLD};")
     clickhouse.command(f"RENAME TABLE {TABLE_NAME_NEW} TO {TABLE_NAME};")
     clickhouse.command(f"DROP TABLE {TABLE_NAME_OLD};")
-    return
 
 
 def forwards(logger: logging.Logger) -> None:
     """
-    This migration is a bit complicated because we need to change the sorting key.
-    We can't do it inplace so we need to create a new table with the modified keys,
-    copy the data over, then drop the old table.
+    Recreate querylog_local without SAMPLE BY request_id on every local node.
+
+    ClickHouse cannot ALTER SAMPLE BY, so this copies data into a new table.
+    Clusters whose querylog_local has no sampling key (or a non-UUID one) are
+    left unchanged.
     """
     cluster = get_cluster(StorageSetKey.QUERYLOG)
 
@@ -103,9 +86,8 @@ def forwards(logger: logging.Logger) -> None:
 
 def backwards(logger: logging.Logger) -> None:
     """
-    This method cleans up the temporary tables used by the forwards methods and
-    returns us to the original state if the forwards method has failed somewhere
-    in the middle. Otherwise it's a no-op.
+    Clean up temporary tables if forwards failed mid-way. Does not restore
+    SAMPLE BY request_id — that schema is illegal on current ClickHouse.
     """
     cluster = get_cluster(StorageSetKey.QUERYLOG)
 
@@ -136,18 +118,20 @@ def cleanup(clickhouse: ClickhousePool, logger: logging.Logger) -> None:
 
 class Migration(migration.CodeMigration):
     """
-    Change the sorting key to dataset, referrer, timestamp, request_id, to match SaaS.
-    This is a code migration because we can't change the sorting key in a single step.
+    Drop the illegal UUID SAMPLE BY request_id from querylog_local.
 
+    Fresh installs after 0001 no longer create this clause (#4842). Existing
+    clusters that still have it cannot dump or recreate the table on
+    ClickHouse >= 21.9 (https://github.com/getsentry/snuba/issues/7216).
     """
 
-    blocking = True  # This migration may take some time if there is data to migrate
+    blocking = True  # Recreating the table may take time if there is data to copy
 
     def forwards_global(self) -> Sequence[operations.RunPython]:
         return [
             operations.RunPython(
                 func=forwards,
-                description="Sync sample by and sorting key",
+                description="Drop UUID SAMPLE BY request_id from querylog_local",
             ),
         ]
 
