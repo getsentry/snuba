@@ -8,7 +8,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_stats_pb2 import (
     MatrixColumn,
     TraceItemStatsRequest,
 )
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeValue
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     AndFilter,
     ExistsFilter,
