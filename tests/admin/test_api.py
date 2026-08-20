@@ -265,7 +265,8 @@ def test_clickhouse_clusters(admin_api: FlaskClient) -> None:
     for cluster, configured in zip(data, settings.CLUSTERS, strict=True):
         assert cluster["error"] is None, cluster["error"]
         # The version of the ClickHouse the tests run against, e.g. 23.8.11.29
-        assert cluster["version"]
+        assert all(node["version"] for node in cluster["query_node_versions"])
+        assert all(node["version"] for node in cluster["storage_node_versions"])
         assert cluster["host"] == configured["host"]
         assert cluster["port"] == configured["port"]
         assert set(cluster["storage_sets"]) == set(configured["storage_sets"])
@@ -279,9 +280,15 @@ def test_clickhouse_clusters(admin_api: FlaskClient) -> None:
 
 @pytest.mark.redis_db
 def test_clickhouse_clusters_reports_unreachable_cluster(admin_api: FlaskClient) -> None:
-    with mock.patch(
-        "snuba.admin.clickhouse.clusters.get_ro_query_node_connection",
-        side_effect=Exception("Connection refused"),
+    with (
+        mock.patch(
+            "snuba.clusters.cluster.ClickhouseCluster.get_query_connection",
+            side_effect=Exception("Connection refused"),
+        ),
+        mock.patch(
+            "snuba.clusters.cluster.ClickhouseCluster.get_node_connection",
+            side_effect=Exception("Connection refused"),
+        ),
     ):
         response = admin_api.get("/clickhouse_clusters")
 
@@ -289,7 +296,12 @@ def test_clickhouse_clusters_reports_unreachable_cluster(admin_api: FlaskClient)
     data = json.loads(response.data)
     assert len(data) == len(settings.CLUSTERS)
     for cluster in data:
-        assert cluster["version"] is None
+        assert all(node["version"] is None for node in cluster["query_node_versions"])
+        assert all(node["error"] == "Connection refused" for node in cluster["query_node_versions"])
+        assert all(node["version"] is None for node in cluster["storage_node_versions"])
+        assert all(
+            node["error"] == "Connection refused" for node in cluster["storage_node_versions"]
+        )
         assert cluster["tables"] == []
         assert cluster["error"] == "Connection refused"
 

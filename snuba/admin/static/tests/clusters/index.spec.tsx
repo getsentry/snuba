@@ -9,14 +9,30 @@ function cluster(overrides: Partial<ClusterData> = {}): ClusterData {
   return {
     host: "localhost",
     port: 9000,
-    http_port: 8123,
     database: "default",
     secure: false,
     single_node: true,
     cluster_name: null,
     distributed_cluster_name: null,
     storage_sets: ["events"],
-    version: "24.8.14.10459",
+    query_node_versions: [
+      {
+        host: "query-localhost",
+        port: 9000,
+        version: "24.8.14.10459",
+        error: null,
+      },
+    ],
+    query_node_error: null,
+    storage_node_versions: [
+      {
+        host: "storage-localhost",
+        port: 9001,
+        version: "24.8.14.10459",
+        error: null,
+      },
+    ],
+    storage_node_error: null,
     tables: ["errors_local", "sentry_local"],
     error: null,
     ...overrides,
@@ -33,7 +49,12 @@ it("lists every cluster with its ClickHouse version", async () => {
       cluster_name: "cluster_one_sh",
       distributed_cluster_name: "cluster_one_sh_dist",
       storage_sets: ["metrics", "transactions"],
-      version: "25.3.1.100",
+      query_node_versions: [
+        { host: "query", port: 9000, version: "25.3.1.100", error: null },
+      ],
+      storage_node_versions: [
+        { host: "storage", port: 9001, version: "24.8.14.10459", error: null },
+      ],
       tables: ["metrics_local"],
     }),
   ];
@@ -50,10 +71,11 @@ it("lists every cluster with its ClickHouse version", async () => {
     expect(mockClient.getClickhouseClusters).toBeCalledTimes(1)
   );
 
-  expect(getByText("localhost:9000", { exact: false })).toBeTruthy();
-  expect(getByText("clickhouse-query:9001", { exact: false })).toBeTruthy();
-  // Once in the table row, once in the summary of versions in use.
-  expect(getAllByText("24.8.14.10459", { exact: false })).toHaveLength(2);
+  expect(getByText("query-localhost:9000", { exact: false })).toBeTruthy();
+  expect(getByText("storage-localhost:9001", { exact: false })).toBeTruthy();
+  expect(getByText("query:9000", { exact: false })).toBeTruthy();
+  expect(getByText("storage:9001", { exact: false })).toBeTruthy();
+  expect(getAllByText("24.8.14.10459", { exact: false })).toHaveLength(4);
   expect(getAllByText("25.3.1.100", { exact: false })).toHaveLength(2);
   expect(getByText("cluster_one_sh_dist", { exact: false })).toBeTruthy();
   expect(getByText("metrics, transactions", { exact: false })).toBeTruthy();
@@ -89,7 +111,16 @@ it("shows the reason a cluster's version could not be fetched", async () => {
     getClickhouseClusters: jest
       .fn<() => Promise<ClusterData[]>>()
       .mockResolvedValueOnce([
-        cluster({ version: null, error: "Connection refused" }),
+        cluster({
+          query_node_versions: [
+            {
+              host: "query",
+              port: 9000,
+              version: null,
+              error: "Connection refused",
+            },
+          ],
+        }),
       ]),
   };
 
@@ -122,5 +153,5 @@ it("keeps refresh reachable when the clusters could not be loaded", async () => 
   await waitFor(() =>
     expect(mockClient.getClickhouseClusters).toBeCalledTimes(2)
   );
-  expect(getByText("localhost:9000", { exact: false })).toBeTruthy();
+  expect(getByText("query-localhost:9000", { exact: false })).toBeTruthy();
 });
