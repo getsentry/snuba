@@ -16,7 +16,8 @@ from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
 
 querylog_0008 = importlib.import_module("snuba.snuba_migrations.querylog.0008_drop_uuid_sample_by")
-forwards_ops = querylog_0008._forwards_ops
+rebuild_ops = querylog_0008.rebuild_ops
+recover_ops = querylog_0008.recover_ops
 
 SHOW_CREATE_MULTILINE = """CREATE TABLE default.querylog_local
 (
@@ -116,17 +117,17 @@ def _ops_for(sampling_key: str, create_sql: str) -> list[Any]:
     )
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(querylog_0008, "get_cluster", lambda storage_set: mock_cluster)
-        return list(forwards_ops())
+        return list(rebuild_ops())
 
 
-def _backwards_ops_for(existing_tables: set[str]) -> list[Any]:
+def _recover_ops_for(existing_tables: set[str]) -> list[Any]:
     mock_cluster = Mock()
     mock_cluster.get_local_nodes.return_value = [Mock()]
     mock_cluster.get_database.return_value = "default"
     mock_cluster.get_node_connection.return_value = _FakePool(existing_tables=existing_tables)
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(querylog_0008, "get_cluster", lambda storage_set: mock_cluster)
-        return list(querylog_0008._backwards_ops())
+        return list(recover_ops())
 
 
 @pytest.mark.parametrize("sampling_key", ["", "cityHash64(request_id)"])
@@ -154,21 +155,21 @@ def test_forwards_ops_rebuilds_when_sample_by_is_request_id() -> None:
     assert "DROP TABLE IF EXISTS querylog_local_old" in ops[4].format_sql()
 
 
-def test_backwards_ops_restores_old_table_when_local_missing() -> None:
-    ops = _backwards_ops_for({"querylog_local_old", "querylog_local_new"})
+def test_recover_ops_restores_old_table_when_local_missing() -> None:
+    ops = _recover_ops_for({"querylog_local_old", "querylog_local_new"})
     assert [type(op) for op in ops] == [RenameTable, DropTable]
     assert ops[0].format_sql().startswith("RENAME TABLE querylog_local_old TO querylog_local")
     assert "DROP TABLE IF EXISTS querylog_local_new" in ops[1].format_sql()
 
 
-def test_backwards_ops_does_not_drop_old_when_it_is_the_only_copy() -> None:
-    ops = _backwards_ops_for({"querylog_local_old"})
+def test_recover_ops_does_not_drop_old_when_it_is_the_only_copy() -> None:
+    ops = _recover_ops_for({"querylog_local_old"})
     assert [type(op) for op in ops] == [RenameTable]
     assert ops[0].format_sql().startswith("RENAME TABLE querylog_local_old TO querylog_local")
 
 
-def test_backwards_ops_drops_temps_when_local_exists() -> None:
-    ops = _backwards_ops_for({"querylog_local", "querylog_local_new", "querylog_local_old"})
+def test_recover_ops_drops_temps_when_local_exists() -> None:
+    ops = _recover_ops_for({"querylog_local", "querylog_local_new", "querylog_local_old"})
     assert [type(op) for op in ops] == [DropTable, DropTable]
     assert "DROP TABLE IF EXISTS querylog_local_new" in ops[0].format_sql()
     assert "DROP TABLE IF EXISTS querylog_local_old" in ops[1].format_sql()

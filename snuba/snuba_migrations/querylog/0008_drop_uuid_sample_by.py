@@ -37,7 +37,8 @@ def _drop_local(table_name: str) -> operations.DropTable:
     )
 
 
-def _forwards_ops() -> Sequence[operations.SqlOperation]:
+def rebuild_ops() -> Sequence[operations.SqlOperation]:
+    """Inspect querylog_local and return rebuild ops, or [] if SAMPLE BY is already valid."""
     clickhouse = _local_connection()
     if clickhouse is None:
         return []
@@ -91,9 +92,8 @@ def _forwards_ops() -> Sequence[operations.SqlOperation]:
     ]
 
 
-def _backwards_ops() -> Sequence[operations.SqlOperation]:
-    # Recovery only: restore querylog_local if the swap was interrupted, then drop temps.
-    # SAMPLE BY request_id cannot be restored on current ClickHouse.
+def recover_ops() -> Sequence[operations.SqlOperation]:
+    """Restore querylog_local if the swap was interrupted, then drop leftover temps."""
     clickhouse = _local_connection()
     if clickhouse is None:
         return []
@@ -134,6 +134,40 @@ def _backwards_ops() -> Sequence[operations.SqlOperation]:
     return ops
 
 
+class _DeferredLocalOp(operations.SqlOperation):
+    """Inspects ClickHouse at execute time, then runs the returned SqlOperations."""
+
+    def __init__(self, description: str) -> None:
+        super().__init__(StorageSetKey.QUERYLOG, target=operations.OperationTarget.LOCAL)
+        self.__description = description
+
+    def format_sql(self) -> str:
+        return self.__description
+
+    def execute(self) -> None:
+        for op in self._ops():
+            op.execute()
+
+    def _ops(self) -> Sequence[operations.SqlOperation]:
+        raise NotImplementedError
+
+
+class DropUuidSampleBy(_DeferredLocalOp):
+    def __init__(self) -> None:
+        super().__init__("Rebuild querylog_local without SAMPLE BY request_id if present")
+
+    def _ops(self) -> Sequence[operations.SqlOperation]:
+        return rebuild_ops()
+
+
+class RecoverQuerylogLocal(_DeferredLocalOp):
+    def __init__(self) -> None:
+        super().__init__("Restore querylog_local from temp tables after a failed rebuild")
+
+    def _ops(self) -> Sequence[operations.SqlOperation]:
+        return recover_ops()
+
+
 class Migration(migration.ClickhouseNodeMigration):
     """
     Drop the illegal UUID SAMPLE BY request_id from querylog_local.
@@ -146,7 +180,7 @@ class Migration(migration.ClickhouseNodeMigration):
     blocking = True  # Recreating the table may take time if there is data to copy
 
     def forwards_ops(self) -> Sequence[operations.SqlOperation]:
-        return _forwards_ops()
+        return [DropUuidSampleBy()]
 
     def backwards_ops(self) -> Sequence[operations.SqlOperation]:
-        return _backwards_ops()
+        return [RecoverQuerylogLocal()]
