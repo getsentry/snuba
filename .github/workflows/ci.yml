@@ -448,6 +448,34 @@ jobs:
           # TODO(hubertdeng123): New devservices doesn't support running sentry without snuba yet, remove this when it does
           docker stop snuba-snuba-1
           docker rm snuba-snuba-1
+          # Setup Sentry clones snuba master, so clickhouse is still 25.3.
+          # Recreate it from this PR before migrate, or the new floor rejects it.
+          docker stop snuba-clickhouse-1
+          docker rm snuba-clickhouse-1
+          docker pull ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.16.10001.altinitystable
+          docker run -d --rm \
+            --name snuba-clickhouse-1 \
+            --network devservices \
+            --network-alias clickhouse \
+            -p 127.0.0.1:8123:8123 \
+            -p 127.0.0.1:9000:9000 \
+            -p 127.0.0.1:9009:9009 \
+            -v "$GITHUB_WORKSPACE/devservices/clickhouse/config.xml:/etc/clickhouse-server/config.d/sentry.xml" \
+            -v "$GITHUB_WORKSPACE/devservices/clickhouse/users.xml:/etc/clickhouse-server/users.xml" \
+            -v "$GITHUB_WORKSPACE/devservices/clickhouse/default-password.xml:/etc/clickhouse-server/users.d/default-password.xml" \
+            --ulimit nofile=262144:262144 \
+            ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.16.10001.altinitystable
+          for i in $(seq 1 36); do
+            if wget -q -O - http://127.0.0.1:8123/ping >/dev/null 2>&1; then
+              break
+            fi
+            if [ "$i" -eq 36 ]; then
+              echo "ClickHouse 25.8 did not become healthy" >&2
+              docker logs snuba-clickhouse-1 >&2 || true
+              exit 1
+            fi
+            sleep 5
+          done
           docker run -d --rm \
             -p 127.0.0.1:1218:1218 \
             -e PYTHONUNBUFFERED=1 \
