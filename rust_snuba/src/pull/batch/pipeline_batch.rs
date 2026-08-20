@@ -12,6 +12,7 @@ pub struct PipelineBatch {
     pub rows: RowData,
     pub commit_log_offsets: CommitLogOffsets,
     pub cogs_data: CogsData,
+    pub earliest_kafka_ts: DateTime<Utc>,
 }
 
 impl PipelineBatch {
@@ -21,6 +22,7 @@ impl PipelineBatch {
             rows: RowData::default(),
             commit_log_offsets: CommitLogOffsets::default(),
             cogs_data: CogsData::default(),
+            earliest_kafka_ts: Utc::now(),
         }
     }
 
@@ -51,6 +53,7 @@ impl PipelineBatch {
             rows: batch.rows,
             commit_log_offsets,
             cogs_data: batch.cogs_data.unwrap_or_default(),
+            earliest_kafka_ts: timestamp,
         }
     }
 
@@ -61,5 +64,6 @@ impl PipelineBatch {
         self.rows.num_rows += other.rows.num_rows;
         self.commit_log_offsets.merge(other.commit_log_offsets);
         self.cogs_data.merge(other.cogs_data);
+        self.earliest_kafka_ts = self.earliest_kafka_ts.min(other.earliest_kafka_ts);
     }
 }
