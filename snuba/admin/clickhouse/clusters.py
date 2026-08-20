@@ -112,16 +112,17 @@ class _ClusterState(NamedTuple):
     tables: Sequence[str]
 
 
-def _get_cluster_state(storage_name: str | None) -> _ClusterState:
+def _get_cluster_state(cluster: ClickhouseCluster, storage_name: str | None) -> _ClusterState:
     """
-    Query the query endpoint of the cluster `storage_name` is registered on for
-    the ClickHouse version it runs and the tables it holds in the
-    `TABLES_DATABASE` database.
+    Query the cluster's query endpoint for its ClickHouse version and the tables
+    it holds in the `TABLES_DATABASE` database.
     """
     if storage_name is None:
-        raise Exception("No storage is registered on this cluster")
-
-    connection = get_ro_query_node_connection(storage_name, ClickhouseClientSettings.QUERY)
+        connection = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
+    else:
+        connection = get_ro_query_node_connection(
+            storage_name, ClickhouseClientSettings.QUERY
+        )
     # One round trip: the aggregate accumulates the table names into a single
     # sorted array, so the whole cluster is described by one row. It sits in a
     # scalar subquery to keep the outer SELECT aggregate free -- version() next
@@ -163,7 +164,7 @@ def get_cluster_info() -> Sequence[ClusterInfo]:
     executor = ThreadPoolExecutor(max_workers=min(MAX_CONCURRENT_CLUSTER_QUERIES, len(CLUSTERS)))
     try:
         states = [
-            executor.submit(_get_cluster_state, storage_names.get(id(cluster)))
+            executor.submit(_get_cluster_state, cluster, storage_names.get(id(cluster)))
             for cluster in CLUSTERS
         ]
         # The lookups run concurrently, so the timeout is a deadline for all of
