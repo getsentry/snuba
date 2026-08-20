@@ -333,7 +333,7 @@ class ErrorEvent:
             "offset": meta.offset,
             "message_timestamp": int(self.timestamp.replace(tzinfo=UTC).timestamp()),
             "timestamp_ms": int(self.timestamp.replace(tzinfo=UTC).timestamp() * 1000),
-            "retention_days": 90,
+            "retention_days": 30,
             "deleted": 0,
             "group_id": self.group_id,
             "group_first_seen": int((self.timestamp - timedelta(days=2)).timestamp()),

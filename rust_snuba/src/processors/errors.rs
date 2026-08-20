@@ -65,7 +65,10 @@ pub fn process_message_with_replacement(
             row.partition = metadata.partition;
             row.offset = metadata.offset;
             row.message_timestamp = metadata.timestamp.timestamp() as u64;
-            row.retention_days = Some(enforce_retention(row.retention_days, &config.env_config));
+            row.retention_days = Some(enforce_retention(
+                row.retention_days,
+                crate::processors::utils::RetentionKind::Standard,
+            ));
 
             Ok(InsertOrReplacement::Insert(InsertBatch {
                 origin_timestamp,

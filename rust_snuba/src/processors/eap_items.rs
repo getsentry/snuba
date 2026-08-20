@@ -85,10 +85,13 @@ fn process_eap_item(
 
     let retention_days = Some(enforce_retention(
         Some(trace_item.retention_days as u16),
-        &config.env_config,
+        crate::processors::utils::RetentionKind::Standard,
     ));
     let downsampled_retention_days = if trace_item.downsampled_retention_days > 0 {
-        Some(trace_item.downsampled_retention_days as u16)
+        Some(enforce_retention(
+            Some(trace_item.downsampled_retention_days as u16),
+            crate::processors::utils::RetentionKind::Downsampled,
+        ))
     } else {
         retention_days
     };
@@ -817,7 +820,7 @@ mod tests {
         let item_id = Uuid::new_v4();
         let mut trace_item = generate_trace_item(item_id);
 
-        trace_item.downsampled_retention_days = 365;
+        trace_item.downsampled_retention_days = 360;
 
         let mut payload = Vec::new();
 
@@ -839,7 +842,7 @@ mod tests {
 
         let item: Item = serde_json::from_slice(&batch.rows.encoded_rows).unwrap();
 
-        assert_eq!(item.downsampled_retention_days, 365);
+        assert_eq!(item.downsampled_retention_days, 360);
     }
 
     #[test]
@@ -1476,7 +1479,7 @@ mod tests {
     fn test_row_binary_downsampled_retention_days_extended() {
         let item_id = Uuid::new_v4();
         let mut trace_item = generate_trace_item(item_id);
-        trace_item.downsampled_retention_days = 365;
+        trace_item.downsampled_retention_days = 360;
 
         let mut payload = Vec::new();
         trace_item.encode(&mut payload).unwrap();
@@ -1491,7 +1494,7 @@ mod tests {
             .expect("The message should be processed");
 
         let row = &batch.rows[0];
-        assert_eq!(row.downsampled_retention_days, 365);
+        assert_eq!(row.downsampled_retention_days, 360);
     }
 
     #[test]
@@ -1797,7 +1800,7 @@ mod tests {
         trace_item.trace_id = trace_id.to_string();
         trace_item.client_sample_rate = 0.5;
         trace_item.server_sample_rate = 0.25;
-        trace_item.downsampled_retention_days = 365;
+        trace_item.downsampled_retention_days = 360;
         trace_item.attributes.insert(
             "str_attr".to_string(),
             AnyValue {

@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use serde::{Deserialize, Deserializer};
 use serde_json::Value;
@@ -115,9 +115,6 @@ pub struct MessageProcessorConfig {
 pub struct EnvConfig {
     pub sentry_dsn: Option<String>,
     pub dogstatsd_socket_path: Option<String>,
-    pub default_retention_days: u16,
-    pub lower_retention_days: u16,
-    pub valid_retention_days: HashSet<u16>,
     pub record_cogs: bool,
     pub project_stacktrace_blacklist: Vec<u64>,
 }
@@ -127,9 +124,6 @@ impl Default for EnvConfig {
         Self {
             sentry_dsn: None,
             dogstatsd_socket_path: None,
-            default_retention_days: 90,
-            lower_retention_days: 30,
-            valid_retention_days: [30, 60, 90].iter().cloned().collect(),
             record_cogs: false,
             project_stacktrace_blacklist: Vec::new(),
         }

@@ -278,9 +278,9 @@
       },
       "default": {
         "standard": { "default": 30, "max": 90 },
-        "downsampled": { "default": 396, "max": 396 }
+        "downsampled": { "default": 390, "max": 390 }
       },
-      "description": "Retention windows in days for standard and downsampled storage. standard.default (30) is the fallback when RequestMeta.standard_retention_days is unset/non-positive; standard.max (90) clamps positive request values. downsampled.default/max (396, 13 months) configure long-term downsampled retention."
+      "description": "Retention windows in days for standard and downsampled storage. Written values are quantized to a positive multiple of 30. standard.default (30) is the query-path fallback when RequestMeta.standard_retention_days is unset/non-positive. standard.max (90) is the write-path fallback for missing values and the clamp for tier-1 writes and RequestMeta.standard_retention_days. downsampled.default/max (390, 13 months) configure long-term downsampled retention."
     },
     "storage_routing_config_override": {
       "type": "string",

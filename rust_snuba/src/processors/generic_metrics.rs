@@ -145,7 +145,7 @@ trait Parse: Sized {
 impl Parse for CountersRawRow {
     fn parse(
         from: FromGenericMetricsMessage<'_>,
-        config: &ProcessorConfig,
+        _config: &ProcessorConfig,
     ) -> anyhow::Result<Option<CountersRawRow>> {
         if from.metric_type != MetricType::Counter {
             return Ok(Option::None);
@@ -166,7 +166,10 @@ impl Parse for CountersRawRow {
         if from.aggregation_option.unwrap_or_default() == "ten_second" {
             granularities.push(GRANULARITY_TEN_SECONDS);
         }
-        let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
+        let retention_days = enforce_retention(
+            Some(from.retention_days),
+            crate::processors::utils::RetentionKind::Standard,
+        );
 
         let record_meta = should_record_meta(from.use_case_id.as_str());
 

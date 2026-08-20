@@ -12,7 +12,7 @@ use crate::types::{InsertBatch, KafkaMessageMetadata};
 pub fn process_message(
     payload: KafkaPayload,
     metadata: KafkaMessageMetadata,
-    config: &ProcessorConfig,
+    _config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromChunkMessage = serde_json::from_slice(payload_bytes)?;
@@ -21,7 +21,10 @@ pub fn process_message(
 
     chunk.offset = metadata.offset;
     chunk.partition = metadata.partition;
-    chunk.retention_days = Some(enforce_retention(chunk.retention_days, &config.env_config));
+    chunk.retention_days = Some(enforce_retention(
+        chunk.retention_days,
+        crate::processors::utils::RetentionKind::Standard,
+    ));
 
     InsertBatch::from_rows([chunk], origin_timestamp)
 }
