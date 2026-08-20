@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use chrono::Utc;
 use sentry_arroyo::processing::stream::{PipelineEnvelope, Stage, StageResult};
 use sentry_arroyo::{counter, gauge, timer};
 
@@ -34,6 +35,7 @@ impl Stage for ClickHouseWriterStage {
     ) -> StageResult<BatchMetadata> {
         let total_rows = envelope.payload.rows.num_rows;
         let num_bytes = envelope.payload.rows.encoded_rows.len();
+        let earliest_kafka_ts = envelope.payload.earliest_kafka_ts;
         let body = envelope.payload.rows.encoded_rows;
         let commit_log_offsets = envelope.payload.commit_log_offsets;
         let cogs_data = envelope.payload.cogs_data;
@@ -66,6 +68,9 @@ impl Stage for ClickHouseWriterStage {
                 counter!("insertions.batch_write_msgs", total_rows as i64);
                 gauge!("insertions.batch_flush_bytes", num_bytes as i64);
                 gauge!("insertions.batch_flush_msgs", total_rows as i64);
+                if let Ok(latency) = (Utc::now() - earliest_kafka_ts).to_std() {
+                    timer!("insertions.latency_ms", latency);
+                }
 
                 tracing::info!(
                     rows = total_rows,
