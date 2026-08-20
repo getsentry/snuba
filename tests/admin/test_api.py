@@ -326,7 +326,7 @@ def test_clickhouse_clusters(admin_api: FlaskClient) -> None:
     assert len(data) == len(settings.CLUSTERS)
     for cluster, configured in zip(data, settings.CLUSTERS, strict=True):
         assert cluster["error"] is None, cluster["error"]
-        # The version of the ClickHouse the tests run against, e.g. 23.8.11.29
+        # The version of the ClickHouse the tests run against, e.g. 25.8.16.10001
         assert cluster["version"]
         assert cluster["host"] == configured["host"]
         assert cluster["port"] == configured["port"]
