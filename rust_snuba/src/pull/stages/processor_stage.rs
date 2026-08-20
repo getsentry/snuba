@@ -2,6 +2,7 @@ use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::processing::stream::{PipelineEnvelope, RejectionReason, Stage, StageResult};
 
 use crate::config::ProcessorConfig;
+use crate::processors::utils::SilencedDLQMessage;
 use crate::processors::ProcessingFunction;
 use crate::pull::batch::pipeline_batch::PipelineBatch;
 use crate::types::KafkaMessageMetadata;
@@ -64,6 +65,9 @@ impl Stage for ProcessorStage {
                     envelope.raw,
                 ))
             }
+            Ok(Err(e)) if e.is::<SilencedDLQMessage>() => StageResult::Drop {
+                metadata: envelope.metadata,
+            },
             Ok(Err(e)) => {
                 tracing::warn!(
                     "Processor error at {:?}:{}, rejecting: {}",
