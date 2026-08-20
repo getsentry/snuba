@@ -26,9 +26,7 @@ def test_get_cluster_state_with_registered_storage(
 
     state = _get_cluster_state(cluster, "errors")
 
-    get_ro_query_node_connection.assert_called_once_with(
-        "errors", ClickhouseClientSettings.QUERY
-    )
+    get_ro_query_node_connection.assert_called_once_with("errors", ClickhouseClientSettings.QUERY)
     cluster.get_query_connection.assert_not_called()
     assert state.version == "25.3.6"
     assert state.tables == []

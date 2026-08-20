@@ -36,7 +36,6 @@ class ClusterInfo(TypedDict):
     # The cluster's configured query endpoint (an actual node or a proxy).
     host: str
     port: int
-    http_port: int
     database: str
     secure: bool
     single_node: bool
@@ -94,7 +93,6 @@ def _describe_cluster(cluster: ClickhouseCluster) -> ClusterInfo:
     return {
         "host": cluster.get_host(),
         "port": cluster.get_port(),
-        "http_port": cluster.get_http_port(),
         "database": cluster.get_database(),
         "secure": cluster.get_secure(),
         "single_node": cluster.is_single_node(),
@@ -120,9 +118,7 @@ def _get_cluster_state(cluster: ClickhouseCluster, storage_name: str | None) -> 
     if storage_name is None:
         connection = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
     else:
-        connection = get_ro_query_node_connection(
-            storage_name, ClickhouseClientSettings.QUERY
-        )
+        connection = get_ro_query_node_connection(storage_name, ClickhouseClientSettings.QUERY)
     # One round trip: the aggregate accumulates the table names into a single
     # sorted array, so the whole cluster is described by one row. It sits in a
     # scalar subquery to keep the outer SELECT aggregate free -- version() next
