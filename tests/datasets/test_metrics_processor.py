@@ -73,7 +73,7 @@ DIST_MESSAGE_SHARED = {
     "timestamp": timestamp,
     "tags": {"10": 11, "20": 22, "30": 33},
     "value": DIST_VALUES,
-    # test enforce retention days of 90
+    # test enforce retention days of 30 (50 quantizes down to 30)
     "retention_days": 50,
     "mapping_meta": MAPPING_META_COMMON,
     "sentry_received_timestamp": sentry_received_timestamp,
@@ -145,7 +145,7 @@ TEST_CASES_POLYMORPHIC = [
                 "count_value": None,
                 "set_values": None,
                 "materialization_version": MATERIALIZATION_VERSION,
-                "retention_days": 90,
+                "retention_days": 30,
                 "timeseries_id": ANY,
                 "partition": 1,
                 "offset": 100,
