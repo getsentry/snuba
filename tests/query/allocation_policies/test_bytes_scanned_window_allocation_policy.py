@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from unittest import mock
+
 import pytest
 
 from snuba.datasets.storages.storage_key import StorageKey
@@ -251,15 +253,23 @@ def test_no_bytes_scanned(policy: AllocationPolicy) -> None:
     no_bytes_scanned_info_result = QueryResultOrError(
         query_result=QueryResult(
             result={
+                "data": [{"user_email": "should-not-be-logged@example.com"}],
                 "profile": {
                     # bytes scanned info is missing
-                }
+                },
             },
             extra={"stats": {}, "sql": "", "experiments": {}},
         ),
         error=None,
     )
-    policy.update_quota_balance(tenant_ids, QUERY_ID, no_bytes_scanned_info_result)
+    with mock.patch(
+        "snuba.query.allocation_policies.bytes_scanned_window_policy.logging.error"
+    ) as log_error:
+        policy.update_quota_balance(tenant_ids, QUERY_ID, no_bytes_scanned_info_result)
+    log_error.assert_called_once()
+    logged = " ".join(str(arg) for arg in log_error.call_args[0])
+    assert "should-not-be-logged@example.com" not in logged
+    assert QUERY_ID in logged
 
 
 @pytest.mark.redis_db
