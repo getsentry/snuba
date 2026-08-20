@@ -1,5 +1,6 @@
 from collections.abc import Sequence
 
+from snuba.clickhouse.pool import ClickhousePool
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
@@ -16,14 +17,32 @@ TABLE_NAME_OLD = "querylog_local_old"
 ILLEGAL_SAMPLE_BY = "request_id"
 
 
-def _forwards_ops() -> Sequence[operations.SqlOperation]:
+def _local_connection() -> ClickhousePool | None:
     cluster = get_cluster(StorageSetKey.QUERYLOG)
     nodes = cluster.get_local_nodes()
     if not nodes:
+        return None
+    return cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, nodes[0])
+
+
+def _table_exists(clickhouse: ClickhousePool, table_name: str) -> bool:
+    return clickhouse.execute(f"EXISTS TABLE {table_name};").results == [(1,)]
+
+
+def _drop_local(table_name: str) -> operations.DropTable:
+    return operations.DropTable(
+        StorageSetKey.QUERYLOG,
+        table_name,
+        target=operations.OperationTarget.LOCAL,
+    )
+
+
+def _forwards_ops() -> Sequence[operations.SqlOperation]:
+    clickhouse = _local_connection()
+    if clickhouse is None:
         return []
 
-    clickhouse = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, nodes[0])
-    database = cluster.get_database()
+    database = get_cluster(StorageSetKey.QUERYLOG).get_database()
     ((sampling_key,),) = clickhouse.execute(
         f"SELECT sampling_key FROM system.tables WHERE name = '{TABLE_NAME}' AND database = '{database}'"
     ).results
@@ -73,19 +92,46 @@ def _forwards_ops() -> Sequence[operations.SqlOperation]:
 
 
 def _backwards_ops() -> Sequence[operations.SqlOperation]:
-    # Temporary tables only. SAMPLE BY request_id cannot be restored on current ClickHouse.
-    return [
-        operations.DropTable(
-            StorageSetKey.QUERYLOG,
-            TABLE_NAME_NEW,
-            target=operations.OperationTarget.LOCAL,
-        ),
-        operations.DropTable(
-            StorageSetKey.QUERYLOG,
-            TABLE_NAME_OLD,
-            target=operations.OperationTarget.LOCAL,
-        ),
-    ]
+    # Recovery only: restore querylog_local if the swap was interrupted, then drop temps.
+    # SAMPLE BY request_id cannot be restored on current ClickHouse.
+    clickhouse = _local_connection()
+    if clickhouse is None:
+        return []
+
+    has_local = _table_exists(clickhouse, TABLE_NAME)
+    has_new = _table_exists(clickhouse, TABLE_NAME_NEW)
+    has_old = _table_exists(clickhouse, TABLE_NAME_OLD)
+    ops: list[operations.SqlOperation] = []
+
+    if not has_local:
+        if has_old:
+            ops.append(
+                operations.RenameTable(
+                    StorageSetKey.QUERYLOG,
+                    TABLE_NAME_OLD,
+                    TABLE_NAME,
+                    target=operations.OperationTarget.LOCAL,
+                )
+            )
+            has_old = False
+        elif has_new:
+            ops.append(
+                operations.RenameTable(
+                    StorageSetKey.QUERYLOG,
+                    TABLE_NAME_NEW,
+                    TABLE_NAME,
+                    target=operations.OperationTarget.LOCAL,
+                )
+            )
+            has_new = False
+        else:
+            raise Exception(f"Table {TABLE_NAME} is missing")
+
+    if has_new:
+        ops.append(_drop_local(TABLE_NAME_NEW))
+    if has_old:
+        ops.append(_drop_local(TABLE_NAME_OLD))
+    return ops
 
 
 class Migration(migration.ClickhouseNodeMigration):

@@ -85,15 +85,25 @@ def test_strip_sample_by_function_expression() -> None:
 
 
 class _FakePool:
-    def __init__(self, *, sampling_key: str, create_sql: str) -> None:
+    def __init__(
+        self,
+        *,
+        sampling_key: str = "",
+        create_sql: str = "",
+        existing_tables: set[str] | None = None,
+    ) -> None:
         self.sampling_key = sampling_key
         self.create_sql = create_sql
+        self.existing_tables = existing_tables or set()
 
     def execute(self, query: str, *args: Any, **kwargs: Any) -> ClickhouseResult:
         if query.startswith("SELECT sampling_key"):
             return ClickhouseResult(results=[(self.sampling_key,)])
         if query.startswith("SHOW CREATE TABLE"):
             return ClickhouseResult(results=[(self.create_sql,)])
+        if query.startswith("EXISTS TABLE"):
+            table_name = query.split()[-1].rstrip(";")
+            return ClickhouseResult(results=[(1 if table_name in self.existing_tables else 0,)])
         return ClickhouseResult(results=[])
 
 
@@ -107,6 +117,16 @@ def _ops_for(sampling_key: str, create_sql: str) -> list[Any]:
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(querylog_0008, "get_cluster", lambda storage_set: mock_cluster)
         return list(forwards_ops())
+
+
+def _backwards_ops_for(existing_tables: set[str]) -> list[Any]:
+    mock_cluster = Mock()
+    mock_cluster.get_local_nodes.return_value = [Mock()]
+    mock_cluster.get_database.return_value = "default"
+    mock_cluster.get_node_connection.return_value = _FakePool(existing_tables=existing_tables)
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(querylog_0008, "get_cluster", lambda storage_set: mock_cluster)
+        return list(querylog_0008._backwards_ops())
 
 
 @pytest.mark.parametrize("sampling_key", ["", "cityHash64(request_id)"])
@@ -132,6 +152,26 @@ def test_forwards_ops_rebuilds_when_sample_by_is_request_id() -> None:
     assert ops[2].format_sql().startswith("RENAME TABLE querylog_local TO querylog_local_old")
     assert ops[3].format_sql().startswith("RENAME TABLE querylog_local_new TO querylog_local")
     assert "DROP TABLE IF EXISTS querylog_local_old" in ops[4].format_sql()
+
+
+def test_backwards_ops_restores_old_table_when_local_missing() -> None:
+    ops = _backwards_ops_for({"querylog_local_old", "querylog_local_new"})
+    assert [type(op) for op in ops] == [RenameTable, DropTable]
+    assert ops[0].format_sql().startswith("RENAME TABLE querylog_local_old TO querylog_local")
+    assert "DROP TABLE IF EXISTS querylog_local_new" in ops[1].format_sql()
+
+
+def test_backwards_ops_does_not_drop_old_when_it_is_the_only_copy() -> None:
+    ops = _backwards_ops_for({"querylog_local_old"})
+    assert [type(op) for op in ops] == [RenameTable]
+    assert ops[0].format_sql().startswith("RENAME TABLE querylog_local_old TO querylog_local")
+
+
+def test_backwards_ops_drops_temps_when_local_exists() -> None:
+    ops = _backwards_ops_for({"querylog_local", "querylog_local_new", "querylog_local_old"})
+    assert [type(op) for op in ops] == [DropTable, DropTable]
+    assert "DROP TABLE IF EXISTS querylog_local_new" in ops[0].format_sql()
+    assert "DROP TABLE IF EXISTS querylog_local_old" in ops[1].format_sql()
 
 
 def test_migration_is_registered() -> None:
