@@ -691,6 +691,14 @@ if application.debug or application.testing:
 
     @application.route("/tests/<dataset:dataset>/drop", methods=["POST"])
     def drop(*, dataset: Dataset) -> RespTuple:
+        # DEBUG is True in base settings and must not enable destructive test routes.
+        if not settings.TESTING:
+            return (
+                "Drop is only allowed when TESTING is enabled",
+                403,
+                {"Content-Type": "text/plain"},
+            )
+
         truncate_dataset(dataset)
         for redis_client in all_redis_clients():
             redis_client.flushdb()
