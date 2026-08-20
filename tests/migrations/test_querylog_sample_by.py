@@ -11,11 +11,12 @@ from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.groups import MigrationGroup, get_group_loader
 from snuba.migrations.migration_utilities import strip_sample_by_clause
+from snuba.migrations.operations import DropTable, InsertIntoSelect, RenameTable, RunSql
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
 
 querylog_0008 = importlib.import_module("snuba.snuba_migrations.querylog.0008_drop_uuid_sample_by")
-update_querylog_table = querylog_0008.update_querylog_table
+forwards_ops = querylog_0008._forwards_ops
 
 SHOW_CREATE_MULTILINE = """CREATE TABLE default.querylog_local
 (
@@ -84,65 +85,53 @@ def test_strip_sample_by_function_expression() -> None:
 
 
 class _FakePool:
-    def __init__(
-        self,
-        *,
-        sampling_key: str,
-        create_sql: str,
-        row_count: int = 0,
-    ) -> None:
+    def __init__(self, *, sampling_key: str, create_sql: str) -> None:
         self.sampling_key = sampling_key
         self.create_sql = create_sql
-        self.row_count = row_count
-        self.executed: list[str] = []
-        self.commands: list[str] = []
 
     def execute(self, query: str, *args: Any, **kwargs: Any) -> ClickhouseResult:
-        self.executed.append(query)
         if query.startswith("SELECT sampling_key"):
             return ClickhouseResult(results=[(self.sampling_key,)])
         if query.startswith("SHOW CREATE TABLE"):
             return ClickhouseResult(results=[(self.create_sql,)])
-        if query.startswith("SELECT count()"):
-            return ClickhouseResult(results=[(self.row_count,)])
         return ClickhouseResult(results=[])
 
-    def command(self, statement: str, *args: Any, **kwargs: Any) -> ClickhouseResult:
-        self.commands.append(statement)
-        return ClickhouseResult(results=[])
+
+def _ops_for(sampling_key: str, create_sql: str) -> list[Any]:
+    mock_cluster = Mock()
+    mock_cluster.get_local_nodes.return_value = [Mock()]
+    mock_cluster.get_database.return_value = "default"
+    mock_cluster.get_node_connection.return_value = _FakePool(
+        sampling_key=sampling_key, create_sql=create_sql
+    )
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(querylog_0008, "get_cluster", lambda storage_set: mock_cluster)
+        return list(forwards_ops())
 
 
 @pytest.mark.parametrize("sampling_key", ["", "cityHash64(request_id)"])
-def test_update_querylog_table_noop(sampling_key: str) -> None:
-    pool = _FakePool(sampling_key=sampling_key, create_sql=SHOW_CREATE_NO_SAMPLE)
-    update_querylog_table(pool, "default")
-    assert pool.commands == []
-    assert all(not q.startswith("SHOW CREATE") for q in pool.executed)
+def test_forwards_ops_noop(sampling_key: str) -> None:
+    assert _ops_for(sampling_key, SHOW_CREATE_NO_SAMPLE) == []
 
 
-def test_update_querylog_table_rebuilds_when_sample_by_is_request_id() -> None:
-    pool = _FakePool(sampling_key="request_id", create_sql=SHOW_CREATE_MULTILINE, row_count=0)
-    update_querylog_table(pool, "default")
-
-    create_statements = [q for q in pool.executed if q.startswith("CREATE TABLE")]
-    assert len(create_statements) == 1
-    assert "SAMPLE BY" not in create_statements[0].upper()
-    assert "querylog_local_new" in create_statements[0]
-    assert pool.commands == [
-        "RENAME TABLE querylog_local TO querylog_local_old;",
-        "RENAME TABLE querylog_local_new TO querylog_local;",
-        "DROP TABLE querylog_local_old;",
+def test_forwards_ops_rebuilds_when_sample_by_is_request_id() -> None:
+    ops = _ops_for("request_id", SHOW_CREATE_MULTILINE)
+    assert [type(op) for op in ops] == [
+        RunSql,
+        InsertIntoSelect,
+        RenameTable,
+        RenameTable,
+        DropTable,
     ]
 
+    create_sql = ops[0].format_sql()
+    assert "SAMPLE BY" not in create_sql.upper()
+    assert "querylog_local_new" in create_sql
 
-def test_update_querylog_table_copies_rows() -> None:
-    pool = _FakePool(sampling_key="request_id", create_sql=SHOW_CREATE_INLINE, row_count=1)
-    update_querylog_table(pool, "default")
-
-    inserts = [q for q in pool.executed if q.startswith("INSERT INTO")]
-    assert len(inserts) == 1
-    assert "querylog_local_new" in inserts[0]
-    assert "FROM querylog_local" in inserts[0]
+    assert "INSERT INTO querylog_local_new" in ops[1].format_sql()
+    assert ops[2].format_sql().startswith("RENAME TABLE querylog_local TO querylog_local_old")
+    assert ops[3].format_sql().startswith("RENAME TABLE querylog_local_new TO querylog_local")
+    assert "DROP TABLE IF EXISTS querylog_local_old" in ops[4].format_sql()
 
 
 def test_migration_is_registered() -> None:
@@ -150,24 +139,6 @@ def test_migration_is_registered() -> None:
     assert "0008_drop_uuid_sample_by" in migrations
     loaded = get_group_loader(MigrationGroup.QUERYLOG).load_migration("0008_drop_uuid_sample_by")
     assert loaded.blocking is True
-
-
-def test_forwards_visits_local_nodes(monkeypatch: pytest.MonkeyPatch) -> None:
-    updated: list[str] = []
-
-    def fake_update(clickhouse: Any, database: str) -> None:
-        updated.append(database)
-
-    monkeypatch.setattr(querylog_0008, "update_querylog_table", fake_update)
-
-    mock_cluster = Mock()
-    mock_cluster.get_local_nodes.return_value = [Mock(), Mock()]
-    mock_cluster.get_database.return_value = "default"
-    mock_cluster.get_node_connection.return_value = Mock()
-    monkeypatch.setattr(querylog_0008, "get_cluster", lambda storage_set: mock_cluster)
-
-    querylog_0008.forwards(Mock())
-    assert updated == ["default", "default"]
 
 
 @pytest.mark.custom_clickhouse_db
