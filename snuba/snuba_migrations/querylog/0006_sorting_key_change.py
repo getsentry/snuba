@@ -7,7 +7,10 @@ from snuba.clickhouse.pool import ClickhousePool
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
-from snuba.migrations.migration_utilities import strip_sample_by_clause
+from snuba.migrations.migration_utilities import (
+    replace_create_table_name,
+    strip_sample_by_clause,
+)
 
 TABLE_NAME = "querylog_local"
 TABLE_NAME_NEW = "querylog_local_new"
@@ -25,7 +28,9 @@ def update_querylog_table(clickhouse: ClickhousePool, database: str) -> None:
         f"SELECT sampling_key, sorting_key FROM system.tables WHERE name = '{TABLE_NAME}' AND database = '{database}'"
     ).results
 
-    new_create_table_statement = curr_create_table_statement.replace(TABLE_NAME, TABLE_NAME_NEW)
+    new_create_table_statement = replace_create_table_name(
+        curr_create_table_statement, TABLE_NAME, TABLE_NAME_NEW
+    )
 
     # Switch the sorting key
     if curr_sorting_key != new_sorting_key:
