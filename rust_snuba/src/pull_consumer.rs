@@ -32,7 +32,6 @@ const FIRE_AND_FORGET_PROCESSORS: &[&str] = &[
     "QuerylogProcessor",
     "ReplaysProcessor",
     "OutcomesProcessor",
-    "PolymorphicMetricsProcessor",
     "ProfileChunksProcessor",
     "LlmProxyCostProcessor",
 ];
