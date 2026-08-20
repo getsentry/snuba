@@ -5,9 +5,17 @@ from sentry_options.testing import override_options
 
 from snuba.state.retention import (
     DEFAULT_RETENTION_DAYS,
+    RetentionKind,
     get_retention_days_config,
     quantize_retention_days,
 )
+
+OVERRIDE: dict[str, Any] = {
+    "retention_days": {
+        "standard": {"default": 60, "max": 180},
+        "downsampled": {"default": 180, "max": 360},
+    }
+}
 
 
 def test_schema_default_is_quantized() -> None:
@@ -37,21 +45,23 @@ def test_schema_default_is_quantized() -> None:
         (420, "downsampled", 390),
     ],
 )
-def test_quantize_retention_days(value: int | None, kind: str, expected: int) -> None:
-    assert quantize_retention_days(value, kind) == expected  # type: ignore[arg-type]
+def test_quantize_retention_days(value: int | None, kind: RetentionKind, expected: int) -> None:
+    assert quantize_retention_days(value, kind) == expected
 
 
-def test_quantize_honors_option_override() -> None:
-    override: dict[str, Any] = {
-        "retention_days": {
-            "standard": {"default": 60, "max": 180},
-            "downsampled": {"default": 180, "max": 360},
-        }
-    }
-    with override_options("snuba", override):
-        assert quantize_retention_days(None) == 180
-        assert quantize_retention_days(100) == 90
-        assert quantize_retention_days(179) == 150
-        assert quantize_retention_days(200) == 180
-        assert quantize_retention_days(365, "downsampled") == 360
-        assert quantize_retention_days(None, "downsampled") == 360
+@pytest.mark.parametrize(
+    ("value", "kind", "expected"),
+    [
+        (None, "standard", 180),
+        (100, "standard", 90),
+        (179, "standard", 150),
+        (200, "standard", 180),
+        (None, "downsampled", 360),
+        (365, "downsampled", 360),
+    ],
+)
+def test_quantize_honors_option_override(
+    value: int | None, kind: RetentionKind, expected: int
+) -> None:
+    with override_options("snuba", OVERRIDE):
+        assert quantize_retention_days(value, kind) == expected

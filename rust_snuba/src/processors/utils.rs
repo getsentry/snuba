@@ -8,6 +8,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 const PAYLOAD_DATETIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.fZ";
 
 /// Written retention_days values are positive multiples of this quantum.
+/// Keep in sync with `snuba.state.retention.RETENTION_QUANTUM`.
 const RETENTION_QUANTUM: u16 = 30;
 
 #[derive(Clone, Copy)]
@@ -24,12 +25,22 @@ impl RetentionKind {
         }
     }
 
+    /// Schema fallback when the `retention_days` option is missing.
+    ///
+    /// Mirrors `sentry-options/schemas/snuba/schema.json` and
+    /// `snuba.state.retention.DEFAULT_RETENTION_DAYS`. Write-path
+    /// enforcement snaps these down to a multiple of [`RETENTION_QUANTUM`].
     fn default_max(self) -> u16 {
         match self {
             Self::Standard => 90,
-            Self::Downsampled => 390,
+            Self::Downsampled => 396,
         }
     }
+}
+
+/// Floor to a positive multiple of [`RETENTION_QUANTUM`].
+fn quantize(value: u16) -> u16 {
+    (value / RETENTION_QUANTUM).max(1) * RETENTION_QUANTUM
 }
 
 fn retention_max(kind: RetentionKind) -> u16 {
@@ -41,29 +52,20 @@ fn retention_max(kind: RetentionKind) -> u16 {
         .and_then(|n| u16::try_from(n).ok())
         .filter(|&n| n > 0)
         .unwrap_or_else(|| kind.default_max());
-    let quantized = raw / RETENTION_QUANTUM * RETENTION_QUANTUM;
-    if quantized == 0 {
-        RETENTION_QUANTUM
-    } else {
-        quantized
-    }
+    quantize(raw)
 }
 
 /// Snap ``value`` to a positive multiple of 30 and clamp it to ``kind``'s max.
 ///
 /// Missing or non-positive values become ``kind``'s max (the historical write
 /// default of 90 for standard). Values below one quantum become 30.
+/// Keep in sync with `snuba.state.retention.quantize_retention_days`.
 pub fn enforce_retention(value: Option<u16>, kind: RetentionKind) -> u16 {
     let maximum = retention_max(kind);
     let Some(value) = value.filter(|&n| n > 0) else {
         return maximum;
     };
-    let quantized = value.min(maximum) / RETENTION_QUANTUM * RETENTION_QUANTUM;
-    if quantized == 0 {
-        RETENTION_QUANTUM
-    } else {
-        quantized
-    }
+    quantize(value.min(maximum))
 }
 
 fn ensure_valid_datetime<'de, D>(deserializer: D) -> Result<u32, D::Error>
