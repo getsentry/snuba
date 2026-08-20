@@ -11,10 +11,7 @@ from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.groups import MigrationGroup, get_group_loader
 from snuba.migrations.migration import ClickhouseNodeMigration
-from snuba.migrations.migration_utilities import (
-    replace_create_table_name,
-    strip_sample_by_clause,
-)
+from snuba.migrations.migration_utilities import strip_sample_by_clause
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
 
@@ -86,23 +83,6 @@ def test_strip_sample_by_function_expression() -> None:
     assert "SAMPLE BY" not in stripped.upper()
     assert "ORDER BY cityHash64(id)" in stripped
     assert "TTL ts + INTERVAL 1 DAY" in stripped
-
-
-def test_replace_create_table_name_preserves_replicated_zk_path() -> None:
-    renamed = replace_create_table_name(
-        SHOW_CREATE_REPLICATED, "querylog_local", "querylog_local_new"
-    )
-    assert "CREATE TABLE default.querylog_local_new" in renamed
-    assert (
-        "ReplicatedMergeTree('/clickhouse/tables/querylog/{shard}/default/querylog_local'"
-        in renamed
-    )
-    assert "querylog_local_new'" not in renamed
-
-
-def test_replace_create_table_name_rejects_missing_table() -> None:
-    with pytest.raises(ValueError, match="Could not rename"):
-        replace_create_table_name(SHOW_CREATE_NO_SAMPLE, "missing_table", "other")
 
 
 class _FakePool:

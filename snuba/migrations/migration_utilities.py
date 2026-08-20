@@ -18,18 +18,6 @@ def strip_sample_by_clause(create_table_statement: str) -> str:
     return _SAMPLE_BY_RE.sub("", create_table_statement, count=1)
 
 
-def replace_create_table_name(create_table_statement: str, old_name: str, new_name: str) -> str:
-    """Rename the table in a CREATE TABLE statement without rewriting ZooKeeper paths."""
-    pattern = re.compile(
-        rf"(CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?)((?:[`\w]+\.)?`?){re.escape(old_name)}(`?)",
-        re.IGNORECASE,
-    )
-    replaced, count = pattern.subn(rf"\g<1>\g<2>{new_name}\g<3>", create_table_statement, count=1)
-    if count != 1:
-        raise ValueError(f"Could not rename {old_name!r} to {new_name!r} in CREATE TABLE statement")
-    return replaced
-
-
 def get_clickhouse_version_for_storage_set(
     storage_set: StorageSetKey, clickhouse: ClickhousePool | None
 ) -> ClickhouseVersion:
