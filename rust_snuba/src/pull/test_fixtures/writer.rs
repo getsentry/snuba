@@ -1,6 +1,6 @@
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Mutex;
+
+use futures::future::BoxFuture;
 
 use crate::pull::writer::ClickHouseWriter;
 
@@ -28,10 +28,7 @@ impl MockWriter {
 }
 
 impl ClickHouseWriter for MockWriter {
-    fn write(
-        &self,
-        body: Vec<u8>,
-    ) -> Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send + '_>> {
+    fn write(&self, body: Vec<u8>) -> BoxFuture<'_, anyhow::Result<()>> {
         Box::pin(async move {
             self.calls.lock().unwrap().push(WriteCall {
                 raw_bytes: body.len(),
