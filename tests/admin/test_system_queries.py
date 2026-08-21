@@ -442,6 +442,32 @@ def test_is_valid_node_accepts_discovered_storage_node() -> None:
     assert common.is_valid_node("storage", 8123, cluster) is True
 
 
+def test_is_valid_node_uses_known_nodes_without_rediscovery() -> None:
+    """Callers with a topology snapshot must not re-query discovery."""
+    from snuba.admin.clickhouse import common
+    from snuba.clusters.cluster import ClickhouseCluster, ClickhouseNode
+
+    cluster = MagicMock(spec=ClickhouseCluster)
+    query_node = ClickhouseNode("query", 9000)
+    storage_node = ClickhouseNode("storage", 8123)
+    cluster.get_query_node.return_value = query_node
+    cluster.get_port.return_value = 8123
+    cluster.get_local_nodes.side_effect = Exception("should not rediscover")
+    cluster.get_distributed_nodes.side_effect = Exception("should not rediscover")
+
+    assert (
+        common.is_valid_node(
+            "storage",
+            8123,
+            cluster,
+            known_nodes=[query_node, storage_node],
+        )
+        is True
+    )
+    cluster.get_local_nodes.assert_not_called()
+    cluster.get_distributed_nodes.assert_not_called()
+
+
 def test_ro_cluster_node_connection_uses_validated_readonly_pool() -> None:
     """Cluster-scoped admin lookups must stay on the validated readonly path."""
     from unittest.mock import MagicMock
@@ -457,6 +483,7 @@ def test_ro_cluster_node_connection_uses_validated_readonly_pool() -> None:
     cluster.get_port.return_value = 8123
     cluster.get_query_node.return_value = ClickhouseNode("query", 8123)
     node = ClickhouseNode("storage", 8123)
+    known_nodes = [cluster.get_query_node.return_value, node]
 
     with (
         patch.object(common, "_validate_node") as mock_validate,
@@ -464,9 +491,13 @@ def test_ro_cluster_node_connection_uses_validated_readonly_pool() -> None:
         patch.object(settings, "CLICKHOUSE_READONLY_PASSWORD", "ro_pass"),
         patch.object(common, "build_pool") as mock_pool,
     ):
-        common.get_ro_cluster_node_connection(cluster, node, ClickhouseClientSettings.QUERY)
+        common.get_ro_cluster_node_connection(
+            cluster, node, ClickhouseClientSettings.QUERY, known_nodes=known_nodes
+        )
 
-    mock_validate.assert_called_once_with("storage", 8123, cluster, None)
+    mock_validate.assert_called_once_with(
+        "storage", 8123, cluster, None, known_nodes=known_nodes
+    )
     assert mock_pool.called
     assert mock_pool.call_args.args[2] == "ro_user"
     assert mock_pool.call_args.args[3] == "ro_pass"

@@ -92,7 +92,11 @@ class _ClusterState(NamedTuple):
     error: str | None
 
 
-def _query_node_version(cluster: ClickhouseCluster, node: ClickhouseNode) -> NodeVersionInfo:
+def _query_node_version(
+    cluster: ClickhouseCluster,
+    node: ClickhouseNode,
+    known_nodes: Sequence[ClickhouseNode],
+) -> NodeVersionInfo:
     info: NodeVersionInfo = {
         "host": node.host_name,
         "port": node.port,
@@ -101,7 +105,12 @@ def _query_node_version(cluster: ClickhouseCluster, node: ClickhouseNode) -> Nod
     }
     try:
         results = (
-            get_ro_cluster_node_connection(cluster, node, ClickhouseClientSettings.QUERY)
+            get_ro_cluster_node_connection(
+                cluster,
+                node,
+                ClickhouseClientSettings.QUERY,
+                known_nodes=known_nodes,
+            )
             .execute("SELECT version()")
             .results
         )
@@ -120,16 +129,24 @@ def _get_node_versions(
     if not nodes:
         return []
     if len(nodes) == 1:
-        return [_query_node_version(cluster, nodes[0])]
+        return [_query_node_version(cluster, nodes[0], nodes)]
 
     with ThreadPoolExecutor(max_workers=min(MAX_CONCURRENT_NODE_QUERIES, len(nodes))) as executor:
-        return list(executor.map(lambda node: _query_node_version(cluster, node), nodes))
+        return list(
+            executor.map(lambda node: _query_node_version(cluster, node, nodes), nodes)
+        )
 
 
-def _get_tables(cluster: ClickhouseCluster) -> Sequence[str]:
+def _get_tables(
+    cluster: ClickhouseCluster, known_nodes: Sequence[ClickhouseNode] | None = None
+) -> Sequence[str]:
+    query_node = cluster.get_query_node()
     results = (
         get_ro_cluster_node_connection(
-            cluster, cluster.get_query_node(), ClickhouseClientSettings.QUERY
+            cluster,
+            query_node,
+            ClickhouseClientSettings.QUERY,
+            known_nodes=known_nodes or [query_node],
         )
         .execute(
             f"""
@@ -195,7 +212,7 @@ def _get_cluster_state(
     executor = ThreadPoolExecutor(max_workers=2)
     try:
         versions_future = executor.submit(_get_node_versions, cluster, unique_nodes)
-        tables_future = executor.submit(_get_tables, cluster)
+        tables_future = executor.submit(_get_tables, cluster, unique_nodes)
         try:
             node_versions = versions_future.result(
                 timeout=max(0, deadline - time.monotonic())

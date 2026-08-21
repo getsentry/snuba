@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 from sql_metadata import Parser, QueryType  # type: ignore[import-untyped]
 
@@ -43,6 +43,7 @@ def is_valid_node(
     port: int,
     cluster: ClickhouseCluster,
     storage_name: str | None = None,
+    known_nodes: Sequence[ClickhouseNode] | None = None,
 ) -> bool:
     """Return whether host/port is a known node on the cluster.
 
@@ -51,10 +52,21 @@ def is_valid_node(
     of that endpoint being reachable, so discovery errors must not reject the
     query endpoint itself. For other hosts we still require a successful match
     against discovered topology.
+
+    When `known_nodes` is provided (for example after `_get_cluster_state` has
+    already discovered topology), validate against that snapshot instead of
+    re-querying ClickHouse. A second discovery can fail transiently and mark a
+    just-discovered node as invalid.
     """
     query_node = cluster.get_query_node()
     if host == query_node.host_name and port == _node_connect_port(query_node, cluster):
         return True
+
+    if known_nodes is not None:
+        return any(
+            node.host_name == host and _node_connect_port(node, cluster) == port
+            for node in known_nodes
+        )
 
     nodes: list[ClickhouseNode] = [query_node]
     topology_error: Exception | None = None
@@ -102,8 +114,11 @@ def _validate_node(
     clickhouse_port: int,
     cluster: ClickhouseCluster,
     storage_name: str | None = None,
+    known_nodes: Sequence[ClickhouseNode] | None = None,
 ) -> None:
-    if not is_valid_node(clickhouse_host, clickhouse_port, cluster, storage_name):
+    if not is_valid_node(
+        clickhouse_host, clickhouse_port, cluster, storage_name, known_nodes=known_nodes
+    ):
         raise InvalidNodeError(
             f"host {clickhouse_host} and port {clickhouse_port} are not valid",
             extra_data={
@@ -124,13 +139,16 @@ def _build_validated_pool(
     username: str,
     password: str,
     client_settings: ClickhouseClientSettings,
+    known_nodes: Sequence[ClickhouseNode] | None = None,
 ) -> ClickhousePool:
     # Single chokepoint for admin ClickhousePool acquisition. A pool ships the
     # user/password to the node (HTTP auth header), so an unvalidated host means
     # credentials reach whatever listener answers. All admin helpers must go
     # through here. The regression test
     # test_no_direct_clickhouse_pool_construction_in_admin enforces this.
-    _validate_node(clickhouse_host, clickhouse_port, cluster, storage_name)
+    _validate_node(
+        clickhouse_host, clickhouse_port, cluster, storage_name, known_nodes=known_nodes
+    )
     # Query-endpoint traffic uses the cluster Envoy listen port. Replica
     # (by-host) traffic uses 8123 on that node.
     query_node = cluster.get_query_node()
@@ -213,6 +231,7 @@ def get_ro_cluster_node_connection(
     cluster: ClickhouseCluster,
     node: ClickhouseNode,
     client_settings: ClickhouseClientSettings,
+    known_nodes: Sequence[ClickhouseNode] | None = None,
 ) -> ClickhousePool:
     """Read-only connection to a known node on a configured cluster.
 
@@ -220,6 +239,9 @@ def get_ro_cluster_node_connection(
     registered storage. It still goes through `_build_validated_pool`, so the
     host/port must belong to the cluster and only the global readonly
     credentials are used.
+
+    Pass `known_nodes` when the caller already discovered topology for this
+    request so validation does not re-query and risk a transient false reject.
     """
     allowed = {
         ClickhouseClientSettings.QUERY.name,
@@ -251,6 +273,7 @@ def get_ro_cluster_node_connection(
         username,
         password,
         client_settings,
+        known_nodes=known_nodes,
     )
 
 
