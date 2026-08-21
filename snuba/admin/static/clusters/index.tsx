@@ -72,6 +72,13 @@ function versionsCell(cluster: ClusterData) {
   );
 }
 
+function nameCell(name: string | null, singleNode: boolean) {
+  if (singleNode) {
+    return <Text color="dimmed">single node</Text>;
+  }
+  return name || <Text color="dimmed">not set</Text>;
+}
+
 function tablesCell(cluster: ClusterData) {
   if (cluster.error) {
     return (
@@ -148,13 +155,9 @@ function Clusters(props: { api: Client }) {
   }, []);
 
   const rowData = (clusters || []).map((cluster) => [
+    nameCell(cluster.distributed_cluster_name, cluster.single_node),
+    nameCell(cluster.cluster_name, cluster.single_node),
     versionsCell(cluster),
-    cluster.single_node ? (
-      <Text color="dimmed">single node</Text>
-    ) : (
-      cluster.cluster_name || <Text color="dimmed">not set</Text>
-    ),
-    cluster.distributed_cluster_name || <Text color="dimmed">—</Text>,
     cluster.database,
     <Text size="sm">{cluster.storage_sets.join(", ")}</Text>,
     tablesCell(cluster),
@@ -175,22 +178,22 @@ function Clusters(props: { api: Client }) {
       ) : (
         <Table
           headerData={[
+            "Query Cluster",
+            "Storage Cluster",
             "ClickHouse Versions",
-            "Cluster Name",
-            "Distributed Cluster Name",
             "Database",
             "Storage Sets",
             "Tables in default",
           ]}
-          columnWidths={[4, 3, 3, 2, 5, 3]}
+          columnWidths={[3, 3, 4, 2, 5, 3]}
           rowData={rowData}
         />
       )}
       <Text size="sm" color="dimmed">
-        Every cluster this Snuba deployment is configured with. Each row lists
-        distinct versions from its query and storage nodes. Tables are read from
-        the configured query endpoint, and only tables in the <Code>default</Code>{" "}
-        database are listed.
+        Every cluster this Snuba deployment is configured with. Each row shows the
+        ClickHouse query and storage cluster names plus the distinct versions
+        across all nodes. Tables are read from the configured query endpoint, and
+        only tables in the <Code>default</Code> database are listed.
       </Text>
     </div>
   );

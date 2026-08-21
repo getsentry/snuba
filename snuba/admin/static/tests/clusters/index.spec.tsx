@@ -80,7 +80,9 @@ it("lists every cluster with its ClickHouse version", async () => {
   // Once per cluster row that uses it, plus once in the global summary.
   expect(getAllByText("24.8.14.10459", { exact: false })).toHaveLength(3);
   expect(getAllByText("25.3.1.100", { exact: false })).toHaveLength(2);
-  expect(getByText("cluster_one_sh_dist", { exact: false })).toBeTruthy();
+  expect(getByText("cluster_one_sh", { exact: true })).toBeTruthy();
+  expect(getByText("cluster_one_sh_dist", { exact: true })).toBeTruthy();
+  expect(getAllByText("single node")).toHaveLength(2);
   expect(getByText("metrics, transactions", { exact: false })).toBeTruthy();
   expect(getByText("2 tables", { exact: false })).toBeTruthy();
   expect(getByText("1 table", { exact: true })).toBeTruthy();
