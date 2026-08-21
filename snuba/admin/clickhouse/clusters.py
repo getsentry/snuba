@@ -220,14 +220,10 @@ def get_cluster_info() -> Sequence[ClusterInfo]:
                 )
             except FutureTimeoutError:
                 error = f"Timed out after {CLUSTER_QUERY_TIMEOUT}s"
-                info.append(
-                    _describe_target(target, versions_error=error, tables_error=error)
-                )
+                info.append(_describe_target(target, versions_error=error, tables_error=error))
             except Exception as e:
                 logger.warning(str(e), cluster=target.name)
-                info.append(
-                    _describe_target(target, versions_error=str(e), tables_error=str(e))
-                )
+                info.append(_describe_target(target, versions_error=str(e), tables_error=str(e)))
     finally:
         # Do not wait: a query that outlived the timeout above must not hold up
         # the response. Its thread ends on its own once ClickHouse (or the
