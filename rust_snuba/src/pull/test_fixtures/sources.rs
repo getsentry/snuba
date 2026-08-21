@@ -1,7 +1,6 @@
-use std::pin::Pin;
 use std::sync::Mutex;
 
-use futures::stream::Stream;
+use futures::stream::BoxStream;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::processing::stream::{
     MessageMetadata, OffsetCommitter, PipelineEnvelope, PullSource, StageResult,
@@ -39,7 +38,7 @@ impl VecSource {
 }
 
 impl PullSource for VecSource {
-    fn stream(&self) -> Pin<Box<dyn Stream<Item = StageResult<KafkaPayload>> + '_>> {
+    fn stream(&self) -> BoxStream<'_, StageResult<KafkaPayload>> {
         let messages: Vec<_> = self.messages.lock().unwrap().drain(..).collect();
         Box::pin(futures::stream::iter(messages))
     }

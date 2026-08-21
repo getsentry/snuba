@@ -16,7 +16,7 @@ impl Producer<KafkaPayload> for DryRunProducer {
         destination: &TopicOrPartition,
         payload: KafkaPayload,
     ) -> Result<(), ProducerError> {
-        tracing::info!(
+        tracing::debug!(
             destination = ?destination,
             key_bytes = payload.key().map(|k| k.len()),
             payload_bytes = payload.payload().map(|p| p.len()),

@@ -1,6 +1,7 @@
-use std::future::Future;
-use std::pin::Pin;
 use std::time::Duration;
+
+use futures::future::BoxFuture;
+use rand::Rng;
 
 use crate::strategies::clickhouse::writer_v2::lz4_compress;
 
@@ -23,10 +24,7 @@ impl DryRunWriter {
 }
 
 impl ClickHouseWriter for DryRunWriter {
-    fn write(
-        &self,
-        body: Vec<u8>,
-    ) -> Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send + '_>> {
+    fn write(&self, body: Vec<u8>) -> BoxFuture<'_, anyhow::Result<()>> {
         Box::pin(async move {
             let raw_bytes = body.len();
 
@@ -35,10 +33,12 @@ impl ClickHouseWriter for DryRunWriter {
             drop(compressed);
 
             if !self.latency.is_zero() {
-                tokio::time::sleep(self.latency).await;
+                let jitter: i64 = rand::rng().random_range(-100..=100);
+                let adjusted = self.latency.as_millis() as i64 + jitter;
+                tokio::time::sleep(Duration::from_millis(adjusted.max(0) as u64)).await;
             }
 
-            tracing::info!(
+            tracing::debug!(
                 raw_bytes,
                 compressed_bytes,
                 "dry-run: would have written {} bytes ({} compressed) to ClickHouse",
