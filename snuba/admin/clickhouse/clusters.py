@@ -100,9 +100,11 @@ def _get_node_versions(
             "error": None,
         }
         try:
-            results = cluster.get_node_connection(
-                ClickhouseClientSettings.QUERY, node
-            ).execute("SELECT version()").results
+            results = (
+                cluster.get_node_connection(ClickhouseClientSettings.QUERY, node)
+                .execute("SELECT version()")
+                .results
+            )
             if not results:
                 raise Exception("ClickHouse returned no version")
             info["version"] = str(results[0][0])
@@ -139,13 +141,17 @@ def _get_cluster_state(cluster: ClickhouseCluster) -> _ClusterState:
     tables: Sequence[str] = []
     error = None
     try:
-        results = cluster.get_query_connection(ClickhouseClientSettings.QUERY).execute(
-            f"""
+        results = (
+            cluster.get_query_connection(ClickhouseClientSettings.QUERY)
+            .execute(
+                f"""
             SELECT arraySort(groupUniqArray(name))
             FROM system.tables
             WHERE database = '{TABLES_DATABASE}'
             """
-        ).results
+            )
+            .results
+        )
         if results:
             tables = [str(table) for table in results[0][0]]
     except Exception as e:
