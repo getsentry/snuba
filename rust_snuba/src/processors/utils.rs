@@ -64,6 +64,20 @@ pub fn enforce_downsampled_retention(value: Option<u16>) -> u16 {
     clamp_retention(value, RetentionKind::Downsampled)
 }
 
+/// Clamp both windows. Downsampled is at least standard; unset downsampled
+/// copies the standard value.
+pub fn enforce_retention_pair(
+    retention_days: Option<u16>,
+    downsampled_retention_days: Option<u16>,
+) -> (u16, u16) {
+    let retention_days = enforce_retention(retention_days);
+    let downsampled_retention_days = match downsampled_retention_days.filter(|&n| n > 0) {
+        Some(value) => enforce_downsampled_retention(Some(value)).max(retention_days),
+        None => retention_days,
+    };
+    (retention_days, downsampled_retention_days)
+}
+
 fn ensure_valid_datetime<'de, D>(deserializer: D) -> Result<u32, D::Error>
 where
     D: Deserializer<'de>,
@@ -173,5 +187,17 @@ mod tests {
         assert_eq!(enforce_retention(Some(200)), 180);
         assert_eq!(enforce_downsampled_retention(None), 180);
         assert_eq!(enforce_downsampled_retention(Some(365)), 360);
+    }
+
+    #[test]
+    fn test_retention_pair() {
+        init_options();
+        assert_eq!(enforce_retention_pair(None, None), (30, 30));
+        assert_eq!(enforce_retention_pair(Some(90), None), (90, 90));
+        assert_eq!(enforce_retention_pair(Some(90), Some(0)), (90, 90));
+        assert_eq!(enforce_retention_pair(Some(90), Some(30)), (90, 90));
+        assert_eq!(enforce_retention_pair(Some(90), Some(365)), (90, 365));
+        assert_eq!(enforce_retention_pair(Some(90), Some(420)), (90, 396));
+        assert_eq!(enforce_retention_pair(Some(100), Some(50)), (90, 90));
     }
 }

@@ -15,9 +15,7 @@ use sentry_protos::snuba::v1::any_value::Value;
 use sentry_protos::snuba::v1::{ArrayValue, TraceItem, TraceItemType};
 
 use crate::config::ProcessorConfig;
-use crate::processors::utils::{
-    enforce_downsampled_retention, enforce_retention, SilencedDLQMessage,
-};
+use crate::processors::utils::{enforce_retention_pair, SilencedDLQMessage};
 use crate::strategies::clickhouse::rowbinary;
 use crate::types::CogsData;
 use crate::types::{item_type_name, InsertBatch, ItemTypeMetrics, KafkaMessageMetadata};
@@ -85,13 +83,10 @@ fn process_eap_item(
         }
     }
 
-    let retention_days = enforce_retention(Some(trace_item.retention_days as u16));
-    let downsampled_retention_days = if trace_item.downsampled_retention_days > 0 {
-        enforce_downsampled_retention(Some(trace_item.downsampled_retention_days as u16))
-            .max(retention_days)
-    } else {
-        retention_days
-    };
+    let (retention_days, downsampled_retention_days) = enforce_retention_pair(
+        Some(trace_item.retention_days as u16),
+        Some(trace_item.downsampled_retention_days as u16),
+    );
 
     let mut eap_item = EAPItem::try_from(trace_item)?;
 
