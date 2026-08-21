@@ -1,63 +1,66 @@
 import React, { useEffect, useState } from "react";
-import { Badge, Button, Code, Group, Loader, Space, Text } from "@mantine/core";
+import { Code, Loader, Space, Text } from "@mantine/core";
 
 import Client from "SnubaAdmin/api_client";
 import { Table } from "SnubaAdmin/table";
 import { Collapse } from "SnubaAdmin/collapse";
-import { ClusterData, NodeVersionData } from "SnubaAdmin/clusters/types";
+import { ClusterData } from "SnubaAdmin/clusters/types";
 
-function versionsCell(nodes: NodeVersionData[], clusterError: string | null) {
-  if (nodes.length === 0) {
-    return <Text color="red">{clusterError || "unknown"}</Text>;
+function versionsCell(cluster: ClusterData) {
+  if (cluster.versions.length === 0 && !cluster.versions_error) {
+    return <Text color="dimmed">not reported</Text>;
   }
+
   return (
     <div>
-      {nodes.map((node) => (
-        <div key={`${node.host}:${node.port}`}>
-          <Code>
-            {node.host}:{node.port}
-          </Code>{" "}
-          {node.version ? (
-            <Code>{node.version}</Code>
-          ) : (
-            <Text color="red" size="sm" component="span">
-              {node.error || "unknown"}
-            </Text>
-          )}
+      {cluster.versions.map((version) => (
+        <div key={version}>
+          <Code>{version}</Code>
         </div>
       ))}
-      {clusterError && (
+      {cluster.versions_error && (
         <Text color="red" size="sm">
-          {clusterError}
+          {cluster.versions_error}
         </Text>
       )}
     </div>
   );
 }
 
-function tablesCell(cluster: ClusterData) {
-  if (cluster.error) {
-    return (
-      <Text color="red" size="sm">
-        {cluster.error}
-      </Text>
-    );
-  }
-  if (cluster.tables.length === 0) {
+function listCell(values: string[]) {
+  if (values.length === 0) {
     return <Text color="dimmed">—</Text>;
   }
   return (
-    <Collapse
-      text={`${cluster.tables.length} table${
-        cluster.tables.length === 1 ? "" : "s"
-      }`}
-    >
-      <div style={tableListStyle}>
-        {cluster.tables.map((table) => (
-          <div key={table}>{table}</div>
-        ))}
-      </div>
-    </Collapse>
+    <div>
+      {values.map((value) => (
+        <div key={value}>{value}</div>
+      ))}
+    </div>
+  );
+}
+
+function tablesCell(cluster: ClusterData) {
+  if (cluster.tables.length === 0 && !cluster.tables_error) {
+    return <Text color="dimmed">—</Text>;
+  }
+  return (
+    <div>
+      {cluster.tables.length > 0 && (
+        <Collapse
+          text={`${cluster.tables.length} table${
+            cluster.tables.length === 1 ? "" : "s"
+          }`}
+        >
+          <div style={tableListStyle}>
+            {cluster.tables.map((table) => (
+              <div key={table}>{table}</div>
+            ))}
+          </div>
+        </Collapse>
+      )}
+      {cluster.tables_error && <Text color="red">{cluster.tables_error}</Text>}
+    </div>
   );
 }
 
@@ -66,30 +69,6 @@ const tableListStyle = {
   overflowY: "auto" as const,
   fontSize: 14,
 };
-
-function VersionSummary(props: { clusters: ClusterData[] }) {
-  const versions = new Set<string>();
-  props.clusters.forEach((cluster) => {
-    [...cluster.query_node_versions, ...cluster.storage_node_versions].forEach(
-      (node) => versions.add(node.version || "unknown")
-    );
-  });
-
-  return (
-    <Group spacing="xs">
-      <Text size="sm">ClickHouse versions in use:</Text>
-      {Array.from(versions).sort().map((version) => (
-        <Badge
-          key={version}
-          color={version === "unknown" ? "red" : "blue"}
-          variant="light"
-        >
-          {version}
-        </Badge>
-      ))}
-    </Group>
-  );
-}
 
 function Clusters(props: { api: Client }) {
   const [clusters, setClusters] = useState<ClusterData[] | null>(null);
@@ -111,51 +90,33 @@ function Clusters(props: { api: Client }) {
   }, []);
 
   const rowData = (clusters || []).map((cluster) => [
-    versionsCell(cluster.query_node_versions, cluster.query_node_error),
-    versionsCell(cluster.storage_node_versions, cluster.storage_node_error),
-    cluster.single_node ? (
-      <Text color="dimmed">single node</Text>
-    ) : (
-      cluster.cluster_name || <Text color="dimmed">not set</Text>
-    ),
-    cluster.distributed_cluster_name || <Text color="dimmed">—</Text>,
-    cluster.database,
-    <Text size="sm">{cluster.storage_sets.join(", ")}</Text>,
+    cluster.cluster_name,
+    versionsCell(cluster),
+    listCell(cluster.storage_sets),
     tablesCell(cluster),
   ]);
 
   return (
     <div>
-      <Group>
-        <Button onClick={fetchClusters} loading={isLoading}>
-          Refresh
-        </Button>
-        {clusters !== null && <VersionSummary clusters={clusters} />}
-        {fetchError !== null && <Text color="red">{fetchError}</Text>}
-      </Group>
+      {fetchError !== null && <Text color="red">{fetchError}</Text>}
       <Space h="md" />
       {clusters === null ? (
         isLoading && <Loader />
       ) : (
         <Table
           headerData={[
-            "Query Nodes",
-            "Storage Nodes",
             "Cluster Name",
-            "Distributed Cluster Name",
-            "Database",
+            "Distinct Versions",
             "Storage Sets",
-            "Tables in default",
+            "Tables",
           ]}
-          columnWidths={[4, 4, 3, 3, 2, 5, 3]}
+          columnWidths={[4, 3, 4, 3]}
           rowData={rowData}
         />
       )}
       <Text size="sm" color="dimmed">
-        Every cluster this Snuba deployment is configured with. Versions are
-        read directly from each query and storage node. Tables are read from the
-        configured query endpoint, and only tables in the <Code>default</Code>{" "}
-        database are listed.
+        Every ClickHouse cluster this Snuba deployment uses. Versions and tables
+        in the <Code>default</Code> database are read across all replicas.
       </Text>
     </div>
   );
