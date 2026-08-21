@@ -15,7 +15,7 @@ use uuid::Uuid;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 
 use crate::config::ProcessorConfig;
-use crate::processors::utils::{enforce_retention, StringToIntDatetime64};
+use crate::processors::utils::{enforce_standard_retention, StringToIntDatetime64};
 use crate::types::{
     InsertBatch, InsertOrReplacement, KafkaMessageMetadata, ReplacementData, RowData,
 };
@@ -65,7 +65,7 @@ pub fn process_message_with_replacement(
             row.partition = metadata.partition;
             row.offset = metadata.offset;
             row.message_timestamp = metadata.timestamp.timestamp() as u64;
-            row.retention_days = Some(enforce_retention(row.retention_days));
+            row.retention_days = Some(enforce_standard_retention(row.retention_days));
 
             Ok(InsertOrReplacement::Insert(InsertBatch {
                 origin_timestamp,

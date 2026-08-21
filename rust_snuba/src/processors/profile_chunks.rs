@@ -6,7 +6,7 @@ use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::processors::utils::enforce_retention;
+use crate::processors::utils::enforce_standard_retention;
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
@@ -21,7 +21,7 @@ pub fn process_message(
 
     chunk.offset = metadata.offset;
     chunk.partition = metadata.partition;
-    chunk.retention_days = Some(enforce_retention(chunk.retention_days));
+    chunk.retention_days = Some(enforce_standard_retention(chunk.retention_days));
 
     InsertBatch::from_rows([chunk], origin_timestamp)
 }

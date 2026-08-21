@@ -14,7 +14,7 @@ use crate::{
 use sentry_arroyo::backends::kafka::types::{Headers, KafkaPayload};
 use sentry_arroyo::{counter, timer};
 
-use super::utils::enforce_retention;
+use super::utils::enforce_standard_retention;
 
 const GRANULARITY_TEN_SECONDS: u8 = 0;
 const GRANULARITY_ONE_MINUTE: u8 = 1;
@@ -166,7 +166,7 @@ impl Parse for CountersRawRow {
         if from.aggregation_option.unwrap_or_default() == "ten_second" {
             granularities.push(GRANULARITY_TEN_SECONDS);
         }
-        let retention_days = enforce_retention(Some(from.retention_days));
+        let retention_days = enforce_standard_retention(Some(from.retention_days));
 
         let record_meta = should_record_meta(from.use_case_id.as_str());
 
