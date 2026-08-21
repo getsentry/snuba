@@ -10,6 +10,7 @@ from collections.abc import Mapping, MutableMapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from functools import cached_property
+from threading import Lock
 from typing import (
     Any,
     cast,
@@ -120,6 +121,7 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         self.__promoted_tags = promoted_tags
         self.__state_name = ReplacerState(state_name)
         self.__storage_key_str = storage_key_str
+        self.__schema_lock = Lock()
 
     def __initialize_schema(self) -> None:
         # This has to be imported here since the storage factory will also initialize this processor
@@ -129,20 +131,28 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         # would inflate the config representation of any storage using this replacer
         from snuba.datasets.storages.factory import get_storage
 
-        storage = get_storage(StorageKey(self.__storage_key_str))
-        assert isinstance(schema := storage.get_schema(), WritableTableSchema)
-        self.__schema = schema
-        self.__all_columns = [
-            col for col in schema.get_columns() if not col.type.has_modifier(ReadOnly)
-        ]
-        self.__replacement_context = ReplacementContext(
-            all_columns=self.__all_columns,
-            state_name=self.__state_name,
-            required_columns=self.__required_columns,
-            schema=self.__schema,
-            tag_column_map=self.__tag_column_map,
-            promoted_tags=self.__promoted_tags,
-        )
+        # Double-checked so concurrent replacer threads only initialize once.
+        if self.__schema is not None:
+            return
+
+        with self.__schema_lock:
+            if self.__schema is not None:
+                return
+
+            storage = get_storage(StorageKey(self.__storage_key_str))
+            assert isinstance(schema := storage.get_schema(), WritableTableSchema)
+            self.__schema = schema
+            self.__all_columns = [
+                col for col in schema.get_columns() if not col.type.has_modifier(ReadOnly)
+            ]
+            self.__replacement_context = ReplacementContext(
+                all_columns=self.__all_columns,
+                state_name=self.__state_name,
+                required_columns=self.__required_columns,
+                schema=self.__schema,
+                tag_column_map=self.__tag_column_map,
+                promoted_tags=self.__promoted_tags,
+            )
 
     def process_message(self, message: ReplacementMessage[Mapping[str, Any]]) -> Replacement | None:
         if not self.__schema:

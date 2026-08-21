@@ -8,6 +8,7 @@ from collections.abc import Callable, Mapping, MutableMapping, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from functools import partial
+from threading import Lock
 from typing import (
     Any,
     TypeVar,
@@ -15,7 +16,7 @@ from typing import (
 
 import simplejson as json
 from arroyo.backends.kafka import KafkaPayload
-from arroyo.processing.strategies import CommitOffsets, RunTask
+from arroyo.processing.strategies import CommitOffsets, RunTask, RunTaskInThreads
 from arroyo.processing.strategies.abstract import (
     ProcessingStrategy,
     ProcessingStrategyFactory,
@@ -102,35 +103,37 @@ class InOrderConnectionPool(ShardedConnectionPool):
         self.__cluster = cluster
         self.__nodes: Mapping[int, list[ClickhouseNode]] = defaultdict(list)
         self.__nodes_refreshed_at = time.time()
+        self.__lock = Lock()
 
     def get_connections(self) -> Mapping[int, Sequence[ClickhouseNode]]:
         now = time.time()
 
-        if not self.__nodes or now - self.__nodes_refreshed_at > NODES_REFRESH_PERIOD:
-            all_nodes = self.__cluster.get_local_nodes()
+        with self.__lock:
+            if not self.__nodes or now - self.__nodes_refreshed_at > NODES_REFRESH_PERIOD:
+                all_nodes = self.__cluster.get_local_nodes()
 
-            self.__nodes = defaultdict(list)
+                self.__nodes = defaultdict(list)
 
-            # We need to sort the nodes by replica id as there is no guarantee
-            # that `get_local_nodes` will return them sorted. So that we can
-            # always hit the same node (the first replica) except during failover.
-            valid_nodes = filter(
-                lambda node: node.replica is not None and node.shard is not None,
-                all_nodes,
-            )
-            sorted_nodes = sorted(
-                valid_nodes,
-                # Need to assign a value ro replica if that is None because
-                # mypy does not know replica cannot be None at this point.
-                key=lambda n: n.replica if n.replica is not None else -1,
-            )
-            for n in sorted_nodes:
-                # mypy does not know we filtered out None values
-                assert n.shard is not None
-                self.__nodes[n.shard].append(n)
+                # We need to sort the nodes by replica id as there is no guarantee
+                # that `get_local_nodes` will return them sorted. So that we can
+                # always hit the same node (the first replica) except during failover.
+                valid_nodes = filter(
+                    lambda node: node.replica is not None and node.shard is not None,
+                    all_nodes,
+                )
+                sorted_nodes = sorted(
+                    valid_nodes,
+                    # Need to assign a value ro replica if that is None because
+                    # mypy does not know replica cannot be None at this point.
+                    key=lambda n: n.replica if n.replica is not None else -1,
+                )
+                for n in sorted_nodes:
+                    # mypy does not know we filtered out None values
+                    assert n.shard is not None
+                    self.__nodes[n.shard].append(n)
 
-            self.__nodes_refreshed_at = now
-        return self.__nodes
+                self.__nodes_refreshed_at = now
+            return self.__nodes
 
 
 class InsertExecutor(ABC):
@@ -280,13 +283,35 @@ TResult = TypeVar("TResult")
 
 
 class ReplacerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
+    """
+    Build the replacer processing pipeline.
+
+    concurrency=1 (default) keeps the historical single-message path via RunTask.
+
+    concurrency>1 runs multiple replacement messages in parallel via
+    RunTaskInThreads. Replacements for the same project_id still run one at a
+    time (see ReplacerWorker project locks). Cross-project replacements may
+    complete out of kafka order within a partition -- intentional tradeoff for
+    this spike; do not enable in prod without reviewing that.
+    """
+
     def __init__(
         self,
         worker: ReplacerWorker,
         health_check_file: str | None = None,
+        concurrency: int = 1,
+        max_pending_futures: int | None = None,
     ) -> None:
+        if concurrency < 1:
+            raise ValueError("concurrency must be >= 1")
         self.__worker = worker
         self.__health_check_file = health_check_file
+        self.__concurrency = concurrency
+        # Cap the in-flight queue so arroyo backpressures via MessageRejected
+        # instead of unbounded memory growth when clickhouse is slow.
+        self.__max_pending_futures = (
+            max_pending_futures if max_pending_futures is not None else max(concurrency * 2, 2)
+        )
 
     def create_with_partitions(
         self,
@@ -300,7 +325,17 @@ class ReplacerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
 
         commit_offsets: ProcessingStrategy[Any] = CommitOffsets(commit)
 
-        strategy: ProcessingStrategy[KafkaPayload] = RunTask(processing_func, commit_offsets)
+        strategy: ProcessingStrategy[KafkaPayload]
+        if self.__concurrency == 1:
+            # Preserve the historical single-threaded path when concurrency is off.
+            strategy = RunTask(processing_func, commit_offsets)
+        else:
+            strategy = RunTaskInThreads(
+                processing_func,
+                self.__concurrency,
+                self.__max_pending_futures,
+                commit_offsets,
+            )
 
         if self.__health_check_file is not None:
             strategy = Healthcheck(self.__health_check_file, strategy)
@@ -331,6 +366,28 @@ class ReplacerWorker:
 
         self.__last_offset_processed_per_partition: MutableMapping[str, int] = {}
         self.__consumer_group = consumer_group
+
+        # Shared mutable state below is touched from RunTaskInThreads workers when
+        # concurrency > 1. Locks keep offset tracking / counter updates coherent.
+        self.__offset_lock = Lock()
+        self.__counter_lock = Lock()
+        self.__optimize_lock = Lock()
+        self.__project_locks_guard = Lock()
+        self.__project_locks: MutableMapping[int, Lock] = {}
+
+    def __lock_for_project(self, project_id: int) -> Lock:
+        """
+        Return a stable per-project lock so two replacements for the same project
+        never mutate clickhouse/redis state concurrently.
+
+        Different projects may still run in parallel under concurrency > 1.
+        """
+        with self.__project_locks_guard:
+            lock = self.__project_locks.get(project_id)
+            if lock is None:
+                lock = Lock()
+                self.__project_locks[project_id] = lock
+            return lock
 
     def __get_insert_executor(self, replacement: Replacement) -> InsertExecutor:
         """
@@ -441,45 +498,61 @@ class ReplacerWorker:
         )
 
         for message_metadata, replacement in batch:
-            start_time = datetime.now()
-
-            table_name = self.__replacer_processor.get_schema().get_table_name()
-            count_query = replacement.get_count_query(table_name)
-
-            if count_query is not None:
-                count = clickhouse_read.execute_robust(count_query).results[0][0]
-                if count == 0:
-                    continue
-            else:
-                count = 0
-
-            need_optimize = (
-                self.__replacer_processor.pre_replacement(replacement, count) or need_optimize
+            # Serialize work for a single project so concurrent threads cannot
+            # interleave two deletes/merges for the same project_id. Cross-project
+            # replacements still overlap when concurrency > 1.
+            project_lock = (
+                self.__lock_for_project(replacement.get_project_id())
+                if isinstance(replacement, ErrorReplacement)
+                else None
             )
+            if project_lock is not None:
+                project_lock.acquire()
+            try:
+                start_time = datetime.now()
 
-            query_executor = self.__get_insert_executor(replacement)
-            with self.__rate_limiter as state:
-                self.metrics.increment("insert_state", tags={"state": state[0].value})
-                count = query_executor.execute(replacement, count)
+                table_name = self.__replacer_processor.get_schema().get_table_name()
+                count_query = replacement.get_count_query(table_name)
 
-            self.__replacer_processor.post_replacement(replacement, count)
+                if count_query is not None:
+                    count = clickhouse_read.execute_robust(count_query).results[0][0]
+                    if count == 0:
+                        continue
+                else:
+                    count = 0
 
-            self._check_timing_and_write_to_redis(message_metadata, start_time.timestamp())
-
-            if isinstance(replacement, ErrorReplacement):
-                project_id = replacement.get_project_id()
-                end_time = datetime.now()
-                self._attempt_emitting_metric_for_projects_exceeding_limit(
-                    start_time, end_time, project_id
+                need_optimize = (
+                    self.__replacer_processor.pre_replacement(replacement, count) or need_optimize
                 )
+
+                query_executor = self.__get_insert_executor(replacement)
+                with self.__rate_limiter as state:
+                    self.metrics.increment("insert_state", tags={"state": state[0].value})
+                    count = query_executor.execute(replacement, count)
+
+                self.__replacer_processor.post_replacement(replacement, count)
+
+                self._check_timing_and_write_to_redis(message_metadata, start_time.timestamp())
+
+                if isinstance(replacement, ErrorReplacement):
+                    project_id = replacement.get_project_id()
+                    end_time = datetime.now()
+                    self._attempt_emitting_metric_for_projects_exceeding_limit(
+                        start_time, end_time, project_id
+                    )
+            finally:
+                if project_lock is not None:
+                    project_lock.release()
         if need_optimize:
             from snuba.clickhouse.optimize.optimize import run_optimize
 
-            today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-            num_dropped = run_optimize(
-                clickhouse_read, self.__storage, self.__database_name, before=today
-            )
-            logger.info(f"Optimized {num_dropped} partitions on {clickhouse_read.host}")
+            # Only one thread should run OPTIMIZE at a time under concurrency > 1.
+            with self.__optimize_lock:
+                today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+                num_dropped = run_optimize(
+                    clickhouse_read, self.__storage, self.__database_name, before=today
+                )
+                logger.info(f"Optimized {num_dropped} partitions on {clickhouse_read.host}")
 
     def _message_already_processed(self, metadata: ReplacementMessageMetadata) -> bool:
         """
@@ -490,23 +563,24 @@ class ReplacerWorker:
         message by comparing the incoming message to the recorded offset.
         """
         key = self._build_topic_group_index_key(metadata)
-        self._reset_offset_check(key)
+        with self.__offset_lock:
+            self._reset_offset_check(key)
 
-        if key not in self.__last_offset_processed_per_partition:
-            processed_offset = redis_client.get(key)
-            try:
-                self.__last_offset_processed_per_partition[key] = (
-                    -1 if processed_offset is None else int(processed_offset)
-                )
-            except ValueError as e:
-                redis_client.delete(key)
-                logger.warning(
-                    "Unexpected value found for an offset in Redis",
-                    exc_info=e,
-                )
-                self.__last_offset_processed_per_partition[key] = -1
+            if key not in self.__last_offset_processed_per_partition:
+                processed_offset = redis_client.get(key)
+                try:
+                    self.__last_offset_processed_per_partition[key] = (
+                        -1 if processed_offset is None else int(processed_offset)
+                    )
+                except ValueError as e:
+                    redis_client.delete(key)
+                    logger.warning(
+                        "Unexpected value found for an offset in Redis",
+                        exc_info=e,
+                    )
+                    self.__last_offset_processed_per_partition[key] = -1
 
-        return metadata.offset <= self.__last_offset_processed_per_partition[key]
+            return metadata.offset <= self.__last_offset_processed_per_partition[key]
 
     def _reset_offset_check(self, key: str) -> None:
         """
@@ -520,6 +594,8 @@ class ReplacerWorker:
         There exists a config which tells us which consumer groups require their
         replacer(s) reset. Ideally this config is populated with consumer groups
         temporarily, then cleared once relevant consumers restart.
+
+        Caller must hold self.__offset_lock.
         """
         # expected format is "[consumer_group1,consumer_group2,..]"
         consumer_groups = (get_option(RESET_CHECK_CONFIG, "[]"))[1:-1].split(",")
@@ -540,12 +616,13 @@ class ReplacerWorker:
         if (time.time() - start_time) < settings.REPLACER_PROCESSING_TIMEOUT_THRESHOLD:
             return
         key = self._build_topic_group_index_key(message_metadata)
-        redis_client.set(
-            key,
-            message_metadata.offset,
-            ex=settings.REPLACER_PROCESSING_TIMEOUT_THRESHOLD_KEY_TTL,
-        )
-        self.__last_offset_processed_per_partition[key] = message_metadata.offset
+        with self.__offset_lock:
+            redis_client.set(
+                key,
+                message_metadata.offset,
+                ex=settings.REPLACER_PROCESSING_TIMEOUT_THRESHOLD_KEY_TTL,
+            )
+            self.__last_offset_processed_per_partition[key] = message_metadata.offset
 
     def _build_topic_group_index_key(self, message_metadata: ReplacementMessageMetadata) -> str:
         """
@@ -572,12 +649,13 @@ class ReplacerWorker:
         by first writing the time spent on processing the current replacement in Counter class. Then, a list of all projects
         exceeding some limit is obtained and a metric is written to DataDog.
         """
-        self.__processing_time_counter.record_time_spent(
-            project_id,
-            start_time,
-            end_time,
-        )
-        projects_exceeding_limit = self.__processing_time_counter.get_projects_exceeding_limit()
+        with self.__counter_lock:
+            self.__processing_time_counter.record_time_spent(
+                project_id,
+                start_time,
+                end_time,
+            )
+            projects_exceeding_limit = self.__processing_time_counter.get_projects_exceeding_limit()
         set_config_auto_replacements_bypass_projects(projects_exceeding_limit, end_time)
 
         if projects_exceeding_limit:
