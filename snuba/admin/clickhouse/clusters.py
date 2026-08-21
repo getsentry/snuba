@@ -132,9 +132,7 @@ def _get_node_versions(
         return [_query_node_version(cluster, nodes[0], nodes)]
 
     with ThreadPoolExecutor(max_workers=min(MAX_CONCURRENT_NODE_QUERIES, len(nodes))) as executor:
-        return list(
-            executor.map(lambda node: _query_node_version(cluster, node, nodes), nodes)
-        )
+        return list(executor.map(lambda node: _query_node_version(cluster, node, nodes), nodes))
 
 
 def _get_tables(

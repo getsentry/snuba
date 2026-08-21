@@ -495,9 +495,7 @@ def test_ro_cluster_node_connection_uses_validated_readonly_pool() -> None:
             cluster, node, ClickhouseClientSettings.QUERY, known_nodes=known_nodes
         )
 
-    mock_validate.assert_called_once_with(
-        "storage", 8123, cluster, None, known_nodes=known_nodes
-    )
+    mock_validate.assert_called_once_with("storage", 8123, cluster, None, known_nodes=known_nodes)
     assert mock_pool.called
     assert mock_pool.call_args.args[2] == "ro_user"
     assert mock_pool.call_args.args[3] == "ro_pass"

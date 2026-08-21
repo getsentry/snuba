@@ -146,9 +146,7 @@ def _build_validated_pool(
     # credentials reach whatever listener answers. All admin helpers must go
     # through here. The regression test
     # test_no_direct_clickhouse_pool_construction_in_admin enforces this.
-    _validate_node(
-        clickhouse_host, clickhouse_port, cluster, storage_name, known_nodes=known_nodes
-    )
+    _validate_node(clickhouse_host, clickhouse_port, cluster, storage_name, known_nodes=known_nodes)
     # Query-endpoint traffic uses the cluster Envoy listen port. Replica
     # (by-host) traffic uses 8123 on that node.
     query_node = cluster.get_query_node()
