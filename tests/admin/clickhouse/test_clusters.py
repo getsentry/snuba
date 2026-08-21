@@ -33,7 +33,10 @@ def test_get_cluster_state_queries_single_node_through_validated_helper(
 
     assert get_ro_cluster_node_connection.call_count == 2
     assert all(
-        call == mock.call(cluster, node, ClickhouseClientSettings.QUERY)
+        call
+        == mock.call(
+            cluster, node, ClickhouseClientSettings.QUERY, known_nodes=[node]
+        )
         for call in get_ro_cluster_node_connection.call_args_list
     )
     cluster.get_node_connection.assert_not_called()
@@ -58,7 +61,10 @@ def test_get_cluster_state_separates_query_and_storage_node_versions(
     cluster.get_query_node.return_value = query_node
 
     def connection_for_node(
-        cluster_arg: ClickhouseCluster, node: ClickhouseNode, client_settings: object
+        cluster_arg: ClickhouseCluster,
+        node: ClickhouseNode,
+        client_settings: object,
+        known_nodes: object = None,
     ) -> mock.MagicMock:
         connection = mock.MagicMock()
 
@@ -80,6 +86,10 @@ def test_get_cluster_state_separates_query_and_storage_node_versions(
     assert state.query_node_versions[0]["host"] == "query"
     assert state.storage_node_versions[0]["version"] == "24.8.14"
     assert state.storage_node_versions[0]["host"] == "storage"
+    assert all(
+        call.kwargs.get("known_nodes") == [query_node, storage_node]
+        for call in get_ro_cluster_node_connection.call_args_list
+    )
     cluster.get_node_connection.assert_not_called()
     cluster.get_query_connection.assert_not_called()
 
@@ -156,7 +166,10 @@ def test_get_cluster_state_isolates_node_version_errors(
     cluster.get_query_node.return_value = query_node
 
     def connection_for_node(
-        cluster_arg: ClickhouseCluster, node: ClickhouseNode, client_settings: object
+        cluster_arg: ClickhouseCluster,
+        node: ClickhouseNode,
+        client_settings: object,
+        known_nodes: object = None,
     ) -> mock.MagicMock:
         connection = mock.MagicMock()
 
