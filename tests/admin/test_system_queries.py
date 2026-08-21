@@ -397,7 +397,6 @@ def test_by_host_connection_uses_default_http_port(helper_name: str) -> None:
     )
 
 
-
 def test_is_valid_node_accepts_query_endpoint_when_topology_fails() -> None:
     """Configured query endpoint must stay valid if topology discovery fails."""
     from snuba.admin.clickhouse import common
