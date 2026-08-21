@@ -34,18 +34,19 @@ def single_node_cluster(
     port: int,
     storage_sets: set[StorageSetKey],
     *,
-    user: str = "default",
-    password: str = "",
     database: str = "default",
     secure: bool = False,
+    ca_certs: str | None = None,
+    verify: bool | None = None,
 ) -> mock.MagicMock:
     cluster = mock.MagicMock(spec=ClickhouseCluster)
     cluster.is_single_node.return_value = True
     cluster.get_host.return_value = host
     cluster.get_port.return_value = port
-    cluster.get_credentials.return_value = (user, password)
     cluster.get_database.return_value = database
     cluster.get_secure.return_value = secure
+    cluster.get_ca_certs.return_value = ca_certs
+    cluster.get_verify.return_value = verify
     cluster.get_storage_set_keys.return_value = storage_sets
     return cluster
 
@@ -83,24 +84,24 @@ def test_cluster_targets_keeps_single_node_hosts_separate(clusters: mock.MagicMo
 
 
 @mock.patch("snuba.admin.clickhouse.clusters.CLUSTERS")
-def test_cluster_targets_keeps_same_host_different_credentials_separate(
+def test_cluster_targets_keeps_same_host_different_tls_settings_separate(
     clusters: mock.MagicMock,
 ) -> None:
     first = single_node_cluster(
         "clickhouse-a",
         9000,
         {StorageSetKey.EVENTS},
-        user="reader",
-        password="one",
-        database="default",
+        secure=True,
+        ca_certs="/etc/ssl/ca.pem",
+        verify=True,
     )
     second = single_node_cluster(
         "clickhouse-a",
         9000,
         {StorageSetKey.TRANSACTIONS},
-        user="writer",
-        password="two",
-        database="default",
+        secure=True,
+        ca_certs="/etc/ssl/other-ca.pem",
+        verify=False,
     )
     clusters.__iter__.return_value = iter([first, second])
 
@@ -119,6 +120,7 @@ def test_cluster_targets_keeps_same_host_different_credentials_separate(
 def test_cluster_targets_merges_identical_single_node_connections(
     clusters: mock.MagicMock,
 ) -> None:
+    # App credentials are unused by the admin RO path, so they must not split rows.
     first = single_node_cluster("clickhouse-a", 9000, {StorageSetKey.EVENTS})
     second = single_node_cluster("clickhouse-a", 9000, {StorageSetKey.TRANSACTIONS})
     clusters.__iter__.return_value = iter([first, second])

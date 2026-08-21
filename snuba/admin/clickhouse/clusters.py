@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import time
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
@@ -44,21 +43,20 @@ class _ClusterState(NamedTuple):
 
 
 def _single_node_target_key(cluster: ClickhouseCluster) -> str:
-    """Identify a single-node endpoint by connection settings, not host:port alone.
+    """Identify a single-node endpoint by the settings the admin RO pool uses.
 
-    Admin lookups reuse the cluster object for the connection pool database and
-    topology. Two configs that share host:port but differ in credentials or
-    database must stay separate so the wrong connection is not reused.
+    `get_ro_cluster_node_connection` always authenticates with the global
+    readonly credentials. It still takes database and TLS options from the
+    cluster object, so those fields must participate in dedupe. App-level
+    cluster credentials do not.
     """
     host = cluster.get_host()
     port = cluster.get_port()
-    user, password = cluster.get_credentials()
     database = cluster.get_database()
     secure = cluster.get_secure()
-    # Hash credentials so target keys never embed secrets in plain text.
-    identity = f"{user}\0{password}\0{database}\0{secure}".encode()
-    digest = hashlib.sha256(identity).hexdigest()[:16]
-    return f"{host}:{port}:{digest}"
+    ca_certs = cluster.get_ca_certs() or ""
+    verify = cluster.get_verify()
+    return f"{host}:{port}:{database}:{secure}:{ca_certs}:{verify}"
 
 
 def _cluster_targets() -> Sequence[_ClusterTarget]:
@@ -67,8 +65,8 @@ def _cluster_targets() -> Sequence[_ClusterTarget]:
     for cluster in CLUSTERS:
         storage_sets = {storage_set.value for storage_set in cluster.get_storage_set_keys()}
         if cluster.is_single_node():
-            # Single-node configs have no ClickHouse cluster name. Key by full
-            # connection identity so differing credentials/databases do not collapse.
+            # Single-node configs have no ClickHouse cluster name. Key by the
+            # admin RO pool identity so differing DB/TLS settings do not collapse.
             entries = [(_single_node_target_key(cluster), "single node", True)]
         else:
             entries = [
