@@ -342,15 +342,9 @@ def test_clickhouse_clusters(admin_api: FlaskClient) -> None:
 
 @pytest.mark.redis_db
 def test_clickhouse_clusters_reports_unreachable_cluster(admin_api: FlaskClient) -> None:
-    with (
-        mock.patch(
-            "snuba.clusters.cluster.ClickhouseCluster.get_query_connection",
-            side_effect=Exception("Connection refused"),
-        ),
-        mock.patch(
-            "snuba.clusters.cluster.ClickhouseCluster.get_node_connection",
-            side_effect=Exception("Connection refused"),
-        ),
+    with mock.patch(
+        "snuba.admin.clickhouse.clusters.get_ro_cluster_node_connection",
+        side_effect=Exception("Connection refused"),
     ):
         response = admin_api.get("/clickhouse_clusters")
 

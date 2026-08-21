@@ -38,15 +38,21 @@ def _node_connect_port(node: ClickhouseNode, cluster: ClickhouseCluster) -> int:
     return node.port if node.port is not None else DEFAULT_CLICKHOUSE_HTTP_PORT
 
 
-def is_valid_node(host: str, port: int, cluster: ClickhouseCluster, storage_name: str) -> bool:
+def is_valid_node(
+    host: str,
+    port: int,
+    cluster: ClickhouseCluster,
+    storage_name: str | None = None,
+) -> bool:
     nodes = [
         cluster.get_query_node(),
     ]
     try:
         nodes.extend([*cluster.get_local_nodes(), *cluster.get_distributed_nodes()])
     except Exception as e:
+        subject = f"storage {storage_name}" if storage_name is not None else "cluster"
         raise InvalidNodeError(
-            f"Error getting nodes for storage {storage_name}",
+            f"Error getting nodes for {subject}",
             extra_data={
                 "error": str(e),
                 "host": host,
@@ -76,7 +82,7 @@ def _validate_node(
     clickhouse_host: str,
     clickhouse_port: int,
     cluster: ClickhouseCluster,
-    storage_name: str,
+    storage_name: str | None = None,
 ) -> None:
     if not is_valid_node(clickhouse_host, clickhouse_port, cluster, storage_name):
         raise InvalidNodeError(
@@ -93,7 +99,7 @@ def _validate_node(
 def _build_validated_pool(
     clickhouse_host: str,
     clickhouse_port: int,
-    storage_name: str,
+    storage_name: str | None,
     cluster: ClickhouseCluster,
     database: str,
     username: str,
@@ -183,6 +189,51 @@ def get_ro_query_node_connection(
 
     return connection
 
+
+
+def get_ro_cluster_node_connection(
+    cluster: ClickhouseCluster,
+    node: ClickhouseNode,
+    client_settings: ClickhouseClientSettings,
+) -> ClickhousePool:
+    """Read-only connection to a known node on a configured cluster.
+
+    Unlike the storage-keyed helpers, this path works for clusters with no
+    registered storage. It still goes through `_build_validated_pool`, so the
+    host/port must belong to the cluster and only the global readonly
+    credentials are used.
+    """
+    allowed = {
+        ClickhouseClientSettings.QUERY.name,
+        ClickhouseClientSettings.QUERYLOG.name,
+        ClickhouseClientSettings.TRACING.name,
+        ClickhouseClientSettings.CARDINALITY_ANALYZER.name,
+    }
+    assert getattr(client_settings, "name", None) in allowed, (
+        "admin can only use QUERY, QUERYLOG, TRACING or CARDINALITY_ANALYZER "
+        "ClickhouseClientSettings"
+    )
+
+    if getattr(client_settings, "name", None) in {
+        ClickhouseClientSettings.QUERY.name,
+        ClickhouseClientSettings.QUERYLOG.name,
+    }:
+        username = settings.CLICKHOUSE_READONLY_USER
+        password = settings.CLICKHOUSE_READONLY_PASSWORD
+    else:
+        username = settings.CLICKHOUSE_TRACE_USER
+        password = settings.CLICKHOUSE_TRACE_PASSWORD
+
+    return _build_validated_pool(
+        node.host_name,
+        _node_connect_port(node, cluster),
+        None,
+        cluster,
+        cluster.get_database(),
+        username,
+        password,
+        client_settings,
+    )
 
 def get_sudo_node_connection(
     clickhouse_host: str,

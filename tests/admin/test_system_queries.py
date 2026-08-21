@@ -397,6 +397,37 @@ def test_by_host_connection_uses_default_http_port(helper_name: str) -> None:
     )
 
 
+
+def test_ro_cluster_node_connection_uses_validated_readonly_pool() -> None:
+    """Cluster-scoped admin lookups must stay on the validated readonly path."""
+    from unittest.mock import MagicMock
+
+    from snuba.admin.clickhouse import common
+    from snuba.clusters.cluster import ClickhouseCluster, ClickhouseNode
+
+    cluster = MagicMock(spec=ClickhouseCluster)
+    cluster.get_database.return_value = "default"
+    cluster.get_secure.return_value = False
+    cluster.get_ca_certs.return_value = None
+    cluster.get_verify.return_value = False
+    cluster.get_port.return_value = 8123
+    cluster.get_query_node.return_value = ClickhouseNode("query", 8123)
+    node = ClickhouseNode("storage", 8123)
+
+    with (
+        patch.object(common, "_validate_node") as mock_validate,
+        patch.object(settings, "CLICKHOUSE_READONLY_USER", "ro_user"),
+        patch.object(settings, "CLICKHOUSE_READONLY_PASSWORD", "ro_pass"),
+        patch.object(common, "build_pool") as mock_pool,
+    ):
+        common.get_ro_cluster_node_connection(cluster, node, ClickhouseClientSettings.QUERY)
+
+    mock_validate.assert_called_once_with("storage", 8123, cluster, None)
+    assert mock_pool.called
+    assert mock_pool.call_args.args[2] == "ro_user"
+    assert mock_pool.call_args.args[3] == "ro_pass"
+
+
 def test_query_node_connection_uses_cluster_http_port() -> None:
     """
     Counterpart to test_by_host_connection_uses_default_http_port: the

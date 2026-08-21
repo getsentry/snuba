@@ -8,6 +8,7 @@ from typing import NamedTuple, TypedDict
 
 import structlog
 
+from snuba.admin.clickhouse.common import get_ro_cluster_node_connection
 from snuba.clusters.cluster import (
     CLUSTERS,
     ClickhouseClientSettings,
@@ -20,6 +21,9 @@ logger = structlog.get_logger().bind(module=__name__)
 # One lookup per cluster, run concurrently so that a single slow or unreachable
 # cluster does not hold up the whole page.
 MAX_CONCURRENT_CLUSTER_QUERIES = 32
+# Node version lookups within one cluster also run concurrently so one slow
+# replica cannot burn the whole deadline before tables/other nodes are fetched.
+MAX_CONCURRENT_NODE_QUERIES = 16
 CLUSTER_QUERY_TIMEOUT = 30
 
 # Tables are only listed for this database, the one Snuba's own tables live in.
@@ -88,40 +92,66 @@ class _ClusterState(NamedTuple):
     error: str | None
 
 
+def _query_node_version(cluster: ClickhouseCluster, node: ClickhouseNode) -> NodeVersionInfo:
+    info: NodeVersionInfo = {
+        "host": node.host_name,
+        "port": node.port,
+        "version": None,
+        "error": None,
+    }
+    try:
+        results = (
+            get_ro_cluster_node_connection(cluster, node, ClickhouseClientSettings.QUERY)
+            .execute("SELECT version()")
+            .results
+        )
+        if not results:
+            raise Exception("ClickHouse returned no version")
+        info["version"] = str(results[0][0])
+    except Exception as e:
+        logger.warning(str(e), cluster=str(cluster), node=str(node))
+        info["error"] = str(e)
+    return info
+
+
 def _get_node_versions(
     cluster: ClickhouseCluster, nodes: Sequence[ClickhouseNode]
 ) -> Sequence[NodeVersionInfo]:
-    versions: list[NodeVersionInfo] = []
-    for node in nodes:
-        info: NodeVersionInfo = {
-            "host": node.host_name,
-            "port": node.port,
-            "version": None,
-            "error": None,
-        }
-        try:
-            results = (
-                cluster.get_node_connection(ClickhouseClientSettings.QUERY, node)
-                .execute("SELECT version()")
-                .results
-            )
-            if not results:
-                raise Exception("ClickHouse returned no version")
-            info["version"] = str(results[0][0])
-        except Exception as e:
-            logger.warning(str(e), cluster=str(cluster), node=str(node))
-            info["error"] = str(e)
-        versions.append(info)
-    return versions
+    if not nodes:
+        return []
+    if len(nodes) == 1:
+        return [_query_node_version(cluster, nodes[0])]
+
+    with ThreadPoolExecutor(max_workers=min(MAX_CONCURRENT_NODE_QUERIES, len(nodes))) as executor:
+        return list(executor.map(lambda node: _query_node_version(cluster, node), nodes))
+
+
+def _get_tables(cluster: ClickhouseCluster) -> Sequence[str]:
+    results = (
+        get_ro_cluster_node_connection(
+            cluster, cluster.get_query_node(), ClickhouseClientSettings.QUERY
+        )
+        .execute(
+            f"""
+            SELECT arraySort(groupUniqArray(name))
+            FROM system.tables
+            WHERE database = '{TABLES_DATABASE}'
+            """
+        )
+        .results
+    )
+    if not results:
+        return []
+    return [str(table) for table in results[0][0]]
 
 
 def _get_cluster_state(cluster: ClickhouseCluster) -> _ClusterState:
-    """Query the configured query endpoint and each storage node directly."""
+    """Query query nodes, storage nodes, and tables through validated admin pools."""
     query_node_error = None
     storage_node_error = None
     if cluster.is_single_node():
-        query_node_versions = _get_node_versions(cluster, [cluster.get_query_node()])
-        storage_node_versions = query_node_versions
+        query_nodes: Sequence[ClickhouseNode] = [cluster.get_query_node()]
+        storage_nodes: Sequence[ClickhouseNode] = query_nodes
     else:
         try:
             query_nodes = cluster.get_distributed_nodes() or [cluster.get_query_node()]
@@ -129,34 +159,49 @@ def _get_cluster_state(cluster: ClickhouseCluster) -> _ClusterState:
             logger.warning(str(e), cluster=str(cluster), node_role="query")
             query_nodes = []
             query_node_error = str(e)
-        query_node_versions = _get_node_versions(cluster, query_nodes)
 
         try:
-            storage_node_versions = _get_node_versions(cluster, cluster.get_local_nodes())
+            storage_nodes = cluster.get_local_nodes()
         except Exception as e:
             logger.warning(str(e), cluster=str(cluster), node_role="storage")
-            storage_node_versions = []
+            storage_nodes = []
             storage_node_error = str(e)
+
+    # Deduplicate connection work when the same host appears in both roles or
+    # when single-node clusters reuse one endpoint for both columns.
+    unique_nodes: list[ClickhouseNode] = []
+    seen: set[tuple[str, int]] = set()
+    for node in [*query_nodes, *storage_nodes]:
+        key = (node.host_name, node.port)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_nodes.append(node)
 
     tables: Sequence[str] = []
     error = None
-    try:
-        results = (
-            cluster.get_query_connection(ClickhouseClientSettings.QUERY)
-            .execute(
-                f"""
-            SELECT arraySort(groupUniqArray(name))
-            FROM system.tables
-            WHERE database = '{TABLES_DATABASE}'
-            """
-            )
-            .results
-        )
-        if results:
-            tables = [str(table) for table in results[0][0]]
-    except Exception as e:
-        logger.warning(str(e), cluster=str(cluster), lookup="tables")
-        error = str(e)
+    # Run version lookups and the tables query concurrently. Both share the
+    # outer cluster deadline, so finishing independent work in parallel keeps
+    # one slow path from starving the other.
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        versions_future = executor.submit(_get_node_versions, cluster, unique_nodes)
+        tables_future = executor.submit(_get_tables, cluster)
+        node_versions = versions_future.result()
+        try:
+            tables = tables_future.result()
+        except Exception as e:
+            logger.warning(str(e), cluster=str(cluster), lookup="tables")
+            error = str(e)
+
+    versions_by_key = {(info["host"], info["port"]): info for info in node_versions}
+    query_node_versions = [
+        versions_by_key[(node.host_name, node.port)] for node in query_nodes
+    ]
+    storage_node_versions = (
+        query_node_versions
+        if cluster.is_single_node()
+        else [versions_by_key[(node.host_name, node.port)] for node in storage_nodes]
+    )
 
     return _ClusterState(
         query_node_versions,
@@ -204,7 +249,10 @@ def get_cluster_info() -> Sequence[ClusterInfo]:
                 info["error"] = error
             except Exception as e:
                 logger.warning(str(e), cluster=str(cluster))
-                info["error"] = str(e)
+                error = str(e)
+                info["query_node_error"] = error
+                info["storage_node_error"] = error
+                info["error"] = error
     finally:
         # Do not wait: a query that outlived the timeout above must not hold up
         # the response. Its thread ends on its own once ClickHouse (or the
