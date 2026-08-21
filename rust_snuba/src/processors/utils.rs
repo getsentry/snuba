@@ -7,10 +7,6 @@ use serde::{Deserialize, Deserializer, Serialize};
 // Notice the differennce of .%fZ vs %.fZ, this comes from a difference in how rust's chrono handles the format
 const PAYLOAD_DATETIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.fZ";
 
-/// Written retention_days values are positive multiples of this quantum.
-/// Keep in sync with `snuba.state.retention.RETENTION_QUANTUM`.
-const RETENTION_QUANTUM: u16 = 30;
-
 #[derive(Clone, Copy)]
 pub enum RetentionKind {
     Standard,
@@ -25,11 +21,13 @@ impl RetentionKind {
         }
     }
 
-    /// Schema fallback when the `retention_days` option is missing.
-    ///
-    /// Mirrors `sentry-options/schemas/snuba/schema.json` and
-    /// `snuba.state.retention.DEFAULT_RETENTION_DAYS`. Write-path
-    /// enforcement snaps these down to a multiple of [`RETENTION_QUANTUM`].
+    fn default_default(self) -> u16 {
+        match self {
+            Self::Standard => 30,
+            Self::Downsampled => 396,
+        }
+    }
+
     fn default_max(self) -> u16 {
         match self {
             Self::Standard => 90,
@@ -38,34 +36,32 @@ impl RetentionKind {
     }
 }
 
-/// Floor to a positive multiple of [`RETENTION_QUANTUM`].
-fn quantize(value: u16) -> u16 {
-    (value / RETENTION_QUANTUM).max(1) * RETENTION_QUANTUM
-}
-
-fn retention_max(kind: RetentionKind) -> u16 {
-    let raw = options("snuba")
+fn retention_option(kind: RetentionKind, field: &str, fallback: u16) -> u16 {
+    options("snuba")
         .ok()
         .and_then(|o| o.get("retention_days").ok())
         .and_then(|v| v.get(kind.option_key()).cloned())
-        .and_then(|entry| entry.get("max").and_then(|n| n.as_u64()))
+        .and_then(|entry| entry.get(field).and_then(|n| n.as_u64()))
         .and_then(|n| u16::try_from(n).ok())
         .filter(|&n| n > 0)
-        .unwrap_or_else(|| kind.default_max());
-    quantize(raw)
+        .unwrap_or(fallback)
 }
 
-/// Snap ``value`` to a positive multiple of 30 and clamp it to ``kind``'s max.
-///
-/// Missing or non-positive values become ``kind``'s max (the historical write
-/// default of 90 for standard). Values below one quantum become 30.
-/// Keep in sync with `snuba.state.retention.quantize_retention_days`.
-pub fn enforce_retention(value: Option<u16>, kind: RetentionKind) -> u16 {
-    let maximum = retention_max(kind);
+fn clamp_retention(value: Option<u16>, kind: RetentionKind) -> u16 {
     let Some(value) = value.filter(|&n| n > 0) else {
-        return maximum;
+        return retention_option(kind, "default", kind.default_default());
     };
-    quantize(value.min(maximum))
+    value.min(retention_option(kind, "max", kind.default_max()))
+}
+
+/// Standard: missing/non-positive -> 30, otherwise cap at 90.
+pub fn enforce_retention(value: Option<u16>) -> u16 {
+    clamp_retention(value, RetentionKind::Standard)
+}
+
+/// Downsampled: missing/non-positive -> 396, otherwise cap at 396.
+pub fn enforce_downsampled_retention(value: Option<u16>) -> u16 {
+    clamp_retention(value, RetentionKind::Downsampled)
 }
 
 fn ensure_valid_datetime<'de, D>(deserializer: D) -> Result<u32, D::Error>
@@ -139,32 +135,23 @@ mod tests {
     #[test]
     fn test_standard_defaults() {
         init_options();
-        assert_eq!(enforce_retention(None, RetentionKind::Standard), 90);
-        assert_eq!(enforce_retention(Some(0), RetentionKind::Standard), 90);
-        assert_eq!(enforce_retention(Some(29), RetentionKind::Standard), 30);
-        assert_eq!(enforce_retention(Some(30), RetentionKind::Standard), 30);
-        assert_eq!(enforce_retention(Some(60), RetentionKind::Standard), 60);
-        assert_eq!(enforce_retention(Some(89), RetentionKind::Standard), 60);
-        assert_eq!(enforce_retention(Some(90), RetentionKind::Standard), 90);
-        assert_eq!(enforce_retention(Some(100), RetentionKind::Standard), 90);
+        assert_eq!(enforce_retention(None), 30);
+        assert_eq!(enforce_retention(Some(0)), 30);
+        assert_eq!(enforce_retention(Some(29)), 29);
+        assert_eq!(enforce_retention(Some(30)), 30);
+        assert_eq!(enforce_retention(Some(60)), 60);
+        assert_eq!(enforce_retention(Some(89)), 89);
+        assert_eq!(enforce_retention(Some(90)), 90);
+        assert_eq!(enforce_retention(Some(100)), 90);
     }
 
     #[test]
     fn test_downsampled_defaults() {
         init_options();
-        assert_eq!(enforce_retention(None, RetentionKind::Downsampled), 390);
-        assert_eq!(
-            enforce_retention(Some(365), RetentionKind::Downsampled),
-            360
-        );
-        assert_eq!(
-            enforce_retention(Some(396), RetentionKind::Downsampled),
-            390
-        );
-        assert_eq!(
-            enforce_retention(Some(420), RetentionKind::Downsampled),
-            390
-        );
+        assert_eq!(enforce_downsampled_retention(None), 396);
+        assert_eq!(enforce_downsampled_retention(Some(365)), 365);
+        assert_eq!(enforce_downsampled_retention(Some(396)), 396);
+        assert_eq!(enforce_downsampled_retention(Some(420)), 396);
     }
 
     #[test]
@@ -180,14 +167,11 @@ mod tests {
         )])
         .unwrap();
 
-        assert_eq!(enforce_retention(None, RetentionKind::Standard), 180);
-        assert_eq!(enforce_retention(Some(100), RetentionKind::Standard), 90);
-        assert_eq!(enforce_retention(Some(179), RetentionKind::Standard), 150);
-        assert_eq!(enforce_retention(Some(200), RetentionKind::Standard), 180);
-        assert_eq!(enforce_retention(None, RetentionKind::Downsampled), 360);
-        assert_eq!(
-            enforce_retention(Some(365), RetentionKind::Downsampled),
-            360
-        );
+        assert_eq!(enforce_retention(None), 60);
+        assert_eq!(enforce_retention(Some(100)), 100);
+        assert_eq!(enforce_retention(Some(179)), 179);
+        assert_eq!(enforce_retention(Some(200)), 180);
+        assert_eq!(enforce_downsampled_retention(None), 180);
+        assert_eq!(enforce_downsampled_retention(Some(365)), 360);
     }
 }

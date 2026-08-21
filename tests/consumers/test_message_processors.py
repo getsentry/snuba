@@ -146,30 +146,6 @@ def test_replays_message_processor() -> None:
             assert parsed_rust_message | parsed_python_message == parsed_rust_message
 
 
-@patch("snuba.settings.DISCARD_OLD_EVENTS", False)
-def test_rust_compat_processor_quantizes_custom_retention() -> None:
-    """Custom retention is quantized to a multiple of 30, not rewritten to 90."""
-    example = next(
-        data
-        for ex in sentry_kafka_schemas.iter_examples("events")
-        if isinstance((data := ex.load()), list) and len(data) >= 3 and data[1] == "insert"
-    )
-    example[2]["retention_days"] = 60
-
-    processed = ErrorsProcessor().process_message(
-        example,
-        KafkaMessageMetadata(
-            offset=1,
-            partition=0,
-            timestamp=datetime.utcfromtimestamp(int(time.time())),
-        ),
-    )
-
-    assert isinstance(processed, InsertBatch)
-    assert processed.rows
-    assert processed.rows[0]["retention_days"] == 60
-
-
 def test_eap_items_received_at_from_broker_timestamp() -> None:
     payload = next(iter(sentry_kafka_schemas.iter_examples("snuba-items"))).load()
     broker_timestamp = datetime.fromtimestamp(1_745_562_493.123, tz=UTC)

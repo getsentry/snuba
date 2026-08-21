@@ -166,10 +166,7 @@ impl Parse for CountersRawRow {
         if from.aggregation_option.unwrap_or_default() == "ten_second" {
             granularities.push(GRANULARITY_TEN_SECONDS);
         }
-        let retention_days = enforce_retention(
-            Some(from.retention_days),
-            crate::processors::utils::RetentionKind::Standard,
-        );
+        let retention_days = enforce_retention(Some(from.retention_days));
 
         let record_meta = should_record_meta(from.use_case_id.as_str());
 

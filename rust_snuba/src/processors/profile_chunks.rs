@@ -21,10 +21,7 @@ pub fn process_message(
 
     chunk.offset = metadata.offset;
     chunk.partition = metadata.partition;
-    chunk.retention_days = Some(enforce_retention(
-        chunk.retention_days,
-        crate::processors::utils::RetentionKind::Standard,
-    ));
+    chunk.retention_days = Some(enforce_retention(chunk.retention_days));
 
     InsertBatch::from_rows([chunk], origin_timestamp)
 }

@@ -15,7 +15,9 @@ use sentry_protos::snuba::v1::any_value::Value;
 use sentry_protos::snuba::v1::{ArrayValue, TraceItem, TraceItemType};
 
 use crate::config::ProcessorConfig;
-use crate::processors::utils::{enforce_retention, SilencedDLQMessage};
+use crate::processors::utils::{
+    enforce_downsampled_retention, enforce_retention, SilencedDLQMessage,
+};
 use crate::strategies::clickhouse::rowbinary;
 use crate::types::CogsData;
 use crate::types::{item_type_name, InsertBatch, ItemTypeMetrics, KafkaMessageMetadata};
@@ -83,23 +85,18 @@ fn process_eap_item(
         }
     }
 
-    let retention_days = Some(enforce_retention(
-        Some(trace_item.retention_days as u16),
-        crate::processors::utils::RetentionKind::Standard,
-    ));
+    let retention_days = enforce_retention(Some(trace_item.retention_days as u16));
     let downsampled_retention_days = if trace_item.downsampled_retention_days > 0 {
-        Some(enforce_retention(
-            Some(trace_item.downsampled_retention_days as u16),
-            crate::processors::utils::RetentionKind::Downsampled,
-        ))
+        enforce_downsampled_retention(Some(trace_item.downsampled_retention_days as u16))
+            .max(retention_days)
     } else {
         retention_days
     };
 
     let mut eap_item = EAPItem::try_from(trace_item)?;
 
-    eap_item.retention_days = retention_days;
-    eap_item.downsampled_retention_days = downsampled_retention_days;
+    eap_item.retention_days = Some(retention_days);
+    eap_item.downsampled_retention_days = Some(downsampled_retention_days);
     if config.eap_items_emit_received_at {
         eap_item.received_at = Some(
             metadata
@@ -820,7 +817,7 @@ mod tests {
         let item_id = Uuid::new_v4();
         let mut trace_item = generate_trace_item(item_id);
 
-        trace_item.downsampled_retention_days = 360;
+        trace_item.downsampled_retention_days = 365;
 
         let mut payload = Vec::new();
 
@@ -842,7 +839,7 @@ mod tests {
 
         let item: Item = serde_json::from_slice(&batch.rows.encoded_rows).unwrap();
 
-        assert_eq!(item.downsampled_retention_days, 360);
+        assert_eq!(item.downsampled_retention_days, 365);
     }
 
     #[test]
@@ -1479,7 +1476,7 @@ mod tests {
     fn test_row_binary_downsampled_retention_days_extended() {
         let item_id = Uuid::new_v4();
         let mut trace_item = generate_trace_item(item_id);
-        trace_item.downsampled_retention_days = 360;
+        trace_item.downsampled_retention_days = 365;
 
         let mut payload = Vec::new();
         trace_item.encode(&mut payload).unwrap();
@@ -1494,7 +1491,7 @@ mod tests {
             .expect("The message should be processed");
 
         let row = &batch.rows[0];
-        assert_eq!(row.downsampled_retention_days, 360);
+        assert_eq!(row.downsampled_retention_days, 365);
     }
 
     #[test]
@@ -1800,7 +1797,7 @@ mod tests {
         trace_item.trace_id = trace_id.to_string();
         trace_item.client_sample_rate = 0.5;
         trace_item.server_sample_rate = 0.25;
-        trace_item.downsampled_retention_days = 360;
+        trace_item.downsampled_retention_days = 365;
         trace_item.attributes.insert(
             "str_attr".to_string(),
             AnyValue {

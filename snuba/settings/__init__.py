@@ -269,8 +269,7 @@ CLICKHOUSE_HTTP_CHUNK_SIZE = 8192
 HTTP_WRITER_BUFFER_SIZE = 1
 BATCH_JOIN_TIMEOUT = int(os.environ.get("BATCH_JOIN_TIMEOUT", 10))
 
-# Fallback used by fixtures and tests when an event does not carry retention_days.
-# Write-path enforcement reads the retention_days sentry-option, not this setting.
+# Retention related settings
 DEFAULT_RETENTION_DAYS = 90
 
 MAX_PREWHERE_CONDITIONS = 1

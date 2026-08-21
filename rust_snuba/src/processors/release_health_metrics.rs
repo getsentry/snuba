@@ -114,10 +114,7 @@ impl Parse for MetricsRawRow {
             generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
 
         let (tag_keys, tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
-        let retention_days = enforce_retention(
-            Some(from.retention_days),
-            crate::processors::utils::RetentionKind::Standard,
-        );
+        let retention_days = enforce_retention(Some(from.retention_days));
 
         Ok(Some(MetricsRawRow {
             use_case_id: from.use_case_id,

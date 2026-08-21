@@ -93,8 +93,8 @@ def _retention_days_override(
     *,
     standard_default: int = 30,
     standard_max: int = 90,
-    downsampled_default: int = 390,
-    downsampled_max: int = 390,
+    downsampled_default: int = 396,
+    downsampled_max: int = 396,
 ) -> dict[str, Any]:
     return {
         "retention_days": {

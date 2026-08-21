@@ -23,10 +23,7 @@ pub fn process_message(
         partition: metadata.partition,
     };
 
-    row.profile.retention_days = Some(enforce_retention(
-        row.profile.retention_days,
-        crate::processors::utils::RetentionKind::Standard,
-    ));
+    row.profile.retention_days = Some(enforce_retention(row.profile.retention_days));
 
     let origin_timestamp = DateTime::from_timestamp(row.profile.received, 0);
 
