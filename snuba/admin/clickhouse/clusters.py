@@ -17,7 +17,6 @@ logger = structlog.get_logger().bind(module=__name__)
 MAX_CONCURRENT_CLUSTER_QUERIES = 32
 CLUSTER_QUERY_TIMEOUT = 30
 TABLES_DATABASE = "default"
-SINGLE_NODE_CLUSTER_NAME = "single node"
 
 
 class NodeVersionInfo(TypedDict):
@@ -51,6 +50,9 @@ class ClusterInfo(TypedDict):
 
 
 class _ClusterTarget(NamedTuple):
+    # Unique identity used while collapsing duplicate ClickHouse names.
+    key: str
+    # Value shown in the Cluster Name column.
     name: str
     cluster: ClickhouseCluster
     storage_sets: set[str]
@@ -63,58 +65,71 @@ class _ClusterState(NamedTuple):
 
 
 def _cluster_targets() -> Sequence[_ClusterTarget]:
-    """Return one target per unique ClickHouse cluster name."""
+    """Return one target per unique ClickHouse cluster endpoint/name."""
     targets: dict[str, _ClusterTarget] = {}
     for cluster in CLUSTERS:
         storage_sets = {storage_set.value for storage_set in cluster.get_storage_set_keys()}
-        names = (
-            [(SINGLE_NODE_CLUSTER_NAME, True)]
-            if cluster.is_single_node()
-            else [
-                (cluster.get_clickhouse_distributed_cluster_name(), False),
-                (cluster.get_clickhouse_cluster_name(), False),
+        if cluster.is_single_node():
+            host = cluster.get_host()
+            port = cluster.get_port()
+            # Single-node configs have no ClickHouse cluster name. Keep each
+            # endpoint separate so multiple single-node hosts do not collapse.
+            entries = [(f"{host}:{port}", host, True)]
+        else:
+            entries = [
+                (name, name, False)
+                for name in (
+                    cluster.get_clickhouse_distributed_cluster_name(),
+                    cluster.get_clickhouse_cluster_name(),
+                )
+                if name is not None
             ]
-        )
-        for name, local in names:
-            if name is None:
+
+        for key, name, local in entries:
+            existing = targets.get(key)
+            if existing is not None:
+                existing.storage_sets.update(storage_sets)
                 continue
-            if name in targets:
-                targets[name].storage_sets.update(storage_sets)
-            else:
-                targets[name] = _ClusterTarget(name, cluster, storage_sets, local)
+            # Copy storage_sets so query/storage siblings from one Snuba cluster
+            # do not share one mutable set and later merges stay isolated.
+            targets[key] = _ClusterTarget(key, name, cluster, set(storage_sets), local)
     return list(targets.values())
+
+
+def _cluster_source(target: _ClusterTarget, table: str) -> str:
+    if target.local:
+        return table
+    return f"clusterAllReplicas({escape_string(target.name)}, {table})"
 
 
 def _get_cluster_state(target: _ClusterTarget) -> _ClusterState:
     """Fetch distinct versions and default-database tables for one cluster."""
     query_node = target.cluster.get_query_node()
-    source = (
-        "system.tables"
-        if target.local
-        else f"clusterAllReplicas({escape_string(target.name)}, system.tables)"
+    connection = get_ro_cluster_node_connection(
+        target.cluster,
+        query_node,
+        ClickhouseClientSettings.QUERY,
+        known_nodes=[query_node],
     )
-    results = (
-        get_ro_cluster_node_connection(
-            target.cluster,
-            query_node,
-            ClickhouseClientSettings.QUERY,
-            known_nodes=[query_node],
-        )
-        .execute(
-            f"""
-            SELECT
-                version() AS version,
-                arraySort(groupUniqArray(name)) AS tables
-            FROM {source}
-            WHERE database = '{TABLES_DATABASE}'
-            GROUP BY version
-            ORDER BY version
-            """
-        )
-        .results
-    )
-    versions = sorted({str(row[0]) for row in results})
-    tables = sorted({str(table) for row in results for table in row[1]})
+    # system.one always yields one row per replica, including replicas with no
+    # tables in `default`. Tables are collected separately so empty default DBs
+    # do not drop version rows.
+    version_rows = connection.execute(
+        f"""
+        SELECT DISTINCT version() AS version
+        FROM {_cluster_source(target, "system.one")}
+        ORDER BY version
+        """
+    ).results
+    table_rows = connection.execute(
+        f"""
+        SELECT arraySort(groupUniqArray(name)) AS tables
+        FROM {_cluster_source(target, "system.tables")}
+        WHERE database = '{TABLES_DATABASE}'
+        """
+    ).results
+    versions = [str(row[0]) for row in version_rows]
+    tables = sorted({str(table) for row in table_rows for table in row[0]})
     return _ClusterState(versions, tables)
 
 
