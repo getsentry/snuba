@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Badge, Button, Code, Group, Loader, Space, Text } from "@mantine/core";
+import { Button, Code, Group, Loader, Space, Text } from "@mantine/core";
 
 import Client from "SnubaAdmin/api_client";
 import { Table } from "SnubaAdmin/table";
@@ -11,16 +11,13 @@ function queryNodeVersions(cluster: ClusterData): NodeVersionData[] {
     return cluster.query_node_versions;
   }
 
-  // A rolling deploy can pair this frontend with the previous API response.
-  // Preserve that response instead of crashing when the page is refreshed.
+  // A rolling deploy can pair this frontend with the original API response.
   if ("version" in cluster) {
     return [
       {
         host: cluster.host,
         port: cluster.port,
         version: cluster.version || null,
-        // cluster.error is the table-lookup failure on older backends. Keep it
-        // out of the versions column; tablesCell already surfaces it.
         error: null,
       },
     ];
@@ -29,42 +26,41 @@ function queryNodeVersions(cluster: ClusterData): NodeVersionData[] {
   return [];
 }
 
-function storageNodeVersions(cluster: ClusterData): NodeVersionData[] {
-  return Array.isArray(cluster.storage_node_versions)
-    ? cluster.storage_node_versions
-    : [];
-}
-
 function clusterVersions(cluster: ClusterData): string[] {
-  const versions = [
-    ...(cluster.query_cluster_versions || []),
-    ...(cluster.storage_cluster_versions || []),
-  ];
-  if (versions.length > 0) {
-    return Array.from(new Set(versions)).sort();
+  if (Array.isArray(cluster.versions)) {
+    return cluster.versions;
   }
+
   return Array.from(
     new Set(
-      [...queryNodeVersions(cluster), ...storageNodeVersions(cluster)].flatMap(
-        (node) => (node.version ? [node.version] : [])
-      )
+      [
+        ...(cluster.query_cluster_versions || []),
+        ...(cluster.storage_cluster_versions || []),
+        ...queryNodeVersions(cluster).flatMap((node) =>
+          node.version ? [node.version] : []
+        ),
+        ...(cluster.storage_node_versions || []).flatMap((node) =>
+          node.version ? [node.version] : []
+        ),
+      ]
     )
   ).sort();
 }
 
 function versionsCell(cluster: ClusterData) {
-  const versions = clusterVersions(cluster);
-  const errors = Array.from(
-    new Set(
-      [
+  // On the cluster-level API, one query fetches both versions and tables, so a
+  // failure applies here too. Older APIs use cluster.error for tables only.
+  const errors = Array.isArray(cluster.versions)
+    ? cluster.error
+      ? [cluster.error]
+      : []
+    : [
         cluster.query_node_error,
         cluster.storage_node_error,
         ...queryNodeVersions(cluster).map((node) => node.error),
-        ...storageNodeVersions(cluster).map((node) => node.error),
-      ].filter((error): error is string => Boolean(error))
-    )
-  );
-
+        ...(cluster.storage_node_versions || []).map((node) => node.error),
+      ].filter((error): error is string => Boolean(error));
+  const versions = clusterVersions(cluster);
   if (versions.length === 0 && errors.length === 0) {
     return <Text color="dimmed">not reported</Text>;
   }
@@ -76,7 +72,7 @@ function versionsCell(cluster: ClusterData) {
           <Code>{version}</Code>
         </div>
       ))}
-      {errors.map((error) => (
+      {Array.from(new Set(errors)).map((error) => (
         <Text key={error} color="red" size="sm">
           {error}
         </Text>
@@ -85,20 +81,22 @@ function versionsCell(cluster: ClusterData) {
   );
 }
 
-function nameCell(name: string | null, singleNode: boolean) {
-  if (singleNode) {
-    return <Text color="dimmed">single node</Text>;
+function listCell(values: string[]) {
+  if (values.length === 0) {
+    return <Text color="dimmed">—</Text>;
   }
-  return name || <Text color="dimmed">not set</Text>;
+  return (
+    <div>
+      {values.map((value) => (
+        <div key={value}>{value}</div>
+      ))}
+    </div>
+  );
 }
 
 function tablesCell(cluster: ClusterData) {
   if (cluster.error) {
-    return (
-      <Text color="red" size="sm">
-        {cluster.error}
-      </Text>
-    );
+    return <Text color="red">{cluster.error}</Text>;
   }
   if (cluster.tables.length === 0) {
     return <Text color="dimmed">—</Text>;
@@ -124,26 +122,14 @@ const tableListStyle = {
   fontSize: 14,
 };
 
-function VersionSummary(props: { clusters: ClusterData[] }) {
-  const versions = new Set<string>();
-  props.clusters.forEach((cluster) => {
-    clusterVersions(cluster).forEach((version) => versions.add(version));
-  });
-
-  return (
-    <Group spacing="xs">
-      <Text size="sm">ClickHouse versions in use:</Text>
-      {Array.from(versions).sort().map((version) => (
-        <Badge
-          key={version}
-          color={version === "unknown" ? "red" : "blue"}
-          variant="light"
-        >
-          {version}
-        </Badge>
-      ))}
-    </Group>
-  );
+function displayClusterName(cluster: ClusterData): string {
+  if (cluster.cluster_name) {
+    return cluster.cluster_name;
+  }
+  if (cluster.distributed_cluster_name) {
+    return cluster.distributed_cluster_name;
+  }
+  return "single node";
 }
 
 function Clusters(props: { api: Client }) {
@@ -166,11 +152,9 @@ function Clusters(props: { api: Client }) {
   }, []);
 
   const rowData = (clusters || []).map((cluster) => [
-    nameCell(cluster.distributed_cluster_name, cluster.single_node),
-    nameCell(cluster.cluster_name, cluster.single_node),
+    displayClusterName(cluster),
     versionsCell(cluster),
-    cluster.database,
-    <Text size="sm">{cluster.storage_sets.join(", ")}</Text>,
+    listCell(cluster.storage_sets),
     tablesCell(cluster),
   ]);
 
@@ -180,7 +164,6 @@ function Clusters(props: { api: Client }) {
         <Button onClick={fetchClusters} loading={isLoading}>
           Refresh
         </Button>
-        {clusters !== null && <VersionSummary clusters={clusters} />}
         {fetchError !== null && <Text color="red">{fetchError}</Text>}
       </Group>
       <Space h="md" />
@@ -189,22 +172,18 @@ function Clusters(props: { api: Client }) {
       ) : (
         <Table
           headerData={[
-            "Query Cluster",
-            "Storage Cluster",
-            "ClickHouse Versions",
-            "Database",
+            "Cluster Name",
+            "Distinct Versions",
             "Storage Sets",
-            "Tables in default",
+            "Tables",
           ]}
-          columnWidths={[3, 3, 4, 2, 5, 3]}
+          columnWidths={[4, 3, 4, 3]}
           rowData={rowData}
         />
       )}
       <Text size="sm" color="dimmed">
-        Every cluster this Snuba deployment is configured with. Each row shows the
-        ClickHouse query and storage cluster names plus the distinct versions
-        across all nodes. Tables are read from the configured query endpoint, and
-        only tables in the <Code>default</Code> database are listed.
+        Every ClickHouse cluster this Snuba deployment uses. Versions and tables
+        in the <Code>default</Code> database are read across all replicas.
       </Text>
     </div>
   );

@@ -12,7 +12,6 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     TimeSeriesResponse,
 )
 
-from snuba import settings
 from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.auth import USER_HEADER_KEY
 from snuba.admin.auth_roles import DEFAULT_ROLES, ROLES
@@ -323,29 +322,23 @@ def test_clickhouse_clusters(admin_api: FlaskClient) -> None:
     assert response.status_code == 200
     data = json.loads(response.data)
 
-    assert len(data) == len(settings.CLUSTERS)
-    for cluster, configured in zip(data, settings.CLUSTERS, strict=True):
+    assert data
+    assert len({cluster["cluster_name"] for cluster in data}) == len(data)
+    for cluster in data:
         assert cluster["error"] is None, cluster["error"]
         # The version of the ClickHouse the tests run against, e.g. 25.8.16.10001
-        assert cluster["query_cluster_versions"]
-        assert cluster["storage_cluster_versions"]
+        assert cluster["versions"]
+        assert cluster["versions"] == sorted(set(cluster["versions"]))
+        assert cluster["database"] == TABLES_DATABASE
+        assert cluster["tables"] == sorted(set(cluster["tables"]))
         # Keep the previous fields populated during rolling deploys, where an
         # older frontend bundle can receive this response.
-        assert [entry["version"] for entry in cluster["query_node_versions"]] == cluster[
-            "query_cluster_versions"
-        ]
+        assert cluster["query_cluster_versions"] == cluster["versions"]
+        assert cluster["storage_cluster_versions"] == cluster["versions"]
+        assert [entry["version"] for entry in cluster["query_node_versions"]] == cluster["versions"]
         assert [entry["version"] for entry in cluster["storage_node_versions"]] == cluster[
-            "storage_cluster_versions"
+            "versions"
         ]
-        assert cluster["host"] == configured["host"]
-        assert cluster["port"] == configured["port"]
-        assert set(cluster["storage_sets"]) == set(configured["storage_sets"])
-        # Deduplicated and sorted by the aggregate the endpoint runs.
-        assert cluster["tables"] == sorted(set(cluster["tables"]))
-        # Tables are only ever listed for TABLES_DATABASE, so the migrated
-        # tables of the test cluster are only expected there.
-        if configured.get("database", TABLES_DATABASE) == TABLES_DATABASE:
-            assert "errors_local" in cluster["tables"]
 
 
 @pytest.mark.redis_db
@@ -358,8 +351,9 @@ def test_clickhouse_clusters_reports_unreachable_cluster(admin_api: FlaskClient)
 
     assert response.status_code == 200
     data = json.loads(response.data)
-    assert len(data) == len(settings.CLUSTERS)
+    assert data
     for cluster in data:
+        assert cluster["versions"] == []
         assert cluster["query_cluster_versions"] == []
         assert cluster["query_node_error"] == "Connection refused"
         assert cluster["storage_cluster_versions"] == []

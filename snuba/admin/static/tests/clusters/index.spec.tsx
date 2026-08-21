@@ -3,7 +3,7 @@ import { ClusterData } from "SnubaAdmin/clusters/types";
 import Client from "SnubaAdmin/api_client";
 import React from "react";
 import { it, expect, jest } from "@jest/globals";
-import { render, waitFor, fireEvent } from "@testing-library/react";
+import { fireEvent, render, waitFor } from "@testing-library/react";
 
 function cluster(overrides: Partial<ClusterData> = {}): ClusterData {
   return {
@@ -11,88 +11,24 @@ function cluster(overrides: Partial<ClusterData> = {}): ClusterData {
     port: 8123,
     database: "default",
     secure: false,
-    single_node: true,
-    cluster_name: null,
-    distributed_cluster_name: null,
-    storage_sets: ["events"],
-    query_cluster_versions: ["24.8.14.10459"],
-    query_node_versions: [
-      {
-        host: "query-localhost",
-        port: 9000,
-        version: "24.8.14.10459",
-        error: null,
-      },
-    ],
+    single_node: false,
+    cluster_name: "cluster_one",
+    distributed_cluster_name: "cluster_one",
+    storage_sets: ["events", "transactions"],
+    versions: ["24.8.14.10459", "25.3.1.100"],
+    query_cluster_versions: ["24.8.14.10459", "25.3.1.100"],
+    query_node_versions: [],
     query_node_error: null,
-    storage_cluster_versions: ["24.8.14.10459"],
-    storage_node_versions: [
-      {
-        host: "storage-localhost",
-        port: 9001,
-        version: "24.8.14.10459",
-        error: null,
-      },
-    ],
+    storage_cluster_versions: ["24.8.14.10459", "25.3.1.100"],
+    storage_node_versions: [],
     storage_node_error: null,
-    tables: ["errors_local", "sentry_local"],
+    tables: ["errors_local", "transactions_local"],
     error: null,
     ...overrides,
   };
 }
 
-it("lists every cluster with its ClickHouse version", async () => {
-  let data = [
-    cluster(),
-    cluster({
-      host: "clickhouse-query",
-      port: 9001,
-      single_node: false,
-      cluster_name: "cluster_one_sh",
-      distributed_cluster_name: "cluster_one_sh_dist",
-      storage_sets: ["metrics", "transactions"],
-      query_cluster_versions: ["25.3.1.100"],
-      query_node_versions: [
-        { host: "query", port: 9000, version: "25.3.1.100", error: null },
-      ],
-      storage_cluster_versions: ["24.8.14.10459"],
-      storage_node_versions: [
-        { host: "storage", port: 9001, version: "24.8.14.10459", error: null },
-      ],
-      tables: ["metrics_local"],
-    }),
-  ];
-  let mockClient = {
-    ...Client(),
-    getClickhouseClusters: jest
-      .fn<() => Promise<ClusterData[]>>()
-      .mockResolvedValueOnce(data),
-  };
-
-  let { getByText, getAllByText, queryByText } = render(
-    <Clusters api={mockClient} />
-  );
-
-  await waitFor(() =>
-    expect(mockClient.getClickhouseClusters).toBeCalledTimes(1)
-  );
-
-  expect(queryByText("query-localhost:9000", { exact: false })).toBeNull();
-  expect(queryByText("storage-localhost:9001", { exact: false })).toBeNull();
-  expect(queryByText("query:9000", { exact: false })).toBeNull();
-  expect(queryByText("storage:9001", { exact: false })).toBeNull();
-  // Once per cluster row that uses it, plus once in the global summary.
-  expect(getAllByText("24.8.14.10459", { exact: false })).toHaveLength(3);
-  expect(getAllByText("25.3.1.100", { exact: false })).toHaveLength(2);
-  expect(getByText("cluster_one_sh", { exact: true })).toBeTruthy();
-  expect(getByText("cluster_one_sh_dist", { exact: true })).toBeTruthy();
-  expect(getAllByText("single node")).toHaveLength(2);
-  expect(getByText("metrics, transactions", { exact: false })).toBeTruthy();
-  expect(getByText("2 tables", { exact: false })).toBeTruthy();
-  expect(getByText("1 table", { exact: true })).toBeTruthy();
-});
-
-it("expands the list of tables on a cluster", async () => {
+it("shows only cluster name, distinct versions, storage sets, and tables", async () => {
   let mockClient = {
     ...Client(),
     getClickhouseClusters: jest
@@ -100,7 +36,7 @@ it("expands the list of tables on a cluster", async () => {
       .mockResolvedValueOnce([cluster()]),
   };
 
-  let { getByText, queryByText, container } = render(
+  let { getByText, getByRole, queryByText, container } = render(
     <Clusters api={mockClient} />
   );
 
@@ -108,64 +44,49 @@ it("expands the list of tables on a cluster", async () => {
     expect(mockClient.getClickhouseClusters).toBeCalledTimes(1)
   );
 
+  expect(getByRole("columnheader", { name: "Cluster Name" })).toBeTruthy();
+  expect(getByRole("columnheader", { name: "Distinct Versions" })).toBeTruthy();
+  expect(getByRole("columnheader", { name: "Storage Sets" })).toBeTruthy();
+  expect(getByRole("columnheader", { name: "Tables" })).toBeTruthy();
+  expect(queryByText("Database")).toBeNull();
+  expect(queryByText("Query Cluster")).toBeNull();
+  expect(queryByText("Storage Cluster")).toBeNull();
+
+  expect(getByText("cluster_one", { exact: true })).toBeTruthy();
+  expect(getByText("24.8.14.10459", { exact: true })).toBeTruthy();
+  expect(getByText("25.3.1.100", { exact: true })).toBeTruthy();
+  expect(getByText("events", { exact: true })).toBeTruthy();
+  expect(getByText("transactions", { exact: true })).toBeTruthy();
+
   expect(queryByText("errors_local")).toBeNull();
   fireEvent.click(container.querySelectorAll("a")[0]);
   expect(getByText("errors_local")).toBeTruthy();
-  expect(getByText("sentry_local")).toBeTruthy();
+  expect(getByText("transactions_local")).toBeTruthy();
 });
 
-it("shows the reason a cluster's version could not be fetched", async () => {
+it("shows cluster lookup errors", async () => {
   let mockClient = {
     ...Client(),
     getClickhouseClusters: jest
       .fn<() => Promise<ClusterData[]>>()
       .mockResolvedValueOnce([
-        cluster({
-          query_node_versions: [
-            {
-              host: "query",
-              port: 9000,
-              version: null,
-              error: "Connection refused",
-            },
-          ],
-        }),
+        cluster({ versions: [], tables: [], error: "Connection refused" }),
       ]),
   };
 
-  let { getByText } = render(<Clusters api={mockClient} />);
+  let { getAllByText } = render(<Clusters api={mockClient} />);
 
   await waitFor(() =>
     expect(mockClient.getClickhouseClusters).toBeCalledTimes(1)
   );
-
-  expect(getByText("Connection refused", { exact: false })).toBeTruthy();
-});
-
-it("shows topology errors alongside fallback node versions", async () => {
-  let mockClient = {
-    ...Client(),
-    getClickhouseClusters: jest
-      .fn<() => Promise<ClusterData[]>>()
-      .mockResolvedValueOnce([
-        cluster({ query_node_error: "Query topology unavailable" }),
-      ]),
-  };
-
-  let { getByText, getAllByText } = render(<Clusters api={mockClient} />);
-
-  await waitFor(() =>
-    expect(mockClient.getClickhouseClusters).toBeCalledTimes(1)
-  );
-
-  expect(getAllByText("24.8.14.10459", { exact: false })).toHaveLength(2);
-  expect(getByText("Query topology unavailable")).toBeTruthy();
+  expect(getAllByText("Connection refused")).toHaveLength(2);
 });
 
 it("does not crash when refresh hits an older backend during a rolling deploy", async () => {
   let legacyCluster = cluster({
-    host: "legacy-query",
-    port: 8123,
+    cluster_name: null,
+    distributed_cluster_name: null,
+    versions: undefined,
     query_cluster_versions: undefined,
     query_node_versions: undefined,
     query_node_error: undefined,
@@ -182,9 +103,7 @@ it("does not crash when refresh hits an older backend during a rolling deploy", 
       .mockResolvedValueOnce([legacyCluster]),
   };
 
-  let { getByRole, getAllByText, queryByText } = render(
-    <Clusters api={mockClient} />
-  );
+  let { getByRole, getByText } = render(<Clusters api={mockClient} />);
 
   await waitFor(() =>
     expect(mockClient.getClickhouseClusters).toBeCalledTimes(1)
@@ -192,15 +111,14 @@ it("does not crash when refresh hits an older backend during a rolling deploy", 
   fireEvent.click(getByRole("button", { name: "Refresh" }));
 
   await waitFor(() =>
-    expect(getAllByText("24.8.14.10459", { exact: false })).toHaveLength(2)
+    expect(getByText("single node", { exact: true })).toBeTruthy()
   );
-  expect(queryByText("legacy-query:8123", { exact: false })).toBeNull();
+  expect(getByText("24.8.14.10459", { exact: true })).toBeTruthy();
 });
 
-it("keeps table-lookup errors out of the versions column on older backends", async () => {
+it("keeps legacy table errors out of the versions column", async () => {
   let legacyCluster = cluster({
-    host: "legacy-query",
-    port: 8123,
+    versions: undefined,
     query_cluster_versions: undefined,
     query_node_versions: undefined,
     query_node_error: undefined,
@@ -217,19 +135,16 @@ it("keeps table-lookup errors out of the versions column on older backends", asy
       .mockResolvedValueOnce([legacyCluster]),
   };
 
-  let { getAllByText } = render(<Clusters api={mockClient} />);
+  let { getByText, getAllByText } = render(<Clusters api={mockClient} />);
 
   await waitFor(() =>
     expect(mockClient.getClickhouseClusters).toBeCalledTimes(1)
   );
-
-  // Once in the tables column only; not also under ClickHouse Versions.
   expect(getAllByText("tables unavailable")).toHaveLength(1);
-  // Once in the row, once in the global summary badge.
-  expect(getAllByText("24.8.14.10459", { exact: false })).toHaveLength(2);
+  expect(getByText("24.8.14.10459", { exact: true })).toBeTruthy();
 });
 
-it("keeps refresh reachable when the clusters could not be loaded", async () => {
+it("keeps refresh reachable when clusters could not be loaded", async () => {
   let mockClient = {
     ...Client(),
     getClickhouseClusters: jest
@@ -238,18 +153,15 @@ it("keeps refresh reachable when the clusters could not be loaded", async () => 
       .mockResolvedValueOnce([cluster()]),
   };
 
-  let { getByText, getAllByText, getByRole } = render(
-    <Clusters api={mockClient} />
-  );
+  let { getByText, getByRole } = render(<Clusters api={mockClient} />);
 
   await waitFor(() =>
     expect(getByText("No permissions on clusters")).toBeTruthy()
   );
-
   fireEvent.click(getByRole("button", { name: "Refresh" }));
 
   await waitFor(() =>
     expect(mockClient.getClickhouseClusters).toBeCalledTimes(2)
   );
-  expect(getAllByText("24.8.14.10459", { exact: false })).toHaveLength(2);
+  expect(getByText("cluster_one", { exact: true })).toBeTruthy();
 });
