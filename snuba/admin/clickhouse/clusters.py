@@ -194,9 +194,7 @@ def _get_cluster_state(cluster: ClickhouseCluster) -> _ClusterState:
             error = str(e)
 
     versions_by_key = {(info["host"], info["port"]): info for info in node_versions}
-    query_node_versions = [
-        versions_by_key[(node.host_name, node.port)] for node in query_nodes
-    ]
+    query_node_versions = [versions_by_key[(node.host_name, node.port)] for node in query_nodes]
     storage_node_versions = (
         query_node_versions
         if cluster.is_single_node()

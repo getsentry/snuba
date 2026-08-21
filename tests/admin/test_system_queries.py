@@ -397,7 +397,6 @@ def test_by_host_connection_uses_default_http_port(helper_name: str) -> None:
     )
 
 
-
 def test_ro_cluster_node_connection_uses_validated_readonly_pool() -> None:
     """Cluster-scoped admin lookups must stay on the validated readonly path."""
     from unittest.mock import MagicMock

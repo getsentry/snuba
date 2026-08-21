@@ -190,7 +190,6 @@ def get_ro_query_node_connection(
     return connection
 
 
-
 def get_ro_cluster_node_connection(
     cluster: ClickhouseCluster,
     node: ClickhouseNode,
@@ -234,6 +233,7 @@ def get_ro_cluster_node_connection(
         password,
         client_settings,
     )
+
 
 def get_sudo_node_connection(
     clickhouse_host: str,
