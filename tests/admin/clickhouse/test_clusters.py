@@ -5,6 +5,7 @@ from snuba.admin.clickhouse.clusters import (
     _cluster_targets,
     _ClusterTarget,
     _get_cluster_state,
+    _single_node_target_key,
     get_cluster_info,
 )
 from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster, ClickhouseNode
@@ -28,11 +29,23 @@ def multi_node_cluster(
     return cluster
 
 
-def single_node_cluster(host: str, port: int, storage_sets: set[StorageSetKey]) -> mock.MagicMock:
+def single_node_cluster(
+    host: str,
+    port: int,
+    storage_sets: set[StorageSetKey],
+    *,
+    user: str = "default",
+    password: str = "",
+    database: str = "default",
+    secure: bool = False,
+) -> mock.MagicMock:
     cluster = mock.MagicMock(spec=ClickhouseCluster)
     cluster.is_single_node.return_value = True
     cluster.get_host.return_value = host
     cluster.get_port.return_value = port
+    cluster.get_credentials.return_value = (user, password)
+    cluster.get_database.return_value = database
+    cluster.get_secure.return_value = secure
     cluster.get_storage_set_keys.return_value = storage_sets
     return cluster
 
@@ -62,8 +75,64 @@ def test_cluster_targets_keeps_single_node_hosts_separate(clusters: mock.MagicMo
     targets = _cluster_targets()
 
     assert targets == [
-        _ClusterTarget("clickhouse-a:9000", "single node", first, {"events"}, True),
-        _ClusterTarget("clickhouse-b:9000", "single node", second, {"transactions"}, True),
+        _ClusterTarget(_single_node_target_key(first), "single node", first, {"events"}, True),
+        _ClusterTarget(
+            _single_node_target_key(second), "single node", second, {"transactions"}, True
+        ),
+    ]
+
+
+@mock.patch("snuba.admin.clickhouse.clusters.CLUSTERS")
+def test_cluster_targets_keeps_same_host_different_credentials_separate(
+    clusters: mock.MagicMock,
+) -> None:
+    first = single_node_cluster(
+        "clickhouse-a",
+        9000,
+        {StorageSetKey.EVENTS},
+        user="reader",
+        password="one",
+        database="default",
+    )
+    second = single_node_cluster(
+        "clickhouse-a",
+        9000,
+        {StorageSetKey.TRANSACTIONS},
+        user="writer",
+        password="two",
+        database="default",
+    )
+    clusters.__iter__.return_value = iter([first, second])
+
+    targets = _cluster_targets()
+
+    assert _single_node_target_key(first) != _single_node_target_key(second)
+    assert targets == [
+        _ClusterTarget(_single_node_target_key(first), "single node", first, {"events"}, True),
+        _ClusterTarget(
+            _single_node_target_key(second), "single node", second, {"transactions"}, True
+        ),
+    ]
+
+
+@mock.patch("snuba.admin.clickhouse.clusters.CLUSTERS")
+def test_cluster_targets_merges_identical_single_node_connections(
+    clusters: mock.MagicMock,
+) -> None:
+    first = single_node_cluster("clickhouse-a", 9000, {StorageSetKey.EVENTS})
+    second = single_node_cluster("clickhouse-a", 9000, {StorageSetKey.TRANSACTIONS})
+    clusters.__iter__.return_value = iter([first, second])
+
+    targets = _cluster_targets()
+
+    assert targets == [
+        _ClusterTarget(
+            _single_node_target_key(first),
+            "single node",
+            first,
+            {"events", "transactions"},
+            True,
+        )
     ]
 
 

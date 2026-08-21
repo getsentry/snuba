@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import time
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
@@ -42,17 +43,33 @@ class _ClusterState(NamedTuple):
     tables: Sequence[str]
 
 
+def _single_node_target_key(cluster: ClickhouseCluster) -> str:
+    """Identify a single-node endpoint by connection settings, not host:port alone.
+
+    Admin lookups reuse the cluster object for the connection pool database and
+    topology. Two configs that share host:port but differ in credentials or
+    database must stay separate so the wrong connection is not reused.
+    """
+    host = cluster.get_host()
+    port = cluster.get_port()
+    user, password = cluster.get_credentials()
+    database = cluster.get_database()
+    secure = cluster.get_secure()
+    # Hash credentials so target keys never embed secrets in plain text.
+    identity = f"{user}\0{password}\0{database}\0{secure}".encode()
+    digest = hashlib.sha256(identity).hexdigest()[:16]
+    return f"{host}:{port}:{digest}"
+
+
 def _cluster_targets() -> Sequence[_ClusterTarget]:
     """Return one target per unique ClickHouse cluster endpoint/name."""
     targets: dict[str, _ClusterTarget] = {}
     for cluster in CLUSTERS:
         storage_sets = {storage_set.value for storage_set in cluster.get_storage_set_keys()}
         if cluster.is_single_node():
-            host = cluster.get_host()
-            port = cluster.get_port()
-            # Single-node configs have no ClickHouse cluster name. Keep each
-            # endpoint separate so multiple single-node hosts do not collapse.
-            entries = [(f"{host}:{port}", "single node", True)]
+            # Single-node configs have no ClickHouse cluster name. Key by full
+            # connection identity so differing credentials/databases do not collapse.
+            entries = [(_single_node_target_key(cluster), "single node", True)]
         else:
             entries = [
                 (name, name, False)
