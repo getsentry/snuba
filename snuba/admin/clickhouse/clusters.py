@@ -179,28 +179,46 @@ def _get_cluster_state(cluster: ClickhouseCluster) -> _ClusterState:
         seen.add(key)
         unique_nodes.append(node)
 
+    node_versions: Sequence[NodeVersionInfo] = []
     tables: Sequence[str] = []
     error = None
+    versions_failed = False
     # Run version lookups and the tables query concurrently. Both share the
     # outer cluster deadline, so finishing independent work in parallel keeps
-    # one slow path from starving the other.
+    # one slow path from starving the other. Isolate each future so a failure
+    # in one does not discard results already produced by the other.
     with ThreadPoolExecutor(max_workers=2) as executor:
         versions_future = executor.submit(_get_node_versions, cluster, unique_nodes)
         tables_future = executor.submit(_get_tables, cluster)
-        node_versions = versions_future.result()
+        try:
+            node_versions = versions_future.result()
+        except Exception as e:
+            logger.warning(str(e), cluster=str(cluster), lookup="versions")
+            versions_failed = True
+            version_error = str(e)
+            if query_node_error is None:
+                query_node_error = version_error
+            if storage_node_error is None:
+                storage_node_error = version_error
         try:
             tables = tables_future.result()
         except Exception as e:
             logger.warning(str(e), cluster=str(cluster), lookup="tables")
             error = str(e)
 
-    versions_by_key = {(info["host"], info["port"]): info for info in node_versions}
-    query_node_versions = [versions_by_key[(node.host_name, node.port)] for node in query_nodes]
-    storage_node_versions = (
-        query_node_versions
-        if cluster.is_single_node()
-        else [versions_by_key[(node.host_name, node.port)] for node in storage_nodes]
-    )
+    if versions_failed:
+        query_node_versions: Sequence[NodeVersionInfo] = []
+        storage_node_versions: Sequence[NodeVersionInfo] = []
+    else:
+        versions_by_key = {(info["host"], info["port"]): info for info in node_versions}
+        query_node_versions = [
+            versions_by_key[(node.host_name, node.port)] for node in query_nodes
+        ]
+        storage_node_versions = (
+            query_node_versions
+            if cluster.is_single_node()
+            else [versions_by_key[(node.host_name, node.port)] for node in storage_nodes]
+        )
 
     return _ClusterState(
         query_node_versions,

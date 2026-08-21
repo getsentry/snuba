@@ -156,6 +156,32 @@ def test_get_cluster_state_isolates_node_version_errors(
     assert state.storage_node_versions[0]["error"] is None
 
 
+@mock.patch("snuba.admin.clickhouse.clusters._get_node_versions")
+@mock.patch("snuba.admin.clickhouse.clusters.get_ro_cluster_node_connection")
+def test_get_cluster_state_keeps_tables_when_version_lookup_raises(
+    get_ro_cluster_node_connection: mock.MagicMock,
+    get_node_versions: mock.MagicMock,
+) -> None:
+    cluster = mock.MagicMock(spec=ClickhouseCluster)
+    query_node = ClickhouseNode("query", 8123)
+    cluster.is_single_node.return_value = True
+    cluster.get_query_node.return_value = query_node
+    get_node_versions.side_effect = RuntimeError("version executor boom")
+
+    connection = mock.MagicMock()
+    connection.execute.return_value = result([(["migrations_local"],)])
+    get_ro_cluster_node_connection.return_value = connection
+
+    state = _get_cluster_state(cluster)
+
+    assert state.query_node_versions == []
+    assert state.storage_node_versions == []
+    assert state.query_node_error == "version executor boom"
+    assert state.storage_node_error == "version executor boom"
+    assert state.tables == ["migrations_local"]
+    assert state.error is None
+
+
 @mock.patch("snuba.admin.clickhouse.clusters.get_ro_cluster_node_connection")
 def test_get_cluster_state_falls_back_to_query_endpoint_when_topology_fails(
     get_ro_cluster_node_connection: mock.MagicMock,
