@@ -33,10 +33,7 @@ def test_get_cluster_state_queries_single_node_through_validated_helper(
 
     assert get_ro_cluster_node_connection.call_count == 2
     assert all(
-        call
-        == mock.call(
-            cluster, node, ClickhouseClientSettings.QUERY, known_nodes=[node]
-        )
+        call == mock.call(cluster, node, ClickhouseClientSettings.QUERY, known_nodes=[node])
         for call in get_ro_cluster_node_connection.call_args_list
     )
     cluster.get_node_connection.assert_not_called()
