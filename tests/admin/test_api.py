@@ -18,6 +18,7 @@ from snuba.admin.auth import USER_HEADER_KEY
 from snuba.admin.auth_roles import DEFAULT_ROLES, ROLES
 from snuba.admin.clickhouse.clusters import TABLES_DATABASE
 from snuba.admin.user import AdminUser
+from snuba.clusters.cluster import ClickhouseCluster
 from snuba.datasets.factory import get_enabled_dataset_names
 from snuba.web.rpc import RPCEndpoint
 
@@ -342,9 +343,15 @@ def test_clickhouse_clusters(admin_api: FlaskClient) -> None:
 
 @pytest.mark.redis_db
 def test_clickhouse_clusters_reports_unreachable_cluster(admin_api: FlaskClient) -> None:
-    with mock.patch(
-        "snuba.admin.clickhouse.clusters.get_ro_cluster_node_connection",
-        side_effect=Exception("Connection refused"),
+    # This test covers connection failure handling, not live topology discovery.
+    # Keep it DB-free by supplying an empty topology for multi-node clusters.
+    with (
+        mock.patch.object(ClickhouseCluster, "get_distributed_nodes", return_value=[]),
+        mock.patch.object(ClickhouseCluster, "get_local_nodes", return_value=[]),
+        mock.patch(
+            "snuba.admin.clickhouse.clusters.get_ro_cluster_node_connection",
+            side_effect=Exception("Connection refused"),
+        ),
     ):
         response = admin_api.get("/clickhouse_clusters")
 
