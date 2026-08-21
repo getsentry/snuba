@@ -20,38 +20,26 @@ impl RetentionKind {
             Self::Downsampled => "downsampled",
         }
     }
-
-    fn default_default(self) -> u16 {
-        match self {
-            Self::Standard => 30,
-            Self::Downsampled => 396,
-        }
-    }
-
-    fn default_max(self) -> u16 {
-        match self {
-            Self::Standard => 90,
-            Self::Downsampled => 396,
-        }
-    }
 }
 
-fn retention_option(kind: RetentionKind, field: &str, fallback: u16) -> u16 {
-    options("snuba")
-        .ok()
-        .and_then(|o| o.get("retention_days").ok())
-        .and_then(|v| v.get(kind.option_key()).cloned())
-        .and_then(|entry| entry.get(field).and_then(|n| n.as_u64()))
+fn retention_option(kind: RetentionKind, field: &str) -> u16 {
+    let retention_days = options("snuba")
+        .expect("sentry-options must be initialized")
+        .get("retention_days")
+        .expect("retention_days option must exist");
+    retention_days
+        .get(kind.option_key())
+        .and_then(|entry| entry.get(field))
+        .and_then(|n| n.as_u64())
         .and_then(|n| u16::try_from(n).ok())
-        .filter(|&n| n > 0)
-        .unwrap_or(fallback)
+        .expect("retention_days schema must declare a positive default and max")
 }
 
 fn clamp_retention(value: Option<u16>, kind: RetentionKind) -> u16 {
     let Some(value) = value.filter(|&n| n > 0) else {
-        return retention_option(kind, "default", kind.default_default());
+        return retention_option(kind, "default");
     };
-    value.min(retention_option(kind, "max", kind.default_max()))
+    value.min(retention_option(kind, "max"))
 }
 
 /// Standard: missing/non-positive -> 30, otherwise cap at 90.

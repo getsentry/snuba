@@ -3,16 +3,11 @@ from typing import Any
 import pytest
 from sentry_options.testing import override_options
 
-from snuba.state.retention import (
-    DEFAULT_RETENTION_DAYS,
-    clamp_retention_days,
-    get_retention_days_config,
-)
+from snuba.state.retention import clamp_retention_days, get_retention_days_config
 
 
 def test_schema_default() -> None:
     config = get_retention_days_config()
-    assert config == DEFAULT_RETENTION_DAYS
     assert config["standard"] == {"default": 30, "max": 90}
     assert config["downsampled"] == {"default": 396, "max": 396}
 
