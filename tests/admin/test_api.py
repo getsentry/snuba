@@ -324,8 +324,16 @@ def test_clickhouse_clusters(admin_api: FlaskClient) -> None:
     assert data
     assert len({cluster["cluster_name"] for cluster in data}) == len(data)
     for cluster in data:
-        assert set(cluster) == {"cluster_name", "versions", "storage_sets", "tables", "error"}
-        assert cluster["error"] is None, cluster["error"]
+        assert set(cluster) == {
+            "cluster_name",
+            "versions",
+            "storage_sets",
+            "tables",
+            "versions_error",
+            "tables_error",
+        }
+        assert cluster["versions_error"] is None, cluster["versions_error"]
+        assert cluster["tables_error"] is None, cluster["tables_error"]
         # The version of the ClickHouse the tests run against, e.g. 25.8.16.10001
         assert cluster["versions"]
         assert cluster["versions"] == sorted(set(cluster["versions"]))
@@ -344,10 +352,18 @@ def test_clickhouse_clusters_reports_unreachable_cluster(admin_api: FlaskClient)
     data = json.loads(response.data)
     assert data
     for cluster in data:
-        assert set(cluster) == {"cluster_name", "versions", "storage_sets", "tables", "error"}
+        assert set(cluster) == {
+            "cluster_name",
+            "versions",
+            "storage_sets",
+            "tables",
+            "versions_error",
+            "tables_error",
+        }
         assert cluster["versions"] == []
         assert cluster["tables"] == []
-        assert cluster["error"] == "Connection refused"
+        assert cluster["versions_error"] == "Connection refused"
+        assert cluster["tables_error"] == "Connection refused"
 
 
 @pytest.mark.redis_db

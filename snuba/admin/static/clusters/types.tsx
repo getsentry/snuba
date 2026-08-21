@@ -3,7 +3,8 @@ type ClusterData = {
   versions: string[];
   storage_sets: string[];
   tables: string[];
-  error: string | null;
+  versions_error: string | null;
+  tables_error: string | null;
 };
 
 export { ClusterData };

@@ -11,7 +11,8 @@ function cluster(overrides: Partial<ClusterData> = {}): ClusterData {
     storage_sets: ["events", "transactions"],
     versions: ["24.8.14.10459", "25.3.1.100"],
     tables: ["errors_local", "transactions_local"],
-    error: null,
+    versions_error: null,
+    tables_error: null,
     ...overrides,
   };
 }
@@ -69,7 +70,7 @@ it("labels single-node clusters without showing their hostname", async () => {
   expect(queryByText("clickhouse-a")).toBeNull();
 });
 
-it("shows partial cluster data alongside lookup errors", async () => {
+it("keeps version and table lookup errors in their own columns", async () => {
   let mockClient = {
     ...Client(),
     getClickhouseClusters: jest
@@ -79,18 +80,18 @@ it("shows partial cluster data alongside lookup errors", async () => {
           cluster_name: "tables_failed",
           versions: ["25.3.1.100"],
           tables: [],
-          error: "tables unavailable",
+          tables_error: "tables unavailable",
         }),
         cluster({
           cluster_name: "versions_failed",
           versions: [],
           tables: ["errors_local"],
-          error: "versions unavailable",
+          versions_error: "versions unavailable",
         }),
       ]),
   };
 
-  let { getByText, getAllByText, container } = render(
+  let { getByText, queryByText, container } = render(
     <Clusters api={mockClient} />
   );
 
@@ -98,28 +99,36 @@ it("shows partial cluster data alongside lookup errors", async () => {
     expect(mockClient.getClickhouseClusters).toBeCalledTimes(1)
   );
   expect(getByText("25.3.1.100", { exact: true })).toBeTruthy();
-  expect(getAllByText("tables unavailable")).toHaveLength(2);
-  expect(getAllByText("versions unavailable")).toHaveLength(2);
+  expect(getByText("tables unavailable", { exact: true })).toBeTruthy();
+  expect(getByText("versions unavailable", { exact: true })).toBeTruthy();
+  // A tables-only failure must not also paint the versions column, and vice versa.
+  expect(queryByText("not reported")).toBeNull();
   fireEvent.click(container.querySelectorAll("a")[0]);
   expect(getByText("errors_local", { exact: true })).toBeTruthy();
 });
 
-it("shows cluster lookup errors", async () => {
+it("shows both lookup errors when both fail", async () => {
   let mockClient = {
     ...Client(),
     getClickhouseClusters: jest
       .fn<() => Promise<ClusterData[]>>()
       .mockResolvedValueOnce([
-        cluster({ versions: [], tables: [], error: "Connection refused" }),
+        cluster({
+          versions: [],
+          tables: [],
+          versions_error: "versions unavailable",
+          tables_error: "tables unavailable",
+        }),
       ]),
   };
 
-  let { getAllByText } = render(<Clusters api={mockClient} />);
+  let { getByText } = render(<Clusters api={mockClient} />);
 
   await waitFor(() =>
     expect(mockClient.getClickhouseClusters).toBeCalledTimes(1)
   );
-  expect(getAllByText("Connection refused")).toHaveLength(2);
+  expect(getByText("versions unavailable", { exact: true })).toBeTruthy();
+  expect(getByText("tables unavailable", { exact: true })).toBeTruthy();
 });
 
 it("shows cluster loading errors", async () => {

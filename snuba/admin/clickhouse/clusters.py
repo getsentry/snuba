@@ -24,7 +24,8 @@ class ClusterInfo(TypedDict):
     versions: Sequence[str]
     storage_sets: Sequence[str]
     tables: Sequence[str]
-    error: str | None
+    versions_error: str | None
+    tables_error: str | None
 
 
 class _ClusterTarget(NamedTuple):
@@ -40,7 +41,8 @@ class _ClusterTarget(NamedTuple):
 class _ClusterState(NamedTuple):
     versions: Sequence[str]
     tables: Sequence[str]
-    error: str | None
+    versions_error: str | None
+    tables_error: str | None
 
 
 def _single_node_target_key(cluster: ClickhouseCluster) -> str:
@@ -134,18 +136,26 @@ def _query_tables(target: _ClusterTarget) -> Sequence[str]:
     return sorted({str(table) for row in table_rows for table in row[0]})
 
 
+def _lookup_error(exc: Exception) -> str:
+    if isinstance(exc, FutureTimeoutError):
+        return f"Timed out after {CLUSTER_QUERY_TIMEOUT}s"
+    return str(exc)
+
+
 def _get_cluster_state(target: _ClusterTarget, deadline: float | None = None) -> _ClusterState:
     """Fetch distinct versions and default-database tables for one cluster.
 
     Version and table lookups share the outer deadline and run concurrently so
-    one slow path cannot starve the other past the parent timeout.
+    one slow path cannot starve the other past the parent timeout. Each lookup
+    keeps its own error so a failure in one column does not mislabel the other.
     """
     if deadline is None:
         deadline = time.monotonic() + CLUSTER_QUERY_TIMEOUT
 
     versions: Sequence[str] = ()
     tables: Sequence[str] = ()
-    error: str | None = None
+    versions_error: str | None = None
+    tables_error: str | None = None
     executor = ThreadPoolExecutor(max_workers=2)
     try:
         versions_future = executor.submit(_query_versions, target)
@@ -153,40 +163,33 @@ def _get_cluster_state(target: _ClusterTarget, deadline: float | None = None) ->
         try:
             versions = versions_future.result(timeout=max(0, deadline - time.monotonic()))
         except Exception as e:
-            error = (
-                f"Timed out after {CLUSTER_QUERY_TIMEOUT}s"
-                if isinstance(e, FutureTimeoutError)
-                else str(e)
-            )
-            logger.warning(error, cluster=target.name, lookup="versions")
+            versions_error = _lookup_error(e)
+            logger.warning(versions_error, cluster=target.name, lookup="versions")
         try:
             tables = tables_future.result(timeout=max(0, deadline - time.monotonic()))
         except Exception as e:
-            table_error = (
-                f"Timed out after {CLUSTER_QUERY_TIMEOUT}s"
-                if isinstance(e, FutureTimeoutError)
-                else str(e)
-            )
-            logger.warning(table_error, cluster=target.name, lookup="tables")
-            error = error or table_error
+            tables_error = _lookup_error(e)
+            logger.warning(tables_error, cluster=target.name, lookup="tables")
     finally:
         executor.shutdown(wait=False, cancel_futures=True)
 
-    return _ClusterState(versions, tables, error)
+    return _ClusterState(versions, tables, versions_error, tables_error)
 
 
 def _describe_target(
     target: _ClusterTarget,
     versions: Sequence[str] = (),
     tables: Sequence[str] = (),
-    error: str | None = None,
+    versions_error: str | None = None,
+    tables_error: str | None = None,
 ) -> ClusterInfo:
     return {
         "cluster_name": target.name,
         "versions": versions,
         "storage_sets": sorted(target.storage_sets),
         "tables": tables,
-        "error": error,
+        "versions_error": versions_error,
+        "tables_error": tables_error,
     }
 
 
@@ -203,14 +206,28 @@ def get_cluster_info() -> Sequence[ClusterInfo]:
         states = [executor.submit(_get_cluster_state, target, deadline) for target in targets]
         for target, state in zip(targets, states, strict=True):
             try:
-                versions, tables, error = state.result(timeout=max(0, deadline - time.monotonic()))
-                info.append(_describe_target(target, versions, tables, error))
+                versions, tables, versions_error, tables_error = state.result(
+                    timeout=max(0, deadline - time.monotonic())
+                )
+                info.append(
+                    _describe_target(
+                        target,
+                        versions,
+                        tables,
+                        versions_error=versions_error,
+                        tables_error=tables_error,
+                    )
+                )
             except FutureTimeoutError:
                 error = f"Timed out after {CLUSTER_QUERY_TIMEOUT}s"
-                info.append(_describe_target(target, error=error))
+                info.append(
+                    _describe_target(target, versions_error=error, tables_error=error)
+                )
             except Exception as e:
                 logger.warning(str(e), cluster=target.name)
-                info.append(_describe_target(target, error=str(e)))
+                info.append(
+                    _describe_target(target, versions_error=str(e), tables_error=str(e))
+                )
     finally:
         # Do not wait: a query that outlived the timeout above must not hold up
         # the response. Its thread ends on its own once ClickHouse (or the

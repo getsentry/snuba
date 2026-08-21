@@ -7,8 +7,7 @@ import { Collapse } from "SnubaAdmin/collapse";
 import { ClusterData } from "SnubaAdmin/clusters/types";
 
 function versionsCell(cluster: ClusterData) {
-  const errors = cluster.error ? [cluster.error] : [];
-  if (cluster.versions.length === 0 && errors.length === 0) {
+  if (cluster.versions.length === 0 && !cluster.versions_error) {
     return <Text color="dimmed">not reported</Text>;
   }
 
@@ -19,11 +18,11 @@ function versionsCell(cluster: ClusterData) {
           <Code>{version}</Code>
         </div>
       ))}
-      {Array.from(new Set(errors)).map((error) => (
-        <Text key={error} color="red" size="sm">
-          {error}
+      {cluster.versions_error && (
+        <Text color="red" size="sm">
+          {cluster.versions_error}
         </Text>
-      ))}
+      )}
     </div>
   );
 }
@@ -42,7 +41,7 @@ function listCell(values: string[]) {
 }
 
 function tablesCell(cluster: ClusterData) {
-  if (cluster.tables.length === 0 && !cluster.error) {
+  if (cluster.tables.length === 0 && !cluster.tables_error) {
     return <Text color="dimmed">—</Text>;
   }
   return (
@@ -60,7 +59,7 @@ function tablesCell(cluster: ClusterData) {
           </div>
         </Collapse>
       )}
-      {cluster.error && <Text color="red">{cluster.error}</Text>}
+      {cluster.tables_error && <Text color="red">{cluster.tables_error}</Text>}
     </div>
   );
 }

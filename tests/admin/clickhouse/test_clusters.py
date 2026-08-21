@@ -165,7 +165,8 @@ def test_get_cluster_state_queries_versions_and_tables_across_all_replicas(
 
     assert state.versions == ["24.8.14", "25.3.6"]
     assert state.tables == ["errors_local", "metrics_local", "shared"]
-    assert state.error is None
+    assert state.versions_error is None
+    assert state.tables_error is None
     assert get_ro_cluster_node_connection.call_count == 2
     get_ro_cluster_node_connection.assert_called_with(
         cluster,
@@ -226,7 +227,8 @@ def test_get_cluster_state_queries_single_node_locally(
 
     assert state.versions == ["25.3.6"]
     assert state.tables == ["errors_local"]
-    assert state.error is None
+    assert state.versions_error is None
+    assert state.tables_error is None
     sqls = [
         call.args[0] for call in get_ro_cluster_node_connection.return_value.execute.call_args_list
     ]
@@ -254,11 +256,19 @@ def test_get_cluster_info_reports_timeout(
 
     info = get_cluster_info()[0]
 
-    assert set(info) == {"cluster_name", "versions", "storage_sets", "tables", "error"}
+    assert set(info) == {
+        "cluster_name",
+        "versions",
+        "storage_sets",
+        "tables",
+        "versions_error",
+        "tables_error",
+    }
     assert info["cluster_name"] == "cluster_one"
     assert info["versions"] == ()
     assert info["tables"] == ()
-    assert info["error"] == "Timed out after 10s"
+    assert info["versions_error"] == "Timed out after 10s"
+    assert info["tables_error"] == "Timed out after 10s"
     # Outer submit passes the shared deadline into each worker.
     args, _kwargs = executor.return_value.submit.call_args
     assert args[0] is get_cluster_state
@@ -279,7 +289,7 @@ def test_get_cluster_state_honors_shared_deadline(
 
     state = _get_cluster_state(target, deadline=time.monotonic() - 1)
 
-    assert state == _ClusterState((), (), "Timed out after 30s")
+    assert state == _ClusterState((), (), "Timed out after 30s", "Timed out after 30s")
 
 
 @mock.patch("snuba.admin.clickhouse.clusters._query_tables")
@@ -295,7 +305,7 @@ def test_get_cluster_state_preserves_versions_when_tables_fail(
 
     state = _get_cluster_state(target)
 
-    assert state == _ClusterState(["25.3.6"], (), "tables unavailable")
+    assert state == _ClusterState(["25.3.6"], (), None, "tables unavailable")
 
 
 @mock.patch("snuba.admin.clickhouse.clusters._query_tables")
@@ -311,7 +321,7 @@ def test_get_cluster_state_preserves_tables_when_versions_fail(
 
     state = _get_cluster_state(target)
 
-    assert state == _ClusterState((), ["errors_local"], "versions unavailable")
+    assert state == _ClusterState((), ["errors_local"], "versions unavailable", None)
 
 
 @mock.patch("snuba.admin.clickhouse.clusters.ThreadPoolExecutor")
@@ -324,7 +334,7 @@ def test_get_cluster_info_returns_partial_state(
     target = _ClusterTarget("cluster_one", "cluster_one", cluster, {"events"}, False)
     cluster_targets.return_value = [target]
     executor.return_value.submit.return_value.result.return_value = _ClusterState(
-        ["25.3.6"], (), "tables unavailable"
+        ["25.3.6"], (), None, "tables unavailable"
     )
 
     info = get_cluster_info()[0]
@@ -334,5 +344,6 @@ def test_get_cluster_info_returns_partial_state(
         "versions": ["25.3.6"],
         "storage_sets": ["events"],
         "tables": (),
-        "error": "tables unavailable",
+        "versions_error": None,
+        "tables_error": "tables unavailable",
     }
