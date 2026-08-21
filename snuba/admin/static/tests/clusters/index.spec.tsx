@@ -64,6 +64,30 @@ it("shows only cluster name, distinct versions, storage sets, and tables", async
   expect(getByText("transactions_local")).toBeTruthy();
 });
 
+it("labels single-node clusters without showing their hostname", async () => {
+  let mockClient = {
+    ...Client(),
+    getClickhouseClusters: jest
+      .fn<() => Promise<ClusterData[]>>()
+      .mockResolvedValueOnce([
+        cluster({
+          host: "clickhouse-a",
+          single_node: true,
+          cluster_name: "clickhouse-a",
+          distributed_cluster_name: "clickhouse-a",
+        }),
+      ]),
+  };
+
+  let { getByText, queryByText } = render(<Clusters api={mockClient} />);
+
+  await waitFor(() =>
+    expect(mockClient.getClickhouseClusters).toBeCalledTimes(1)
+  );
+  expect(getByText("single node", { exact: true })).toBeTruthy();
+  expect(queryByText("clickhouse-a")).toBeNull();
+});
+
 it("shows cluster lookup errors", async () => {
   let mockClient = {
     ...Client(),

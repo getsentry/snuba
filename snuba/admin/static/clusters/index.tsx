@@ -123,6 +123,9 @@ const tableListStyle = {
 };
 
 function displayClusterName(cluster: ClusterData): string {
+  if (cluster.single_node) {
+    return "single node";
+  }
   if (cluster.cluster_name) {
     return cluster.cluster_name;
   }
