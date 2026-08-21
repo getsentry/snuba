@@ -120,9 +120,7 @@ def test_get_cluster_state_does_not_wait_for_inner_executor_after_deadline(
 
     versions_future.result.assert_called_once_with(timeout=0)
     tables_future.result.assert_called_once_with(timeout=0)
-    executor.return_value.shutdown.assert_called_once_with(
-        wait=False, cancel_futures=True
-    )
+    executor.return_value.shutdown.assert_called_once_with(wait=False, cancel_futures=True)
     assert state.query_node_error == "Timed out after 30s"
     assert state.storage_node_error == "Timed out after 30s"
     assert state.error == "Timed out after 30s"
