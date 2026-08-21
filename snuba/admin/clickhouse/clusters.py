@@ -95,8 +95,7 @@ def _cluster_source(target: _ClusterTarget, table: str) -> str:
     return f"clusterAllReplicas({escape_string(target.name)}, {table})"
 
 
-def _get_cluster_state(target: _ClusterTarget) -> _ClusterState:
-    """Fetch distinct versions and default-database tables for one cluster."""
+def _query_versions(target: _ClusterTarget) -> Sequence[str]:
     query_node = target.cluster.get_query_node()
     connection = get_ro_cluster_node_connection(
         target.cluster,
@@ -105,8 +104,7 @@ def _get_cluster_state(target: _ClusterTarget) -> _ClusterState:
         known_nodes=[query_node],
     )
     # system.one always yields one row per replica, including replicas with no
-    # tables in `default`. Tables are collected separately so empty default DBs
-    # do not drop version rows.
+    # tables in `default`.
     version_rows = connection.execute(
         f"""
         SELECT DISTINCT version() AS version
@@ -114,6 +112,17 @@ def _get_cluster_state(target: _ClusterTarget) -> _ClusterState:
         ORDER BY version
         """
     ).results
+    return [str(row[0]) for row in version_rows]
+
+
+def _query_tables(target: _ClusterTarget) -> Sequence[str]:
+    query_node = target.cluster.get_query_node()
+    connection = get_ro_cluster_node_connection(
+        target.cluster,
+        query_node,
+        ClickhouseClientSettings.QUERY,
+        known_nodes=[query_node],
+    )
     table_rows = connection.execute(
         f"""
         SELECT arraySort(groupUniqArray(name)) AS tables
@@ -121,8 +130,49 @@ def _get_cluster_state(target: _ClusterTarget) -> _ClusterState:
         WHERE database = '{TABLES_DATABASE}'
         """
     ).results
-    versions = [str(row[0]) for row in version_rows]
-    tables = sorted({str(table) for row in table_rows for table in row[0]})
+    return sorted({str(table) for row in table_rows for table in row[0]})
+
+
+def _get_cluster_state(target: _ClusterTarget, deadline: float | None = None) -> _ClusterState:
+    """Fetch distinct versions and default-database tables for one cluster.
+
+    Version and table lookups share the outer deadline and run concurrently so
+    one slow path cannot starve the other past the parent timeout.
+    """
+    if deadline is None:
+        deadline = time.monotonic() + CLUSTER_QUERY_TIMEOUT
+
+    versions: Sequence[str] = ()
+    tables: Sequence[str] = ()
+    error: str | None = None
+    executor = ThreadPoolExecutor(max_workers=2)
+    try:
+        versions_future = executor.submit(_query_versions, target)
+        tables_future = executor.submit(_query_tables, target)
+        try:
+            versions = versions_future.result(timeout=max(0, deadline - time.monotonic()))
+        except Exception as e:
+            error = (
+                f"Timed out after {CLUSTER_QUERY_TIMEOUT}s"
+                if isinstance(e, FutureTimeoutError)
+                else str(e)
+            )
+            logger.warning(error, cluster=target.name, lookup="versions")
+        try:
+            tables = tables_future.result(timeout=max(0, deadline - time.monotonic()))
+        except Exception as e:
+            table_error = (
+                f"Timed out after {CLUSTER_QUERY_TIMEOUT}s"
+                if isinstance(e, FutureTimeoutError)
+                else str(e)
+            )
+            logger.warning(table_error, cluster=target.name, lookup="tables")
+            error = error or table_error
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
+
+    if error is not None:
+        raise Exception(error)
     return _ClusterState(versions, tables)
 
 
@@ -151,7 +201,7 @@ def get_cluster_info() -> Sequence[ClusterInfo]:
     info: list[ClusterInfo] = []
     executor = ThreadPoolExecutor(max_workers=min(MAX_CONCURRENT_CLUSTER_QUERIES, len(targets)))
     try:
-        states = [executor.submit(_get_cluster_state, target) for target in targets]
+        states = [executor.submit(_get_cluster_state, target, deadline) for target in targets]
         for target, state in zip(targets, states, strict=True):
             try:
                 versions, tables = state.result(timeout=max(0, deadline - time.monotonic()))
@@ -163,6 +213,9 @@ def get_cluster_info() -> Sequence[ClusterInfo]:
                 logger.warning(str(e), cluster=target.name)
                 info.append(_describe_target(target, error=str(e)))
     finally:
+        # Do not wait: a query that outlived the timeout above must not hold up
+        # the response. Its thread ends on its own once ClickHouse (or the
+        # driver's own timeout) lets go.
         executor.shutdown(wait=False, cancel_futures=True)
 
     return info
