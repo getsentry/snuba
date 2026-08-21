@@ -127,7 +127,8 @@ function QueryEditor(props: {
   useEffect(() => {
     let values = queryParamValues;
     if (hasTimeRangeParams) {
-      const hasValidRelativeRange = relativeTimeAmount > 0;
+      const hasValidRelativeRange =
+        Number.isInteger(relativeTimeAmount) && relativeTimeAmount > 0;
       const hasValidAbsoluteRange =
         absoluteStartTime !== null &&
         absoluteEndTime !== null &&
@@ -248,9 +249,15 @@ function QueryEditor(props: {
                 label="Look back"
                 aria-label="Look back amount"
                 min={1}
+                step={1}
+                precision={0}
                 value={relativeTimeAmount}
                 onChange={(value) =>
-                  setRelativeTimeAmount(typeof value === "number" ? value : 0)
+                  setRelativeTimeAmount(
+                    typeof value === "number" && Number.isInteger(value)
+                      ? value
+                      : 0
+                  )
                 }
               />
               <Select
