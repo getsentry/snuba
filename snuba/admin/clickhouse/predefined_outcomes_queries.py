@@ -153,22 +153,3 @@ class VolumeByOutcomeOverTime(OutcomesQuery):
     GROUP BY hour, outcome
     ORDER BY hour DESC, total_quantity DESC
     """
-
-
-class TimeRangeTopOrgs(OutcomesQuery):
-    """Top org/hour pairs for a category in the selected time range."""
-
-    sql = """
-    SELECT
-        toStartOfHour(timestamp) AS hour,
-        org_id,
-        sum(quantity) AS total_quantity,
-        sum(times_seen) AS total_times_seen
-    FROM outcomes_hourly_dist
-    WHERE category = {{category}}
-        AND timestamp >= {{start_time}}
-        AND timestamp < {{end_time}}
-    GROUP BY hour, org_id
-    ORDER BY total_quantity DESC
-    LIMIT {{limit}}
-    """

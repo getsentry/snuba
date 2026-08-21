@@ -1,6 +1,15 @@
 import React, { useEffect, useState, ReactElement } from "react";
 
-import { Box } from "@mantine/core";
+import {
+  Box,
+  Group,
+  NumberInput,
+  SegmentedControl,
+  Select,
+  Stack,
+  Text,
+} from "@mantine/core";
+import { DateTimePicker } from "@mantine/dates";
 import { SQLEditor } from "SnubaAdmin/common/components/sql_editor";
 import { useLocalStorage } from "@mantine/hooks";
 import { CustomSelect } from "SnubaAdmin/select";
@@ -22,17 +31,25 @@ const START_TIME_PARAM = "{{start_time}}";
 const END_TIME_PARAM = "{{end_time}}";
 
 /** @private */
-export function formatAbsoluteDateTime(value: string): string {
-  if (!value) {
+export function formatAbsoluteDateTime(value: Date | null): string {
+  if (!value || Number.isNaN(value.getTime())) {
     return "";
   }
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
+  return `toDateTime('${value.toISOString().slice(0, 19).replace("T", " ")}', 'UTC')`;
+}
 
-  return `toDateTime('${date.toISOString().slice(0, 19).replace("T", " ")}', 'UTC')`;
+function getRelativeStart(
+  end: Date,
+  amount: number,
+  unit: RelativeTimeUnit
+): Date {
+  const millisecondsByUnit = {
+    MINUTE: 60 * 1000,
+    HOUR: 60 * 60 * 1000,
+    DAY: 24 * 60 * 60 * 1000,
+  };
+  return new Date(end.getTime() - amount * millisecondsByUnit[unit]);
 }
 
 /** @private */
@@ -85,11 +102,11 @@ function QueryEditor(props: {
   >(undefined);
   const [timeRangeMode, setTimeRangeMode] =
     useState<TimeRangeMode>("relative");
-  const [relativeTimeAmount, setRelativeTimeAmount] = useState("24");
+  const [relativeTimeAmount, setRelativeTimeAmount] = useState(24);
   const [relativeTimeUnit, setRelativeTimeUnit] =
     useState<RelativeTimeUnit>("HOUR");
-  const [absoluteStartTime, setAbsoluteStartTime] = useState("");
-  const [absoluteEndTime, setAbsoluteEndTime] = useState("");
+  const [absoluteStartTime, setAbsoluteStartTime] = useState<Date | null>(null);
+  const [absoluteEndTime, setAbsoluteEndTime] = useState<Date | null>(null);
 
   const variableRegex = /{{([a-zA-Z0-9_]+)}}/;
   const hasTimeRangeParams =
@@ -110,6 +127,22 @@ function QueryEditor(props: {
   useEffect(() => {
     let values = queryParamValues;
     if (hasTimeRangeParams) {
+      const hasValidRelativeRange = relativeTimeAmount > 0;
+      const hasValidAbsoluteRange =
+        absoluteStartTime !== null &&
+        absoluteEndTime !== null &&
+        absoluteStartTime < absoluteEndTime;
+      const hasValidTimeRange =
+        timeRangeMode === "relative"
+          ? hasValidRelativeRange
+          : hasValidAbsoluteRange;
+
+      if (!hasValidTimeRange) {
+        setQuery("");
+        props.onQueryUpdate("");
+        return;
+      }
+
       values = {
         ...values,
         [START_TIME_PARAM]:
@@ -169,79 +202,97 @@ function QueryEditor(props: {
     );
   }
 
+  function changeTimeRangeMode(value: string) {
+    const mode = value as TimeRangeMode;
+    if (mode === "absolute") {
+      const end = new Date();
+      setAbsoluteEndTime(end);
+      setAbsoluteStartTime(
+        getRelativeStart(end, relativeTimeAmount, relativeTimeUnit)
+      );
+    }
+    setTimeRangeMode(mode);
+  }
+
   function renderTimeRangeSetter() {
     if (!hasTimeRangeParams) {
       return null;
     }
 
+    const absoluteRangeError =
+      timeRangeMode === "absolute" &&
+      absoluteStartTime !== null &&
+      absoluteEndTime !== null &&
+      absoluteStartTime >= absoluteEndTime
+        ? "Start must be before end"
+        : undefined;
+
     return (
-      <fieldset style={timeRangeStyle}>
-        <legend>Time range</legend>
-        <label>
-          <input
-            type="radio"
-            name="time-range-mode"
-            checked={timeRangeMode === "relative"}
-            onChange={() => setTimeRangeMode("relative")}
-          />{" "}
-          Relative to now
-        </label>
-        <label>
-          <input
-            type="radio"
-            name="time-range-mode"
-            checked={timeRangeMode === "absolute"}
-            onChange={() => setTimeRangeMode("absolute")}
-          />{" "}
-          Absolute dates
-        </label>
-        {timeRangeMode === "relative" ? (
-          <div style={timeRangeInputsStyle}>
-            <label>
-              Look back{" "}
-              <input
+      <Box component="fieldset" p="md" mb="md" style={timeRangeStyle}>
+        <Text component="legend" fw={600} px={4}>
+          Time range
+        </Text>
+        <Stack spacing="sm">
+          <SegmentedControl
+            aria-label="Time range mode"
+            value={timeRangeMode}
+            onChange={changeTimeRangeMode}
+            data={[
+              { label: "Relative", value: "relative" },
+              { label: "Absolute", value: "absolute" },
+            ]}
+          />
+          {timeRangeMode === "relative" ? (
+            <Group align="flex-end" grow>
+              <NumberInput
+                label="Look back"
                 aria-label="Look back amount"
-                type="number"
-                min="1"
+                min={1}
                 value={relativeTimeAmount}
-                onChange={(event) => setRelativeTimeAmount(event.target.value)}
+                onChange={(value) =>
+                  setRelativeTimeAmount(typeof value === "number" ? value : 0)
+                }
               />
-            </label>
-            <select
-              aria-label="Look back unit"
-              value={relativeTimeUnit}
-              onChange={(event) =>
-                setRelativeTimeUnit(event.target.value as RelativeTimeUnit)
-              }
-            >
-              <option value="MINUTE">minutes</option>
-              <option value="HOUR">hours</option>
-              <option value="DAY">days</option>
-            </select>
-          </div>
-        ) : (
-          <div style={timeRangeInputsStyle}>
-            <label>
-              Start{" "}
-              <input
+              <Select
+                label="Unit"
+                aria-label="Look back unit"
+                value={relativeTimeUnit}
+                onChange={(value) => {
+                  if (value) {
+                    setRelativeTimeUnit(value as RelativeTimeUnit);
+                  }
+                }}
+                data={[
+                  { label: "Minutes", value: "MINUTE" },
+                  { label: "Hours", value: "HOUR" },
+                  { label: "Days", value: "DAY" },
+                ]}
+              />
+            </Group>
+          ) : (
+            <Group align="flex-start" grow>
+              <DateTimePicker
+                label="Start"
                 aria-label="Start date and time"
-                type="datetime-local"
                 value={absoluteStartTime}
-                onChange={(event) => setAbsoluteStartTime(event.target.value)}
+                onChange={setAbsoluteStartTime}
+                valueFormat="YYYY-MM-DD HH:mm"
+                error={absoluteRangeError}
+                clearable
               />
-            </label>
-            <label>
-              End{" "}
-              <input
+              <DateTimePicker
+                label="End"
                 aria-label="End date and time"
-                type="datetime-local"
                 value={absoluteEndTime}
-                onChange={(event) => setAbsoluteEndTime(event.target.value)}
+                onChange={setAbsoluteEndTime}
+                valueFormat="YYYY-MM-DD HH:mm"
+                error={absoluteRangeError}
+                clearable
               />
-            </label>
-          </div>
-        )}
-      </fieldset>
+            </Group>
+          )}
+        </Stack>
+      </Box>
     );
   }
 
@@ -304,17 +355,9 @@ const predefinedQueryStyle = {
 };
 
 const timeRangeStyle = {
-  display: "flex",
-  gap: 16,
-  alignItems: "center",
-  flexWrap: "wrap" as const,
-  marginBottom: 16,
-};
-
-const timeRangeInputsStyle = {
-  display: "flex",
-  gap: 8,
-  alignItems: "center",
+  border: "1px solid #ced4da",
+  borderRadius: 4,
+  maxWidth: 640,
 };
 
 export default QueryEditor;

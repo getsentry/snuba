@@ -40,15 +40,15 @@ describe("Query editor", () => {
   });
   describe("when formatting absolute dates", () => {
     it("converts a local datetime value to a ClickHouse UTC expression", () => {
-      const result = formatAbsoluteDateTime("2026-08-21T12:34");
-
-      expect(result).toMatch(
-        /^toDateTime\('\d{4}-\d{2}-\d{2} \d{2}:\d{2}:00', 'UTC'\)$/
+      const result = formatAbsoluteDateTime(
+        new Date("2026-08-21T12:34:00.000Z")
       );
+
+      expect(result).toBe("toDateTime('2026-08-21 12:34:00', 'UTC')");
     });
 
     it("leaves an empty datetime unresolved", () => {
-      expect(formatAbsoluteDateTime("")).toBe("");
+      expect(formatAbsoluteDateTime(null)).toBe("");
     });
   });
   describe("when new parameters are given", () => {
@@ -154,10 +154,18 @@ describe("Query editor", () => {
         );
 
         await act(async () =>
-          userEvent.click(getByLabelText("Absolute dates"))
+          userEvent.click(getByLabelText("Absolute"))
         );
         expect(getByLabelText("Start date and time")).toBeTruthy();
         expect(getByLabelText("End date and time")).toBeTruthy();
+        expect(mockOnQueryUpdate).toHaveBeenLastCalledWith(
+          expect.stringMatching(
+            /^timestamp >= toDateTime\(.+\) AND timestamp < toDateTime\(.+\)$/
+          )
+        );
+        expect(mockOnQueryUpdate).not.toHaveBeenLastCalledWith(
+          expect.stringContaining("{{")
+        );
       });
     });
     describe("with text area input", () => {

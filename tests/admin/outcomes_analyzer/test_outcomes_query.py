@@ -18,7 +18,6 @@ def test_predefined_outcomes_queries_registered() -> None:
         "VolumeByCategoryOverTime",
         "TopOrgsByCategory",
         "OrgVolumeByReason",
-        "TimeRangeTopOrgs",
     }.issubset(names)
 
 
