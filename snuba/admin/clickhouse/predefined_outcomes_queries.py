@@ -34,7 +34,8 @@ class VolumeByCategoryOverTime(OutcomesQuery):
         sum(times_seen) AS total_times_seen
     FROM outcomes_hourly_dist
     WHERE category = {{category}}
-        AND timestamp >= now() - INTERVAL {{lookback_hours}} HOUR
+        AND timestamp >= {{start_time}}
+        AND timestamp < {{end_time}}
     GROUP BY hour
     ORDER BY hour DESC
     """
@@ -51,7 +52,8 @@ class TopOrgsByCategory(OutcomesQuery):
         sum(times_seen) AS total_times_seen
     FROM outcomes_hourly_dist
     WHERE category = {{category}}
-        AND timestamp >= now() - INTERVAL {{lookback_hours}} HOUR
+        AND timestamp >= {{start_time}}
+        AND timestamp < {{end_time}}
     GROUP BY hour, org_id
     ORDER BY total_quantity DESC
     LIMIT {{limit}}
@@ -68,7 +70,8 @@ class TopOrgsByCategoryAggregated(OutcomesQuery):
         sum(times_seen) AS total_times_seen
     FROM outcomes_hourly_dist
     WHERE category = {{category}}
-        AND timestamp >= now() - INTERVAL {{lookback_hours}} HOUR
+        AND timestamp >= {{start_time}}
+        AND timestamp < {{end_time}}
     GROUP BY org_id
     ORDER BY total_quantity DESC
     LIMIT {{limit}}
@@ -87,7 +90,8 @@ class OrgVolumeOverTime(OutcomesQuery):
     FROM outcomes_hourly_dist
     WHERE category = {{category}}
         AND org_id = {{org_id}}
-        AND timestamp >= now() - INTERVAL {{lookback_hours}} HOUR
+        AND timestamp >= {{start_time}}
+        AND timestamp < {{end_time}}
     GROUP BY hour, org_id
     ORDER BY hour DESC
     """
@@ -107,7 +111,8 @@ class OrgVolumeByReason(OutcomesQuery):
     FROM outcomes_hourly_dist
     WHERE category = {{category}}
         AND org_id = {{org_id}}
-        AND timestamp >= now() - INTERVAL {{lookback_hours}} HOUR
+        AND timestamp >= {{start_time}}
+        AND timestamp < {{end_time}}
     GROUP BY hour, org_id, reason, outcome
     ORDER BY hour DESC, total_quantity DESC
     """
@@ -124,7 +129,8 @@ class OrgVolumeByProject(OutcomesQuery):
     FROM outcomes_hourly_dist
     WHERE category = {{category}}
         AND org_id = {{org_id}}
-        AND timestamp >= now() - INTERVAL {{lookback_hours}} HOUR
+        AND timestamp >= {{start_time}}
+        AND timestamp < {{end_time}}
     GROUP BY project_id
     ORDER BY total_quantity DESC
     LIMIT {{limit}}
@@ -142,14 +148,15 @@ class VolumeByOutcomeOverTime(OutcomesQuery):
         sum(times_seen) AS total_times_seen
     FROM outcomes_hourly_dist
     WHERE category = {{category}}
-        AND timestamp >= now() - INTERVAL {{lookback_hours}} HOUR
+        AND timestamp >= {{start_time}}
+        AND timestamp < {{end_time}}
     GROUP BY hour, outcome
     ORDER BY hour DESC, total_quantity DESC
     """
 
 
 class TimeRangeTopOrgs(OutcomesQuery):
-    """Top org/hour pairs for a category in an explicit from_ts/to_ts window."""
+    """Top org/hour pairs for a category in the selected time range."""
 
     sql = """
     SELECT
@@ -159,8 +166,8 @@ class TimeRangeTopOrgs(OutcomesQuery):
         sum(times_seen) AS total_times_seen
     FROM outcomes_hourly_dist
     WHERE category = {{category}}
-        AND timestamp >= '{{from_ts}}'
-        AND timestamp < '{{to_ts}}'
+        AND timestamp >= {{start_time}}
+        AND timestamp < {{end_time}}
     GROUP BY hour, org_id
     ORDER BY total_quantity DESC
     LIMIT {{limit}}

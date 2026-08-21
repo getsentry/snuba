@@ -15,6 +15,26 @@ type QueryParamValues = {
   [key: string]: string;
 };
 
+type TimeRangeMode = "relative" | "absolute";
+type RelativeTimeUnit = "MINUTE" | "HOUR" | "DAY";
+
+const START_TIME_PARAM = "{{start_time}}";
+const END_TIME_PARAM = "{{end_time}}";
+
+/** @private */
+export function formatAbsoluteDateTime(value: string): string {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return `toDateTime('${date.toISOString().slice(0, 19).replace("T", " ")}', 'UTC')`;
+}
+
 /** @private */
 export function generateQuery(
   queryTemplate: string,
@@ -63,8 +83,18 @@ function QueryEditor(props: {
   const [selectedPredefinedQuery, setSelectedPredefinedQuery] = useState<
     PredefinedQuery | undefined
   >(undefined);
+  const [timeRangeMode, setTimeRangeMode] =
+    useState<TimeRangeMode>("relative");
+  const [relativeTimeAmount, setRelativeTimeAmount] = useState("24");
+  const [relativeTimeUnit, setRelativeTimeUnit] =
+    useState<RelativeTimeUnit>("HOUR");
+  const [absoluteStartTime, setAbsoluteStartTime] = useState("");
+  const [absoluteEndTime, setAbsoluteEndTime] = useState("");
 
   const variableRegex = /{{([a-zA-Z0-9_]+)}}/;
+  const hasTimeRangeParams =
+    queryTemplate.includes(START_TIME_PARAM) &&
+    queryTemplate.includes(END_TIME_PARAM);
 
   useEffect(() => {
     const newQueryParams = new Set(
@@ -78,10 +108,34 @@ function QueryEditor(props: {
   }, [queryTemplate]);
 
   useEffect(() => {
-    const newQuery = generateQuery(queryTemplate, queryParamValues);
+    let values = queryParamValues;
+    if (hasTimeRangeParams) {
+      values = {
+        ...values,
+        [START_TIME_PARAM]:
+          timeRangeMode === "relative"
+            ? `now() - INTERVAL ${relativeTimeAmount} ${relativeTimeUnit}`
+            : formatAbsoluteDateTime(absoluteStartTime),
+        [END_TIME_PARAM]:
+          timeRangeMode === "relative"
+            ? "now()"
+            : formatAbsoluteDateTime(absoluteEndTime),
+      };
+    }
+
+    const newQuery = generateQuery(queryTemplate, values);
     setQuery(newQuery);
     props.onQueryUpdate(newQuery);
-  }, [queryTemplate, queryParamValues]);
+  }, [
+    queryTemplate,
+    queryParamValues,
+    hasTimeRangeParams,
+    timeRangeMode,
+    relativeTimeAmount,
+    relativeTimeUnit,
+    absoluteStartTime,
+    absoluteEndTime,
+  ]);
 
   function updateQueryParameter(name: string, value: string) {
     setQueryParamValues((queryParams) => ({ ...queryParams, [name]: value }));
@@ -115,28 +169,109 @@ function QueryEditor(props: {
     );
   }
 
-  function renderParameterSetters() {
-    let setters: Array<ReactElement> = [];
-    Object.keys(queryParamValues).forEach((paramName) => {
-      setters.push(
-        <div key={paramName}>
-          <div>
+  function renderTimeRangeSetter() {
+    if (!hasTimeRangeParams) {
+      return null;
+    }
+
+    return (
+      <fieldset style={timeRangeStyle}>
+        <legend>Time range</legend>
+        <label>
+          <input
+            type="radio"
+            name="time-range-mode"
+            checked={timeRangeMode === "relative"}
+            onChange={() => setTimeRangeMode("relative")}
+          />{" "}
+          Relative to now
+        </label>
+        <label>
+          <input
+            type="radio"
+            name="time-range-mode"
+            checked={timeRangeMode === "absolute"}
+            onChange={() => setTimeRangeMode("absolute")}
+          />{" "}
+          Absolute dates
+        </label>
+        {timeRangeMode === "relative" ? (
+          <div style={timeRangeInputsStyle}>
             <label>
-              {paramName.match(variableRegex)?.[1]}
-              <br />
-              <textarea
-                value={queryParamValues[paramName]}
-                onChange={(evt) => {
-                  updateQueryParameter(paramName, evt.target.value);
-                }}
-                data-testid="parameter-value"
+              Look back{" "}
+              <input
+                aria-label="Look back amount"
+                type="number"
+                min="1"
+                value={relativeTimeAmount}
+                onChange={(event) => setRelativeTimeAmount(event.target.value)}
+              />
+            </label>
+            <select
+              aria-label="Look back unit"
+              value={relativeTimeUnit}
+              onChange={(event) =>
+                setRelativeTimeUnit(event.target.value as RelativeTimeUnit)
+              }
+            >
+              <option value="MINUTE">minutes</option>
+              <option value="HOUR">hours</option>
+              <option value="DAY">days</option>
+            </select>
+          </div>
+        ) : (
+          <div style={timeRangeInputsStyle}>
+            <label>
+              Start{" "}
+              <input
+                aria-label="Start date and time"
+                type="datetime-local"
+                value={absoluteStartTime}
+                onChange={(event) => setAbsoluteStartTime(event.target.value)}
+              />
+            </label>
+            <label>
+              End{" "}
+              <input
+                aria-label="End date and time"
+                type="datetime-local"
+                value={absoluteEndTime}
+                onChange={(event) => setAbsoluteEndTime(event.target.value)}
               />
             </label>
           </div>
-          <hr />
-        </div>
-      );
-    });
+        )}
+      </fieldset>
+    );
+  }
+
+  function renderParameterSetters() {
+    let setters: Array<ReactElement> = [];
+    Object.keys(queryParamValues)
+      .filter(
+        (paramName) =>
+          paramName !== START_TIME_PARAM && paramName !== END_TIME_PARAM
+      )
+      .forEach((paramName) => {
+        setters.push(
+          <div key={paramName}>
+            <div>
+              <label>
+                {paramName.match(variableRegex)?.[1]}
+                <br />
+                <textarea
+                  value={queryParamValues[paramName]}
+                  onChange={(evt) => {
+                    updateQueryParameter(paramName, evt.target.value);
+                  }}
+                  data-testid="parameter-value"
+                />
+              </label>
+            </div>
+            <hr />
+          </div>
+        );
+      });
     return setters;
   }
 
@@ -158,6 +293,7 @@ function QueryEditor(props: {
         />
       </Box>
 
+      {renderTimeRangeSetter()}
       {renderParameterSetters()}
     </form>
   );
@@ -165,6 +301,20 @@ function QueryEditor(props: {
 
 const predefinedQueryStyle = {
   display: "inline-block",
+};
+
+const timeRangeStyle = {
+  display: "flex",
+  gap: 16,
+  alignItems: "center",
+  flexWrap: "wrap" as const,
+  marginBottom: 16,
+};
+
+const timeRangeInputsStyle = {
+  display: "flex",
+  gap: 8,
+  alignItems: "center",
 };
 
 export default QueryEditor;

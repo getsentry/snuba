@@ -1,7 +1,11 @@
 import React from "react";
 import { it, expect, describe, jest, afterEach } from "@jest/globals";
 import { act, cleanup, render } from "@testing-library/react";
-import { generateQuery, mergeQueryParamValues } from "../query_editor";
+import {
+  formatAbsoluteDateTime,
+  generateQuery,
+  mergeQueryParamValues,
+} from "../query_editor";
 import userEvent from "@testing-library/user-event";
 import QueryEditor from "SnubaAdmin/query_editor";
 
@@ -32,6 +36,19 @@ describe("Query editor", () => {
       expect(generateQuery(queryTemplate, queryParamValues)).toBe(
         "{{key}}_theActualValue_{{key}}_theActualValue"
       );
+    });
+  });
+  describe("when formatting absolute dates", () => {
+    it("converts a local datetime value to a ClickHouse UTC expression", () => {
+      const result = formatAbsoluteDateTime("2026-08-21T12:34");
+
+      expect(result).toMatch(
+        /^toDateTime\('\d{4}-\d{2}-\d{2} \d{2}:\d{2}:00', 'UTC'\)$/
+      );
+    });
+
+    it("leaves an empty datetime unresolved", () => {
+      expect(formatAbsoluteDateTime("")).toBe("");
     });
   });
   describe("when new parameters are given", () => {
@@ -114,6 +131,33 @@ describe("Query editor", () => {
           );
           expect(getByText(predefinedQuery.description)).toBeTruthy();
         }
+      });
+
+      it("renders relative and absolute time range controls", async () => {
+        const timeRangeQuery = {
+          name: "time_range_query",
+          sql: "timestamp >= {{start_time}} AND timestamp < {{end_time}}",
+          description: "Query a time range",
+        };
+        const mockOnQueryUpdate = jest.fn<(query: string) => {}>();
+        const { getByLabelText, getByTestId, getByText } = render(
+          <QueryEditor
+            onQueryUpdate={mockOnQueryUpdate}
+            predefinedQueryOptions={[timeRangeQuery]}
+          />
+        );
+
+        await act(async () => userEvent.click(getByTestId("select")));
+        await act(async () => userEvent.click(getByText(timeRangeQuery.name)));
+        expect(mockOnQueryUpdate).toHaveBeenLastCalledWith(
+          "timestamp >= now() - INTERVAL 24 HOUR AND timestamp < now()"
+        );
+
+        await act(async () =>
+          userEvent.click(getByLabelText("Absolute dates"))
+        );
+        expect(getByLabelText("Start date and time")).toBeTruthy();
+        expect(getByLabelText("End date and time")).toBeTruthy();
       });
     });
     describe("with text area input", () => {
