@@ -69,6 +69,41 @@ it("labels single-node clusters without showing their hostname", async () => {
   expect(queryByText("clickhouse-a")).toBeNull();
 });
 
+it("shows partial cluster data alongside lookup errors", async () => {
+  let mockClient = {
+    ...Client(),
+    getClickhouseClusters: jest
+      .fn<() => Promise<ClusterData[]>>()
+      .mockResolvedValueOnce([
+        cluster({
+          cluster_name: "tables_failed",
+          versions: ["25.3.1.100"],
+          tables: [],
+          error: "tables unavailable",
+        }),
+        cluster({
+          cluster_name: "versions_failed",
+          versions: [],
+          tables: ["errors_local"],
+          error: "versions unavailable",
+        }),
+      ]),
+  };
+
+  let { getByText, getAllByText, container } = render(
+    <Clusters api={mockClient} />
+  );
+
+  await waitFor(() =>
+    expect(mockClient.getClickhouseClusters).toBeCalledTimes(1)
+  );
+  expect(getByText("25.3.1.100", { exact: true })).toBeTruthy();
+  expect(getAllByText("tables unavailable")).toHaveLength(2);
+  expect(getAllByText("versions unavailable")).toHaveLength(2);
+  fireEvent.click(container.querySelectorAll("a")[0]);
+  expect(getByText("errors_local", { exact: true })).toBeTruthy();
+});
+
 it("shows cluster lookup errors", async () => {
   let mockClient = {
     ...Client(),

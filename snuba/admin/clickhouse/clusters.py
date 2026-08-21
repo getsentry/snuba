@@ -40,6 +40,7 @@ class _ClusterTarget(NamedTuple):
 class _ClusterState(NamedTuple):
     versions: Sequence[str]
     tables: Sequence[str]
+    error: str | None
 
 
 def _single_node_target_key(cluster: ClickhouseCluster) -> str:
@@ -171,9 +172,7 @@ def _get_cluster_state(target: _ClusterTarget, deadline: float | None = None) ->
     finally:
         executor.shutdown(wait=False, cancel_futures=True)
 
-    if error is not None:
-        raise Exception(error)
-    return _ClusterState(versions, tables)
+    return _ClusterState(versions, tables, error)
 
 
 def _describe_target(
@@ -204,8 +203,8 @@ def get_cluster_info() -> Sequence[ClusterInfo]:
         states = [executor.submit(_get_cluster_state, target, deadline) for target in targets]
         for target, state in zip(targets, states, strict=True):
             try:
-                versions, tables = state.result(timeout=max(0, deadline - time.monotonic()))
-                info.append(_describe_target(target, versions, tables))
+                versions, tables, error = state.result(timeout=max(0, deadline - time.monotonic()))
+                info.append(_describe_target(target, versions, tables, error))
             except FutureTimeoutError:
                 error = f"Timed out after {CLUSTER_QUERY_TIMEOUT}s"
                 info.append(_describe_target(target, error=error))

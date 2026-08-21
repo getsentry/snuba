@@ -4,6 +4,7 @@ from unittest import mock
 
 from snuba.admin.clickhouse.clusters import (
     _cluster_targets,
+    _ClusterState,
     _ClusterTarget,
     _get_cluster_state,
     _single_node_target_key,
@@ -164,6 +165,7 @@ def test_get_cluster_state_queries_versions_and_tables_across_all_replicas(
 
     assert state.versions == ["24.8.14", "25.3.6"]
     assert state.tables == ["errors_local", "metrics_local", "shared"]
+    assert state.error is None
     assert get_ro_cluster_node_connection.call_count == 2
     get_ro_cluster_node_connection.assert_called_with(
         cluster,
@@ -224,6 +226,7 @@ def test_get_cluster_state_queries_single_node_locally(
 
     assert state.versions == ["25.3.6"]
     assert state.tables == ["errors_local"]
+    assert state.error is None
     sqls = [
         call.args[0] for call in get_ro_cluster_node_connection.return_value.execute.call_args_list
     ]
@@ -274,8 +277,62 @@ def test_get_cluster_state_honors_shared_deadline(
     query_versions.side_effect = FutureTimeoutError
     query_tables.side_effect = FutureTimeoutError
 
-    try:
-        _get_cluster_state(target, deadline=time.monotonic() - 1)
-        raise AssertionError("expected timeout")
-    except Exception as e:
-        assert str(e) == "Timed out after 30s"
+    state = _get_cluster_state(target, deadline=time.monotonic() - 1)
+
+    assert state == _ClusterState((), (), "Timed out after 30s")
+
+
+@mock.patch("snuba.admin.clickhouse.clusters._query_tables")
+@mock.patch("snuba.admin.clickhouse.clusters._query_versions")
+def test_get_cluster_state_preserves_versions_when_tables_fail(
+    query_versions: mock.MagicMock,
+    query_tables: mock.MagicMock,
+) -> None:
+    cluster = mock.MagicMock(spec=ClickhouseCluster)
+    target = _ClusterTarget("cluster_one", "cluster_one", cluster, {"events"}, False)
+    query_versions.return_value = ["25.3.6"]
+    query_tables.side_effect = Exception("tables unavailable")
+
+    state = _get_cluster_state(target)
+
+    assert state == _ClusterState(["25.3.6"], (), "tables unavailable")
+
+
+@mock.patch("snuba.admin.clickhouse.clusters._query_tables")
+@mock.patch("snuba.admin.clickhouse.clusters._query_versions")
+def test_get_cluster_state_preserves_tables_when_versions_fail(
+    query_versions: mock.MagicMock,
+    query_tables: mock.MagicMock,
+) -> None:
+    cluster = mock.MagicMock(spec=ClickhouseCluster)
+    target = _ClusterTarget("cluster_one", "cluster_one", cluster, {"events"}, False)
+    query_versions.side_effect = Exception("versions unavailable")
+    query_tables.return_value = ["errors_local"]
+
+    state = _get_cluster_state(target)
+
+    assert state == _ClusterState((), ["errors_local"], "versions unavailable")
+
+
+@mock.patch("snuba.admin.clickhouse.clusters.ThreadPoolExecutor")
+@mock.patch("snuba.admin.clickhouse.clusters._cluster_targets")
+def test_get_cluster_info_returns_partial_state(
+    cluster_targets: mock.MagicMock,
+    executor: mock.MagicMock,
+) -> None:
+    cluster = mock.MagicMock(spec=ClickhouseCluster)
+    target = _ClusterTarget("cluster_one", "cluster_one", cluster, {"events"}, False)
+    cluster_targets.return_value = [target]
+    executor.return_value.submit.return_value.result.return_value = _ClusterState(
+        ["25.3.6"], (), "tables unavailable"
+    )
+
+    info = get_cluster_info()[0]
+
+    assert info == {
+        "cluster_name": "cluster_one",
+        "versions": ["25.3.6"],
+        "storage_sets": ["events"],
+        "tables": (),
+        "error": "tables unavailable",
+    }

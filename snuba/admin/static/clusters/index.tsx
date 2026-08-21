@@ -42,24 +42,26 @@ function listCell(values: string[]) {
 }
 
 function tablesCell(cluster: ClusterData) {
-  if (cluster.error) {
-    return <Text color="red">{cluster.error}</Text>;
-  }
-  if (cluster.tables.length === 0) {
+  if (cluster.tables.length === 0 && !cluster.error) {
     return <Text color="dimmed">—</Text>;
   }
   return (
-    <Collapse
-      text={`${cluster.tables.length} table${
-        cluster.tables.length === 1 ? "" : "s"
-      }`}
-    >
-      <div style={tableListStyle}>
-        {cluster.tables.map((table) => (
-          <div key={table}>{table}</div>
-        ))}
-      </div>
-    </Collapse>
+    <div>
+      {cluster.tables.length > 0 && (
+        <Collapse
+          text={`${cluster.tables.length} table${
+            cluster.tables.length === 1 ? "" : "s"
+          }`}
+        >
+          <div style={tableListStyle}>
+            {cluster.tables.map((table) => (
+              <div key={table}>{table}</div>
+            ))}
+          </div>
+        </Collapse>
+      )}
+      {cluster.error && <Text color="red">{cluster.error}</Text>}
+    </div>
   );
 }
 
