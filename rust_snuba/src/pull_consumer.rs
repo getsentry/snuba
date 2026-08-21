@@ -254,7 +254,7 @@ async fn run_fire_and_forget(
             clickhouse_concurrency,
         );
 
-        let mut tracker = OffsetTracker::new(Duration::from_secs(5), source.committer());
+        let mut tracker = OffsetTracker::new(Duration::from_secs(1), source.committer());
         match pipeline.stream(source.stream()).commit(&mut tracker).await {
             Ok(PipelineExit::Rebalance) => {
                 tracing::info!("Rebalance detected, restarting pipeline");
@@ -379,7 +379,7 @@ async fn run_eap(
             cogs,
         );
 
-        let mut tracker = OffsetTracker::new(Duration::from_secs(5), source.committer());
+        let mut tracker = OffsetTracker::new(Duration::from_secs(1), source.committer());
         match pipeline.stream(source.stream()).commit(&mut tracker).await {
             Ok(PipelineExit::Rebalance) => {
                 tracing::info!("Rebalance detected, restarting pipeline");
