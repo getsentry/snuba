@@ -6,9 +6,40 @@ import { Table } from "SnubaAdmin/table";
 import { Collapse } from "SnubaAdmin/collapse";
 import { ClusterData, NodeVersionData } from "SnubaAdmin/clusters/types";
 
-function versionsCell(nodes: NodeVersionData[], clusterError: string | null) {
+function queryNodeVersions(cluster: ClusterData): NodeVersionData[] {
+  if (Array.isArray(cluster.query_node_versions)) {
+    return cluster.query_node_versions;
+  }
+
+  // A rolling deploy can pair this frontend with the previous API response.
+  // Preserve that response instead of crashing when the page is refreshed.
+  if ("version" in cluster) {
+    return [
+      {
+        host: cluster.host,
+        port: cluster.port,
+        version: cluster.version || null,
+        error: cluster.error,
+      },
+    ];
+  }
+
+  return [];
+}
+
+function storageNodeVersions(cluster: ClusterData): NodeVersionData[] {
+  return Array.isArray(cluster.storage_node_versions)
+    ? cluster.storage_node_versions
+    : [];
+}
+
+function versionsCell(nodes: NodeVersionData[], clusterError?: string | null) {
   if (nodes.length === 0) {
-    return <Text color="red">{clusterError || "unknown"}</Text>;
+    return clusterError ? (
+      <Text color="red">{clusterError}</Text>
+    ) : (
+      <Text color="dimmed">not reported</Text>
+    );
   }
   return (
     <div>
@@ -70,7 +101,7 @@ const tableListStyle = {
 function VersionSummary(props: { clusters: ClusterData[] }) {
   const versions = new Set<string>();
   props.clusters.forEach((cluster) => {
-    [...cluster.query_node_versions, ...cluster.storage_node_versions].forEach(
+    [...queryNodeVersions(cluster), ...storageNodeVersions(cluster)].forEach(
       (node) => versions.add(node.version || "unknown")
     );
   });
@@ -111,8 +142,8 @@ function Clusters(props: { api: Client }) {
   }, []);
 
   const rowData = (clusters || []).map((cluster) => [
-    versionsCell(cluster.query_node_versions, cluster.query_node_error),
-    versionsCell(cluster.storage_node_versions, cluster.storage_node_error),
+    versionsCell(queryNodeVersions(cluster), cluster.query_node_error),
+    versionsCell(storageNodeVersions(cluster), cluster.storage_node_error),
     cluster.single_node ? (
       <Text color="dimmed">single node</Text>
     ) : (

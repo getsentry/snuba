@@ -153,6 +153,37 @@ it("shows topology errors alongside fallback node versions", async () => {
   expect(getByText("Query topology unavailable")).toBeTruthy();
 });
 
+it("does not crash when refresh hits an older backend during a rolling deploy", async () => {
+  let legacyCluster = cluster({
+    host: "legacy-query",
+    port: 8123,
+    query_node_versions: undefined,
+    query_node_error: undefined,
+    storage_node_versions: undefined,
+    storage_node_error: undefined,
+    version: "24.8.14.10459",
+  });
+  let mockClient = {
+    ...Client(),
+    getClickhouseClusters: jest
+      .fn<() => Promise<ClusterData[]>>()
+      .mockResolvedValueOnce([cluster()])
+      .mockResolvedValueOnce([legacyCluster]),
+  };
+
+  let { getByRole, getByText } = render(<Clusters api={mockClient} />);
+
+  await waitFor(() =>
+    expect(mockClient.getClickhouseClusters).toBeCalledTimes(1)
+  );
+  fireEvent.click(getByRole("button", { name: "Refresh" }));
+
+  await waitFor(() =>
+    expect(getByText("legacy-query:8123", { exact: false })).toBeTruthy()
+  );
+  expect(getByText("not reported")).toBeTruthy();
+});
+
 it("keeps refresh reachable when the clusters could not be loaded", async () => {
   let mockClient = {
     ...Client(),
