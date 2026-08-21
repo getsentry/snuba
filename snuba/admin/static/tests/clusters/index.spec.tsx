@@ -15,6 +15,7 @@ function cluster(overrides: Partial<ClusterData> = {}): ClusterData {
     cluster_name: null,
     distributed_cluster_name: null,
     storage_sets: ["events"],
+    query_cluster_versions: ["24.8.14.10459"],
     query_node_versions: [
       {
         host: "query-localhost",
@@ -24,6 +25,7 @@ function cluster(overrides: Partial<ClusterData> = {}): ClusterData {
       },
     ],
     query_node_error: null,
+    storage_cluster_versions: ["24.8.14.10459"],
     storage_node_versions: [
       {
         host: "storage-localhost",
@@ -49,9 +51,11 @@ it("lists every cluster with its ClickHouse version", async () => {
       cluster_name: "cluster_one_sh",
       distributed_cluster_name: "cluster_one_sh_dist",
       storage_sets: ["metrics", "transactions"],
+      query_cluster_versions: ["25.3.1.100"],
       query_node_versions: [
         { host: "query", port: 9000, version: "25.3.1.100", error: null },
       ],
+      storage_cluster_versions: ["24.8.14.10459"],
       storage_node_versions: [
         { host: "storage", port: 9001, version: "24.8.14.10459", error: null },
       ],
@@ -162,8 +166,10 @@ it("does not crash when refresh hits an older backend during a rolling deploy", 
   let legacyCluster = cluster({
     host: "legacy-query",
     port: 8123,
+    query_cluster_versions: undefined,
     query_node_versions: undefined,
     query_node_error: undefined,
+    storage_cluster_versions: undefined,
     storage_node_versions: undefined,
     storage_node_error: undefined,
     version: "24.8.14.10459",

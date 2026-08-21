@@ -33,21 +33,32 @@ function storageNodeVersions(cluster: ClusterData): NodeVersionData[] {
     : [];
 }
 
-function clusterNodes(cluster: ClusterData): NodeVersionData[] {
-  return [...queryNodeVersions(cluster), ...storageNodeVersions(cluster)];
+function clusterVersions(cluster: ClusterData): string[] {
+  const versions = [
+    ...(cluster.query_cluster_versions || []),
+    ...(cluster.storage_cluster_versions || []),
+  ];
+  if (versions.length > 0) {
+    return Array.from(new Set(versions)).sort();
+  }
+  return Array.from(
+    new Set(
+      [...queryNodeVersions(cluster), ...storageNodeVersions(cluster)].flatMap(
+        (node) => (node.version ? [node.version] : [])
+      )
+    )
+  ).sort();
 }
 
 function versionsCell(cluster: ClusterData) {
-  const nodes = clusterNodes(cluster);
-  const versions = Array.from(
-    new Set(nodes.flatMap((node) => (node.version ? [node.version] : [])))
-  ).sort();
+  const versions = clusterVersions(cluster);
   const errors = Array.from(
     new Set(
       [
-        ...nodes.map((node) => node.error),
         cluster.query_node_error,
         cluster.storage_node_error,
+        ...queryNodeVersions(cluster).map((node) => node.error),
+        ...storageNodeVersions(cluster).map((node) => node.error),
       ].filter((error): error is string => Boolean(error))
     )
   );
@@ -114,9 +125,7 @@ const tableListStyle = {
 function VersionSummary(props: { clusters: ClusterData[] }) {
   const versions = new Set<string>();
   props.clusters.forEach((cluster) => {
-    clusterNodes(cluster).forEach((node) =>
-      versions.add(node.version || "unknown")
-    );
+    clusterVersions(cluster).forEach((version) => versions.add(version));
   });
 
   return (

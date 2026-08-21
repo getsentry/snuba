@@ -1,7 +1,7 @@
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from unittest import mock
 
-from snuba.admin.clickhouse.clusters import _get_cluster_state, get_cluster_info
+from snuba.admin.clickhouse.clusters import _get_cluster_state, _get_versions, get_cluster_info
 from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster, ClickhouseNode
 
 
@@ -12,83 +12,102 @@ def result(rows: list[tuple[object, ...]]) -> mock.MagicMock:
 
 
 @mock.patch("snuba.admin.clickhouse.clusters.get_ro_cluster_node_connection")
-def test_get_cluster_state_queries_single_node_through_validated_helper(
+def test_get_versions_queries_distinct_versions_on_all_cluster_replicas(
     get_ro_cluster_node_connection: mock.MagicMock,
 ) -> None:
     cluster = mock.MagicMock(spec=ClickhouseCluster)
-    node = ClickhouseNode("single", 8123)
+    query_node = ClickhouseNode("query", 8123)
+    cluster.get_query_node.return_value = query_node
+    connection = get_ro_cluster_node_connection.return_value
+    connection.execute.return_value = result([("24.8.14",), ("25.3.6",)])
+
+    versions = _get_versions(cluster, "query_cluster")
+
+    assert versions == ["24.8.14", "25.3.6"]
+    get_ro_cluster_node_connection.assert_called_once_with(
+        cluster,
+        query_node,
+        ClickhouseClientSettings.QUERY,
+        known_nodes=[query_node],
+    )
+    connection.execute.assert_called_once_with(
+        "SELECT DISTINCT version() AS version FROM "
+        "clusterAllReplicas('query_cluster', system.one) ORDER BY version"
+    )
+
+
+@mock.patch("snuba.admin.clickhouse.clusters.get_ro_cluster_node_connection")
+def test_get_versions_escapes_cluster_name(
+    get_ro_cluster_node_connection: mock.MagicMock,
+) -> None:
+    cluster = mock.MagicMock(spec=ClickhouseCluster)
+    cluster.get_query_node.return_value = ClickhouseNode("query", 8123)
+    connection = get_ro_cluster_node_connection.return_value
+    connection.execute.return_value = result([])
+
+    _get_versions(cluster, "cluster'name")
+
+    connection.execute.assert_called_once_with(
+        "SELECT DISTINCT version() AS version FROM "
+        "clusterAllReplicas('cluster\\'name', system.one) ORDER BY version"
+    )
+
+
+@mock.patch("snuba.admin.clickhouse.clusters.get_ro_cluster_node_connection")
+def test_get_cluster_state_queries_query_and_storage_clusters(
+    get_ro_cluster_node_connection: mock.MagicMock,
+) -> None:
+    cluster = mock.MagicMock(spec=ClickhouseCluster)
+    cluster.is_single_node.return_value = False
+    cluster.get_query_node.return_value = ClickhouseNode("query", 8123)
+    cluster.get_clickhouse_distributed_cluster_name.return_value = "query_cluster"
+    cluster.get_clickhouse_cluster_name.return_value = "storage_cluster"
+
+    def execute(sql: str, *args: object, **kwargs: object) -> mock.MagicMock:
+        if "query_cluster" in sql:
+            return result([("25.3.6",)])
+        if "storage_cluster" in sql:
+            return result([("24.8.14",), ("25.3.6",)])
+        return result([(["migrations_local"],)])
+
+    get_ro_cluster_node_connection.return_value.execute.side_effect = execute
+
+    state = _get_cluster_state(cluster)
+
+    assert state.query_cluster_versions == ["25.3.6"]
+    assert state.storage_cluster_versions == ["24.8.14", "25.3.6"]
+    assert state.query_node_error is None
+    assert state.storage_node_error is None
+    assert state.tables == ["migrations_local"]
+
+
+@mock.patch("snuba.admin.clickhouse.clusters.get_ro_cluster_node_connection")
+def test_get_cluster_state_queries_single_node_once(
+    get_ro_cluster_node_connection: mock.MagicMock,
+) -> None:
+    cluster = mock.MagicMock(spec=ClickhouseCluster)
     cluster.is_single_node.return_value = True
-    cluster.get_query_node.return_value = node
+    cluster.get_query_node.return_value = ClickhouseNode("single", 8123)
 
     def execute(sql: str, *args: object, **kwargs: object) -> mock.MagicMock:
         if "version()" in sql:
             return result([("25.3.6",)])
         return result([(["migrations_local"],)])
 
-    connection = mock.MagicMock()
-    connection.execute.side_effect = execute
-    get_ro_cluster_node_connection.return_value = connection
+    get_ro_cluster_node_connection.return_value.execute.side_effect = execute
 
     state = _get_cluster_state(cluster)
 
-    assert get_ro_cluster_node_connection.call_count == 2
-    assert all(
-        call == mock.call(cluster, node, ClickhouseClientSettings.QUERY, known_nodes=[node])
-        for call in get_ro_cluster_node_connection.call_args_list
-    )
-    cluster.get_node_connection.assert_not_called()
-    cluster.get_query_connection.assert_not_called()
-    assert state.query_node_versions == [
-        {"host": "single", "port": 8123, "version": "25.3.6", "error": None}
+    assert state.query_cluster_versions == ["25.3.6"]
+    assert state.storage_cluster_versions == ["25.3.6"]
+    version_queries = [
+        call.args[0]
+        for call in get_ro_cluster_node_connection.return_value.execute.call_args_list
+        if "version()" in call.args[0]
     ]
-    assert state.storage_node_versions == state.query_node_versions
-    assert state.tables == ["migrations_local"]
-
-
-@mock.patch("snuba.admin.clickhouse.clusters.get_ro_cluster_node_connection")
-def test_get_cluster_state_separates_query_and_storage_node_versions(
-    get_ro_cluster_node_connection: mock.MagicMock,
-) -> None:
-    cluster = mock.MagicMock(spec=ClickhouseCluster)
-    query_node = ClickhouseNode("query", 8123)
-    storage_node = ClickhouseNode("storage", 8123)
-    cluster.is_single_node.return_value = False
-    cluster.get_distributed_nodes.return_value = [query_node]
-    cluster.get_local_nodes.return_value = [storage_node]
-    cluster.get_query_node.return_value = query_node
-
-    def connection_for_node(
-        cluster_arg: ClickhouseCluster,
-        node: ClickhouseNode,
-        client_settings: object,
-        known_nodes: object = None,
-    ) -> mock.MagicMock:
-        connection = mock.MagicMock()
-
-        def execute(sql: str, *args: object, **kwargs: object) -> mock.MagicMock:
-            if "version()" in sql:
-                if node.host_name == "query":
-                    return result([("25.3.6",)])
-                return result([("24.8.14",)])
-            return result([([],)])
-
-        connection.execute.side_effect = execute
-        return connection
-
-    get_ro_cluster_node_connection.side_effect = connection_for_node
-
-    state = _get_cluster_state(cluster)
-
-    assert state.query_node_versions[0]["version"] == "25.3.6"
-    assert state.query_node_versions[0]["host"] == "query"
-    assert state.storage_node_versions[0]["version"] == "24.8.14"
-    assert state.storage_node_versions[0]["host"] == "storage"
-    assert all(
-        call.kwargs.get("known_nodes") == [query_node, storage_node]
-        for call in get_ro_cluster_node_connection.call_args_list
-    )
-    cluster.get_node_connection.assert_not_called()
-    cluster.get_query_connection.assert_not_called()
+    assert version_queries == [
+        "SELECT DISTINCT version() AS version FROM system.one ORDER BY version"
+    ]
 
 
 @mock.patch("snuba.admin.clickhouse.clusters.CLUSTER_QUERY_TIMEOUT", 10)
@@ -109,140 +128,29 @@ def test_get_cluster_info_propagates_timeout_to_version_errors(
     assert info["error"] == "Timed out after 10s"
 
 
-@mock.patch("snuba.admin.clickhouse.clusters.ThreadPoolExecutor")
-def test_get_cluster_state_does_not_wait_for_inner_executor_after_deadline(
-    executor: mock.MagicMock,
+@mock.patch("snuba.admin.clickhouse.clusters._get_versions")
+@mock.patch("snuba.admin.clickhouse.clusters._get_tables")
+def test_get_cluster_state_isolates_cluster_version_errors(
+    get_tables: mock.MagicMock,
+    get_versions: mock.MagicMock,
 ) -> None:
     cluster = mock.MagicMock(spec=ClickhouseCluster)
-    node = ClickhouseNode("single", 8123)
-    cluster.is_single_node.return_value = True
-    cluster.get_query_node.return_value = node
-    versions_future = mock.MagicMock()
-    tables_future = mock.MagicMock()
-    versions_future.result.side_effect = FutureTimeoutError
-    tables_future.result.side_effect = FutureTimeoutError
-    executor.return_value.submit.side_effect = [versions_future, tables_future]
-
-    state = _get_cluster_state(cluster, deadline=0)
-
-    versions_future.result.assert_called_once_with(timeout=0)
-    tables_future.result.assert_called_once_with(timeout=0)
-    executor.return_value.shutdown.assert_called_once_with(wait=False, cancel_futures=True)
-    assert state.query_node_error == "Timed out after 30s"
-    assert state.storage_node_error == "Timed out after 30s"
-    assert state.error == "Timed out after 30s"
-
-
-@mock.patch("snuba.admin.clickhouse.clusters.ThreadPoolExecutor")
-def test_get_cluster_info_propagates_unexpected_errors_to_version_fields(
-    executor: mock.MagicMock,
-) -> None:
-    cluster = mock.MagicMock(spec=ClickhouseCluster)
-    cluster.get_storage_set_keys.return_value = set()
-    future = executor.return_value.submit.return_value
-    future.result.side_effect = RuntimeError("boom")
-
-    with mock.patch("snuba.admin.clickhouse.clusters.CLUSTERS", [cluster]):
-        info = get_cluster_info()[0]
-
-    assert info["query_node_error"] == "boom"
-    assert info["storage_node_error"] == "boom"
-    assert info["error"] == "boom"
-
-
-@mock.patch("snuba.admin.clickhouse.clusters.get_ro_cluster_node_connection")
-def test_get_cluster_state_isolates_node_version_errors(
-    get_ro_cluster_node_connection: mock.MagicMock,
-) -> None:
-    cluster = mock.MagicMock(spec=ClickhouseCluster)
-    query_node = ClickhouseNode("query", 8123)
-    storage_node = ClickhouseNode("storage", 8123)
     cluster.is_single_node.return_value = False
-    cluster.get_distributed_nodes.return_value = [query_node]
-    cluster.get_local_nodes.return_value = [storage_node]
-    cluster.get_query_node.return_value = query_node
+    cluster.get_clickhouse_distributed_cluster_name.return_value = "query_cluster"
+    cluster.get_clickhouse_cluster_name.return_value = "storage_cluster"
 
-    def connection_for_node(
-        cluster_arg: ClickhouseCluster,
-        node: ClickhouseNode,
-        client_settings: object,
-        known_nodes: object = None,
-    ) -> mock.MagicMock:
-        connection = mock.MagicMock()
+    def versions_for_cluster(cluster_arg: ClickhouseCluster, cluster_name: str | None) -> list[str]:
+        if cluster_name == "query_cluster":
+            raise RuntimeError("query unavailable")
+        return ["24.8.14"]
 
-        def execute(sql: str, *args: object, **kwargs: object) -> mock.MagicMock:
-            if "version()" in sql:
-                if node.host_name == "query":
-                    raise Exception("query unavailable")
-                return result([("24.8.14",)])
-            return result([([],)])
-
-        connection.execute.side_effect = execute
-        return connection
-
-    get_ro_cluster_node_connection.side_effect = connection_for_node
+    get_versions.side_effect = versions_for_cluster
+    get_tables.return_value = ["errors_local"]
 
     state = _get_cluster_state(cluster)
 
-    assert state.query_node_versions[0]["version"] is None
-    assert state.query_node_versions[0]["error"] == "query unavailable"
-    assert state.storage_node_versions[0]["version"] == "24.8.14"
-    assert state.storage_node_versions[0]["error"] is None
-
-
-@mock.patch("snuba.admin.clickhouse.clusters._get_node_versions")
-@mock.patch("snuba.admin.clickhouse.clusters.get_ro_cluster_node_connection")
-def test_get_cluster_state_keeps_tables_when_version_lookup_raises(
-    get_ro_cluster_node_connection: mock.MagicMock,
-    get_node_versions: mock.MagicMock,
-) -> None:
-    cluster = mock.MagicMock(spec=ClickhouseCluster)
-    query_node = ClickhouseNode("query", 8123)
-    cluster.is_single_node.return_value = True
-    cluster.get_query_node.return_value = query_node
-    get_node_versions.side_effect = RuntimeError("version executor boom")
-
-    connection = mock.MagicMock()
-    connection.execute.return_value = result([(["migrations_local"],)])
-    get_ro_cluster_node_connection.return_value = connection
-
-    state = _get_cluster_state(cluster)
-
-    assert state.query_node_versions == []
-    assert state.storage_node_versions == []
-    assert state.query_node_error == "version executor boom"
-    assert state.storage_node_error == "version executor boom"
-    assert state.tables == ["migrations_local"]
-    assert state.error is None
-
-
-@mock.patch("snuba.admin.clickhouse.clusters.get_ro_cluster_node_connection")
-def test_get_cluster_state_falls_back_to_query_endpoint_when_topology_fails(
-    get_ro_cluster_node_connection: mock.MagicMock,
-) -> None:
-    cluster = mock.MagicMock(spec=ClickhouseCluster)
-    query_node = ClickhouseNode("query", 8123)
-    cluster.is_single_node.return_value = False
-    cluster.get_query_node.return_value = query_node
-    cluster.get_distributed_nodes.side_effect = Exception("topology down")
-    cluster.get_local_nodes.side_effect = Exception("topology down")
-
-    def execute(sql: str, *args: object, **kwargs: object) -> mock.MagicMock:
-        if "version()" in sql:
-            return result([("25.3.6",)])
-        return result([(["errors_local"],)])
-
-    connection = mock.MagicMock()
-    connection.execute.side_effect = execute
-    get_ro_cluster_node_connection.return_value = connection
-
-    state = _get_cluster_state(cluster)
-
-    assert state.query_node_versions == [
-        {"host": "query", "port": 8123, "version": "25.3.6", "error": None}
-    ]
-    assert state.storage_node_versions == []
-    assert state.storage_node_error == "topology down"
-    assert state.query_node_error == "topology down"
+    assert state.query_cluster_versions == []
+    assert state.query_node_error == "query unavailable"
+    assert state.storage_cluster_versions == ["24.8.14"]
+    assert state.storage_node_error is None
     assert state.tables == ["errors_local"]
-    assert state.error is None

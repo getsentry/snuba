@@ -18,7 +18,6 @@ from snuba.admin.auth import USER_HEADER_KEY
 from snuba.admin.auth_roles import DEFAULT_ROLES, ROLES
 from snuba.admin.clickhouse.clusters import TABLES_DATABASE
 from snuba.admin.user import AdminUser
-from snuba.clusters.cluster import ClickhouseCluster
 from snuba.datasets.factory import get_enabled_dataset_names
 from snuba.web.rpc import RPCEndpoint
 
@@ -328,8 +327,16 @@ def test_clickhouse_clusters(admin_api: FlaskClient) -> None:
     for cluster, configured in zip(data, settings.CLUSTERS, strict=True):
         assert cluster["error"] is None, cluster["error"]
         # The version of the ClickHouse the tests run against, e.g. 25.8.16.10001
-        assert all(node["version"] for node in cluster["query_node_versions"])
-        assert all(node["version"] for node in cluster["storage_node_versions"])
+        assert cluster["query_cluster_versions"]
+        assert cluster["storage_cluster_versions"]
+        # Keep the previous fields populated during rolling deploys, where an
+        # older frontend bundle can receive this response.
+        assert [entry["version"] for entry in cluster["query_node_versions"]] == cluster[
+            "query_cluster_versions"
+        ]
+        assert [entry["version"] for entry in cluster["storage_node_versions"]] == cluster[
+            "storage_cluster_versions"
+        ]
         assert cluster["host"] == configured["host"]
         assert cluster["port"] == configured["port"]
         assert set(cluster["storage_sets"]) == set(configured["storage_sets"])
@@ -343,15 +350,9 @@ def test_clickhouse_clusters(admin_api: FlaskClient) -> None:
 
 @pytest.mark.redis_db
 def test_clickhouse_clusters_reports_unreachable_cluster(admin_api: FlaskClient) -> None:
-    # This test covers connection failure handling, not live topology discovery.
-    # Keep it DB-free by supplying an empty topology for multi-node clusters.
-    with (
-        mock.patch.object(ClickhouseCluster, "get_distributed_nodes", return_value=[]),
-        mock.patch.object(ClickhouseCluster, "get_local_nodes", return_value=[]),
-        mock.patch(
-            "snuba.admin.clickhouse.clusters.get_ro_cluster_node_connection",
-            side_effect=Exception("Connection refused"),
-        ),
+    with mock.patch(
+        "snuba.admin.clickhouse.clusters.get_ro_cluster_node_connection",
+        side_effect=Exception("Connection refused"),
     ):
         response = admin_api.get("/clickhouse_clusters")
 
@@ -359,12 +360,10 @@ def test_clickhouse_clusters_reports_unreachable_cluster(admin_api: FlaskClient)
     data = json.loads(response.data)
     assert len(data) == len(settings.CLUSTERS)
     for cluster in data:
-        assert all(node["version"] is None for node in cluster["query_node_versions"])
-        assert all(node["error"] == "Connection refused" for node in cluster["query_node_versions"])
-        assert all(node["version"] is None for node in cluster["storage_node_versions"])
-        assert all(
-            node["error"] == "Connection refused" for node in cluster["storage_node_versions"]
-        )
+        assert cluster["query_cluster_versions"] == []
+        assert cluster["query_node_error"] == "Connection refused"
+        assert cluster["storage_cluster_versions"] == []
+        assert cluster["storage_node_error"] == "Connection refused"
         assert cluster["tables"] == []
         assert cluster["error"] == "Connection refused"
 

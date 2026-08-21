@@ -16,8 +16,10 @@ type ClusterData = {
   storage_sets: string[];
   // These fields are optional while older snuba-admin backends can still
   // return the previous single-version response during a rolling deploy.
+  query_cluster_versions?: string[];
   query_node_versions?: NodeVersionData[];
   query_node_error?: string | null;
+  storage_cluster_versions?: string[];
   storage_node_versions?: NodeVersionData[];
   storage_node_error?: string | null;
   version?: string | null;
