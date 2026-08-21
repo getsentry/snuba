@@ -32,9 +32,9 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.downsampled_storage_tiers import Tier
 from snuba.protos.common import (
-    NORMALIZED_COLUMNS_EAP_ITEMS,
     TYPED_ARRAY_MAP_COLUMNS,
     NormalizedColumn,
+    get_normalized_columns_eap_items,
     type_array_typed_columns_select_expressions,
 )
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
@@ -59,7 +59,6 @@ from snuba.request import Request as SnubaRequest
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
-    add_existence_check_to_map_attribute_reads,
     attribute_key_to_expression,
     base_conditions_and,
     get_field_existence_expression,
@@ -68,7 +67,6 @@ from snuba.web.rpc.common.common import (
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
     typed_array_select_subcolumn_name,
-    use_indexed_name_for_request,
     use_sampling_factor,
     valid_sampling_factor_conditions,
 )
@@ -116,7 +114,9 @@ COMPARISON_OP_TO_EXPR: dict[int, Callable[..., FunctionCall]] = {
 
 
 def _apply_virtual_columns(
-    query: Query, virtual_column_contexts: Sequence[VirtualColumnContext]
+    query: Query,
+    virtual_column_contexts: Sequence[VirtualColumnContext],
+    organization_id: int,
 ) -> None:
     """Injects virtual column mappings into the clickhouse query. Works with NORMALIZED_COLUMNS on the table or
     dynamic columns in attr_str
@@ -192,12 +192,17 @@ def _apply_virtual_columns(
         if context is None:
             return expression
 
-        from_column_type = NORMALIZED_COLUMNS_EAP_ITEMS.get(
-            context.from_column_name,
-            NormalizedColumn(context.from_column_name, [AttributeKey.TYPE_STRING]),
-        ).types[0]
+        from_column_type = (
+            get_normalized_columns_eap_items(organization_id)
+            .get(
+                context.from_column_name,
+                NormalizedColumn(context.from_column_name, [AttributeKey.TYPE_STRING]),
+            )
+            .types[0]
+        )
         from_column = attribute_key_to_expression(
-            AttributeKey(name=context.from_column_name, type=from_column_type)
+            AttributeKey(name=context.from_column_name, type=from_column_type),
+            organization_id,
         )
         if is_existence:
             return get_field_existence_expression(from_column)
@@ -247,6 +252,7 @@ def aggregation_filter_to_expression(
                     agg_filter.comparison_filter.conditional_aggregation,
                     attribute_key_to_expression,
                     use_sampling_factor(request_meta),
+                    organization_id=request_meta.organization_id,
                 ),
                 agg_filter.comparison_filter.val,
             )
@@ -276,7 +282,7 @@ def aggregation_filter_to_expression(
             raise BadSnubaRPCRequestException(f"Unsupported aggregation filter type: {default}")
 
 
-def _groupby_order_by_expression(attr_key: AttributeKey) -> Expression:
+def _groupby_order_by_expression(attr_key: AttributeKey, organization_id: int) -> Expression:
     """
     Maps an attribute key used in GROUP BY / ORDER BY to its expression.
 
@@ -292,7 +298,7 @@ def _groupby_order_by_expression(attr_key: AttributeKey) -> Expression:
     """
     if attr_key.name == "sentry.timestamp":
         return snuba_column("timestamp")
-    return attribute_key_to_expression(attr_key)
+    return attribute_key_to_expression(attr_key, organization_id)
 
 
 def _convert_order_by(
@@ -355,7 +361,9 @@ def _convert_order_by(
             res.append(
                 OrderBy(
                     direction=direction,
-                    expression=expression,
+                    expression=_groupby_order_by_expression(
+                        x.column.key, request_meta.organization_id
+                    ),
                 )
             )
         elif x.column.HasField("conditional_aggregation"):
@@ -366,6 +374,7 @@ def _convert_order_by(
                         x.column.conditional_aggregation,
                         attribute_key_to_expression,
                         use_sampling_factor(request_meta),
+                        organization_id=request_meta.organization_id,
                     ),
                 )
             )
@@ -486,6 +495,7 @@ def _get_reliability_context_columns(
         confidence_interval_column = get_confidence_interval_column(
             column.conditional_aggregation,
             attribute_key_to_expression,
+            organization_id=request_meta.organization_id,
         )
         if confidence_interval_column is not None:
             context_columns.append(
@@ -498,6 +508,7 @@ def _get_reliability_context_columns(
         average_sample_rate_column = get_average_sample_rate_column(
             column.conditional_aggregation,
             attribute_key_to_expression,
+            organization_id=request_meta.organization_id,
         )
         context_columns.append(
             SelectedExpression(
@@ -509,6 +520,7 @@ def _get_reliability_context_columns(
         count_column = get_count_column(
             column.conditional_aggregation,
             attribute_key_to_expression,
+            organization_id=request_meta.organization_id,
         )
         context_columns.append(SelectedExpression(name=count_column.alias, expression=count_column))
         return context_columns
@@ -583,12 +595,13 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
     Given a column protobuf object, translates it into a Expression object and returns it.
     """
     if column.HasField("key"):
-        return attribute_key_to_expression(column.key)
+        return attribute_key_to_expression(column.key, request_meta.organization_id)
     if column.HasField("conditional_aggregation"):
         function_expr = aggregation_to_expression(
             column.conditional_aggregation,
             attribute_key_to_expression,
             use_sampling_factor(request_meta),
+            organization_id=request_meta.organization_id,
         )
         match column.conditional_aggregation.WhichOneof("default_value"):
             case None:
@@ -711,7 +724,10 @@ def build_query(
     if page_token_filter:
         additional_conditions.append(page_token_filter)
 
-    groupby = [_groupby_order_by_expression(attr_key) for attr_key in request.group_by]
+    groupby = [
+        _groupby_order_by_expression(attr_key, request.meta.organization_id)
+        for attr_key in request.group_by
+    ]
 
     res = Query(
         from_clause=entity,
@@ -722,7 +738,7 @@ def build_query(
                 request.meta.trace_item_type,
                 request.filter,
                 attribute_key_to_expression,
-                use_indexed_name=use_indexed_name_for_request(request.meta),
+                organization_id=request.meta.organization_id,
             ),
             valid_sampling_factor_conditions(),
             *item_type_conds,
@@ -748,19 +764,8 @@ def build_query(
         ),
     )
     treeify_or_and_conditions(res)
-    _apply_virtual_columns(res, request.virtual_column_contexts)
-    add_existence_check_to_map_attribute_reads(res)
-    # The transforms above (notably virtual-column rewriting) can re-apply aliases to
-    # limit_by expressions; a LIMIT BY must stay alias-free unless the alias is declared
-    # in the SELECT, so strip any aliases they reintroduced.
-    limitby = res.get_limitby()
-    if limitby is not None:
-        res.set_limitby(
-            LimitBy(
-                limit=limitby.limit,
-                columns=[_strip_aliases(column) for column in limitby.columns],
-            )
-        )
+    _apply_virtual_columns(res, request.virtual_column_contexts, request.meta.organization_id)
+    add_existence_check_to_subscriptable_references(res)
     return res
 
 

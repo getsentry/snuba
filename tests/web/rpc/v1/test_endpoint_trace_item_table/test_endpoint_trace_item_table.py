@@ -5173,6 +5173,7 @@ class TestArrayOperationsRejected:
                     label="count(tags)",
                 ),
                 attribute_key_to_expression,
+                organization_id=1,
             )
 
 

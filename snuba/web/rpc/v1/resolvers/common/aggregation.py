@@ -67,7 +67,9 @@ SERVER_SAMPLE_RATE_ATTRIBUTE = "server_sample_rate"
 
 def _get_condition_in_aggregation(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
-    attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    attribute_key_to_expression: Callable[[AttributeKey, int], Expression],
+    *,
+    organization_id: int,
 ) -> Expression:
     condition_in_aggregation: Expression = literal(True)
     if isinstance(aggregation, AttributeConditionalAggregation):
@@ -80,6 +82,7 @@ def _get_condition_in_aggregation(
             aggregation.filter,
             attribute_key_to_expression,
             membership_as_has=True,
+            organization_id=organization_id,
         )
     return condition_in_aggregation
 
@@ -94,13 +97,14 @@ _ATTR_KEY_EXPR_OP_TO_FUNC = {
 
 def _attribute_key_expression_to_expression(
     expr: AttributeKeyExpression,
-    attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    attribute_key_to_expression: Callable[[AttributeKey, int], Expression],
+    organization_id: int,
 ) -> tuple[Expression, list[AttributeKey]]:
     """Recursively converts an AttributeKeyExpression proto to a Snuba AST Expression,
     also collecting all leaf AttributeKey nodes encountered during traversal."""
     match expr.WhichOneof("expression"):
         case "key":
-            return attribute_key_to_expression(expr.key), [expr.key]
+            return attribute_key_to_expression(expr.key, organization_id), [expr.key]
         case "formula":
             func = _ATTR_KEY_EXPR_OP_TO_FUNC.get(expr.formula.op)
             if func is None:
@@ -108,10 +112,10 @@ def _attribute_key_expression_to_expression(
                     f"Unknown AttributeKeyExpression op: {expr.formula.op}"
                 )
             left_expr, left_keys = _attribute_key_expression_to_expression(
-                expr.formula.left, attribute_key_to_expression
+                expr.formula.left, attribute_key_to_expression, organization_id
             )
             right_expr, right_keys = _attribute_key_expression_to_expression(
-                expr.formula.right, attribute_key_to_expression
+                expr.formula.right, attribute_key_to_expression, organization_id
             )
             return func(left_expr, right_expr), left_keys + right_keys
         case _:
@@ -120,7 +124,8 @@ def _attribute_key_expression_to_expression(
 
 def _resolve_field_and_existence(
     aggregation: AttributeConditionalAggregation,
-    attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    attribute_key_to_expression: Callable[[AttributeKey, int], Expression],
+    organization_id: int,
 ) -> tuple[Expression, Expression]:
     """Given a protobuf aggregation, returns (aggregation expression, existence expression)
     Aggregation expression - the actual aggregation ex: sum(attr1 + attr2)
@@ -128,10 +133,11 @@ def _resolve_field_and_existence(
     """
     if aggregation.HasField("expression"):
         field, keys = _attribute_key_expression_to_expression(
-            aggregation.expression, attribute_key_to_expression
+            aggregation.expression, attribute_key_to_expression, organization_id
         )
         existence_checks = [
-            get_field_existence_expression(attribute_key_to_expression(k)) for k in keys
+            get_field_existence_expression(attribute_key_to_expression(k, organization_id))
+            for k in keys
         ]
 
         existence: Expression = existence_checks[0]
@@ -145,7 +151,7 @@ def _resolve_field_and_existence(
     # Array keys resolve like scalars now: attribute_key_to_expression reads the typed
     # array column(s) natively and get_field_existence_expression maps that read to a
     # notEmpty existence check (see snuba.web.rpc.common.common).
-    field = attribute_key_to_expression(aggregation.key)
+    field = attribute_key_to_expression(aggregation.key, organization_id)
     return field, get_field_existence_expression(field)
 
 
@@ -381,8 +387,10 @@ def get_attribute_confidence_interval_alias(
 
 def get_average_sample_rate_column(
     aggregation: AttributeConditionalAggregation,
-    attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    attribute_key_to_expression: Callable[[AttributeKey, int], Expression],
     use_sampling_factor: bool = False,
+    *,
+    organization_id: int,
 ) -> Expression:
     alias = CustomColumnInformation(
         custom_column_id="average_sample_rate",
@@ -393,9 +401,11 @@ def get_average_sample_rate_column(
         use_sampling_factor,
         aggregation.extrapolation_mode,
     )
-    field, field_exists = _resolve_field_and_existence(aggregation, attribute_key_to_expression)
+    field, field_exists = _resolve_field_and_existence(
+        aggregation, attribute_key_to_expression, organization_id
+    )
     condition_in_aggregation = _get_condition_in_aggregation(
-        aggregation, attribute_key_to_expression
+        aggregation, attribute_key_to_expression, organization_id=organization_id
     )
     return f.divide(
         f.countIf(
@@ -422,14 +432,20 @@ def _get_count_column_alias(
 
 def get_count_column(
     aggregation: AttributeConditionalAggregation,
-    attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    attribute_key_to_expression: Callable[[AttributeKey, int], Expression],
+    *,
+    organization_id: int,
 ) -> Expression:
-    field, field_exists = _resolve_field_and_existence(aggregation, attribute_key_to_expression)
+    field, field_exists = _resolve_field_and_existence(
+        aggregation, attribute_key_to_expression, organization_id
+    )
     return f.countIf(
         field,
         and_cond(
             field_exists,
-            _get_condition_in_aggregation(aggregation, attribute_key_to_expression),
+            _get_condition_in_aggregation(
+                aggregation, attribute_key_to_expression, organization_id=organization_id
+            ),
         ),
         alias=_get_count_column_alias(aggregation),
     )
@@ -454,10 +470,12 @@ def _get_possible_percentiles(percentile: float, granularity: float, width: floa
 def _get_possible_percentiles_expression(
     aggregation: AttributeConditionalAggregation,
     percentile: float,
-    attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    attribute_key_to_expression: Callable[[AttributeKey, int], Expression],
     use_sampling_factor: bool = False,
     granularity: float = 0.005,
     width: float = 0.1,
+    *,
+    organization_id: int,
 ) -> Expression:
     """
     In order to approximate the confidence intervals, we calculate a bunch of quantiles around the desired percentile, using the given granularity and width.
@@ -469,7 +487,9 @@ def _get_possible_percentiles_expression(
     The width isn't important as long as it contains the range of values that we actually care about, I just added it as a performance optimization.
     The granularity might need to be adjusted, but I think this is a good starting value.
     """
-    field, _field_exists = _resolve_field_and_existence(aggregation, attribute_key_to_expression)
+    field, _field_exists = _resolve_field_and_existence(
+        aggregation, attribute_key_to_expression, organization_id
+    )
     possible_percentiles = _get_possible_percentiles(percentile, granularity, width)
     alias = get_attribute_confidence_interval_alias(
         aggregation, {"granularity": str(granularity), "width": str(width)}
@@ -516,8 +536,10 @@ def get_extrapolated_function(
     aggregation: AttributeConditionalAggregation,
     field: Expression,
     field_exists: Expression,
-    attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    attribute_key_to_expression: Callable[[AttributeKey, int], Expression],
     use_sampling_factor: bool = False,
+    *,
+    organization_id: int,
 ) -> CurriedFunctionCall | FunctionCall | None:
     alias = aggregation.label or None
     alias_dict = {"alias": alias} if alias else {}
@@ -532,7 +554,7 @@ def get_extrapolated_function(
         )
 
     condition_in_aggregation = _get_condition_in_aggregation(
-        aggregation, attribute_key_to_expression
+        aggregation, attribute_key_to_expression, organization_id=organization_id
     )
 
     sampling_weight = _get_sampling_weight_expression(
@@ -637,10 +659,12 @@ def get_non_extrapolated_function(
 
 def _get_ci_count(
     aggregation: AttributeConditionalAggregation,
-    attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    attribute_key_to_expression: Callable[[AttributeKey, int], Expression],
     alias: str | None = None,
     z_value: float = Z_VALUE_P95,
     use_sampling_factor: bool = False,
+    *,
+    organization_id: int,
 ) -> Expression:
     r"""
     confidence interval = Z \cdot \sqrt{\sum_{i=1}^n w_i^2 - w_i}
@@ -662,9 +686,11 @@ def _get_ci_count(
         dependent inclusion probabilities from the HT formula zero out.
     """
 
-    field, field_exists = _resolve_field_and_existence(aggregation, attribute_key_to_expression)
+    field, field_exists = _resolve_field_and_existence(
+        aggregation, attribute_key_to_expression, organization_id
+    )
     condition_in_aggregation = _get_condition_in_aggregation(
-        aggregation, attribute_key_to_expression
+        aggregation, attribute_key_to_expression, organization_id=organization_id
     )
     alias_dict = {"alias": alias} if alias else {}
     sampling_weight = _get_sampling_weight_expression(
@@ -687,10 +713,12 @@ def _get_ci_count(
 
 def _get_ci_sum(
     aggregation: AttributeConditionalAggregation,
-    attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    attribute_key_to_expression: Callable[[AttributeKey, int], Expression],
     alias: str | None = None,
     z_value: float = Z_VALUE_P95,
     use_sampling_factor: bool = False,
+    *,
+    organization_id: int,
 ) -> Expression:
     r"""
     confidence interval = Z \cdot \sqrt{\sum_{i=1}^n x_i^2 \cdot (w_i^2 - w_i)}
@@ -706,9 +734,11 @@ def _get_ci_sum(
     variance of the total.
     """
 
-    field, field_exists = _resolve_field_and_existence(aggregation, attribute_key_to_expression)
+    field, field_exists = _resolve_field_and_existence(
+        aggregation, attribute_key_to_expression, organization_id
+    )
     condition_in_aggregation = _get_condition_in_aggregation(
-        aggregation, attribute_key_to_expression
+        aggregation, attribute_key_to_expression, organization_id=organization_id
     )
     alias_dict = {"alias": alias} if alias else {}
     sampling_weight = _get_sampling_weight_expression(
@@ -734,9 +764,11 @@ def _get_ci_sum(
 
 def _get_ci_avg(
     aggregation: AttributeConditionalAggregation,
-    attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    attribute_key_to_expression: Callable[[AttributeKey, int], Expression],
     alias: str | None = None,
     use_sampling_factor: bool = False,
+    *,
+    organization_id: int,
 ) -> Expression:
     """
     confidence interval = (\\frac{t + err_t}{c - err_c} - \\frac{t - err_t}{c + err_c}) \\cdot 0.5
@@ -761,9 +793,11 @@ def _get_ci_avg(
     average between the upper and lower error.
     """
 
-    field, field_exists = _resolve_field_and_existence(aggregation, attribute_key_to_expression)
+    field, field_exists = _resolve_field_and_existence(
+        aggregation, attribute_key_to_expression, organization_id
+    )
     condition_in_aggregation = _get_condition_in_aggregation(
-        aggregation, attribute_key_to_expression
+        aggregation, attribute_key_to_expression, organization_id=organization_id
     )
     alias_dict = {"alias": alias} if alias else {}
     sampling_weight = _get_sampling_weight_expression(
@@ -788,6 +822,7 @@ def _get_ci_avg(
         f"{alias}__sum_err",
         Z_VALUE_P975,
         use_sampling_factor,
+        organization_id=organization_id,
     )
     expr_count_err = _get_ci_count(
         aggregation,
@@ -795,6 +830,7 @@ def _get_ci_avg(
         f"{alias}__count_err",
         Z_VALUE_P975,
         use_sampling_factor,
+        organization_id=organization_id,
     )
 
     return f.divide(
@@ -817,8 +853,10 @@ def _get_ci_avg(
 
 def get_confidence_interval_column(
     aggregation: AttributeConditionalAggregation,
-    attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    attribute_key_to_expression: Callable[[AttributeKey, int], Expression],
     use_sampling_factor: bool = False,
+    *,
+    organization_id: int,
 ) -> Expression | None:
     """
     Returns the expression for calculating the upper confidence limit for a given aggregation. If the aggregation cannot be extrapolated, returns None.
@@ -833,33 +871,56 @@ def get_confidence_interval_column(
             attribute_key_to_expression,
             alias,
             use_sampling_factor=use_sampling_factor,
+            organization_id=organization_id,
         ),
         Function.FUNCTION_SUM: _get_ci_sum(
             aggregation,
             attribute_key_to_expression,
             alias,
             use_sampling_factor=use_sampling_factor,
+            organization_id=organization_id,
         ),
         Function.FUNCTION_AVG: _get_ci_avg(
             aggregation,
             attribute_key_to_expression,
             alias,
             use_sampling_factor,
+            organization_id=organization_id,
         ),
         Function.FUNCTION_P50: _get_possible_percentiles_expression(
-            aggregation, 0.5, attribute_key_to_expression, use_sampling_factor
+            aggregation,
+            0.5,
+            attribute_key_to_expression,
+            use_sampling_factor,
+            organization_id=organization_id,
         ),
         Function.FUNCTION_P75: _get_possible_percentiles_expression(
-            aggregation, 0.75, attribute_key_to_expression, use_sampling_factor
+            aggregation,
+            0.75,
+            attribute_key_to_expression,
+            use_sampling_factor,
+            organization_id=organization_id,
         ),
         Function.FUNCTION_P90: _get_possible_percentiles_expression(
-            aggregation, 0.9, attribute_key_to_expression, use_sampling_factor
+            aggregation,
+            0.9,
+            attribute_key_to_expression,
+            use_sampling_factor,
+            organization_id=organization_id,
         ),
         Function.FUNCTION_P95: _get_possible_percentiles_expression(
-            aggregation, 0.95, attribute_key_to_expression, use_sampling_factor
+            aggregation,
+            0.95,
+            attribute_key_to_expression,
+            use_sampling_factor,
+            organization_id=organization_id,
         ),
         Function.FUNCTION_P99: _get_possible_percentiles_expression(
-            aggregation, 0.99, attribute_key_to_expression, use_sampling_factor
+            aggregation,
+            0.99,
+            attribute_key_to_expression,
+            use_sampling_factor,
+            organization_id=organization_id,
         ),
     }
 
@@ -950,14 +1011,18 @@ def _build_ordered_agg_sort_key(
 
 def aggregation_to_expression(
     aggregation: AttributeConditionalAggregation,
-    attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    attribute_key_to_expression: Callable[[AttributeKey, int], Expression],
     use_sampling_factor: bool = False,
+    *,
+    organization_id: int,
 ) -> Expression:
-    field, field_exists = _resolve_field_and_existence(aggregation, attribute_key_to_expression)
+    field, field_exists = _resolve_field_and_existence(
+        aggregation, attribute_key_to_expression, organization_id
+    )
     alias = aggregation.label if aggregation.label else None
     alias_dict = {"alias": alias} if alias else {}
     condition_in_aggregation = _get_condition_in_aggregation(
-        aggregation, attribute_key_to_expression
+        aggregation, attribute_key_to_expression, organization_id=organization_id
     )
     max_array_size = get_option("snuba_query_max_array_size", 1000)
 
@@ -977,6 +1042,7 @@ def aggregation_to_expression(
             field_exists,
             attribute_key_to_expression,
             use_sampling_factor,
+            organization_id=organization_id,
         )
     else:
         agg_func_expr = get_non_extrapolated_function(

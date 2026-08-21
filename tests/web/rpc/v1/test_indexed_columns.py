@@ -7,10 +7,12 @@ and check the filter returns the right rows.
 """
 
 import uuid
+from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     Column,
     TraceItemTableRequest,
@@ -74,6 +76,15 @@ def _item_message(ts: datetime, session_id: str, conversation_id: str, color: st
 @pytest.mark.eap
 @pytest.mark.redis_db
 class TestIndexedColumnSkipIndex:
+    @pytest.fixture
+    def org_1_allowlisted(self) -> Iterator[None]:
+        # org 1 is opted in, so session_id / ai_conversation_id resolve to their real
+        # (indexed) columns instead of falling through to the attributes_* map.
+        with override_options(
+            "snuba", {"eap_items_unpopulated_normalized_columns_org_allowlist": "1"}
+        ):
+            yield
+
     @pytest.fixture(autouse=True)
     def setup(self, eap: None, redis_db: None) -> None:
         self.base_time = datetime.now(tz=UTC).replace(
@@ -167,6 +178,7 @@ class TestIndexedColumnSkipIndex:
     )
     def test_filter_uses_skip_index_and_matches(
         self,
+        org_1_allowlisted: None,
         attribute_name: str,
         op: "ComparisonFilter.Op.ValueType",
         value: AttributeValue,
@@ -185,7 +197,9 @@ class TestIndexedColumnSkipIndex:
         assert colors == expected_colors
         assert self._explain_uses_index(sql, expected_index), sql
 
-    def test_exists_on_conversation_id_excludes_rows_without_a_value(self) -> None:
+    def test_exists_on_conversation_id_excludes_rows_without_a_value(
+        self, org_1_allowlisted: None
+    ) -> None:
         # gen_ai.conversation.id is optional: the "green" span never set it, so its
         # ai_conversation_id is empty. exists() must treat empty as absent and exclude
         # it, rather than matching every row (a non-nullable column is never NULL, so a
@@ -198,3 +212,39 @@ class TestIndexedColumnSkipIndex:
             )
         )
         assert colors == ["blue", "red"]
+
+    @pytest.mark.parametrize(
+        "attribute_name,index_name,value",
+        [
+            ("sentry.session_id", "bf_session_id", AttributeValue(val_str=SESSION_A)),
+            (
+                "gen_ai.conversation.id",
+                "bf_ai_conversation_id",
+                AttributeValue(val_str=CONV_A),
+            ),
+        ],
+    )
+    def test_org_not_allowlisted_falls_through_to_map(
+        self,
+        attribute_name: str,
+        index_name: str,
+        value: AttributeValue,
+    ) -> None:
+        # org 1 is NOT in the allowlist, so session_id / ai_conversation_id resolve via the
+        # attributes_string map rather than their dedicated columns. The skip index is
+        # therefore not applied, and since the consumer writes these values only to the
+        # dedicated columns (never the map), the map lookup matches nothing.
+        with override_options(
+            "snuba", {"eap_items_unpopulated_normalized_columns_org_allowlist": "999"}
+        ):
+            sql, colors = self._execute(
+                TraceItemFilter(
+                    comparison_filter=ComparisonFilter(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name=attribute_name),
+                        op=ComparisonFilter.OP_EQUALS,
+                        value=value,
+                    )
+                )
+            )
+        assert colors == []
+        assert not self._explain_uses_index(sql, index_name), sql

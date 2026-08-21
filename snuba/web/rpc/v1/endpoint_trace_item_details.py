@@ -35,7 +35,6 @@ from snuba.web.rpc.common.common import (
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
     typed_array_map_selected_expressions,
-    use_indexed_name_for_request,
 )
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
@@ -107,7 +106,7 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
                 request.meta.trace_item_type,
                 request.filter,
                 attribute_key_to_expression,
-                use_indexed_name=use_indexed_name_for_request(request.meta),
+                organization_id=request.meta.organization_id,
             ),
         ),
         limit=1,
