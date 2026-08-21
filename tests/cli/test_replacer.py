@@ -53,6 +53,8 @@ def test_replacer_cli(
             "/tmp/health.txt",
             "--max-poll-interval-ms",
             "12345",
+            "--concurrency",
+            "4",
         ],
     )
 
@@ -60,6 +62,7 @@ def test_replacer_cli(
     assert replacer_strategy_factory.call_args.kwargs == {
         "worker": worker,
         "health_check_file": "/tmp/health.txt",
+        "concurrency": 4,
     }
     assert build_kafka_consumer_configuration.call_args.kwargs["override_params"] == {
         "max.poll.interval.ms": 12345,

@@ -69,6 +69,17 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     type=int,
     default=30000,
 )
+@click.option(
+    "--concurrency",
+    type=int,
+    default=1,
+    show_default=True,
+    help=(
+        "Number of replacement messages to process in parallel in one consumer. "
+        "1 keeps the historical single-threaded path. Values >1 use RunTaskInThreads "
+        "and only help when many projects are in the backlog; same-project work stays serial."
+    ),
+)
 def replacer(
     *,
     replacements_topic: str | None,
@@ -82,6 +93,7 @@ def replacer(
     log_level: str | None = None,
     health_check_file: str | None = None,
     max_poll_interval_ms: int = 30000,
+    concurrency: int = 1,
 ) -> None:
     from arroyo import Topic, configure_metrics
     from arroyo.backends.kafka import KafkaConsumer
@@ -134,6 +146,7 @@ def replacer(
         ReplacerStrategyFactory(
             worker=ReplacerWorker(storage, consumer_group, metrics=metrics),
             health_check_file=health_check_file,
+            concurrency=concurrency,
         ),
         ONCE_PER_SECOND,
     )

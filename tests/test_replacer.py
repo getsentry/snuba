@@ -437,3 +437,32 @@ class TestReplacer:
         strategy = factory.create_with_partitions(mock.Mock(), {})
 
         assert isinstance(strategy, Healthcheck)
+
+    def test_replacer_strategy_factory_defaults_to_run_task(self) -> None:
+        from arroyo.processing.strategies.run_task import RunTask
+
+        worker = mock.Mock()
+        factory = replacer.ReplacerStrategyFactory(worker=worker)
+
+        strategy = factory.create_with_partitions(mock.Mock(), {})
+
+        assert isinstance(strategy, RunTask)
+
+    def test_replacer_strategy_factory_uses_threads_when_concurrent(self) -> None:
+        from arroyo.processing.strategies.run_task_in_threads import RunTaskInThreads
+
+        worker = mock.Mock()
+        factory = replacer.ReplacerStrategyFactory(
+            worker=worker,
+            concurrency=4,
+            max_pending_futures=8,
+        )
+
+        strategy = factory.create_with_partitions(mock.Mock(), {})
+
+        assert isinstance(strategy, RunTaskInThreads)
+
+    def test_replacer_strategy_factory_rejects_invalid_concurrency(self) -> None:
+        worker = mock.Mock()
+        with pytest.raises(ValueError, match="concurrency must be >= 1"):
+            replacer.ReplacerStrategyFactory(worker=worker, concurrency=0)
