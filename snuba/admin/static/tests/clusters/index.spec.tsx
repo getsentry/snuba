@@ -197,6 +197,38 @@ it("does not crash when refresh hits an older backend during a rolling deploy", 
   expect(queryByText("legacy-query:8123", { exact: false })).toBeNull();
 });
 
+it("keeps table-lookup errors out of the versions column on older backends", async () => {
+  let legacyCluster = cluster({
+    host: "legacy-query",
+    port: 8123,
+    query_cluster_versions: undefined,
+    query_node_versions: undefined,
+    query_node_error: undefined,
+    storage_cluster_versions: undefined,
+    storage_node_versions: undefined,
+    storage_node_error: undefined,
+    version: "24.8.14.10459",
+    error: "tables unavailable",
+  });
+  let mockClient = {
+    ...Client(),
+    getClickhouseClusters: jest
+      .fn<() => Promise<ClusterData[]>>()
+      .mockResolvedValueOnce([legacyCluster]),
+  };
+
+  let { getAllByText } = render(<Clusters api={mockClient} />);
+
+  await waitFor(() =>
+    expect(mockClient.getClickhouseClusters).toBeCalledTimes(1)
+  );
+
+  // Once in the tables column only; not also under ClickHouse Versions.
+  expect(getAllByText("tables unavailable")).toHaveLength(1);
+  // Once in the row, once in the global summary badge.
+  expect(getAllByText("24.8.14.10459", { exact: false })).toHaveLength(2);
+});
+
 it("keeps refresh reachable when the clusters could not be loaded", async () => {
   let mockClient = {
     ...Client(),

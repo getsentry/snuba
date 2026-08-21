@@ -19,7 +19,9 @@ function queryNodeVersions(cluster: ClusterData): NodeVersionData[] {
         host: cluster.host,
         port: cluster.port,
         version: cluster.version || null,
-        error: cluster.error,
+        // cluster.error is the table-lookup failure on older backends. Keep it
+        // out of the versions column; tablesCell already surfaces it.
+        error: null,
       },
     ];
   }
