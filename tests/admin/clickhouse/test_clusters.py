@@ -154,3 +154,35 @@ def test_get_cluster_state_isolates_node_version_errors(
     assert state.query_node_versions[0]["error"] == "query unavailable"
     assert state.storage_node_versions[0]["version"] == "24.8.14"
     assert state.storage_node_versions[0]["error"] is None
+
+
+@mock.patch("snuba.admin.clickhouse.clusters.get_ro_cluster_node_connection")
+def test_get_cluster_state_falls_back_to_query_endpoint_when_topology_fails(
+    get_ro_cluster_node_connection: mock.MagicMock,
+) -> None:
+    cluster = mock.MagicMock(spec=ClickhouseCluster)
+    query_node = ClickhouseNode("query", 8123)
+    cluster.is_single_node.return_value = False
+    cluster.get_query_node.return_value = query_node
+    cluster.get_distributed_nodes.side_effect = Exception("topology down")
+    cluster.get_local_nodes.side_effect = Exception("topology down")
+
+    def execute(sql: str, *args: object, **kwargs: object) -> mock.MagicMock:
+        if "version()" in sql:
+            return result([("25.3.6",)])
+        return result([(["errors_local"],)])
+
+    connection = mock.MagicMock()
+    connection.execute.side_effect = execute
+    get_ro_cluster_node_connection.return_value = connection
+
+    state = _get_cluster_state(cluster)
+
+    assert state.query_node_versions == [
+        {"host": "query", "port": 8123, "version": "25.3.6", "error": None}
+    ]
+    assert state.storage_node_versions == []
+    assert state.storage_node_error == "topology down"
+    assert state.query_node_error is None
+    assert state.tables == ["errors_local"]
+    assert state.error is None

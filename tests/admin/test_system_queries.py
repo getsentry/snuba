@@ -2,7 +2,7 @@ import ast
 import contextlib
 from collections.abc import Sequence
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -395,6 +395,52 @@ def test_by_host_connection_uses_default_http_port(helper_name: str) -> None:
     assert node.port != sentinel_cluster_http_port, (
         "by-host connections must not use the cluster's configured port"
     )
+
+
+
+def test_is_valid_node_accepts_query_endpoint_when_topology_fails() -> None:
+    """Configured query endpoint must stay valid if topology discovery fails."""
+    from snuba.admin.clickhouse import common
+    from snuba.clusters.cluster import ClickhouseCluster, ClickhouseNode
+
+    cluster = MagicMock(spec=ClickhouseCluster)
+    query_node = ClickhouseNode("query", 9000)
+    cluster.get_query_node.return_value = query_node
+    cluster.get_port.return_value = 8123
+    cluster.get_local_nodes.side_effect = Exception("topology down")
+    cluster.get_distributed_nodes.side_effect = Exception("topology down")
+
+    assert common.is_valid_node("query", 8123, cluster) is True
+
+
+def test_is_valid_node_rejects_unknown_host_when_topology_fails() -> None:
+    from snuba.admin.clickhouse import common
+    from snuba.admin.clickhouse.common import InvalidNodeError
+    from snuba.clusters.cluster import ClickhouseCluster, ClickhouseNode
+
+    cluster = MagicMock(spec=ClickhouseCluster)
+    cluster.get_query_node.return_value = ClickhouseNode("query", 9000)
+    cluster.get_port.return_value = 8123
+    cluster.get_local_nodes.side_effect = Exception("topology down")
+    cluster.get_distributed_nodes.side_effect = Exception("topology down")
+
+    with pytest.raises(InvalidNodeError):
+        common.is_valid_node("attacker.example.com", 8123, cluster)
+
+
+def test_is_valid_node_accepts_discovered_storage_node() -> None:
+    from snuba.admin.clickhouse import common
+    from snuba.clusters.cluster import ClickhouseCluster, ClickhouseNode
+
+    cluster = MagicMock(spec=ClickhouseCluster)
+    query_node = ClickhouseNode("query", 9000)
+    storage_node = ClickhouseNode("storage", 8123)
+    cluster.get_query_node.return_value = query_node
+    cluster.get_port.return_value = 8123
+    cluster.get_local_nodes.return_value = [storage_node]
+    cluster.get_distributed_nodes.return_value = []
+
+    assert common.is_valid_node("storage", 8123, cluster) is True
 
 
 def test_ro_cluster_node_connection_uses_validated_readonly_pool() -> None:

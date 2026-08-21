@@ -44,26 +44,45 @@ def is_valid_node(
     cluster: ClickhouseCluster,
     storage_name: str | None = None,
 ) -> bool:
-    nodes = [
-        cluster.get_query_node(),
-    ]
+    """Return whether host/port is a known node on the cluster.
+
+    The configured query endpoint is always accepted from static cluster
+    config. Topology discovery (local/distributed nodes) can fail independently
+    of that endpoint being reachable, so discovery errors must not reject the
+    query endpoint itself. For other hosts we still require a successful match
+    against discovered topology.
+    """
+    query_node = cluster.get_query_node()
+    if host == query_node.host_name and port == _node_connect_port(query_node, cluster):
+        return True
+
+    nodes: list[ClickhouseNode] = [query_node]
+    topology_error: Exception | None = None
     try:
-        nodes.extend([*cluster.get_local_nodes(), *cluster.get_distributed_nodes()])
+        nodes.extend(list(cluster.get_local_nodes()))
     except Exception as e:
+        topology_error = e
+    try:
+        nodes.extend(list(cluster.get_distributed_nodes()))
+    except Exception as e:
+        topology_error = e if topology_error is None else topology_error
+
+    if any(node.host_name == host and _node_connect_port(node, cluster) == port for node in nodes):
+        return True
+
+    if topology_error is not None:
         subject = f"storage {storage_name}" if storage_name is not None else "cluster"
         raise InvalidNodeError(
             f"Error getting nodes for {subject}",
             extra_data={
-                "error": str(e),
+                "error": str(topology_error),
                 "host": host,
                 "port": port,
                 "nodes": ",".join([node.host_name for node in nodes]),
             },
-        ) from e
+        ) from topology_error
 
-    return any(
-        node.host_name == host and _node_connect_port(node, cluster) == port for node in nodes
-    )
+    return False
 
 
 def _get_storage(storage_name: str) -> ReadableTableStorage:

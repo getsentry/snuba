@@ -156,9 +156,10 @@ def _get_cluster_state(cluster: ClickhouseCluster) -> _ClusterState:
         try:
             query_nodes = cluster.get_distributed_nodes() or [cluster.get_query_node()]
         except Exception as e:
+            # Topology discovery failed, but the configured query endpoint is
+            # still known statically and can serve version/table lookups.
             logger.warning(str(e), cluster=str(cluster), node_role="query")
-            query_nodes = []
-            query_node_error = str(e)
+            query_nodes = [cluster.get_query_node()]
 
         try:
             storage_nodes = cluster.get_local_nodes()
