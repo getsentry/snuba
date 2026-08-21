@@ -103,6 +103,32 @@ def test_get_cluster_info_propagates_timeout_to_version_errors(
 
 
 @mock.patch("snuba.admin.clickhouse.clusters.ThreadPoolExecutor")
+def test_get_cluster_state_does_not_wait_for_inner_executor_after_deadline(
+    executor: mock.MagicMock,
+) -> None:
+    cluster = mock.MagicMock(spec=ClickhouseCluster)
+    node = ClickhouseNode("single", 8123)
+    cluster.is_single_node.return_value = True
+    cluster.get_query_node.return_value = node
+    versions_future = mock.MagicMock()
+    tables_future = mock.MagicMock()
+    versions_future.result.side_effect = FutureTimeoutError
+    tables_future.result.side_effect = FutureTimeoutError
+    executor.return_value.submit.side_effect = [versions_future, tables_future]
+
+    state = _get_cluster_state(cluster, deadline=0)
+
+    versions_future.result.assert_called_once_with(timeout=0)
+    tables_future.result.assert_called_once_with(timeout=0)
+    executor.return_value.shutdown.assert_called_once_with(
+        wait=False, cancel_futures=True
+    )
+    assert state.query_node_error == "Timed out after 30s"
+    assert state.storage_node_error == "Timed out after 30s"
+    assert state.error == "Timed out after 30s"
+
+
+@mock.patch("snuba.admin.clickhouse.clusters.ThreadPoolExecutor")
 def test_get_cluster_info_propagates_unexpected_errors_to_version_fields(
     executor: mock.MagicMock,
 ) -> None:
