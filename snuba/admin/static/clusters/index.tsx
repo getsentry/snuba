@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Button, Code, Group, Loader, Space, Text } from "@mantine/core";
+import { Code, Loader, Space, Text } from "@mantine/core";
 
 import Client from "SnubaAdmin/api_client";
 import { Table } from "SnubaAdmin/table";
@@ -97,12 +97,7 @@ function Clusters(props: { api: Client }) {
 
   return (
     <div>
-      <Group>
-        <Button onClick={fetchClusters} loading={isLoading}>
-          Refresh
-        </Button>
-        {fetchError !== null && <Text color="red">{fetchError}</Text>}
-      </Group>
+      {fetchError !== null && <Text color="red">{fetchError}</Text>}
       <Space h="md" />
       {clusters === null ? (
         isLoading && <Loader />

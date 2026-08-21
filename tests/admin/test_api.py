@@ -15,7 +15,6 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
 from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.auth import USER_HEADER_KEY
 from snuba.admin.auth_roles import DEFAULT_ROLES, ROLES
-from snuba.admin.clickhouse.clusters import TABLES_DATABASE
 from snuba.admin.user import AdminUser
 from snuba.datasets.factory import get_enabled_dataset_names
 from snuba.web.rpc import RPCEndpoint
@@ -325,20 +324,12 @@ def test_clickhouse_clusters(admin_api: FlaskClient) -> None:
     assert data
     assert len({cluster["cluster_name"] for cluster in data}) == len(data)
     for cluster in data:
+        assert set(cluster) == {"cluster_name", "versions", "storage_sets", "tables", "error"}
         assert cluster["error"] is None, cluster["error"]
         # The version of the ClickHouse the tests run against, e.g. 25.8.16.10001
         assert cluster["versions"]
         assert cluster["versions"] == sorted(set(cluster["versions"]))
-        assert cluster["database"] == TABLES_DATABASE
         assert cluster["tables"] == sorted(set(cluster["tables"]))
-        # Keep the previous fields populated during rolling deploys, where an
-        # older frontend bundle can receive this response.
-        assert cluster["query_cluster_versions"] == cluster["versions"]
-        assert cluster["storage_cluster_versions"] == cluster["versions"]
-        assert [entry["version"] for entry in cluster["query_node_versions"]] == cluster["versions"]
-        assert [entry["version"] for entry in cluster["storage_node_versions"]] == cluster[
-            "versions"
-        ]
 
 
 @pytest.mark.redis_db
@@ -353,11 +344,8 @@ def test_clickhouse_clusters_reports_unreachable_cluster(admin_api: FlaskClient)
     data = json.loads(response.data)
     assert data
     for cluster in data:
+        assert set(cluster) == {"cluster_name", "versions", "storage_sets", "tables", "error"}
         assert cluster["versions"] == []
-        assert cluster["query_cluster_versions"] == []
-        assert cluster["query_node_error"] == "Connection refused"
-        assert cluster["storage_cluster_versions"] == []
-        assert cluster["storage_node_error"] == "Connection refused"
         assert cluster["tables"] == []
         assert cluster["error"] == "Connection refused"
 
