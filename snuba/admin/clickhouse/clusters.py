@@ -192,7 +192,10 @@ def get_cluster_info() -> Sequence[ClusterInfo]:
                     info["error"],
                 ) = state.result(timeout=max(0, deadline - time.monotonic()))
             except FutureTimeoutError:
-                info["error"] = f"Timed out after {CLUSTER_QUERY_TIMEOUT}s"
+                error = f"Timed out after {CLUSTER_QUERY_TIMEOUT}s"
+                info["query_node_error"] = error
+                info["storage_node_error"] = error
+                info["error"] = error
             except Exception as e:
                 logger.warning(str(e), cluster=str(cluster))
                 info["error"] = str(e)
