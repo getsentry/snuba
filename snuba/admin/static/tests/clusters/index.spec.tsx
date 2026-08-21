@@ -133,6 +133,26 @@ it("shows the reason a cluster's version could not be fetched", async () => {
   expect(getByText("Connection refused", { exact: false })).toBeTruthy();
 });
 
+it("shows topology errors alongside fallback node versions", async () => {
+  let mockClient = {
+    ...Client(),
+    getClickhouseClusters: jest
+      .fn<() => Promise<ClusterData[]>>()
+      .mockResolvedValueOnce([
+        cluster({ query_node_error: "Query topology unavailable" }),
+      ]),
+  };
+
+  let { getByText } = render(<Clusters api={mockClient} />);
+
+  await waitFor(() =>
+    expect(mockClient.getClickhouseClusters).toBeCalledTimes(1)
+  );
+
+  expect(getByText("query-localhost:9000", { exact: false })).toBeTruthy();
+  expect(getByText("Query topology unavailable")).toBeTruthy();
+});
+
 it("keeps refresh reachable when the clusters could not be loaded", async () => {
   let mockClient = {
     ...Client(),

@@ -160,6 +160,7 @@ def _get_cluster_state(cluster: ClickhouseCluster) -> _ClusterState:
             # still known statically and can serve version/table lookups.
             logger.warning(str(e), cluster=str(cluster), node_role="query")
             query_nodes = [cluster.get_query_node()]
+            query_node_error = str(e)
 
         try:
             storage_nodes = cluster.get_local_nodes()

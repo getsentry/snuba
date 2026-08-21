@@ -26,6 +26,11 @@ function versionsCell(nodes: NodeVersionData[], clusterError: string | null) {
           )}
         </div>
       ))}
+      {clusterError && (
+        <Text color="red" size="sm">
+          {clusterError}
+        </Text>
+      )}
     </div>
   );
 }

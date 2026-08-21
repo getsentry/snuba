@@ -209,6 +209,6 @@ def test_get_cluster_state_falls_back_to_query_endpoint_when_topology_fails(
     ]
     assert state.storage_node_versions == []
     assert state.storage_node_error == "topology down"
-    assert state.query_node_error is None
+    assert state.query_node_error == "topology down"
     assert state.tables == ["errors_local"]
     assert state.error is None
