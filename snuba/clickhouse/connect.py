@@ -51,6 +51,10 @@ _CLICKHOUSE_CONNECT_TRANSPORT_SETTINGS = {"X-ClickHouse-Format": "Native"}
 
 clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
 clickhouse_connect_common.set_setting("use_protocol_version", True)
+# clickhouse-connect mints query_id once per request, outside its HTTP retry
+# loop. Reusing that id on retry races a still-running first attempt and raises
+# QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING (SNUBA-CJK). Let ClickHouse assign ids.
+clickhouse_connect_common.set_setting("autogenerate_query_id", False)
 
 _pool_lock = Lock()
 _pool_managers: dict[tuple[str | None, bool], PoolManager] = {}
@@ -459,6 +463,9 @@ class ClickhouseConnectPool(ClickhousePool):
                     query_limit=resolved_query_limit,
                     query_retries=query_retries,
                     autogenerate_session_id=False,
+                    # See module-level autogenerate_query_id=False: avoid reusing
+                    # one client-minted query_id across connect HTTP retries.
+                    autogenerate_query_id=False,
                     compress="lz4",
                 )
                 self._clients[cache_key] = client
