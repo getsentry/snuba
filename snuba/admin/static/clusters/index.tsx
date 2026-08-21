@@ -33,35 +33,41 @@ function storageNodeVersions(cluster: ClusterData): NodeVersionData[] {
     : [];
 }
 
-function versionsCell(nodes: NodeVersionData[], clusterError?: string | null) {
-  if (nodes.length === 0) {
-    return clusterError ? (
-      <Text color="red">{clusterError}</Text>
-    ) : (
-      <Text color="dimmed">not reported</Text>
-    );
+function clusterNodes(cluster: ClusterData): NodeVersionData[] {
+  return [...queryNodeVersions(cluster), ...storageNodeVersions(cluster)];
+}
+
+function versionsCell(cluster: ClusterData) {
+  const nodes = clusterNodes(cluster);
+  const versions = Array.from(
+    new Set(nodes.flatMap((node) => (node.version ? [node.version] : [])))
+  ).sort();
+  const errors = Array.from(
+    new Set(
+      [
+        ...nodes.map((node) => node.error),
+        cluster.query_node_error,
+        cluster.storage_node_error,
+      ].filter((error): error is string => Boolean(error))
+    )
+  );
+
+  if (versions.length === 0 && errors.length === 0) {
+    return <Text color="dimmed">not reported</Text>;
   }
+
   return (
     <div>
-      {nodes.map((node) => (
-        <div key={`${node.host}:${node.port}`}>
-          <Code>
-            {node.host}:{node.port}
-          </Code>{" "}
-          {node.version ? (
-            <Code>{node.version}</Code>
-          ) : (
-            <Text color="red" size="sm" component="span">
-              {node.error || "unknown"}
-            </Text>
-          )}
+      {versions.map((version) => (
+        <div key={version}>
+          <Code>{version}</Code>
         </div>
       ))}
-      {clusterError && (
-        <Text color="red" size="sm">
-          {clusterError}
+      {errors.map((error) => (
+        <Text key={error} color="red" size="sm">
+          {error}
         </Text>
-      )}
+      ))}
     </div>
   );
 }
@@ -101,8 +107,8 @@ const tableListStyle = {
 function VersionSummary(props: { clusters: ClusterData[] }) {
   const versions = new Set<string>();
   props.clusters.forEach((cluster) => {
-    [...queryNodeVersions(cluster), ...storageNodeVersions(cluster)].forEach(
-      (node) => versions.add(node.version || "unknown")
+    clusterNodes(cluster).forEach((node) =>
+      versions.add(node.version || "unknown")
     );
   });
 
@@ -142,8 +148,7 @@ function Clusters(props: { api: Client }) {
   }, []);
 
   const rowData = (clusters || []).map((cluster) => [
-    versionsCell(queryNodeVersions(cluster), cluster.query_node_error),
-    versionsCell(storageNodeVersions(cluster), cluster.storage_node_error),
+    versionsCell(cluster),
     cluster.single_node ? (
       <Text color="dimmed">single node</Text>
     ) : (
@@ -170,22 +175,21 @@ function Clusters(props: { api: Client }) {
       ) : (
         <Table
           headerData={[
-            "Query Nodes",
-            "Storage Nodes",
+            "ClickHouse Versions",
             "Cluster Name",
             "Distributed Cluster Name",
             "Database",
             "Storage Sets",
             "Tables in default",
           ]}
-          columnWidths={[4, 4, 3, 3, 2, 5, 3]}
+          columnWidths={[4, 3, 3, 2, 5, 3]}
           rowData={rowData}
         />
       )}
       <Text size="sm" color="dimmed">
-        Every cluster this Snuba deployment is configured with. Versions are
-        read directly from each query and storage node. Tables are read from the
-        configured query endpoint, and only tables in the <Code>default</Code>{" "}
+        Every cluster this Snuba deployment is configured with. Each row lists
+        distinct versions from its query and storage nodes. Tables are read from
+        the configured query endpoint, and only tables in the <Code>default</Code>{" "}
         database are listed.
       </Text>
     </div>
