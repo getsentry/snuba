@@ -4,70 +4,17 @@ import { Button, Code, Group, Loader, Space, Text } from "@mantine/core";
 import Client from "SnubaAdmin/api_client";
 import { Table } from "SnubaAdmin/table";
 import { Collapse } from "SnubaAdmin/collapse";
-import { ClusterData, NodeVersionData } from "SnubaAdmin/clusters/types";
-
-function queryNodeVersions(cluster: ClusterData): NodeVersionData[] {
-  if (Array.isArray(cluster.query_node_versions)) {
-    return cluster.query_node_versions;
-  }
-
-  // A rolling deploy can pair this frontend with the original API response.
-  if ("version" in cluster) {
-    return [
-      {
-        host: cluster.host,
-        port: cluster.port,
-        version: cluster.version || null,
-        error: null,
-      },
-    ];
-  }
-
-  return [];
-}
-
-function clusterVersions(cluster: ClusterData): string[] {
-  if (Array.isArray(cluster.versions)) {
-    return cluster.versions;
-  }
-
-  return Array.from(
-    new Set(
-      [
-        ...(cluster.query_cluster_versions || []),
-        ...(cluster.storage_cluster_versions || []),
-        ...queryNodeVersions(cluster).flatMap((node) =>
-          node.version ? [node.version] : []
-        ),
-        ...(cluster.storage_node_versions || []).flatMap((node) =>
-          node.version ? [node.version] : []
-        ),
-      ]
-    )
-  ).sort();
-}
+import { ClusterData } from "SnubaAdmin/clusters/types";
 
 function versionsCell(cluster: ClusterData) {
-  // On the cluster-level API, one query fetches both versions and tables, so a
-  // failure applies here too. Older APIs use cluster.error for tables only.
-  const errors = Array.isArray(cluster.versions)
-    ? cluster.error
-      ? [cluster.error]
-      : []
-    : [
-        cluster.query_node_error,
-        cluster.storage_node_error,
-        ...queryNodeVersions(cluster).map((node) => node.error),
-        ...(cluster.storage_node_versions || []).map((node) => node.error),
-      ].filter((error): error is string => Boolean(error));
-  const versions = clusterVersions(cluster);
-  if (versions.length === 0 && errors.length === 0) {
+  const errors = cluster.error ? [cluster.error] : [];
+  if (cluster.versions.length === 0 && errors.length === 0) {
     return <Text color="dimmed">not reported</Text>;
   }
 
   return (
     <div>
-      {versions.map((version) => (
+      {cluster.versions.map((version) => (
         <div key={version}>
           <Code>{version}</Code>
         </div>
@@ -122,19 +69,6 @@ const tableListStyle = {
   fontSize: 14,
 };
 
-function displayClusterName(cluster: ClusterData): string {
-  if (cluster.single_node) {
-    return "single node";
-  }
-  if (cluster.cluster_name) {
-    return cluster.cluster_name;
-  }
-  if (cluster.distributed_cluster_name) {
-    return cluster.distributed_cluster_name;
-  }
-  return "single node";
-}
-
 function Clusters(props: { api: Client }) {
   const [clusters, setClusters] = useState<ClusterData[] | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -155,7 +89,7 @@ function Clusters(props: { api: Client }) {
   }, []);
 
   const rowData = (clusters || []).map((cluster) => [
-    displayClusterName(cluster),
+    cluster.cluster_name,
     versionsCell(cluster),
     listCell(cluster.storage_sets),
     tablesCell(cluster),

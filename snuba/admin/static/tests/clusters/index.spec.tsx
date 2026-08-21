@@ -7,21 +7,9 @@ import { fireEvent, render, waitFor } from "@testing-library/react";
 
 function cluster(overrides: Partial<ClusterData> = {}): ClusterData {
   return {
-    host: "localhost",
-    port: 8123,
-    database: "default",
-    secure: false,
-    single_node: false,
     cluster_name: "cluster_one",
-    distributed_cluster_name: "cluster_one",
     storage_sets: ["events", "transactions"],
     versions: ["24.8.14.10459", "25.3.1.100"],
-    query_cluster_versions: ["24.8.14.10459", "25.3.1.100"],
-    query_node_versions: [],
-    query_node_error: null,
-    storage_cluster_versions: ["24.8.14.10459", "25.3.1.100"],
-    storage_node_versions: [],
-    storage_node_error: null,
     tables: ["errors_local", "transactions_local"],
     error: null,
     ...overrides,
@@ -69,14 +57,7 @@ it("labels single-node clusters without showing their hostname", async () => {
     ...Client(),
     getClickhouseClusters: jest
       .fn<() => Promise<ClusterData[]>>()
-      .mockResolvedValueOnce([
-        cluster({
-          host: "clickhouse-a",
-          single_node: true,
-          cluster_name: "clickhouse-a",
-          distributed_cluster_name: "clickhouse-a",
-        }),
-      ]),
+      .mockResolvedValueOnce([cluster({ cluster_name: "single node" })]),
   };
 
   let { getByText, queryByText } = render(<Clusters api={mockClient} />);
@@ -104,68 +85,6 @@ it("shows cluster lookup errors", async () => {
     expect(mockClient.getClickhouseClusters).toBeCalledTimes(1)
   );
   expect(getAllByText("Connection refused")).toHaveLength(2);
-});
-
-it("does not crash when refresh hits an older backend during a rolling deploy", async () => {
-  let legacyCluster = cluster({
-    cluster_name: null,
-    distributed_cluster_name: null,
-    versions: undefined,
-    query_cluster_versions: undefined,
-    query_node_versions: undefined,
-    query_node_error: undefined,
-    storage_cluster_versions: undefined,
-    storage_node_versions: undefined,
-    storage_node_error: undefined,
-    version: "24.8.14.10459",
-  });
-  let mockClient = {
-    ...Client(),
-    getClickhouseClusters: jest
-      .fn<() => Promise<ClusterData[]>>()
-      .mockResolvedValueOnce([cluster()])
-      .mockResolvedValueOnce([legacyCluster]),
-  };
-
-  let { getByRole, getByText } = render(<Clusters api={mockClient} />);
-
-  await waitFor(() =>
-    expect(mockClient.getClickhouseClusters).toBeCalledTimes(1)
-  );
-  fireEvent.click(getByRole("button", { name: "Refresh" }));
-
-  await waitFor(() =>
-    expect(getByText("single node", { exact: true })).toBeTruthy()
-  );
-  expect(getByText("24.8.14.10459", { exact: true })).toBeTruthy();
-});
-
-it("keeps legacy table errors out of the versions column", async () => {
-  let legacyCluster = cluster({
-    versions: undefined,
-    query_cluster_versions: undefined,
-    query_node_versions: undefined,
-    query_node_error: undefined,
-    storage_cluster_versions: undefined,
-    storage_node_versions: undefined,
-    storage_node_error: undefined,
-    version: "24.8.14.10459",
-    error: "tables unavailable",
-  });
-  let mockClient = {
-    ...Client(),
-    getClickhouseClusters: jest
-      .fn<() => Promise<ClusterData[]>>()
-      .mockResolvedValueOnce([legacyCluster]),
-  };
-
-  let { getByText, getAllByText } = render(<Clusters api={mockClient} />);
-
-  await waitFor(() =>
-    expect(mockClient.getClickhouseClusters).toBeCalledTimes(1)
-  );
-  expect(getAllByText("tables unavailable")).toHaveLength(1);
-  expect(getByText("24.8.14.10459", { exact: true })).toBeTruthy();
 });
 
 it("keeps refresh reachable when clusters could not be loaded", async () => {

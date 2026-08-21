@@ -19,34 +19,12 @@ CLUSTER_QUERY_TIMEOUT = 30
 TABLES_DATABASE = "default"
 
 
-class NodeVersionInfo(TypedDict):
-    """Compatibility shape for frontend bundles from before cluster-level rows."""
-
-    host: str
-    port: int
-    version: str | None
-    error: str | None
-
-
 class ClusterInfo(TypedDict):
     cluster_name: str
     versions: Sequence[str]
     storage_sets: Sequence[str]
     tables: Sequence[str]
     error: str | None
-    # Compatibility fields for frontend bundles from before cluster-level rows.
-    host: str
-    port: int
-    database: str
-    secure: bool
-    single_node: bool
-    distributed_cluster_name: str | None
-    query_cluster_versions: Sequence[str]
-    query_node_versions: Sequence[NodeVersionInfo]
-    query_node_error: str | None
-    storage_cluster_versions: Sequence[str]
-    storage_node_versions: Sequence[NodeVersionInfo]
-    storage_node_error: str | None
 
 
 class _ClusterTarget(NamedTuple):
@@ -74,7 +52,7 @@ def _cluster_targets() -> Sequence[_ClusterTarget]:
             port = cluster.get_port()
             # Single-node configs have no ClickHouse cluster name. Keep each
             # endpoint separate so multiple single-node hosts do not collapse.
-            entries = [(f"{host}:{port}", host, True)]
+            entries = [(f"{host}:{port}", "single node", True)]
         else:
             entries = [
                 (name, name, False)
@@ -133,35 +111,18 @@ def _get_cluster_state(target: _ClusterTarget) -> _ClusterState:
     return _ClusterState(versions, tables)
 
 
-def _compat_versions(name: str, versions: Sequence[str]) -> Sequence[NodeVersionInfo]:
-    return [{"host": name, "port": 0, "version": version, "error": None} for version in versions]
-
-
 def _describe_target(
     target: _ClusterTarget,
     versions: Sequence[str] = (),
     tables: Sequence[str] = (),
     error: str | None = None,
 ) -> ClusterInfo:
-    compat_versions = _compat_versions(target.name, versions)
     return {
         "cluster_name": target.name,
         "versions": versions,
         "storage_sets": sorted(target.storage_sets),
         "tables": tables,
         "error": error,
-        "host": target.cluster.get_host(),
-        "port": target.cluster.get_port(),
-        "database": TABLES_DATABASE,
-        "secure": target.cluster.get_secure(),
-        "single_node": target.local,
-        "distributed_cluster_name": target.name,
-        "query_cluster_versions": versions,
-        "query_node_versions": compat_versions,
-        "query_node_error": error,
-        "storage_cluster_versions": versions,
-        "storage_node_versions": compat_versions,
-        "storage_node_error": error,
     }
 
 

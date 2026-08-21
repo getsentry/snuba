@@ -62,8 +62,8 @@ def test_cluster_targets_keeps_single_node_hosts_separate(clusters: mock.MagicMo
     targets = _cluster_targets()
 
     assert targets == [
-        _ClusterTarget("clickhouse-a:9000", "clickhouse-a", first, {"events"}, True),
-        _ClusterTarget("clickhouse-b:9000", "clickhouse-b", second, {"transactions"}, True),
+        _ClusterTarget("clickhouse-a:9000", "single node", first, {"events"}, True),
+        _ClusterTarget("clickhouse-b:9000", "single node", second, {"transactions"}, True),
     ]
 
 
@@ -160,6 +160,7 @@ def test_get_cluster_info_reports_timeout(
 
     info = get_cluster_info()[0]
 
+    assert set(info) == {"cluster_name", "versions", "storage_sets", "tables", "error"}
     assert info["cluster_name"] == "cluster_one"
     assert info["versions"] == ()
     assert info["tables"] == ()
