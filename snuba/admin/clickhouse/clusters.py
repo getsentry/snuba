@@ -145,9 +145,7 @@ def _get_tables(cluster: ClickhouseCluster) -> Sequence[str]:
     return [str(table) for table in results[0][0]]
 
 
-def _get_cluster_state(
-    cluster: ClickhouseCluster, deadline: float | None = None
-) -> _ClusterState:
+def _get_cluster_state(cluster: ClickhouseCluster, deadline: float | None = None) -> _ClusterState:
     """Query query nodes, storage nodes, and tables through validated admin pools."""
     if deadline is None:
         deadline = time.monotonic() + CLUSTER_QUERY_TIMEOUT
@@ -197,9 +195,7 @@ def _get_cluster_state(
         versions_future = executor.submit(_get_node_versions, cluster, unique_nodes)
         tables_future = executor.submit(_get_tables, cluster)
         try:
-            node_versions = versions_future.result(
-                timeout=max(0, deadline - time.monotonic())
-            )
+            node_versions = versions_future.result(timeout=max(0, deadline - time.monotonic()))
         except Exception as e:
             version_error = (
                 f"Timed out after {CLUSTER_QUERY_TIMEOUT}s"
@@ -265,9 +261,7 @@ def get_cluster_info() -> Sequence[ClusterInfo]:
         # them rather than a per cluster budget. Inner lookups share this same
         # deadline and stop holding an outer worker when it expires.
         deadline = time.monotonic() + CLUSTER_QUERY_TIMEOUT
-        states = [
-            executor.submit(_get_cluster_state, cluster, deadline) for cluster in CLUSTERS
-        ]
+        states = [executor.submit(_get_cluster_state, cluster, deadline) for cluster in CLUSTERS]
         for cluster, info, state in zip(CLUSTERS, cluster_info, states, strict=True):
             try:
                 (
