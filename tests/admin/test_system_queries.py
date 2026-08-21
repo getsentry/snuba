@@ -2,7 +2,7 @@ import ast
 import contextlib
 from collections.abc import Sequence
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -395,6 +395,110 @@ def test_by_host_connection_uses_default_http_port(helper_name: str) -> None:
     assert node.port != sentinel_cluster_http_port, (
         "by-host connections must not use the cluster's configured port"
     )
+
+
+def test_is_valid_node_accepts_query_endpoint_when_topology_fails() -> None:
+    """Configured query endpoint must stay valid if topology discovery fails."""
+    from snuba.admin.clickhouse import common
+    from snuba.clusters.cluster import ClickhouseCluster, ClickhouseNode
+
+    cluster = MagicMock(spec=ClickhouseCluster)
+    query_node = ClickhouseNode("query", 9000)
+    cluster.get_query_node.return_value = query_node
+    cluster.get_port.return_value = 8123
+    cluster.get_local_nodes.side_effect = Exception("topology down")
+    cluster.get_distributed_nodes.side_effect = Exception("topology down")
+
+    assert common.is_valid_node("query", 8123, cluster) is True
+
+
+def test_is_valid_node_rejects_unknown_host_when_topology_fails() -> None:
+    from snuba.admin.clickhouse import common
+    from snuba.admin.clickhouse.common import InvalidNodeError
+    from snuba.clusters.cluster import ClickhouseCluster, ClickhouseNode
+
+    cluster = MagicMock(spec=ClickhouseCluster)
+    cluster.get_query_node.return_value = ClickhouseNode("query", 9000)
+    cluster.get_port.return_value = 8123
+    cluster.get_local_nodes.side_effect = Exception("topology down")
+    cluster.get_distributed_nodes.side_effect = Exception("topology down")
+
+    with pytest.raises(InvalidNodeError):
+        common.is_valid_node("attacker.example.com", 8123, cluster)
+
+
+def test_is_valid_node_accepts_discovered_storage_node() -> None:
+    from snuba.admin.clickhouse import common
+    from snuba.clusters.cluster import ClickhouseCluster, ClickhouseNode
+
+    cluster = MagicMock(spec=ClickhouseCluster)
+    query_node = ClickhouseNode("query", 9000)
+    storage_node = ClickhouseNode("storage", 8123)
+    cluster.get_query_node.return_value = query_node
+    cluster.get_port.return_value = 8123
+    cluster.get_local_nodes.return_value = [storage_node]
+    cluster.get_distributed_nodes.return_value = []
+
+    assert common.is_valid_node("storage", 8123, cluster) is True
+
+
+def test_is_valid_node_uses_known_nodes_without_rediscovery() -> None:
+    """Callers with a topology snapshot must not re-query discovery."""
+    from snuba.admin.clickhouse import common
+    from snuba.clusters.cluster import ClickhouseCluster, ClickhouseNode
+
+    cluster = MagicMock(spec=ClickhouseCluster)
+    query_node = ClickhouseNode("query", 9000)
+    storage_node = ClickhouseNode("storage", 8123)
+    cluster.get_query_node.return_value = query_node
+    cluster.get_port.return_value = 8123
+    cluster.get_local_nodes.side_effect = Exception("should not rediscover")
+    cluster.get_distributed_nodes.side_effect = Exception("should not rediscover")
+
+    assert (
+        common.is_valid_node(
+            "storage",
+            8123,
+            cluster,
+            known_nodes=[query_node, storage_node],
+        )
+        is True
+    )
+    cluster.get_local_nodes.assert_not_called()
+    cluster.get_distributed_nodes.assert_not_called()
+
+
+def test_ro_cluster_node_connection_uses_validated_readonly_pool() -> None:
+    """Cluster-scoped admin lookups must stay on the validated readonly path."""
+    from unittest.mock import MagicMock
+
+    from snuba.admin.clickhouse import common
+    from snuba.clusters.cluster import ClickhouseCluster, ClickhouseNode
+
+    cluster = MagicMock(spec=ClickhouseCluster)
+    cluster.get_database.return_value = "default"
+    cluster.get_secure.return_value = False
+    cluster.get_ca_certs.return_value = None
+    cluster.get_verify.return_value = False
+    cluster.get_port.return_value = 8123
+    cluster.get_query_node.return_value = ClickhouseNode("query", 8123)
+    node = ClickhouseNode("storage", 8123)
+    known_nodes = [cluster.get_query_node.return_value, node]
+
+    with (
+        patch.object(common, "_validate_node") as mock_validate,
+        patch.object(settings, "CLICKHOUSE_READONLY_USER", "ro_user"),
+        patch.object(settings, "CLICKHOUSE_READONLY_PASSWORD", "ro_pass"),
+        patch.object(common, "build_pool") as mock_pool,
+    ):
+        common.get_ro_cluster_node_connection(
+            cluster, node, ClickhouseClientSettings.QUERY, known_nodes=known_nodes
+        )
+
+    mock_validate.assert_called_once_with("storage", 8123, cluster, None, known_nodes=known_nodes)
+    assert mock_pool.called
+    assert mock_pool.call_args.args[2] == "ro_user"
+    assert mock_pool.call_args.args[3] == "ro_pass"
 
 
 def test_query_node_connection_uses_cluster_http_port() -> None:

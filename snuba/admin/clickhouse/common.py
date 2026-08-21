@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 from sql_metadata import Parser, QueryType  # type: ignore[import-untyped]
 
@@ -38,26 +38,63 @@ def _node_connect_port(node: ClickhouseNode, cluster: ClickhouseCluster) -> int:
     return node.port if node.port is not None else DEFAULT_CLICKHOUSE_HTTP_PORT
 
 
-def is_valid_node(host: str, port: int, cluster: ClickhouseCluster, storage_name: str) -> bool:
-    nodes = [
-        cluster.get_query_node(),
-    ]
+def is_valid_node(
+    host: str,
+    port: int,
+    cluster: ClickhouseCluster,
+    storage_name: str | None = None,
+    known_nodes: Sequence[ClickhouseNode] | None = None,
+) -> bool:
+    """Return whether host/port is a known node on the cluster.
+
+    The configured query endpoint is always accepted from static cluster
+    config. Topology discovery (local/distributed nodes) can fail independently
+    of that endpoint being reachable, so discovery errors must not reject the
+    query endpoint itself. For other hosts we still require a successful match
+    against discovered topology.
+
+    When `known_nodes` is provided (for example after `_get_cluster_state` has
+    already discovered topology), validate against that snapshot instead of
+    re-querying ClickHouse. A second discovery can fail transiently and mark a
+    just-discovered node as invalid.
+    """
+    query_node = cluster.get_query_node()
+    if host == query_node.host_name and port == _node_connect_port(query_node, cluster):
+        return True
+
+    if known_nodes is not None:
+        return any(
+            node.host_name == host and _node_connect_port(node, cluster) == port
+            for node in known_nodes
+        )
+
+    nodes: list[ClickhouseNode] = [query_node]
+    topology_error: Exception | None = None
     try:
-        nodes.extend([*cluster.get_local_nodes(), *cluster.get_distributed_nodes()])
+        nodes.extend(list(cluster.get_local_nodes()))
     except Exception as e:
+        topology_error = e
+    try:
+        nodes.extend(list(cluster.get_distributed_nodes()))
+    except Exception as e:
+        topology_error = e if topology_error is None else topology_error
+
+    if any(node.host_name == host and _node_connect_port(node, cluster) == port for node in nodes):
+        return True
+
+    if topology_error is not None:
+        subject = f"storage {storage_name}" if storage_name is not None else "cluster"
         raise InvalidNodeError(
-            f"Error getting nodes for storage {storage_name}",
+            f"Error getting nodes for {subject}",
             extra_data={
-                "error": str(e),
+                "error": str(topology_error),
                 "host": host,
                 "port": port,
                 "nodes": ",".join([node.host_name for node in nodes]),
             },
-        ) from e
+        ) from topology_error
 
-    return any(
-        node.host_name == host and _node_connect_port(node, cluster) == port for node in nodes
-    )
+    return False
 
 
 def _get_storage(storage_name: str) -> ReadableTableStorage:
@@ -76,9 +113,12 @@ def _validate_node(
     clickhouse_host: str,
     clickhouse_port: int,
     cluster: ClickhouseCluster,
-    storage_name: str,
+    storage_name: str | None = None,
+    known_nodes: Sequence[ClickhouseNode] | None = None,
 ) -> None:
-    if not is_valid_node(clickhouse_host, clickhouse_port, cluster, storage_name):
+    if not is_valid_node(
+        clickhouse_host, clickhouse_port, cluster, storage_name, known_nodes=known_nodes
+    ):
         raise InvalidNodeError(
             f"host {clickhouse_host} and port {clickhouse_port} are not valid",
             extra_data={
@@ -93,19 +133,20 @@ def _validate_node(
 def _build_validated_pool(
     clickhouse_host: str,
     clickhouse_port: int,
-    storage_name: str,
+    storage_name: str | None,
     cluster: ClickhouseCluster,
     database: str,
     username: str,
     password: str,
     client_settings: ClickhouseClientSettings,
+    known_nodes: Sequence[ClickhouseNode] | None = None,
 ) -> ClickhousePool:
     # Single chokepoint for admin ClickhousePool acquisition. A pool ships the
     # user/password to the node (HTTP auth header), so an unvalidated host means
     # credentials reach whatever listener answers. All admin helpers must go
     # through here. The regression test
     # test_no_direct_clickhouse_pool_construction_in_admin enforces this.
-    _validate_node(clickhouse_host, clickhouse_port, cluster, storage_name)
+    _validate_node(clickhouse_host, clickhouse_port, cluster, storage_name, known_nodes=known_nodes)
     # Query-endpoint traffic uses the cluster Envoy listen port. Replica
     # (by-host) traffic uses 8123 on that node.
     query_node = cluster.get_query_node()
@@ -182,6 +223,56 @@ def get_ro_query_node_connection(
     )
 
     return connection
+
+
+def get_ro_cluster_node_connection(
+    cluster: ClickhouseCluster,
+    node: ClickhouseNode,
+    client_settings: ClickhouseClientSettings,
+    known_nodes: Sequence[ClickhouseNode] | None = None,
+) -> ClickhousePool:
+    """Read-only connection to a known node on a configured cluster.
+
+    Unlike the storage-keyed helpers, this path works for clusters with no
+    registered storage. It still goes through `_build_validated_pool`, so the
+    host/port must belong to the cluster and only the global readonly
+    credentials are used.
+
+    Pass `known_nodes` when the caller already discovered topology for this
+    request so validation does not re-query and risk a transient false reject.
+    """
+    allowed = {
+        ClickhouseClientSettings.QUERY.name,
+        ClickhouseClientSettings.QUERYLOG.name,
+        ClickhouseClientSettings.TRACING.name,
+        ClickhouseClientSettings.CARDINALITY_ANALYZER.name,
+    }
+    assert getattr(client_settings, "name", None) in allowed, (
+        "admin can only use QUERY, QUERYLOG, TRACING or CARDINALITY_ANALYZER "
+        "ClickhouseClientSettings"
+    )
+
+    if getattr(client_settings, "name", None) in {
+        ClickhouseClientSettings.QUERY.name,
+        ClickhouseClientSettings.QUERYLOG.name,
+    }:
+        username = settings.CLICKHOUSE_READONLY_USER
+        password = settings.CLICKHOUSE_READONLY_PASSWORD
+    else:
+        username = settings.CLICKHOUSE_TRACE_USER
+        password = settings.CLICKHOUSE_TRACE_PASSWORD
+
+    return _build_validated_pool(
+        node.host_name,
+        _node_connect_port(node, cluster),
+        None,
+        cluster,
+        cluster.get_database(),
+        username,
+        password,
+        client_settings,
+        known_nodes=known_nodes,
+    )
 
 
 def get_sudo_node_connection(
