@@ -11,7 +11,6 @@ from functools import partial
 from typing import (
     Any,
     TypeVar,
-    cast,
 )
 
 import simplejson as json
@@ -43,7 +42,7 @@ from snuba.replacers.replacer_processor import (
     ReplacementMessage,
     ReplacementMessageMetadata,
 )
-from snuba.state.sentry_options import get_option
+from snuba.state.sentry_options import get_mapped_option, get_option
 from snuba.utils.bucket_timer import Counter
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.rate_limiter import RateLimiter
@@ -51,22 +50,14 @@ from snuba.utils.rate_limiter import RateLimiter
 logger = logging.getLogger("snuba.replacer")
 
 
-def _replace_int(value: object, default: int) -> int:
-    return value if isinstance(value, int) and value > 0 else default
-
-
 def _replace_resource_settings() -> dict[str, int]:
-    """Per-query REPLACE resource limits from the `replacer` sentry-option."""
-    # Nested object option; OptionValue's static type is only one level deep.
-    raw: object = get_option("replacer", cast(Any, {}))
-    values = raw if isinstance(raw, Mapping) else {}
     return {
-        "max_threads": _replace_int(values.get("max_threads"), settings.REPLACER_MAX_THREADS),
-        "max_block_size": _replace_int(
-            values.get("max_block_size"), settings.REPLACER_MAX_BLOCK_SIZE
+        "max_threads": get_mapped_option("replacer", "max_threads", settings.REPLACER_MAX_THREADS),
+        "max_block_size": get_mapped_option(
+            "replacer", "max_block_size", settings.REPLACER_MAX_BLOCK_SIZE
         ),
-        "max_memory_usage": _replace_int(
-            values.get("max_memory_usage"), settings.REPLACER_MAX_MEMORY_USAGE
+        "max_memory_usage": get_mapped_option(
+            "replacer", "max_memory_usage", settings.REPLACER_MAX_MEMORY_USAGE
         ),
     }
 

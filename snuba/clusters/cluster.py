@@ -91,8 +91,7 @@ class ClickhouseClientSettings(Enum):
             # ClickHouse to go over the default max_memory_usage of 10GB per
             # query. Lowering the max_block_size reduces memory usage, and
             # increasing the max_memory_usage gives the query more breathing
-            # room. Per-environment raises go through the `replacer`
-            # sentry-option (applied at query time in the replacer).
+            # room. The `replacer` sentry-option can raise these per query.
             "max_threads": settings.REPLACER_MAX_THREADS,
             "max_block_size": settings.REPLACER_MAX_BLOCK_SIZE,
             "max_memory_usage": settings.REPLACER_MAX_MEMORY_USAGE,
