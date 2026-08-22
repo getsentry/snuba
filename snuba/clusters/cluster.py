@@ -93,6 +93,7 @@ class ClickhouseClientSettings(Enum):
             # increasing the max_memory_usage gives the query more breathing
             # room. Per-environment raises go through the `replacer`
             # sentry-option (applied at query time in the replacer).
+            "max_threads": settings.REPLACER_MAX_THREADS,
             "max_block_size": settings.REPLACER_MAX_BLOCK_SIZE,
             "max_memory_usage": settings.REPLACER_MAX_MEMORY_USAGE,
             # Don't use up production cache for replacement SELECT ... FINAL.
