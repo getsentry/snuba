@@ -96,11 +96,13 @@ class ClickhouseClientSettings(Enum):
             "max_memory_usage": settings.REPLACER_MAX_MEMORY_USAGE,
             # Don't use up production cache for the count() queries.
             "use_uncompressed_cache": 0,
-            # Bound server-side work to the same budget as the client timeout so
-            # a slow shard cannot sit on a replacement past REPLACER_QUERY_TIMEOUT.
+            # Server-side kill switch. Client timeout is intentionally a bit
+            # higher (REPLACER_CLIENT_TIMEOUT) so CH can surface this error
+            # before the HTTP read times out.
             "max_execution_time": settings.REPLACER_QUERY_TIMEOUT,
         },
-        settings.REPLACER_QUERY_TIMEOUT,
+        # seconds; clickhouse-connect maps this to urllib3 Timeout(read=...)
+        settings.REPLACER_CLIENT_TIMEOUT,
     )
     CARDINALITY_ANALYZER = ClickhouseClientSettingsType(
         {

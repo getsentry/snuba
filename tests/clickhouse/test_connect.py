@@ -528,15 +528,17 @@ def test_internal_profile_has_no_explicit_timeout() -> None:
     assert ClickhouseClientSettings.INTERNAL.value.timeout is None
 
 
-def test_replace_profile_uses_10_minute_timeout() -> None:
-    # REPLACE used to leave timeout unset (1h connect fallback). Cap both the
-    # client send/receive budget and ClickHouse max_execution_time at 10 minutes.
+def test_replace_profile_uses_bounded_timeouts() -> None:
+    # REPLACE used to leave client timeout unset (1h connect fallback) and had
+    # no server max_execution_time. Cap server work at 10m and keep the client
+    # slightly higher so CH fails cleanly before HTTP read timeout.
     from snuba import settings as snuba_settings
 
     replace = ClickhouseClientSettings.REPLACE.value
-    assert replace.timeout == snuba_settings.REPLACER_QUERY_TIMEOUT
-    assert replace.timeout == 10 * 60
     assert replace.settings["max_execution_time"] == snuba_settings.REPLACER_QUERY_TIMEOUT
+    assert replace.settings["max_execution_time"] == 10 * 60
+    assert replace.timeout == snuba_settings.REPLACER_CLIENT_TIMEOUT
+    assert replace.timeout == snuba_settings.REPLACER_QUERY_TIMEOUT + 60
 
 
 def test_clickhouse_reader_wraps_connect_pool() -> None:
