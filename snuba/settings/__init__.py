@@ -281,14 +281,8 @@ STATS_IN_RESPONSE = False
 
 PAYLOAD_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
-# REPLACE client settings for INSERT ... SELECT ... FINAL on errors replicas
-# (~80 CPUs / 320GB). Leave headroom for ingest, merges, mutations, and user
-# FINAL: one replacement query per shard (sometimes per replica), so 32 threads
-# parallelizes part scans without pinning the box. 64GB + ClickHouse's default
-# 65536-row blocks is enough to rebuild wide error rows; do not take most of host RAM.
-REPLACER_MAX_THREADS = 32
-REPLACER_MAX_BLOCK_SIZE = 65536  # ClickHouse default
-REPLACER_MAX_MEMORY_USAGE = 64 * (1024**3)  # 64GB
+REPLACER_MAX_BLOCK_SIZE = 512
+REPLACER_MAX_MEMORY_USAGE = 10 * (1024**3)  # 10GB
 # ClickHouse server-side cap for REPLACE queries (seconds).
 # Keeps a slow shard from running INSERT ... FINAL unbounded.
 REPLACER_QUERY_TIMEOUT = 10 * 60  # 10 minutes

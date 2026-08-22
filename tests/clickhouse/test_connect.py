@@ -547,21 +547,6 @@ def test_replace_profile_uses_bounded_timeouts() -> None:
     assert replace.timeout == snuba_settings.REPLACER_QUERY_TIMEOUT + 60
 
 
-def test_replace_profile_uses_raised_resource_limits() -> None:
-    # errors CH user max_threads defaults to 1; REPLACE overrides threads/block
-    # size/memory so FINAL inserts can use modern replica hardware without
-    # pinning the whole box.
-    from snuba import settings as snuba_settings
-
-    replace = ClickhouseClientSettings.REPLACE.value
-    assert replace.settings["max_block_size"] == snuba_settings.REPLACER_MAX_BLOCK_SIZE
-    assert replace.settings["max_block_size"] == 65536
-    assert replace.settings["max_threads"] == snuba_settings.REPLACER_MAX_THREADS
-    assert replace.settings["max_threads"] == 32
-    assert replace.settings["max_memory_usage"] == snuba_settings.REPLACER_MAX_MEMORY_USAGE
-    assert replace.settings["max_memory_usage"] == 64 * (1024**3)
-
-
 def test_clickhouse_reader_wraps_connect_pool() -> None:
     # The single driver-agnostic ClickhouseReader wraps the abstract pool, so it
     # works with the connect pool.

@@ -85,12 +85,14 @@ class ClickhouseClientSettings(Enum):
     QUERYLOG = ClickhouseClientSettingsType({}, None)
     REPLACE = ClickhouseClientSettingsType(
         {
-            # INSERT ... SELECT ... FINAL rebuilds full wide error rows. The
-            # errors CH user profile defaults max_threads=1, which starves the
-            # scan on large replicas. Override threads/block size/memory here
-            # only (see REPLACER_MAX_*); leave headroom for ingest, merges,
-            # mutations, and user FINAL. Do not change replacement SQL.
-            "max_threads": settings.REPLACER_MAX_THREADS,
+            # Replacing existing rows requires reconstructing the entire tuple
+            # for each event (via a SELECT), which is a Hard Thing (TM) for
+            # columnstores to do. With the default settings it's common for
+            # ClickHouse to go over the default max_memory_usage of 10GB per
+            # query. Lowering the max_block_size reduces memory usage, and
+            # increasing the max_memory_usage gives the query more breathing
+            # room. Per-environment raises go through the replacer.max_*
+            # sentry-options (applied at query time in the replacer).
             "max_block_size": settings.REPLACER_MAX_BLOCK_SIZE,
             "max_memory_usage": settings.REPLACER_MAX_MEMORY_USAGE,
             # Don't use up production cache for replacement SELECT ... FINAL.

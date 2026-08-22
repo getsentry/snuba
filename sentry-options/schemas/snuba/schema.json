@@ -415,6 +415,21 @@
       "default": 5,
       "description": "Window in minutes for which a project that recently received replacements is kept in the auto-replacements bypass set. Migrated from runtime config replacements_expiry_window_minutes."
     },
+    "replacer.max_threads": {
+      "type": "integer",
+      "default": 0,
+      "description": "ClickHouse max_threads for errors-replacer INSERT ... SELECT ... FINAL. 0 keeps the ClickHouse user-profile default (errors is 1). Raise per environment on large replicas; applied at query time."
+    },
+    "replacer.max_block_size": {
+      "type": "integer",
+      "default": 0,
+      "description": "ClickHouse max_block_size for errors-replacer INSERT ... SELECT ... FINAL. 0 keeps settings.REPLACER_MAX_BLOCK_SIZE (512). Raise per environment; applied at query time."
+    },
+    "replacer.max_memory_usage": {
+      "type": "integer",
+      "default": 0,
+      "description": "ClickHouse max_memory_usage (bytes) for errors-replacer INSERT ... SELECT ... FINAL. 0 keeps settings.REPLACER_MAX_MEMORY_USAGE (10GB, 50GB in SaaS prod_settings). Raise per environment; applied at query time."
+    },
     "use.low.cardinality.processor": {
       "type": "boolean",
       "default": true,

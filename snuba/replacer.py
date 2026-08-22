@@ -49,6 +49,27 @@ from snuba.utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger("snuba.replacer")
 
+# 0 on each option means "keep the REPLACE client / CH user default".
+_REPLACER_MAX_THREADS_OPTION = "replacer.max_threads"
+_REPLACER_MAX_BLOCK_SIZE_OPTION = "replacer.max_block_size"
+_REPLACER_MAX_MEMORY_USAGE_OPTION = "replacer.max_memory_usage"
+
+
+def _replace_resource_settings() -> dict[str, int]:
+    """Per-query REPLACE overrides from sentry-options. Empty when all are 0."""
+    overrides: dict[str, int] = {}
+    max_threads = get_option(_REPLACER_MAX_THREADS_OPTION, 0)
+    if max_threads > 0:
+        overrides["max_threads"] = max_threads
+    max_block_size = get_option(_REPLACER_MAX_BLOCK_SIZE_OPTION, 0)
+    if max_block_size > 0:
+        overrides["max_block_size"] = max_block_size
+    max_memory_usage = get_option(_REPLACER_MAX_MEMORY_USAGE_OPTION, 0)
+    if max_memory_usage > 0:
+        overrides["max_memory_usage"] = max_memory_usage
+    return overrides
+
+
 executor = ThreadPoolExecutor()
 NODES_REFRESH_PERIOD = 10
 
@@ -351,7 +372,7 @@ class ReplacerWorker:
             t = time.time()
 
             logger.debug(f"Executing replace query: {query}")
-            result = connection.execute_robust(query)
+            result = connection.execute_robust(query, settings=_replace_resource_settings())
             duration = int((time.time() - t) * 1000)
             profile = result.profile
             written_rows = profile["written_rows"] if profile and "written_rows" in profile else 0
