@@ -48,10 +48,6 @@ class Replacement(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def get_count_query(self, table_name: str) -> str | None:
-        raise NotImplementedError()
-
-    @abstractmethod
     def should_write_every_node(self) -> bool:
         raise NotImplementedError()
 
@@ -94,14 +90,13 @@ class ReplacerProcessor(ABC, Generic[R], metaclass=RegisteredClass):
     def get_state(self) -> ReplacerState:
         raise NotImplementedError
 
-    def pre_replacement(self, replacement: R, matching_records: int) -> bool:
+    def pre_replacement(self, replacement: R) -> bool:
         """
-        Custom actions to run before the replacements when we already know how
-        many rows will be impacted.
+        Custom actions to run before the replacement insert.
         """
         return False
 
-    def post_replacement(self, replacement: R, matching_records: int) -> None:
+    def post_replacement(self, replacement: R) -> None:
         """
         Custom actions to run after the replacement was executed.
         """

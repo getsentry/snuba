@@ -217,7 +217,7 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
     def get_state(self) -> ReplacerState:
         return self.__state_name
 
-    def pre_replacement(self, replacement: Replacement, matching_records: int) -> bool:
+    def pre_replacement(self, replacement: Replacement) -> bool:
         project_id = replacement.get_project_id()
         query_time_flags = replacement.get_query_time_flags()
 
@@ -340,13 +340,6 @@ class ReplaceGroupReplacement(Replacement):
 
         return f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}" % query_args
 
-    def get_count_query(self, table_name: str) -> str | None:
-        return f"""\
-            SELECT count()
-            FROM {table_name} FINAL
-            {self._where_clause}
-        """
-
     def get_insert_query(self, table_name: str) -> str | None:
         all_column_names = [c.escaped for c in self.all_columns]
         select_columns = ", ".join(
@@ -413,13 +406,6 @@ class DeleteGroupsReplacement(Replacement):
             AND NOT deleted
         """
 
-    def get_count_query(self, table_name: str) -> str | None:
-        return f"""\
-            SELECT count()
-            FROM {table_name} FINAL
-            {self._where_clause}
-        """
-
     def get_insert_query(self, table_name: str) -> str | None:
         required_columns = ", ".join(self.required_columns)
         select_columns = ", ".join(i if i != "deleted" else "1" for i in self.required_columns)
@@ -475,13 +461,6 @@ class TombstoneEventsReplacement(Replacement):
             prewhere.append("primary_hash = %(old_primary_hash)s")
 
         return f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}" % query_args
-
-    def get_count_query(self, table_name: str) -> str | None:
-        return f"""\
-            SELECT count()
-            FROM {table_name} FINAL
-            {self._where_clause}
-        """
 
     def get_insert_query(self, table_name: str) -> str | None:
         required_columns = ", ".join(self.required_columns)
@@ -551,9 +530,6 @@ class ExcludeGroupsReplacement(Replacement):
         return ReplacementType.EXCLUDE_GROUPS
 
     def get_insert_query(self, table_name: str) -> str | None:
-        return None
-
-    def get_count_query(self, table_name: str) -> str | None:
         return None
 
 
@@ -638,13 +614,6 @@ class MergeReplacement(Replacement):
             WHERE project_id = {self.project_id}
             AND received <= CAST('{timestamp}' AS DateTime)
             AND NOT deleted
-        """
-
-    def get_count_query(self, table_name: str) -> str | None:
-        return f"""\
-            SELECT count()
-            FROM {table_name} FINAL
-            {self._where_clause}
         """
 
     def get_insert_query(self, table_name: str) -> str | None:
@@ -734,13 +703,6 @@ class UnmergeGroupsReplacement(Replacement):
             AND project_id = {self.project_id}
             AND received <= CAST('{timestamp}' AS DateTime)
             AND NOT deleted
-        """
-
-    def get_count_query(self, table_name: str) -> str | None:
-        return f"""\
-            SELECT count()
-            FROM {table_name} FINAL
-            {self._where_clause}
         """
 
     def get_insert_query(self, table_name: str) -> str | None:
@@ -850,13 +812,6 @@ class DeleteTagReplacement(Replacement):
         return f"""\
             INSERT INTO {table_name} ({all_columns})
             SELECT {select_columns}
-            FROM {table_name} FINAL
-            {self._where_clause}
-        """
-
-    def get_count_query(self, table_name: str) -> str | None:
-        return f"""\
-            SELECT count()
             FROM {table_name} FINAL
             {self._where_clause}
         """

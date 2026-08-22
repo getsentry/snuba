@@ -108,9 +108,7 @@ TEST_CASES = [
         "override_cluster",
         1.0,
         {
-            "query_node": [
-                "SELECT count() FROM errors_dist FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'",
-            ],
+            "query_node": [],
             "storage-0-0": [LOCAL_QUERY],
             "storage-1-0": [LOCAL_QUERY],
             "storage-2-0": [LOCAL_QUERY],
@@ -122,7 +120,6 @@ TEST_CASES = [
         0.0,
         {
             "query_node": [
-                "SELECT count() FROM errors_dist FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'",
                 DIST_QUERY,
             ]
         },
@@ -139,9 +136,6 @@ class DummyReplacement(Replacement):
         context: ReplacementContext,
     ) -> DummyReplacement | None:
         return cls()
-
-    def get_count_query(self, table_name: str) -> str | None:
-        return f"SELECT count() FROM {table_name} FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'"
 
     def get_insert_query(self, table_name: str) -> str | None:
         required_columns = "project_id, timestamp, event_id"
@@ -241,10 +235,7 @@ def test_load_balancing(override_cluster: Callable[[bool], FakeClickhouseCluster
     )
 
     assert cluster.get_queries() == {
-        "query_node": [
-            "SELECT count() FROM errors_dist FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'",
-            "SELECT count() FROM errors_dist FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'",
-        ],
+        "query_node": [],
         "storage-0-0": [LOCAL_QUERY, LOCAL_QUERY],
         "storage-1-0": [LOCAL_QUERY, LOCAL_QUERY],
         "storage-2-0": [LOCAL_QUERY, LOCAL_QUERY],
@@ -348,7 +339,6 @@ def test_local_executor(
     def run_query(
         connection: ClickhousePool,
         query: str,
-        records_count: int,
         metrics: MetricsBackend,
     ) -> None:
         connection.execute_robust(query)
@@ -390,7 +380,6 @@ def test_local_executor(
 
     insert_executor.execute(
         replacement=DummyReplacement(),
-        records_count=1,
     )
 
     assert queries == expected_queries

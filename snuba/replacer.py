@@ -141,7 +141,7 @@ class InsertExecutor(ABC):
     """
 
     @abstractmethod
-    def execute(self, replacement: Replacement, record_counts: int) -> int:
+    def execute(self, replacement: Replacement) -> None:
         """
         Executes the query according to the policy implemented by this
         class.
@@ -150,7 +150,7 @@ class InsertExecutor(ABC):
 
 
 # Used by InsertExecutors to run the query
-RunQuery = Callable[[ClickhousePool, str, int, MetricsBackend], None]
+RunQuery = Callable[[ClickhousePool, str, MetricsBackend], None]
 
 
 class QueryNodeExecutor(InsertExecutor):
@@ -175,12 +175,11 @@ class QueryNodeExecutor(InsertExecutor):
         self.__metrics = metrics
         self.__runner = runner
 
-    def execute(self, replacement: Replacement, records_count: int) -> int:
+    def execute(self, replacement: Replacement) -> None:
         query = replacement.get_insert_query(self.__table)
         if query is None:
-            return 0
-        self.__runner(self.__connection, query, records_count, self.__metrics)
-        return records_count
+            return
+        self.__runner(self.__connection, query, self.__metrics)
 
 
 class ShardedExecutor(InsertExecutor):
@@ -214,7 +213,6 @@ class ShardedExecutor(InsertExecutor):
         self,
         nodes: Sequence[ClickhouseNode],
         query: str,
-        records_count: int,
         metrics: MetricsBackend,
     ) -> None:
         """
@@ -230,7 +228,6 @@ class ShardedExecutor(InsertExecutor):
                 self.__runner(
                     connection,
                     query,
-                    records_count,
                     metrics,
                 )
                 return
@@ -242,11 +239,11 @@ class ShardedExecutor(InsertExecutor):
                     exc_info=e,
                 )
 
-    def execute(self, replacement: Replacement, records_count: int) -> int:
+    def execute(self, replacement: Replacement) -> None:
         try:
             query = replacement.get_insert_query(self.__local_table_name)
             if query is None:
-                return 0
+                return
             result_futures = []
             for nodes in self.__connection_pool.get_connections().values():
                 result_futures.append(
@@ -255,7 +252,6 @@ class ShardedExecutor(InsertExecutor):
                             self.__run_multiple_replicas,
                             nodes=nodes,
                             query=query,
-                            records_count=records_count,
                             metrics=self.__metrics,
                         )
                     )
@@ -264,15 +260,13 @@ class ShardedExecutor(InsertExecutor):
                 e = result.exception()
                 if e is not None:
                     raise e
-            return records_count
 
         except Exception as e:
-            count = self.__backup_executor.execute(replacement, records_count)
+            self.__backup_executor.execute(replacement)
             logger.warning(
                 "Replacement processing failed on the main connection",
                 exc_info=e,
             )
-            return count
 
 
 TPayload = TypeVar("TPayload")
@@ -352,7 +346,6 @@ class ReplacerWorker:
         def run_query(
             connection: ClickhousePool,
             query: str,
-            records_count: int,
             metrics: MetricsBackend,
         ) -> None:
             t = time.time()
@@ -361,12 +354,7 @@ class ReplacerWorker:
             connection.execute_robust(query)
             duration = int((time.time() - t) * 1000)
 
-            logger.info(f"Replacing {records_count} rows took {duration}ms")
-            metrics.timing(
-                "replacements.count",
-                records_count,
-                tags={"host": connection.host},
-            )
+            logger.info(f"Replacement query took {duration}ms")
             metrics.timing(
                 "replacements.duration",
                 duration,
@@ -443,26 +431,14 @@ class ReplacerWorker:
         for message_metadata, replacement in batch:
             start_time = datetime.now()
 
-            table_name = self.__replacer_processor.get_schema().get_table_name()
-            count_query = replacement.get_count_query(table_name)
-
-            if count_query is not None:
-                count = clickhouse_read.execute_robust(count_query).results[0][0]
-                if count == 0:
-                    continue
-            else:
-                count = 0
-
-            need_optimize = (
-                self.__replacer_processor.pre_replacement(replacement, count) or need_optimize
-            )
+            need_optimize = self.__replacer_processor.pre_replacement(replacement) or need_optimize
 
             query_executor = self.__get_insert_executor(replacement)
             with self.__rate_limiter as state:
                 self.metrics.increment("insert_state", tags={"state": state[0].value})
-                count = query_executor.execute(replacement, count)
+                query_executor.execute(replacement)
 
-            self.__replacer_processor.post_replacement(replacement, count)
+            self.__replacer_processor.post_replacement(replacement)
 
             self._check_timing_and_write_to_redis(message_metadata, start_time.timestamp())
 
