@@ -538,9 +538,11 @@ def test_replace_profile_uses_bounded_timeouts() -> None:
     assert replace.settings["max_execution_time"] == snuba_settings.REPLACER_QUERY_TIMEOUT
     assert replace.settings["max_execution_time"] == 10 * 60
     assert replace.settings["max_block_size"] == snuba_settings.REPLACER_MAX_BLOCK_SIZE
-    assert replace.settings["max_block_size"] == 8192
+    assert replace.settings["max_block_size"] == 65536
     assert replace.settings["max_threads"] == snuba_settings.REPLACER_MAX_THREADS
-    assert replace.settings["max_threads"] == 8
+    assert replace.settings["max_threads"] == 32
+    assert replace.settings["max_memory_usage"] == snuba_settings.REPLACER_MAX_MEMORY_USAGE
+    assert replace.settings["max_memory_usage"] == 64 * (1024**3)
     assert replace.settings["do_not_merge_across_partitions_select_final"] == 1
     assert replace.settings["use_skip_indexes_if_final"] == 1
     assert replace.settings["optimize_move_to_prewhere"] == 1

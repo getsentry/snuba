@@ -87,12 +87,13 @@ class ClickhouseClientSettings(Enum):
         {
             # Replacing existing rows requires reconstructing the entire tuple
             # for each event (via a SELECT), which is a Hard Thing (TM) for
-            # columnstores to do. With the default settings it's common for
-            # ClickHouse to go over the default max_memory_usage of 10GB per
-            # query. Keep max_block_size below the CH default (65536) so
-            # max_threads * block size stays inside max_memory_usage. The
-            # errors user profile defaults max_threads to 1; raise it so FINAL
-            # can scan parts in parallel.
+            # columnstores to do. The errors user profile still defaults
+            # max_threads to 1 (ops salt users.xml), so FINAL inserts stay
+            # single-threaded unless REPLACE overrides it. Raise threads and
+            # memory for ~80-core / 320GB replicas without pinning the whole
+            # box (ingest, merges, mutations, and user FINAL still share it).
+            # max_block_size uses the ClickHouse default; the old 10GB cap is
+            # why blocks used to stay tiny.
             "max_block_size": settings.REPLACER_MAX_BLOCK_SIZE,
             "max_threads": settings.REPLACER_MAX_THREADS,
             "max_memory_usage": settings.REPLACER_MAX_MEMORY_USAGE,
