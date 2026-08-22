@@ -1392,14 +1392,47 @@ def test_response_is_drained_on_error() -> None:
     result.close.assert_called_once()
 
 
+def test_format_exception_chain_includes_cause() -> None:
+    from snuba.clickhouse.connect import _format_exception_chain
+
+    root = TimeoutError("read timed out")
+    mid = OSError("request failed")
+    mid.__cause__ = root
+    top = RuntimeError("Error HTTPError executing HTTP request attempt 2")
+    top.__cause__ = mid
+
+    detail = _format_exception_chain(top)
+    assert "RuntimeError: Error HTTPError executing HTTP request attempt 2" in detail
+    assert "OSError: request failed" in detail
+    assert "TimeoutError: read timed out" in detail
+    assert detail.count("caused by") == 2
+
+
 def test_operational_error_mapped() -> None:
     from clickhouse_connect.driver.exceptions import OperationalError
 
     client = mock.Mock()
-    client.query.side_effect = OperationalError("conn reset")
-    with pytest.raises(ClickhouseError) as excinfo:
+    # Mirror clickhouse-connect: OperationalError wraps the urllib3/socket cause.
+    cause = TimeoutError("The read operation timed out")
+    driver_error = OperationalError("Error ReadTimeout executing HTTP request attempt 2")
+    driver_error.__cause__ = cause
+    client.query.side_effect = driver_error
+
+    with (
+        mock.patch("snuba.clickhouse.connect.logger") as logger,
+        pytest.raises(ClickhouseError) as excinfo,
+    ):
         _make_pool(client).execute("SELECT 1")
+
     assert excinfo.value.code == -1
+    detail = str(excinfo.value)
+    assert "OperationalError" in detail
+    assert "TimeoutError: The read operation timed out" in detail
+    logger.error.assert_called_once()
+    assert logger.error.call_args.args[0] == (
+        "ClickHouse HTTP driver error host=%s port=%s detail=%s"
+    )
+    assert logger.error.call_args.args[3] == detail
 
 
 def test_stream_failure_mapped() -> None:
@@ -1407,9 +1440,15 @@ def test_stream_failure_mapped() -> None:
 
     client = mock.Mock()
     client.query.side_effect = StreamFailureError("stream died")
-    with pytest.raises(ClickhouseError) as excinfo:
+    with (
+        mock.patch("snuba.clickhouse.connect.logger") as logger,
+        pytest.raises(ClickhouseError) as excinfo,
+    ):
         _make_pool(client).execute("SELECT 1")
     assert excinfo.value.code == -1
+    assert "StreamFailureError: stream died" in str(excinfo.value)
+    logger.error.assert_called_once()
+    assert "ClickHouse stream failure" in logger.error.call_args.args[0]
 
 
 def test_shared_pools_reset_after_fork() -> None:

@@ -49,6 +49,31 @@ DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS = 60 * 60  # 1h fallback when profile timeo
 DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
 _CLICKHOUSE_CONNECT_TRANSPORT_SETTINGS = {"X-ClickHouse-Format": "Native"}
 
+
+def _format_exception_chain(exc: BaseException, *, limit: int = 6) -> str:
+    """Single-line exception chain for log sinks that drop multi-line tracebacks.
+
+    clickhouse-connect logs ``Unexpected Http Driver Exception`` without the
+    underlying urllib3/socket cause. Snuba's LOG_FORMAT is also message-only, so
+    arroyo's ``logger.exception`` traceback often never reaches Cloud Logging.
+    Walk ``__cause__`` / ``__context__`` and pack types + messages into one line.
+    """
+    parts: list[str] = []
+    current: BaseException | None = exc
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen and len(parts) < limit:
+        seen.add(id(current))
+        message = str(current).replace("\n", " ").strip()
+        parts.append(f"{type(current).__name__}: {message}" if message else type(current).__name__)
+        if current.__cause__ is not None:
+            current = current.__cause__
+        elif not current.__suppress_context__:
+            current = current.__context__
+        else:
+            current = None
+    return " | caused by: ".join(parts)
+
+
 clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
 clickhouse_connect_common.set_setting("use_protocol_version", True)
 
@@ -683,10 +708,27 @@ class ClickhouseConnectPool(ClickhousePool):
             yield
         except OperationalError as e:
             metrics.increment("connection_error")
-            raise ClickhouseError(str(e), code=getattr(e, "code", None) or -1) from e
+            # clickhouse-connect only logs "Unexpected Http Driver Exception"
+            # without the urllib3/socket cause. Fold the chain into the message
+            # so Cloud Logging still shows ReadTimeout / ProtocolError / etc.
+            detail = _format_exception_chain(e)
+            logger.error(
+                "ClickHouse HTTP driver error host=%s port=%s detail=%s",
+                self.host,
+                self.port,
+                detail,
+            )
+            raise ClickhouseError(detail, code=getattr(e, "code", None) or -1) from e
         except StreamFailureError as e:
             metrics.increment("stream_failure")
-            raise ClickhouseError(str(e), code=-1) from e
+            detail = _format_exception_chain(e)
+            logger.error(
+                "ClickHouse stream failure host=%s port=%s detail=%s",
+                self.host,
+                self.port,
+                detail,
+            )
+            raise ClickhouseError(detail, code=-1) from e
         except ClickHouseError as e:
             # Missing server code is not a transport failure. -1 is reserved
             # for OperationalError / StreamFailureError / malformed HTTP bodies.
