@@ -103,6 +103,11 @@ class ClickhouseClientSettings(Enum):
             # Skip indexes (e.g. minmax_group_id) used to be ignored under FINAL.
             # Keep them on so group_id filters can still prune granules.
             "use_skip_indexes_if_final": 1,
+            # clickhouse-connect caps its own progress interval at 120s when the
+            # client timeout is large. Pin a 15s header so a quiet FINAL still
+            # writes bytes before http_send_timeout / Envoy idle (30s default).
+            "send_progress_in_http_headers": 1,
+            "http_headers_progress_interval_ms": 15000,
             # Server-side kill switch. Client timeout is intentionally a bit
             # higher (REPLACER_CLIENT_TIMEOUT) so CH can surface this error
             # before the HTTP read times out.

@@ -539,6 +539,8 @@ def test_replace_profile_uses_bounded_timeouts() -> None:
     assert replace.settings["max_execution_time"] == 10 * 60
     assert replace.settings["do_not_merge_across_partitions_select_final"] == 1
     assert replace.settings["use_skip_indexes_if_final"] == 1
+    assert replace.settings["send_progress_in_http_headers"] == 1
+    assert replace.settings["http_headers_progress_interval_ms"] == 15000
     assert replace.timeout == snuba_settings.REPLACER_CLIENT_TIMEOUT
     assert replace.timeout == snuba_settings.REPLACER_QUERY_TIMEOUT + 60
 
