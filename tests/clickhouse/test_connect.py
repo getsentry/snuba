@@ -537,6 +537,12 @@ def test_replace_profile_uses_bounded_timeouts() -> None:
     replace = ClickhouseClientSettings.REPLACE.value
     assert replace.settings["max_execution_time"] == snuba_settings.REPLACER_QUERY_TIMEOUT
     assert replace.settings["max_execution_time"] == 10 * 60
+    assert replace.settings["do_not_merge_across_partitions_select_final"] == 1
+    assert replace.settings["use_skip_indexes_if_final"] == 1
+    assert replace.settings["optimize_move_to_prewhere"] == 1
+    assert replace.settings["optimize_move_to_prewhere_if_final"] == 1
+    assert replace.settings["send_progress_in_http_headers"] == 1
+    assert replace.settings["http_headers_progress_interval_ms"] == 15000
     assert replace.timeout == snuba_settings.REPLACER_CLIENT_TIMEOUT
     assert replace.timeout == snuba_settings.REPLACER_QUERY_TIMEOUT + 60
 
@@ -1367,6 +1373,21 @@ def test_shared_socket_pool() -> None:
         assert get_client.call_args_list[0].kwargs["pool_mgr"] is shared
         assert get_client.call_args_list[1].kwargs["pool_mgr"] is shared
     connect_mod._pool_managers.clear()
+
+
+def test_execute_maps_written_rows_from_summary() -> None:
+    # INSERT ... SELECT (the replacer path) uses Native, not JSONCompact.
+    # written_rows comes from X-ClickHouse-Summary after wait_end_of_query.
+    client = mock.Mock()
+    client.query.return_value = FakeQueryResult(
+        result_set=[],
+        summary={"read_rows": 40, "written_rows": 12, "read_bytes": 256},
+    )
+    result = _make_pool(client).execute("INSERT INTO t SELECT * FROM t")
+    assert result.profile is not None
+    assert result.profile["rows"] == 40
+    assert result.profile["written_rows"] == 12
+    assert result.profile["bytes"] == 256
 
 
 def test_response_is_drained() -> None:

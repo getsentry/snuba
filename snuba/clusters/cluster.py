@@ -94,8 +94,24 @@ class ClickhouseClientSettings(Enum):
             # room.
             "max_block_size": settings.REPLACER_MAX_BLOCK_SIZE,
             "max_memory_usage": settings.REPLACER_MAX_MEMORY_USAGE,
-            # Don't use up production cache for the count() queries.
+            # Don't use up production cache for replacement SELECT ... FINAL.
             "use_uncompressed_cache": 0,
+            # Same FINAL setting user reads already apply. errors partitions are
+            # (retention_days, toMonday(timestamp)), so cross-partition merges
+            # are unnecessary and expensive under FINAL.
+            "do_not_merge_across_partitions_select_final": 1,
+            # Skip indexes (e.g. minmax_group_id) used to be ignored under FINAL.
+            # Keep them on so group_id filters can still prune granules.
+            "use_skip_indexes_if_final": 1,
+            # Delete/merge/unmerge leave predicates in WHERE. FINAL ignores
+            # optimize_move_to_prewhere unless this is also on (default off).
+            "optimize_move_to_prewhere": 1,
+            "optimize_move_to_prewhere_if_final": 1,
+            # clickhouse-connect caps its own progress interval at 120s when the
+            # client timeout is large. Pin a 15s header so a quiet FINAL still
+            # writes bytes before http_send_timeout / Envoy idle (30s default).
+            "send_progress_in_http_headers": 1,
+            "http_headers_progress_interval_ms": 15000,
             # Server-side kill switch. Client timeout is intentionally a bit
             # higher (REPLACER_CLIENT_TIMEOUT) so CH can surface this error
             # before the HTTP read times out.
