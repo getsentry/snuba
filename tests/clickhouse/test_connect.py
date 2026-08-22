@@ -1418,9 +1418,11 @@ def test_operational_error_mapped() -> None:
     driver_error.__cause__ = cause
     client.query.side_effect = driver_error
 
-    with mock.patch("snuba.clickhouse.connect.logger") as logger:
-        with pytest.raises(ClickhouseError) as excinfo:
-            _make_pool(client).execute("SELECT 1")
+    with (
+        mock.patch("snuba.clickhouse.connect.logger") as logger,
+        pytest.raises(ClickhouseError) as excinfo,
+    ):
+        _make_pool(client).execute("SELECT 1")
 
     assert excinfo.value.code == -1
     detail = str(excinfo.value)
@@ -1438,9 +1440,11 @@ def test_stream_failure_mapped() -> None:
 
     client = mock.Mock()
     client.query.side_effect = StreamFailureError("stream died")
-    with mock.patch("snuba.clickhouse.connect.logger") as logger:
-        with pytest.raises(ClickhouseError) as excinfo:
-            _make_pool(client).execute("SELECT 1")
+    with (
+        mock.patch("snuba.clickhouse.connect.logger") as logger,
+        pytest.raises(ClickhouseError) as excinfo,
+    ):
+        _make_pool(client).execute("SELECT 1")
     assert excinfo.value.code == -1
     assert "StreamFailureError: stream died" in str(excinfo.value)
     logger.error.assert_called_once()
