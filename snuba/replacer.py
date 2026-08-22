@@ -358,20 +358,10 @@ class ReplacerWorker:
             t = time.time()
 
             logger.debug(f"Executing replace query: {query}")
-            try:
-                connection.execute_robust(query)
-            except Exception as e:
-                # LOG_FORMAT is "%(asctime)s %(message)s" and Cloud Logging often
-                # drops multi-line tracebacks. Put type/message/host on one line
-                # before arroyo shuts the consumer down.
-                logger.error(
-                    "Replacement query failed host=%s records=%s error=%s: %s",
-                    connection.host,
-                    records_count,
-                    type(e).__name__,
-                    e,
-                )
-                raise
+            # Do not log failures here: ShardedExecutor retries other replicas
+            # and may fall back to the query-node executor. Terminal failures are
+            # logged once in flush_batch after retries are exhausted.
+            connection.execute_robust(query)
             duration = int((time.time() - t) * 1000)
 
             logger.info(f"Replacing {records_count} rows took {duration}ms")
@@ -476,8 +466,9 @@ class ReplacerWorker:
                     self.metrics.increment("insert_state", tags={"state": state[0].value})
                     count = query_executor.execute(replacement, count)
             except Exception as e:
-                # Same Cloud Logging constraint as run_query: keep the failure
-                # type/message on one line before the consumer exits.
+                # LOG_FORMAT is "%(asctime)s %(message)s" and Cloud Logging often
+                # drops multi-line tracebacks. Log type/message/host on one line
+                # only after retries/fallback have failed and the consumer will exit.
                 project_id = (
                     replacement.get_project_id()
                     if isinstance(replacement, ErrorReplacement)
