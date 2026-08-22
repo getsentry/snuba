@@ -358,7 +358,20 @@ class ReplacerWorker:
             t = time.time()
 
             logger.debug(f"Executing replace query: {query}")
-            connection.execute_robust(query)
+            try:
+                connection.execute_robust(query)
+            except Exception as e:
+                # LOG_FORMAT is "%(asctime)s %(message)s" and Cloud Logging often
+                # drops multi-line tracebacks. Put type/message/host on one line
+                # before arroyo shuts the consumer down.
+                logger.error(
+                    "Replacement query failed host=%s records=%s error=%s: %s",
+                    connection.host,
+                    records_count,
+                    type(e).__name__,
+                    e,
+                )
+                raise
             duration = int((time.time() - t) * 1000)
 
             logger.info(f"Replacing {records_count} rows took {duration}ms")
@@ -446,21 +459,39 @@ class ReplacerWorker:
             table_name = self.__replacer_processor.get_schema().get_table_name()
             count_query = replacement.get_count_query(table_name)
 
-            if count_query is not None:
-                count = clickhouse_read.execute_robust(count_query).results[0][0]
-                if count == 0:
-                    continue
-            else:
-                count = 0
+            try:
+                if count_query is not None:
+                    count = clickhouse_read.execute_robust(count_query).results[0][0]
+                    if count == 0:
+                        continue
+                else:
+                    count = 0
 
-            need_optimize = (
-                self.__replacer_processor.pre_replacement(replacement, count) or need_optimize
-            )
+                need_optimize = (
+                    self.__replacer_processor.pre_replacement(replacement, count) or need_optimize
+                )
 
-            query_executor = self.__get_insert_executor(replacement)
-            with self.__rate_limiter as state:
-                self.metrics.increment("insert_state", tags={"state": state[0].value})
-                count = query_executor.execute(replacement, count)
+                query_executor = self.__get_insert_executor(replacement)
+                with self.__rate_limiter as state:
+                    self.metrics.increment("insert_state", tags={"state": state[0].value})
+                    count = query_executor.execute(replacement, count)
+            except Exception as e:
+                # Same Cloud Logging constraint as run_query: keep the failure
+                # type/message on one line before the consumer exits.
+                project_id = (
+                    replacement.get_project_id()
+                    if isinstance(replacement, ErrorReplacement)
+                    else None
+                )
+                logger.error(
+                    "Replacement failed type=%s project=%s host=%s error=%s: %s",
+                    replacement.get_replacement_type().value,
+                    project_id,
+                    clickhouse_read.host,
+                    type(e).__name__,
+                    e,
+                )
+                raise
 
             self.__replacer_processor.post_replacement(replacement, count)
 
