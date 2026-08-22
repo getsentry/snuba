@@ -73,6 +73,7 @@ def _format_exception_chain(exc: BaseException, *, limit: int = 6) -> str:
             current = None
     return " | caused by: ".join(parts)
 
+
 clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
 clickhouse_connect_common.set_setting("use_protocol_version", True)
 
