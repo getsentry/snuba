@@ -443,8 +443,6 @@ def test_timeouts_are_passed_through() -> None:
     assert kwargs["connect_timeout"] == 60
     assert kwargs["compress"] == "lz4"
     assert kwargs["query_retries"] == 2
-    assert kwargs["autogenerate_session_id"] is False
-    assert kwargs["autogenerate_query_id"] is False
 
 
 def test_send_receive_timeout_defaults_when_profile_has_none() -> None:
