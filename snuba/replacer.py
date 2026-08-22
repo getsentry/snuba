@@ -11,6 +11,7 @@ from functools import partial
 from typing import (
     Any,
     TypeVar,
+    cast,
 )
 
 import simplejson as json
@@ -49,25 +50,26 @@ from snuba.utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger("snuba.replacer")
 
-# 0 on each option means "keep the REPLACE client / CH user default".
-_REPLACER_MAX_THREADS_OPTION = "replacer.max_threads"
-_REPLACER_MAX_BLOCK_SIZE_OPTION = "replacer.max_block_size"
-_REPLACER_MAX_MEMORY_USAGE_OPTION = "replacer.max_memory_usage"
+_REPLACER_OPTION = "replacer"
+_REPLACER_DEFAULTS: dict[str, int] = {
+    "max_threads": 1,
+    "max_block_size": settings.REPLACER_MAX_BLOCK_SIZE,
+    "max_memory_usage": settings.REPLACER_MAX_MEMORY_USAGE,
+}
 
 
 def _replace_resource_settings() -> dict[str, int]:
-    """Per-query REPLACE overrides from sentry-options. Empty when all are 0."""
-    overrides: dict[str, int] = {}
-    max_threads = get_option(_REPLACER_MAX_THREADS_OPTION, 0)
-    if max_threads > 0:
-        overrides["max_threads"] = max_threads
-    max_block_size = get_option(_REPLACER_MAX_BLOCK_SIZE_OPTION, 0)
-    if max_block_size > 0:
-        overrides["max_block_size"] = max_block_size
-    max_memory_usage = get_option(_REPLACER_MAX_MEMORY_USAGE_OPTION, 0)
-    if max_memory_usage > 0:
-        overrides["max_memory_usage"] = max_memory_usage
-    return overrides
+    """Per-query REPLACE resource limits from the `replacer` sentry-option."""
+    # Nested object option; OptionValue's static type is only one level deep.
+    raw: object = get_option(_REPLACER_OPTION, cast(Any, _REPLACER_DEFAULTS))
+    if not isinstance(raw, Mapping):
+        return dict(_REPLACER_DEFAULTS)
+    settings_out = dict(_REPLACER_DEFAULTS)
+    for key in _REPLACER_DEFAULTS:
+        value = raw.get(key)
+        if isinstance(value, int) and value > 0:
+            settings_out[key] = value
+    return settings_out
 
 
 executor = ThreadPoolExecutor()
