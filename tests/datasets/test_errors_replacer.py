@@ -732,7 +732,7 @@ class TestReplacerProcess(BaseTest):
 
         assert (
             _normalize_query(replacement.get_insert_query("foo"))
-            == "INSERT INTO {table_name} ({all_columns}) SELECT {select_columns} FROM {table_name} FINAL PREWHERE project_id = {project_id} WHERE group_id IN ({previous_group_ids}) AND timestamp <= CAST('{timestamp}' AS DateTime) AND received <= CAST('{timestamp}' AS DateTime) AND NOT deleted".format(
+            == "INSERT INTO {table_name} ({all_columns}) SELECT {select_columns} FROM {table_name} FINAL PREWHERE project_id = {project_id} WHERE group_id IN ({previous_group_ids}) AND timestamp <= CAST('{timestamp}' AS DateTime) + INTERVAL 1 DAY AND received <= CAST('{timestamp}' AS DateTime) AND NOT deleted".format(
                 **query_args
             )
         )
@@ -770,7 +770,7 @@ class TestReplacerProcess(BaseTest):
 
         assert (
             _normalize_query(replacement.get_insert_query("foo"))
-            == "INSERT INTO {table_name} ({all_columns}) SELECT {select_columns} FROM {table_name} FINAL PREWHERE project_id = {project_id} WHERE primary_hash IN ({hashes}) AND group_id = {previous_group_id} AND timestamp <= CAST('{timestamp}' AS DateTime) AND received <= CAST('{timestamp}' AS DateTime) AND NOT deleted".format(
+            == "INSERT INTO {table_name} ({all_columns}) SELECT {select_columns} FROM {table_name} FINAL PREWHERE project_id = {project_id} WHERE primary_hash IN ({hashes}) AND group_id = {previous_group_id} AND timestamp <= CAST('{timestamp}' AS DateTime) + INTERVAL 1 DAY AND received <= CAST('{timestamp}' AS DateTime) AND NOT deleted".format(
                 **query_args
             )
         )
@@ -837,7 +837,7 @@ class TestReplacerProcess(BaseTest):
         }
         assert (
             _normalize_query(replacement.get_insert_query("foo"))
-            == "INSERT INTO {table_name} ({required_columns}) SELECT {select_columns} FROM {table_name} FINAL PREWHERE project_id = {project_id} WHERE group_id IN ({group_ids}) AND timestamp <= CAST('{timestamp}' AS DateTime) AND received <= CAST('{timestamp}' AS DateTime) AND NOT deleted".format(
+            == "INSERT INTO {table_name} ({required_columns}) SELECT {select_columns} FROM {table_name} FINAL PREWHERE project_id = {project_id} WHERE group_id IN ({group_ids}) AND timestamp <= CAST('{timestamp}' AS DateTime) + INTERVAL 1 DAY AND received <= CAST('{timestamp}' AS DateTime) AND NOT deleted".format(
                 **query_args
             )
         )

@@ -402,11 +402,12 @@ class DeleteGroupsReplacement(Replacement):
         # project_id first matches the errors ORDER BY / partition key so FINAL
         # can prune other projects before merging. group_id is not in the key;
         # PREWHERE on it fights minmax_group_id. timestamp is PK-aligned
-        # (toStartOfDay / toMonday); received is kept for ingest-time correctness.
+        # (toStartOfDay / toMonday) and padded by a day so Relay's 60s future
+        # allowance still matches. received is the ingest-time delete cutoff.
         return f"""\
             PREWHERE project_id = {self.project_id}
             WHERE group_id IN ({group_ids})
-            AND timestamp <= CAST('{timestamp}' AS DateTime)
+            AND timestamp <= CAST('{timestamp}' AS DateTime) + INTERVAL 1 DAY
             AND received <= CAST('{timestamp}' AS DateTime)
             AND NOT deleted
         """
@@ -614,12 +615,12 @@ class MergeReplacement(Replacement):
         previous_group_ids = ", ".join(str(gid) for gid in self.previous_group_ids)
         timestamp = self.timestamp.strftime(DATETIME_FORMAT)
 
-        # See DeleteGroupsReplacement: project_id PREWHERE + timestamp bound so
-        # FINAL can use the errors PK / partition key.
+        # See DeleteGroupsReplacement: project_id PREWHERE + padded timestamp
+        # bound so FINAL can use the errors PK / partition key.
         return f"""\
             PREWHERE project_id = {self.project_id}
             WHERE group_id IN ({previous_group_ids})
-            AND timestamp <= CAST('{timestamp}' AS DateTime)
+            AND timestamp <= CAST('{timestamp}' AS DateTime) + INTERVAL 1 DAY
             AND received <= CAST('{timestamp}' AS DateTime)
             AND NOT deleted
         """
@@ -706,13 +707,14 @@ class UnmergeGroupsReplacement(Replacement):
         timestamp = self.timestamp.strftime(DATETIME_FORMAT)
 
         # project_id first for PK pruning under FINAL. primary_hash stays in
-        # WHERE (it is later in the sorting key); timestamp bound helps partition
-        # pruning; received kept for ingest-time correctness.
+        # WHERE (it is later in the sorting key). timestamp is padded by a day
+        # so Relay's 60s future allowance still matches; received is the
+        # ingest-time delete cutoff.
         return f"""\
             PREWHERE project_id = {self.project_id}
             WHERE primary_hash IN ({hashes})
             AND group_id = {self.previous_group_id}
-            AND timestamp <= CAST('{timestamp}' AS DateTime)
+            AND timestamp <= CAST('{timestamp}' AS DateTime) + INTERVAL 1 DAY
             AND received <= CAST('{timestamp}' AS DateTime)
             AND NOT deleted
         """
