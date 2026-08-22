@@ -50,25 +50,25 @@ from snuba.utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger("snuba.replacer")
 
-_REPLACER_OPTION = "replacer"
-_REPLACER_DEFAULTS: dict[str, int] = {
-    "max_threads": settings.REPLACER_MAX_THREADS,
-    "max_block_size": settings.REPLACER_MAX_BLOCK_SIZE,
-    "max_memory_usage": settings.REPLACER_MAX_MEMORY_USAGE,
-}
+
+def _replace_int(value: object, default: int) -> int:
+    return value if isinstance(value, int) and value > 0 else default
 
 
 def _replace_resource_settings() -> dict[str, int]:
     """Per-query REPLACE resource limits from the `replacer` sentry-option."""
     # Nested object option; OptionValue's static type is only one level deep.
-    raw: object = get_option(_REPLACER_OPTION, cast(Any, _REPLACER_DEFAULTS))
-    if not isinstance(raw, Mapping):
-        return dict(_REPLACER_DEFAULTS)
-    settings_out = dict(_REPLACER_DEFAULTS)
-    for key, default in _REPLACER_DEFAULTS.items():
-        value = raw.get(key, default)
-        settings_out[key] = value if isinstance(value, int) and value > 0 else default
-    return settings_out
+    raw: object = get_option("replacer", cast(Any, {}))
+    values = raw if isinstance(raw, Mapping) else {}
+    return {
+        "max_threads": _replace_int(values.get("max_threads"), settings.REPLACER_MAX_THREADS),
+        "max_block_size": _replace_int(
+            values.get("max_block_size"), settings.REPLACER_MAX_BLOCK_SIZE
+        ),
+        "max_memory_usage": _replace_int(
+            values.get("max_memory_usage"), settings.REPLACER_MAX_MEMORY_USAGE
+        ),
+    }
 
 
 executor = ThreadPoolExecutor()
