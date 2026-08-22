@@ -361,15 +361,19 @@ class ReplacerWorker:
                 duration,
                 written_rows,
             )
+            # DogStatsD treats the tag key "host" as the special host dimension,
+            # which reattributes the series onto ClickHouse nodes. Keep CH identity
+            # on a custom tag instead.
+            tags = {"clickhouse_host": connection.host}
             metrics.distribution(
                 "replacements.written_rows",
                 written_rows,
-                tags={"host": connection.host},
+                tags=tags,
             )
             metrics.timing(
                 "replacements.duration",
                 duration,
-                tags={"host": connection.host},
+                tags=tags,
             )
 
         query_table_name = self.__replacer_processor.get_schema().get_table_name()
