@@ -537,6 +537,8 @@ def test_replace_profile_uses_bounded_timeouts() -> None:
     replace = ClickhouseClientSettings.REPLACE.value
     assert replace.settings["max_execution_time"] == snuba_settings.REPLACER_QUERY_TIMEOUT
     assert replace.settings["max_execution_time"] == 10 * 60
+    assert replace.settings["do_not_merge_across_partitions_select_final"] == 1
+    assert replace.settings["use_skip_indexes_if_final"] == 1
     assert replace.timeout == snuba_settings.REPLACER_CLIENT_TIMEOUT
     assert replace.timeout == snuba_settings.REPLACER_QUERY_TIMEOUT + 60
 
