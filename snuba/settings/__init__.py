@@ -283,6 +283,13 @@ PAYLOAD_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 REPLACER_MAX_BLOCK_SIZE = 512
 REPLACER_MAX_MEMORY_USAGE = 10 * (1024**3)  # 10GB
+# ClickHouse server-side cap for REPLACE queries (seconds).
+# Keeps a slow shard from running INSERT ... FINAL unbounded.
+REPLACER_QUERY_TIMEOUT = 10 * 60  # 10 minutes
+# Client HTTP read timeout for REPLACE. Slightly above the server cap so
+# ClickHouse can return a max_execution_time error before urllib3 ReadTimeout,
+# which is noisier and more retry-prone on the connect HTTP path.
+REPLACER_CLIENT_TIMEOUT = REPLACER_QUERY_TIMEOUT + 60  # 11 minutes
 # TLL of Redis key that denotes whether a project had replacements
 # run recently. Useful for decidig whether or not to add FINAL clause
 # to queries.
