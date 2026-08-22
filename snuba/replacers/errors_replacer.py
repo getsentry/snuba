@@ -246,7 +246,7 @@ def _build_event_set_filter(
     event_ids: Sequence[str],
     from_timestamp: str | None,
     to_timestamp: str | None,
-) -> tuple[list[str], list[str], MutableMapping[str, str]]:
+) -> tuple[list[str], MutableMapping[str, str]]:
     def get_timestamp_condition(msg_value: str | None, operator: str) -> str:
         if not msg_value:
             return ""
@@ -264,8 +264,14 @@ def _build_event_set_filter(
     event_id_lhs = "event_id"
     event_id_list = ", ".join(f"'{uuid.UUID(eid)}'" for eid in event_ids)
 
-    prewhere = [f"{event_id_lhs} IN (%(event_ids)s)"]
-    where = ["project_id = %(project_id)s", "NOT deleted"]
+    # Leave everything in WHERE. event_id is highly selective, so
+    # optimize_move_to_prewhere can promote it; an explicit PREWHERE would
+    # block that choice. project_id still prunes via the PK.
+    where = [
+        f"{event_id_lhs} IN (%(event_ids)s)",
+        "project_id = %(project_id)s",
+        "NOT deleted",
+    ]
     if from_condition:
         where.append(from_condition)
     if to_condition:
@@ -276,7 +282,7 @@ def _build_event_set_filter(
         "project_id": str(project_id),
     }
 
-    return prewhere, where, query_args
+    return where, query_args
 
 
 @dataclass
@@ -331,14 +337,14 @@ class ReplaceGroupReplacement(Replacement):
 
     @cached_property
     def _where_clause(self) -> str:
-        prewhere, where, query_args = _build_event_set_filter(
+        where, query_args = _build_event_set_filter(
             project_id=self.project_id,
             event_ids=self.event_ids,
             from_timestamp=self.from_timestamp,
             to_timestamp=self.to_timestamp,
         )
 
-        return f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}" % query_args
+        return f"WHERE {' AND '.join(where)}" % query_args
 
     def get_insert_query(self, table_name: str) -> str | None:
         all_column_names = [c.escaped for c in self.all_columns]
@@ -454,7 +460,7 @@ class TombstoneEventsReplacement(Replacement):
 
     @cached_property
     def _where_clause(self) -> str:
-        prewhere, where, query_args = _build_event_set_filter(
+        where, query_args = _build_event_set_filter(
             project_id=self.project_id,
             event_ids=self.event_ids,
             from_timestamp=self.from_timestamp,
@@ -463,10 +469,9 @@ class TombstoneEventsReplacement(Replacement):
 
         if self.old_primary_hash:
             query_args["old_primary_hash"] = f"'{str(uuid.UUID(self.old_primary_hash))}'"
+            where.append("primary_hash = %(old_primary_hash)s")
 
-            prewhere.append("primary_hash = %(old_primary_hash)s")
-
-        return f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}" % query_args
+        return f"WHERE {' AND '.join(where)}" % query_args
 
     def get_insert_query(self, table_name: str) -> str | None:
         required_columns = ", ".join(self.required_columns)
