@@ -58,8 +58,9 @@ def test_merge_replacement_with_first_seen() -> None:
     expected = f"""INSERT INTO table (organization_id, group_id, event_id, group_first_seen)
             SELECT organization_id, 1, event_id, CAST('{first_seen_dt.strftime(CLICKHOUSE_DATETIME_FORMAT)}' AS DateTime)
             FROM table FINAL
-                        PREWHERE group_id IN (2, 3)
-            WHERE project_id = 100
+                        PREWHERE project_id = 100
+            WHERE group_id IN (2, 3)
+            AND timestamp <= CAST('{now_dt.strftime(CLICKHOUSE_DATETIME_FORMAT)}' AS DateTime) + INTERVAL 1 DAY
             AND received <= CAST('{now_dt.strftime(CLICKHOUSE_DATETIME_FORMAT)}' AS DateTime)
             AND NOT deleted"""
     actual = mr.get_insert_query("table")
@@ -105,8 +106,9 @@ def test_merge_replacement_without_first_seen() -> None:
     expected = f"""INSERT INTO table (organization_id, group_id, event_id, group_first_seen)
             SELECT organization_id, 1, event_id, group_first_seen
             FROM table FINAL
-                        PREWHERE group_id IN (2, 3)
-            WHERE project_id = 100
+                        PREWHERE project_id = 100
+            WHERE group_id IN (2, 3)
+            AND timestamp <= CAST('{now_dt.strftime(CLICKHOUSE_DATETIME_FORMAT)}' AS DateTime) + INTERVAL 1 DAY
             AND received <= CAST('{now_dt.strftime(CLICKHOUSE_DATETIME_FORMAT)}' AS DateTime)
             AND NOT deleted"""
     actual = mr.get_insert_query("table")
