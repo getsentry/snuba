@@ -361,7 +361,7 @@ class ReplacerWorker:
                 duration,
                 written_rows,
             )
-            metrics.timing(
+            metrics.distribution(
                 "replacements.count",
                 written_rows,
                 tags={"host": connection.host},
