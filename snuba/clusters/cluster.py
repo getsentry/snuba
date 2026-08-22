@@ -96,8 +96,11 @@ class ClickhouseClientSettings(Enum):
             "max_memory_usage": settings.REPLACER_MAX_MEMORY_USAGE,
             # Don't use up production cache for the count() queries.
             "use_uncompressed_cache": 0,
+            # Bound server-side work to the same budget as the client timeout so
+            # a slow shard cannot sit on a replacement past REPLACER_QUERY_TIMEOUT.
+            "max_execution_time": settings.REPLACER_QUERY_TIMEOUT,
         },
-        None,
+        settings.REPLACER_QUERY_TIMEOUT,
     )
     CARDINALITY_ANALYZER = ClickhouseClientSettingsType(
         {

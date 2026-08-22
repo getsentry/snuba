@@ -530,6 +530,17 @@ def test_internal_profile_has_no_explicit_timeout() -> None:
     assert ClickhouseClientSettings.INTERNAL.value.timeout is None
 
 
+def test_replace_profile_uses_10_minute_timeout() -> None:
+    # REPLACE used to leave timeout unset (1h connect fallback). Cap both the
+    # client send/receive budget and ClickHouse max_execution_time at 10 minutes.
+    from snuba import settings as snuba_settings
+
+    replace = ClickhouseClientSettings.REPLACE.value
+    assert replace.timeout == snuba_settings.REPLACER_QUERY_TIMEOUT
+    assert replace.timeout == 10 * 60
+    assert replace.settings["max_execution_time"] == snuba_settings.REPLACER_QUERY_TIMEOUT
+
+
 def test_clickhouse_reader_wraps_connect_pool() -> None:
     # The single driver-agnostic ClickhouseReader wraps the abstract pool, so it
     # works with the connect pool.
