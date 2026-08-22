@@ -535,19 +535,20 @@ def test_db_query_success() -> None:
             "throttled_by": {},
         },
         "details": {
-            "PassthroughPolicy": {
+            "BytesScannedRejectingPolicy": {
                 "can_run": True,
                 "max_threads": 10,
                 "max_bytes_to_read": 0,
                 "explanation": {
-                    "storage_key": "default.no_storage_key",
+                    "reason": "within_limit",
+                    "storage_key": "errors_ro",
                 },
                 "is_throttled": False,
-                "throttle_threshold": MAX_THRESHOLD,
-                "rejection_threshold": MAX_THRESHOLD,
+                "throttle_threshold": 1706666666666,
+                "rejection_threshold": 2560000000000,
                 "quota_used": 0,
-                "quota_unit": NO_UNITS,
-                "suggestion": NO_SUGGESTION,
+                "quota_unit": "bytes",
+                "suggestion": "no_suggestion",
             },
         },
     }

@@ -272,6 +272,15 @@ schema:
     - retention_days
     - date
   not_deleted_mandatory_condition: deleted
+allocation_policies:
+  - name: BytesScannedRejectingPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - project_id
+        - referrer
+      default_config_overrides:
+        is_enforced: 1
 query_processors:
   - processor: UniqInSelectAndHavingProcessor
   - processor: TupleUnaliaser
