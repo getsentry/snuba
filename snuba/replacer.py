@@ -351,10 +351,21 @@ class ReplacerWorker:
             t = time.time()
 
             logger.debug(f"Executing replace query: {query}")
-            connection.execute_robust(query)
+            result = connection.execute_robust(query)
             duration = int((time.time() - t) * 1000)
+            profile = result.profile
+            written_rows = profile["written_rows"] if profile and "written_rows" in profile else 0
 
-            logger.info(f"Replacement query took {duration}ms")
+            logger.info(
+                "Replacement query took %sms, written_rows=%s",
+                duration,
+                written_rows,
+            )
+            metrics.timing(
+                "replacements.count",
+                written_rows,
+                tags={"host": connection.host},
+            )
             metrics.timing(
                 "replacements.duration",
                 duration,

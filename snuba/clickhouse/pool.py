@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 Params = Sequence[Any] | dict[str, Any] | None
 
@@ -14,6 +14,8 @@ class ClickhouseProfile(TypedDict):
     blocks: int
     rows: int
     elapsed: float
+    # Rows written by INSERT (from X-ClickHouse-Summary). Absent on reads.
+    written_rows: NotRequired[int]
 
 
 @dataclass(frozen=True)

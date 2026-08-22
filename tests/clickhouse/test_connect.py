@@ -1373,6 +1373,21 @@ def test_shared_socket_pool() -> None:
     connect_mod._pool_managers.clear()
 
 
+def test_execute_maps_written_rows_from_summary() -> None:
+    # INSERT ... SELECT (the replacer path) uses Native, not JSONCompact.
+    # written_rows comes from X-ClickHouse-Summary after wait_end_of_query.
+    client = mock.Mock()
+    client.query.return_value = FakeQueryResult(
+        result_set=[],
+        summary={"read_rows": 40, "written_rows": 12, "read_bytes": 256},
+    )
+    result = _make_pool(client).execute("INSERT INTO t SELECT * FROM t")
+    assert result.profile is not None
+    assert result.profile["rows"] == 40
+    assert result.profile["written_rows"] == 12
+    assert result.profile["bytes"] == 256
+
+
 def test_response_is_drained() -> None:
     client = mock.Mock()
     result = mock.Mock()
