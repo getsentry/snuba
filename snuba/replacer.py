@@ -362,7 +362,7 @@ class ReplacerWorker:
                 written_rows,
             )
             metrics.distribution(
-                "replacements.count",
+                "replacements.written_rows",
                 written_rows,
                 tags={"host": connection.host},
             )
