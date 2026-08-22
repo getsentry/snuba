@@ -265,8 +265,8 @@ def _build_event_set_filter(
     event_id_list = ", ".join(f"'{uuid.UUID(eid)}'" for eid in event_ids)
 
     # Leave everything in WHERE. event_id is highly selective, so
-    # optimize_move_to_prewhere can promote it; an explicit PREWHERE would
-    # block that choice. project_id still prunes via the PK.
+    # optimize_move_to_prewhere_if_final can promote it; an explicit PREWHERE
+    # would block that choice. project_id still prunes via the PK.
     where = [
         f"{event_id_lhs} IN (%(event_ids)s)",
         "project_id = %(project_id)s",
@@ -406,8 +406,9 @@ class DeleteGroupsReplacement(Replacement):
         timestamp = self.timestamp.strftime(DATETIME_FORMAT)
 
         # project_id in WHERE is enough to prune other projects (first PK
-        # column). An explicit PREWHERE would block optimize_move_to_prewhere
-        # from promoting group_id. timestamp is PK-aligned (toStartOfDay /
+        # column). An explicit PREWHERE would block
+        # optimize_move_to_prewhere_if_final from promoting group_id.
+        # timestamp is PK-aligned (toStartOfDay /
         # toMonday) and padded by a day so Relay's 60s future allowance still
         # matches. received is the ingest-time delete cutoff.
         return f"""\
@@ -621,7 +622,7 @@ class MergeReplacement(Replacement):
         timestamp = self.timestamp.strftime(DATETIME_FORMAT)
 
         # See DeleteGroupsReplacement: leave predicates in WHERE so FINAL can
-        # use the errors PK and optimize_move_to_prewhere can pick group_id.
+        # use the errors PK and optimize_move_to_prewhere_if_final can pick group_id.
         return f"""\
             WHERE project_id = {self.project_id}
             AND group_id IN ({previous_group_ids})
@@ -712,7 +713,7 @@ class UnmergeGroupsReplacement(Replacement):
         timestamp = self.timestamp.strftime(DATETIME_FORMAT)
 
         # Leave predicates in WHERE. project_id still prunes via the PK;
-        # optimize_move_to_prewhere can promote primary_hash / group_id.
+        # optimize_move_to_prewhere_if_final can promote primary_hash / group_id.
         # timestamp is padded by a day so Relay's 60s future allowance still
         # matches; received is the ingest-time delete cutoff.
         return f"""\

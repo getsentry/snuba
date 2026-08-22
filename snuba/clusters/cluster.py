@@ -103,9 +103,10 @@ class ClickhouseClientSettings(Enum):
             # Skip indexes (e.g. minmax_group_id) used to be ignored under FINAL.
             # Keep them on so group_id filters can still prune granules.
             "use_skip_indexes_if_final": 1,
-            # Delete/merge/unmerge leave predicates in WHERE. Let CH promote
-            # the selective ones (group_id) instead of a forced project_id PREWHERE.
+            # Delete/merge/unmerge leave predicates in WHERE. FINAL ignores
+            # optimize_move_to_prewhere unless this is also on (default off).
             "optimize_move_to_prewhere": 1,
+            "optimize_move_to_prewhere_if_final": 1,
             # clickhouse-connect caps its own progress interval at 120s when the
             # client timeout is large. Pin a 15s header so a quiet FINAL still
             # writes bytes before http_send_timeout / Envoy idle (30s default).
