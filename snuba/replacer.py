@@ -42,12 +42,25 @@ from snuba.replacers.replacer_processor import (
     ReplacementMessage,
     ReplacementMessageMetadata,
 )
-from snuba.state.sentry_options import get_option
+from snuba.state.sentry_options import get_mapped_option, get_option
 from snuba.utils.bucket_timer import Counter
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger("snuba.replacer")
+
+
+def _replace_resource_settings() -> dict[str, int]:
+    return {
+        "max_threads": get_mapped_option("replacer", "max_threads", settings.REPLACER_MAX_THREADS),
+        "max_block_size": get_mapped_option(
+            "replacer", "max_block_size", settings.REPLACER_MAX_BLOCK_SIZE
+        ),
+        "max_memory_usage": get_mapped_option(
+            "replacer", "max_memory_usage", settings.REPLACER_MAX_MEMORY_USAGE
+        ),
+    }
+
 
 executor = ThreadPoolExecutor()
 NODES_REFRESH_PERIOD = 10
@@ -351,7 +364,7 @@ class ReplacerWorker:
             t = time.time()
 
             logger.debug(f"Executing replace query: {query}")
-            result = connection.execute_robust(query)
+            result = connection.execute_robust(query, settings=_replace_resource_settings())
             duration = int((time.time() - t) * 1000)
             profile = result.profile
             written_rows = profile["written_rows"] if profile and "written_rows" in profile else 0
