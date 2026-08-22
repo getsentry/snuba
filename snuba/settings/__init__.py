@@ -281,7 +281,10 @@ STATS_IN_RESPONSE = False
 
 PAYLOAD_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
-REPLACER_MAX_BLOCK_SIZE = 512
+# Below ClickHouse's 65536 default: INSERT ... SELECT FINAL rebuilds full
+# rows, so large blocks plus max_threads can blow REPLACER_MAX_MEMORY_USAGE.
+REPLACER_MAX_BLOCK_SIZE = 8192
+REPLACER_MAX_THREADS = 8
 REPLACER_MAX_MEMORY_USAGE = 10 * (1024**3)  # 10GB
 # ClickHouse server-side cap for REPLACE queries (seconds).
 # Keeps a slow shard from running INSERT ... FINAL unbounded.

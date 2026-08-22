@@ -89,10 +89,12 @@ class ClickhouseClientSettings(Enum):
             # for each event (via a SELECT), which is a Hard Thing (TM) for
             # columnstores to do. With the default settings it's common for
             # ClickHouse to go over the default max_memory_usage of 10GB per
-            # query. Lowering the max_block_size reduces memory usage, and
-            # increasing the max_memory_usage gives the query more breathing
-            # room.
+            # query. Keep max_block_size below the CH default (65536) so
+            # max_threads * block size stays inside max_memory_usage. The
+            # errors user profile defaults max_threads to 1; raise it so FINAL
+            # can scan parts in parallel.
             "max_block_size": settings.REPLACER_MAX_BLOCK_SIZE,
+            "max_threads": settings.REPLACER_MAX_THREADS,
             "max_memory_usage": settings.REPLACER_MAX_MEMORY_USAGE,
             # Don't use up production cache for replacement SELECT ... FINAL.
             "use_uncompressed_cache": 0,
