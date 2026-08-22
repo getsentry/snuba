@@ -275,7 +275,7 @@ class TransactionEvent:
             "http_referer": self.http_referer,
             "offset": meta.offset,
             "partition": meta.partition,
-            "retention_days": 30,
+            "retention_days": 23,
             "measurements.key": ["lcp", "lcp.elementSize"],
             "measurements.value": [32.129, 4242.0],
             "span_op_breakdowns.key": ["ops.db", "ops.http", "total.time"],
