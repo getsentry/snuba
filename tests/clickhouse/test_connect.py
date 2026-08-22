@@ -532,11 +532,22 @@ def test_replace_profile_uses_bounded_timeouts() -> None:
     # REPLACE used to leave client timeout unset (1h connect fallback) and had
     # no server max_execution_time. Cap server work at 10m and keep the client
     # slightly higher so CH fails cleanly before HTTP read timeout.
+    # Threads/block/memory stay conservative on the client profile; env tuning
+    # is via sentry-options on each query (see get_replace_query_settings).
+    from sentry_options.testing import override_options
+
     from snuba import settings as snuba_settings
+    from snuba.clusters.cluster import get_replace_query_settings
 
     replace = ClickhouseClientSettings.REPLACE.value
     assert replace.settings["max_execution_time"] == snuba_settings.REPLACER_QUERY_TIMEOUT
     assert replace.settings["max_execution_time"] == 10 * 60
+    assert replace.settings["max_block_size"] == snuba_settings.REPLACER_MAX_BLOCK_SIZE
+    assert replace.settings["max_block_size"] == 512
+    assert replace.settings["max_threads"] == snuba_settings.REPLACER_MAX_THREADS
+    assert replace.settings["max_threads"] == 1
+    assert replace.settings["max_memory_usage"] == snuba_settings.REPLACER_MAX_MEMORY_USAGE
+    assert replace.settings["max_memory_usage"] == 10 * (1024**3)
     assert replace.settings["do_not_merge_across_partitions_select_final"] == 1
     assert replace.settings["use_skip_indexes_if_final"] == 1
     assert replace.settings["optimize_move_to_prewhere"] == 1
@@ -545,6 +556,26 @@ def test_replace_profile_uses_bounded_timeouts() -> None:
     assert replace.settings["http_headers_progress_interval_ms"] == 15000
     assert replace.timeout == snuba_settings.REPLACER_CLIENT_TIMEOUT
     assert replace.timeout == snuba_settings.REPLACER_QUERY_TIMEOUT + 60
+
+    # Schema defaults match the conservative settings constants.
+    assert get_replace_query_settings() == {
+        "max_threads": 1,
+        "max_block_size": 512,
+        "max_memory_usage": 10 * (1024**3),
+    }
+    with override_options(
+        "snuba",
+        {
+            "replacer_max_threads": 32,
+            "replacer_max_block_size": 65536,
+            "replacer_max_memory_usage": 64 * (1024**3),
+        },
+    ):
+        assert get_replace_query_settings() == {
+            "max_threads": 32,
+            "max_block_size": 65536,
+            "max_memory_usage": 64 * (1024**3),
+        }
 
 
 def test_clickhouse_reader_wraps_connect_pool() -> None:

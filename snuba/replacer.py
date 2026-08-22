@@ -29,6 +29,7 @@ from snuba.clusters.cluster import (
     ClickhouseClientSettings,
     ClickhouseCluster,
     ClickhouseNode,
+    get_replace_query_settings,
 )
 from snuba.datasets.storage import WritableTableStorage
 from snuba.processor import InvalidMessageVersion
@@ -351,7 +352,9 @@ class ReplacerWorker:
             t = time.time()
 
             logger.debug(f"Executing replace query: {query}")
-            result = connection.execute_robust(query)
+            result = connection.execute_robust(
+                query, settings=get_replace_query_settings()
+            )
             duration = int((time.time() - t) * 1000)
             profile = result.profile
             written_rows = profile["written_rows"] if profile and "written_rows" in profile else 0

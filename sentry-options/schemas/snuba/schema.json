@@ -405,6 +405,21 @@
       "default": 1.0,
       "description": "Probability [0,1] that a replacement is written to every storage node rather than only the distributed table."
     },
+    "replacer_max_threads": {
+      "type": "integer",
+      "default": 1,
+      "description": "ClickHouse max_threads for REPLACE INSERT ... SELECT FINAL queries. Conservative default (1); raise per environment on large errors replicas. The errors user profile also defaults max_threads to 1."
+    },
+    "replacer_max_block_size": {
+      "type": "integer",
+      "default": 512,
+      "description": "ClickHouse max_block_size for REPLACE INSERT ... SELECT FINAL queries. Small default keeps memory low with 1 thread; raise with replacer_max_memory_usage on large hosts."
+    },
+    "replacer_max_memory_usage": {
+      "type": "integer",
+      "default": 10737418240,
+      "description": "ClickHouse max_memory_usage (bytes) for REPLACE INSERT ... SELECT FINAL queries. Default 10GB; raise per environment on large errors replicas without using most of host RAM."
+    },
     "replacements_bypass_projects": {
       "type": "string",
       "default": "[]",

@@ -281,6 +281,11 @@ STATS_IN_RESPONSE = False
 
 PAYLOAD_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
+# Conservative REPLACE defaults. Prefer sentry-options
+# replacer_max_threads / replacer_max_block_size / replacer_max_memory_usage
+# for per-environment tuning; these constants are fallbacks and client-profile
+# baselines only.
+REPLACER_MAX_THREADS = 1
 REPLACER_MAX_BLOCK_SIZE = 512
 REPLACER_MAX_MEMORY_USAGE = 10 * (1024**3)  # 10GB
 # ClickHouse server-side cap for REPLACE queries (seconds).
