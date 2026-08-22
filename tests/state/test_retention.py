@@ -1,4 +1,5 @@
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 from sentry_options.testing import override_options
@@ -10,6 +11,16 @@ def test_schema_default() -> None:
     config = get_retention_days_config()
     assert config["standard"] == {"default": 30, "max": 90}
     assert config["downsampled"] == {"default": 396, "max": 396}
+
+
+def test_missing_option_falls_back_to_schema_defaults() -> None:
+    with patch("snuba.state.retention.get_option", return_value={}):
+        assert get_retention_days_config() == {
+            "standard": {"default": 30, "max": 90},
+            "downsampled": {"default": 396, "max": 396},
+        }
+        assert clamp_retention_days(None) == 30
+        assert clamp_retention_days(100) == 90
 
 
 @pytest.mark.parametrize(

@@ -20,26 +20,38 @@ impl RetentionKind {
             Self::Downsampled => "downsampled",
         }
     }
+
+    fn default_default(self) -> u16 {
+        match self {
+            Self::Standard => 30,
+            Self::Downsampled => 396,
+        }
+    }
+
+    fn default_max(self) -> u16 {
+        match self {
+            Self::Standard => 90,
+            Self::Downsampled => 396,
+        }
+    }
 }
 
-fn retention_option(kind: RetentionKind, field: &str) -> u16 {
-    let retention_days = options("snuba")
-        .expect("sentry-options must be initialized")
-        .get("retention_days")
-        .expect("retention_days option must exist");
-    retention_days
-        .get(kind.option_key())
-        .and_then(|entry| entry.get(field))
-        .and_then(|n| n.as_u64())
+fn retention_option(kind: RetentionKind, field: &str, fallback: u16) -> u16 {
+    options("snuba")
+        .ok()
+        .and_then(|o| o.get("retention_days").ok())
+        .and_then(|v| v.get(kind.option_key()).cloned())
+        .and_then(|entry| entry.get(field).and_then(|n| n.as_u64()))
         .and_then(|n| u16::try_from(n).ok())
-        .expect("retention_days schema must declare a positive default and max")
+        .filter(|&n| n > 0)
+        .unwrap_or(fallback)
 }
 
 fn clamp_retention(value: Option<u16>, kind: RetentionKind) -> u16 {
     let Some(value) = value.filter(|&n| n > 0) else {
-        return retention_option(kind, "default");
+        return retention_option(kind, "default", kind.default_default());
     };
-    value.min(retention_option(kind, "max"))
+    value.min(retention_option(kind, "max", kind.default_max()))
 }
 
 /// Standard: missing/non-positive -> 30, otherwise cap at 90.
@@ -187,5 +199,24 @@ mod tests {
         assert_eq!(enforce_retentions(Some(90), Some(365)), (90, 365));
         assert_eq!(enforce_retentions(Some(90), Some(420)), (90, 396));
         assert_eq!(enforce_retentions(Some(100), Some(50)), (90, 90));
+    }
+
+    #[test]
+    fn test_non_positive_option_falls_back_to_schema_defaults() {
+        init_options();
+        let _guard = override_options(&[(
+            "snuba",
+            "retention_days",
+            json!({
+                "standard": {"default": 0, "max": 0},
+                "downsampled": {"default": 0, "max": 0},
+            }),
+        )])
+        .unwrap();
+
+        assert_eq!(enforce_standard_retention(None), 30);
+        assert_eq!(enforce_standard_retention(Some(100)), 90);
+        assert_eq!(enforce_downsampled_retention(None), 396);
+        assert_eq!(enforce_downsampled_retention(Some(420)), 396);
     }
 }
