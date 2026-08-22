@@ -277,7 +277,7 @@ allocation_policies:
         - project_id
         - referrer
       default_config_overrides:
-        is_enforced: 1
+        is_enforced: 0
 query_processors:
   - processor: UniqInSelectAndHavingProcessor
   - processor: TupleUnaliaser

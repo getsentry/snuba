@@ -540,7 +540,6 @@ def test_db_query_success() -> None:
                 "max_threads": 10,
                 "max_bytes_to_read": 0,
                 "explanation": {
-                    "reason": "within_limit",
                     "storage_key": "errors_ro",
                 },
                 "is_throttled": False,
