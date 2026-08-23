@@ -1,23 +1,35 @@
 //! Consumer healthcheck strategy.
 //!
-//! Touches a file on a timer so Kubernetes liveness probes can kill a stuck
-//! consumer. Optional sentry-options refine when the file is touched:
+//! Touches a health file so Kubernetes liveness probes can restart a stuck
+//! consumer (and Kafka can rebalance its assignment). See
+//! `docs/source/architecture/consumer.rst` ("Healthchecks") for the full
+//! mode matrix.
 //!
-//! - `experimental_healthcheck` (bool): only touch on commit progress, or when
-//!   the consumer is idle (no recent submits). Blocks health while work is in
-//!   flight without commits.
+//! ## Strategy implementations (`--health-check`)
+//!
+//! - **arroyo** (default): touch the file on every successful `poll`.
+//! - **snuba**: this module. Same file touch, plus optional progress modes
+//!   below. Also selected automatically when the partition stall watchdog is
+//!   enabled.
+//!
+//! Both need `--health-check-file`. Without it there is no pod-level check.
+//!
+//! ## Snuba progress modes (sentry-options)
+//!
+//! - `consumer.commit_progress_healthcheck` (bool, default false): consumer-level
+//!   progress. Touch only when a commit request is observed, or when the
+//!   consumer is idle (no recent submits). Unhealthy while work is in flight
+//!   without commits. Legacy alias: `experimental_healthcheck`.
 //! - `consumer.partition_stall_timeout_secs` (integer, default 0 = off): enable
 //!   the per-partition watchdog. Two failure modes:
 //!   1. **Hard stall**: a partition has in-flight work (submit after last
 //!      commit progress) for longer than the timeout with no commit advance.
 //!   2. **Relative slowdown**: over one timeout-sized window, a partition's
 //!      commit rate is below `consumer.partition_slow_ratio` of the median
-//!      sibling rate on this assignment, while still receiving work. This is
-//!      the throughput-collapse case (offsets still move, but one partition
-//!      falls far behind peers and starves GLOBAL subscription watermarks).
+//!      sibling rate on this assignment, while still receiving work.
 //!
-//! On either failure the health file is not touched, so the liveness probe
-//! restarts the pod and Kafka rebalances the assignment.
+//! On stall/slowdown failure the health file is not touched, so the liveness
+//! probe restarts the pod and Kafka rebalances the assignment.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -141,10 +153,25 @@ impl<Next> HealthCheck<Next> {
         }
     }
 
-    fn experimental_healthcheck_enabled(&self) -> bool {
-        options("snuba")
+    /// Consumer-level commit-progress mode. Prefer
+    /// `consumer.commit_progress_healthcheck`; still honor the legacy
+    /// `experimental_healthcheck` alias.
+    fn commit_progress_healthcheck_enabled(&self) -> bool {
+        let snuba = match options("snuba") {
+            Ok(o) => o,
+            Err(_) => return false,
+        };
+        if snuba
+            .get("consumer.commit_progress_healthcheck")
             .ok()
-            .and_then(|o| o.get("experimental_healthcheck").ok())
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+        {
+            return true;
+        }
+        snuba
+            .get("experimental_healthcheck")
+            .ok()
             .and_then(|v| v.as_bool())
             .unwrap_or(false)
     }
@@ -355,7 +382,7 @@ where
             return poll_result;
         }
 
-        if self.experimental_healthcheck_enabled() {
+        if self.commit_progress_healthcheck_enabled() {
             // If we are receiving a commit request, it means we are making progress and this can be considered a healthy state
             if let Ok(Some(_commit_request)) = poll_result.as_ref() {
                 self.maybe_touch_file();
@@ -471,7 +498,7 @@ mod tests {
         // Setup
         init_config();
         let _guard =
-            override_options(&[("snuba", "experimental_healthcheck", json!(true))]).unwrap();
+            override_options(&[("snuba", "consumer.commit_progress_healthcheck", json!(true))]).unwrap();
         let file_path = format!("/tmp/healthcheck_test_{}", uuid::Uuid::new_v4());
 
         // Create a mock strategy that returns a commit request
@@ -492,7 +519,7 @@ mod tests {
         // Setup
         init_config();
         let _guard =
-            override_options(&[("snuba", "experimental_healthcheck", json!(true))]).unwrap();
+            override_options(&[("snuba", "consumer.commit_progress_healthcheck", json!(true))]).unwrap();
         let file_path = format!("/tmp/healthcheck_test_{}", uuid::Uuid::new_v4());
 
         // Create a mock strategy that doesn't return a commit request
@@ -516,6 +543,24 @@ mod tests {
         );
 
         // Cleanup
+        let _ = fs::remove_file(&file_path);
+    }
+
+
+    #[test]
+    fn test_legacy_experimental_healthcheck_alias() {
+        init_config();
+        let _guard =
+            override_options(&[("snuba", "experimental_healthcheck", json!(true))]).unwrap();
+        let file_path = format!("/tmp/healthcheck_legacy_{}", uuid::Uuid::new_v4());
+        let mock_strategy = MockStrategy::new(true);
+        let mut health_check: HealthCheck<MockStrategy> =
+            HealthCheck::new(mock_strategy, &file_path);
+        let _ = health_check.poll();
+        assert!(
+            Path::new(&file_path).exists(),
+            "legacy experimental_healthcheck alias should enable commit-progress mode"
+        );
         let _ = fs::remove_file(&file_path);
     }
 

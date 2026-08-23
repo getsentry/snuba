@@ -162,6 +162,87 @@ Since the consumer is launched from the Python CLI, it will find the Python
 interpreter already initialized, and does not have to re-import Snuba again
 (except in subprocesses)
 
+
+
+Healthchecks
+------------
+
+Kafka consumers can look alive to the broker while making no useful progress
+(or while only one assigned partition is stuck). Snuba uses a health *file*
+plus Kubernetes probes so those pods get restarted and Kafka rebalances.
+
+Strategy implementations
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Selected with ``--health-check`` on ``snuba rust-consumer`` (and accepted
+outcomes). Requires ``--health-check-file``; without the file path there is no
+pod-level check.
+
+==================  =========  =========================================================
+Value               Default    Behavior
+==================  =========  =========================================================
+``arroyo``          yes        Stock arroyo strategy: touch the health file on every
+                               successful ``poll``. Catches a blocked main loop only.
+``snuba``           no         Snuba strategy in ``rust_snuba``. Same file touch, plus
+                               optional progress modes below. Also selected automatically
+                               when ``consumer.partition_stall_timeout_secs > 0``.
+==================  =========  =========================================================
+
+Python consumers only support the arroyo-style file touch (no ``--health-check``
+switch).
+
+Kubernetes probes
+~~~~~~~~~~~~~~~~~
+
+Startup and liveness probes remove the health file and expect the consumer to
+recreate it. Probe period is independent of the strategy. If the strategy stops
+touching the file, the pod is killed and the process leaves the consumer group.
+
+Snuba progress modes (sentry-options)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+These only apply when the **snuba** strategy is active.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 28 18 54
+
+   * - Mode
+     - Option
+     - Healthy when / what it catches
+   * - Default snuba
+     - (options off)
+     - Every successful ``poll`` (same as arroyo). Catches main thread not polling.
+   * - Commit progress
+     - ``consumer.commit_progress_healthcheck``
+       (legacy alias: ``experimental_healthcheck``)
+     - A commit request is observed, or the consumer is idle (no recent submits).
+       Unhealthy while work is in flight without commits. **Consumer-level**, not
+       per-partition: one stuck partition can stay healthy if siblings still commit.
+   * - Hard stall
+     - ``consumer.partition_stall_timeout_secs > 0``
+     - Every partition with in-flight work has committed within the timeout.
+       Catches a partition that stopped committing while still receiving work.
+   * - Relative slowdown
+     - same timeout + ``consumer.partition_slow_ratio``
+       (default ``0.25``; set ``0`` for hard-stall only)
+     - No active partition's commit rate is below ``ratio × median sibling rate``
+       on this assignment. Catches single-partition throughput collapse where
+       offsets still move slowly. Needs ≥2 active partitions on the pod; quiet
+       assignments (median sibling rate under 50 offsets/s) are ignored.
+
+Enable examples (sentry-options)::
+
+    # consumer-level: fail if busy but not committing
+    consumer.commit_progress_healthcheck: true
+
+    # per-partition: restart on stall or severe relative slowdown
+    consumer.partition_stall_timeout_secs: 300
+    consumer.partition_slow_ratio: 0.25
+
+``snuba health`` (API / ClickHouse readiness) is unrelated to this Kafka
+consumer file healthcheck.
+
 Static membership (KIP-345)
 ---------------------------
 
