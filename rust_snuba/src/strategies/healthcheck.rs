@@ -498,7 +498,8 @@ mod tests {
         // Setup
         init_config();
         let _guard =
-            override_options(&[("snuba", "consumer.commit_progress_healthcheck", json!(true))]).unwrap();
+            override_options(&[("snuba", "consumer.commit_progress_healthcheck", json!(true))])
+                .unwrap();
         let file_path = format!("/tmp/healthcheck_test_{}", uuid::Uuid::new_v4());
 
         // Create a mock strategy that returns a commit request
@@ -519,7 +520,8 @@ mod tests {
         // Setup
         init_config();
         let _guard =
-            override_options(&[("snuba", "consumer.commit_progress_healthcheck", json!(true))]).unwrap();
+            override_options(&[("snuba", "consumer.commit_progress_healthcheck", json!(true))])
+                .unwrap();
         let file_path = format!("/tmp/healthcheck_test_{}", uuid::Uuid::new_v4());
 
         // Create a mock strategy that doesn't return a commit request
@@ -545,7 +547,6 @@ mod tests {
         // Cleanup
         let _ = fs::remove_file(&file_path);
     }
-
 
     #[test]
     fn test_legacy_experimental_healthcheck_alias() {
