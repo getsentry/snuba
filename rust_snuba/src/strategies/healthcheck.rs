@@ -376,12 +376,9 @@ mod tests {
     #[test]
     fn test_partition_stall_stops_touching_health_file() {
         init_config();
-        let _guard = override_options(&[(
-            "snuba",
-            "consumer.partition_stall_timeout_secs",
-            json!(1),
-        )])
-        .unwrap();
+        let _guard =
+            override_options(&[("snuba", "consumer.partition_stall_timeout_secs", json!(1))])
+                .unwrap();
         let file_path = format!("/tmp/healthcheck_stall_{}", uuid::Uuid::new_v4());
         let partition = test_partition(41);
 
@@ -392,9 +389,7 @@ mod tests {
             HealthCheck::new(mock_strategy, &file_path);
 
         // First submit seeds last_progress_at = now (healthy).
-        health_check
-            .submit(broker_message(partition, 1))
-            .unwrap();
+        health_check.submit(broker_message(partition, 1)).unwrap();
         let _ = health_check.poll();
         assert!(
             Path::new(&file_path).exists(),
@@ -403,9 +398,7 @@ mod tests {
         let _ = fs::remove_file(&file_path);
 
         // More submits keep last_submit_at ahead of last_progress_at.
-        health_check
-            .submit(broker_message(partition, 2))
-            .unwrap();
+        health_check.submit(broker_message(partition, 2)).unwrap();
 
         // Wait past the 1s stall timeout without any commit progress.
         thread::sleep(Duration::from_millis(1100));
@@ -420,12 +413,9 @@ mod tests {
     #[test]
     fn test_partition_commit_clears_stall() {
         init_config();
-        let _guard = override_options(&[(
-            "snuba",
-            "consumer.partition_stall_timeout_secs",
-            json!(1),
-        )])
-        .unwrap();
+        let _guard =
+            override_options(&[("snuba", "consumer.partition_stall_timeout_secs", json!(1))])
+                .unwrap();
         let file_path = format!("/tmp/healthcheck_recover_{}", uuid::Uuid::new_v4());
         let partition = test_partition(7);
 
@@ -435,9 +425,7 @@ mod tests {
         let mut health_check: HealthCheck<MockStrategy> =
             HealthCheck::new(mock_strategy, &file_path);
 
-        health_check
-            .submit(broker_message(partition, 9))
-            .unwrap();
+        health_check.submit(broker_message(partition, 9)).unwrap();
         thread::sleep(Duration::from_millis(1100));
 
         // poll returns a commit request for the partition → progress advances
@@ -452,12 +440,9 @@ mod tests {
     #[test]
     fn test_idle_partition_is_healthy() {
         init_config();
-        let _guard = override_options(&[(
-            "snuba",
-            "consumer.partition_stall_timeout_secs",
-            json!(1),
-        )])
-        .unwrap();
+        let _guard =
+            override_options(&[("snuba", "consumer.partition_stall_timeout_secs", json!(1))])
+                .unwrap();
         let file_path = format!("/tmp/healthcheck_idle_{}", uuid::Uuid::new_v4());
         let partition = test_partition(3);
 
@@ -468,9 +453,7 @@ mod tests {
             HealthCheck::new(mock_strategy, &file_path);
 
         // Submit then commit so last_progress_at >= last_submit_at (idle).
-        health_check
-            .submit(broker_message(partition, 4))
-            .unwrap();
+        health_check.submit(broker_message(partition, 4)).unwrap();
         let _ = health_check.poll(); // records commit progress
         let _ = fs::remove_file(&file_path);
 
@@ -490,12 +473,9 @@ mod tests {
         init_config();
         // Explicitly set timeout to 0 (disabled). Do not leave a previous
         // override from another test hanging around.
-        let _guard = override_options(&[(
-            "snuba",
-            "consumer.partition_stall_timeout_secs",
-            json!(0),
-        )])
-        .unwrap();
+        let _guard =
+            override_options(&[("snuba", "consumer.partition_stall_timeout_secs", json!(0))])
+                .unwrap();
         let file_path = format!("/tmp/healthcheck_disabled_{}", uuid::Uuid::new_v4());
         let partition = test_partition(1);
 
@@ -503,12 +483,8 @@ mod tests {
         let mut health_check: HealthCheck<MockStrategy> =
             HealthCheck::new(mock_strategy, &file_path);
 
-        health_check
-            .submit(broker_message(partition, 1))
-            .unwrap();
-        health_check
-            .submit(broker_message(partition, 2))
-            .unwrap();
+        health_check.submit(broker_message(partition, 1)).unwrap();
+        health_check.submit(broker_message(partition, 2)).unwrap();
         thread::sleep(Duration::from_millis(50));
         let _ = health_check.poll();
         assert!(
