@@ -288,11 +288,27 @@ impl<Next> HealthCheck<Next> {
         true
     }
 
+    /// Median of a non-empty rate slice. Caller must pass at least one value.
+    fn median_rate(rates: &[f64]) -> f64 {
+        debug_assert!(!rates.is_empty());
+        let mut sorted = rates.to_vec();
+        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        let n = sorted.len();
+        if n % 2 == 1 {
+            sorted[n / 2]
+        } else {
+            (sorted[n / 2 - 1] + sorted[n / 2]) / 2.0
+        }
+    }
+
     /// Relative slowdown: one partition's completed-window commit rate is far
-    /// below the median of active siblings on this assignment.
+    /// below the median of its *siblings* on this assignment (leave-one-out).
+    /// Including the candidate in the median would dilute the signal on small
+    /// assignments (e.g. 1k vs 6k → inclusive median 3.5k, threshold 875 at
+    /// ratio 0.25, so the slow partition would not fire).
     fn relative_slowdown_healthy(&self, ratio: f64) -> bool {
         // Active partitions: completed a window while receiving submits.
-        let mut active_rates: Vec<(Partition, f64)> = self
+        let active_rates: Vec<(Partition, f64)> = self
             .partition_progress
             .iter()
             .filter_map(|(partition, state)| {
@@ -309,26 +325,28 @@ impl<Next> HealthCheck<Next> {
             return true;
         }
 
-        active_rates.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
-        let median = if active_rates.len() % 2 == 1 {
-            active_rates[active_rates.len() / 2].1
-        } else {
-            let mid = active_rates.len() / 2;
-            (active_rates[mid - 1].1 + active_rates[mid].1) / 2.0
-        };
-
-        if median < MIN_MEDIAN_SIBLING_RATE {
-            return true;
-        }
-
-        let threshold = median * ratio;
         for (partition, rate) in &active_rates {
+            let sibling_rates: Vec<f64> = active_rates
+                .iter()
+                .filter(|(other, _)| other != partition)
+                .map(|(_, sibling_rate)| *sibling_rate)
+                .collect();
+            if sibling_rates.is_empty() {
+                continue;
+            }
+
+            let median_sibling = Self::median_rate(&sibling_rates);
+            if median_sibling < MIN_MEDIAN_SIBLING_RATE {
+                continue;
+            }
+
+            let threshold = median_sibling * ratio;
             if *rate < threshold {
                 counter!("arroyo.processing.strategies.healthcheck.partition_slow");
                 tracing::error!(
                     partition = %partition,
                     partition_rate = rate,
-                    median_sibling_rate = median,
+                    median_sibling_rate = median_sibling,
                     ratio = ratio,
                     threshold = threshold,
                     "partition stall watchdog: commit rate far below sibling median"
@@ -727,8 +745,8 @@ mod tests {
         init_config();
         let _guard = override_options(&[
             ("snuba", "consumer.partition_stall_timeout_secs", json!(1)),
-            // Catch anything under 50% of median sibling rate.
-            ("snuba", "consumer.partition_slow_ratio", json!(0.5)),
+            // Default 0.25: leave-one-out sibling median must catch 100/s vs 6000/s.
+            ("snuba", "consumer.partition_slow_ratio", json!(0.25)),
         ])
         .unwrap();
         let file_path = format!("/tmp/healthcheck_slow_{}", uuid::Uuid::new_v4());

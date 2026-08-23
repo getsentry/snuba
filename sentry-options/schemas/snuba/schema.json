@@ -38,12 +38,12 @@
     "consumer.partition_stall_timeout_secs": {
       "type": "integer",
       "default": 0,
-      "description": "When > 0, enables the Snuba rust consumer per-partition stall watchdog. Two checks run: (1) hard stall — in-flight work with no commit progress past this many seconds; (2) relative slowdown — over one timeout-sized window, a partition's commit rate is below consumer.partition_slow_ratio of the median sibling rate on this assignment while still receiving work. Either failure stops touching the health file so the Kubernetes liveness probe restarts the pod and Kafka rebalances. 0 disables both checks. Requires --health-check-file. When enabled, the consumer automatically uses the Snuba healthcheck even if --health-check is still arroyo."
+      "description": "When > 0, enables the Snuba rust consumer per-partition stall watchdog. Two checks run: (1) hard stall — in-flight work with no commit progress past this many seconds; (2) relative slowdown — over one timeout-sized window, a partition's commit rate is below consumer.partition_slow_ratio of the leave-one-out median sibling rate on this assignment while still receiving work. Either failure stops touching the health file so the Kubernetes liveness probe restarts the pod and Kafka rebalances. 0 disables both checks. Requires --health-check-file. When enabled, the consumer automatically uses the Snuba healthcheck even if --health-check is still arroyo."
     },
     "consumer.partition_slow_ratio": {
       "type": "number",
       "default": 0.25,
-      "description": "Used with consumer.partition_stall_timeout_secs. A partition whose completed-window commit rate is below this fraction of the median sibling rate on the same assignment is treated as unhealthy (relative throughput collapse). Default 0.25. Set to 0 to disable the relative check and keep only the hard-stall check. Ignored when the stall timeout is 0."
+      "description": "Used with consumer.partition_stall_timeout_secs. A partition whose completed-window commit rate is below this fraction of the leave-one-out median sibling rate on the same assignment (candidate excluded from the median) is treated as unhealthy (relative throughput collapse). Default 0.25. Set to 0 to disable the relative check and keep only the hard-stall check. Ignored when the stall timeout is 0."
     },
     "generic_metrics_use_case_killswitch": {
       "type": "string",
