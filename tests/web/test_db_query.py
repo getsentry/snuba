@@ -558,7 +558,8 @@ def test_db_query_success() -> None:
                 "is_throttled": False,
                 "throttle_threshold": 1706666666666,
                 "rejection_threshold": 2560000000000,
-                "quota_used": 0,
+                # probe requests 1e12 against the org limit (2.56e12), so used is limit-probe
+                "quota_used": 1560000000000,
                 "quota_unit": "bytes",
                 "suggestion": "no_suggestion",
             },
