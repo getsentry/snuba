@@ -333,16 +333,25 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
         };
 
         if let Some(path) = &self.health_check_file {
-            {
-                if self.health_check == "snuba" {
-                    tracing::info!(
-                        "Using Snuba HealthCheck for consumer group: {}",
-                        self.physical_consumer_group
-                    );
-                    Box::new(SnubaHealthCheck::new(next_step, path))
-                } else {
-                    Box::new(HealthCheck::new(next_step, path))
-                }
+            // Prefer the Snuba healthcheck when explicitly requested, or when the
+            // per-partition stall watchdog is enabled (it only lives in SnubaHealthCheck).
+            let stall_watchdog_enabled = sentry_options::options("snuba")
+                .ok()
+                .and_then(|o| o.get("consumer.partition_stall_timeout_secs").ok())
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0)
+                > 0;
+            let use_snuba_healthcheck = self.health_check == "snuba" || stall_watchdog_enabled;
+            if use_snuba_healthcheck {
+                tracing::info!(
+                    health_check = %self.health_check,
+                    stall_watchdog_enabled,
+                    "Using Snuba HealthCheck for consumer group: {}",
+                    self.physical_consumer_group
+                );
+                Box::new(SnubaHealthCheck::new(next_step, path))
+            } else {
+                Box::new(HealthCheck::new(next_step, path))
             }
         } else {
             Box::new(next_step)

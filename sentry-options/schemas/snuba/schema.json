@@ -30,6 +30,11 @@
       "default": false,
       "description": "When true, the consumer healthcheck strategy treats commit requests (progress) as healthy and touches the healthcheck file accordingly."
     },
+    "consumer.partition_stall_timeout_secs": {
+      "type": "integer",
+      "default": 0,
+      "description": "When > 0, the Snuba rust consumer healthcheck tracks per-partition submit vs commit progress. If any assigned partition has in-flight work (submit more recent than last commit progress) for longer than this many seconds, the health file is not touched so the Kubernetes liveness probe restarts the pod and Kafka rebalances. 0 disables the watchdog. Requires --health-check-file. When enabled, the consumer automatically uses the Snuba healthcheck implementation even if --health-check is still arroyo."
+    },
     "generic_metrics_use_case_killswitch": {
       "type": "string",
       "default": "",
