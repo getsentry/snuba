@@ -185,10 +185,9 @@ impl<Next> HealthCheck<Next> {
             return;
         }
 
-        if let (Some(start_offset), Some(end_offset)) = (
-            entry.rate_window_start_offset,
-            entry.last_committed_offset,
-        ) {
+        if let (Some(start_offset), Some(end_offset)) =
+            (entry.rate_window_start_offset, entry.last_committed_offset)
+        {
             let delta = end_offset.saturating_sub(start_offset) as f64;
             let secs = elapsed.as_secs_f64().max(0.001);
             entry.last_window_rate = Some(delta / secs);
@@ -271,9 +270,7 @@ impl<Next> HealthCheck<Next> {
             .iter()
             .filter_map(|(partition, state)| {
                 if state.last_window_had_submits {
-                    state
-                        .last_window_rate
-                        .map(|rate| (*partition, rate))
+                    state.last_window_rate.map(|rate| (*partition, rate))
                 } else {
                     None
                 }
@@ -541,9 +538,7 @@ mod tests {
             HealthCheck::new(mock_strategy, &file_path);
 
         // First submit seeds last_progress_at = now (healthy).
-        health_check
-            .submit(broker_message(partition, 1))
-            .unwrap();
+        health_check.submit(broker_message(partition, 1)).unwrap();
         let _ = health_check.poll();
         assert!(
             Path::new(&file_path).exists(),
@@ -552,9 +547,7 @@ mod tests {
         let _ = fs::remove_file(&file_path);
 
         // More submits keep last_submit_at ahead of last_progress_at.
-        health_check
-            .submit(broker_message(partition, 2))
-            .unwrap();
+        health_check.submit(broker_message(partition, 2)).unwrap();
 
         // Wait past the 1s stall timeout without any commit progress.
         thread::sleep(Duration::from_millis(1100));
@@ -583,9 +576,7 @@ mod tests {
         let mut health_check: HealthCheck<MockStrategy> =
             HealthCheck::new(mock_strategy, &file_path);
 
-        health_check
-            .submit(broker_message(partition, 9))
-            .unwrap();
+        health_check.submit(broker_message(partition, 9)).unwrap();
         thread::sleep(Duration::from_millis(1100));
 
         // poll returns a commit request for the partition → progress advances
@@ -615,9 +606,7 @@ mod tests {
             HealthCheck::new(mock_strategy, &file_path);
 
         // Submit then commit so last_progress_at >= last_submit_at (idle).
-        health_check
-            .submit(broker_message(partition, 4))
-            .unwrap();
+        health_check.submit(broker_message(partition, 4)).unwrap();
         let _ = health_check.poll(); // records commit progress
         let _ = fs::remove_file(&file_path);
 
@@ -637,12 +626,9 @@ mod tests {
         init_config();
         // Explicitly set timeout to 0 (disabled). Do not leave a previous
         // override from another test hanging around.
-        let _guard = override_options(&[(
-            "snuba",
-            "consumer.partition_stall_timeout_secs",
-            json!(0),
-        )])
-        .unwrap();
+        let _guard =
+            override_options(&[("snuba", "consumer.partition_stall_timeout_secs", json!(0))])
+                .unwrap();
         let file_path = format!("/tmp/healthcheck_disabled_{}", uuid::Uuid::new_v4());
         let partition = test_partition(1);
 
@@ -650,12 +636,8 @@ mod tests {
         let mut health_check: HealthCheck<MockStrategy> =
             HealthCheck::new(mock_strategy, &file_path);
 
-        health_check
-            .submit(broker_message(partition, 1))
-            .unwrap();
-        health_check
-            .submit(broker_message(partition, 2))
-            .unwrap();
+        health_check.submit(broker_message(partition, 1)).unwrap();
+        health_check.submit(broker_message(partition, 2)).unwrap();
         thread::sleep(Duration::from_millis(50));
         let _ = health_check.poll();
         assert!(
@@ -716,8 +698,7 @@ mod tests {
         let mock = MutableCommitMock {
             positions: positions.clone(),
         };
-        let mut health_check: HealthCheck<MutableCommitMock> =
-            HealthCheck::new(mock, &file_path);
+        let mut health_check: HealthCheck<MutableCommitMock> = HealthCheck::new(mock, &file_path);
 
         // Mark both partitions active (receiving work).
         health_check.submit(broker_message(fast, 999)).unwrap();
@@ -765,8 +746,7 @@ mod tests {
         let mock = MutableCommitMock {
             positions: positions.clone(),
         };
-        let mut health_check: HealthCheck<MutableCommitMock> =
-            HealthCheck::new(mock, &file_path);
+        let mut health_check: HealthCheck<MutableCommitMock> = HealthCheck::new(mock, &file_path);
 
         health_check.submit(broker_message(p0, 99)).unwrap();
         health_check.submit(broker_message(p1, 99)).unwrap();
