@@ -504,7 +504,20 @@ def test_db_record_bytes_scanned() -> None:
 @pytest.mark.events_db
 @pytest.mark.redis_db
 def test_db_query_success() -> None:
-    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
+    query, storage, _ = _build_test_query("count(distinct(project_id))")
+    # Use a unique tenant so leftover Redis quota from other tests does not affect
+    # this assertion. BytesScannedRejectingPolicy keys by (org|project, referrer).
+    attribution_info = AttributionInfo(
+        app_id=AppID(key="key"),
+        tenant_ids={
+            "referrer": "test_db_query_success",
+            "organization_id": 987654321,
+        },
+        referrer="test_db_query_success",
+        team=None,
+        feature=None,
+        parent_api=None,
+    )
 
     query_metadata_list: list[ClickhouseQueryMetadata] = []
     stats: dict[str, Any] = {}
