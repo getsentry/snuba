@@ -617,8 +617,6 @@ class PassthroughPolicy(AllocationPolicy):
 
 ALLOCATION_POLICY_KEY = "allocation_policy"
 
-_POLICY_SETTING_KEYS = ("is_active", "is_enforced", "concurrent_limit", "max_threads")
-
 
 def _default_passthough_policy(storage_key: str = "default.no_storage_key") -> AllocationPolicy:
     return PassthroughPolicy(
