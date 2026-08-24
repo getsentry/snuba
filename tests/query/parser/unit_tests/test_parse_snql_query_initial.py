@@ -910,9 +910,11 @@ def test_parse_failure_does_not_log_query_body() -> None:
         "MATCH (events) SELECT f(i(am)bad((at(parentheses)+3() AS `alias` "
         "WHERE user_email = 'secret@example.com'"
     )
-    with mock.patch("snuba.query.snql.parser.logger.warning") as warning:
-        with pytest.raises(ParsingException):
-            parse_snql_query_initial(body)
+    with (
+        mock.patch("snuba.query.snql.parser.logger.warning") as warning,
+        pytest.raises(ParsingException),
+    ):
+        parse_snql_query_initial(body)
     warning.assert_called_once()
     logged = " ".join(str(arg) for arg in warning.call_args[0])
     assert "secret@example.com" not in logged
