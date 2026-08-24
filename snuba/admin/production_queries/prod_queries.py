@@ -185,8 +185,13 @@ def _project_ids_mentioned_in_condition(condition: Expression | None) -> set[int
         for branch in or_branches:
             mentioned |= _project_ids_mentioned_in_condition(branch)
         return mentioned
+    and_terms = get_first_level_and_conditions(or_branches[0])
+    if len(and_terms) == 1:
+        # Leaf that is not a project_id EQ/IN (e.g. timestamp comparison).
+        # Recursing would rematch the same node forever.
+        return set()
     mentioned = set()
-    for term in get_first_level_and_conditions(or_branches[0]):
+    for term in and_terms:
         mentioned |= _project_ids_mentioned_in_condition(term)
     return mentioned
 
