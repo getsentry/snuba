@@ -53,8 +53,9 @@ const DEFAULT_PARTITION_STALL_TIMEOUT_SECS: u64 = 0;
 /// collapse (e.g. ~1k/s vs ~6k/s peers) without firing on mild skew.
 const DEFAULT_PARTITION_SLOW_RATIO: f64 = 0.25;
 
-/// Minimum median sibling commit rate (offsets/sec) before relative slowdown
-/// can fire. Avoids false positives when the whole assignment is quiet.
+/// Minimum inclusive assignment-median commit rate (offsets/sec) before
+/// relative slowdown can fire. Avoids false positives when the whole
+/// assignment is quiet, even if one peer is hotter.
 const MIN_MEDIAN_SIBLING_RATE: f64 = 50.0;
 
 struct PartitionProgress {
@@ -138,9 +139,7 @@ impl<Next> HealthCheck<Next> {
     /// - `0` → relative check disabled (hard stall only)
     /// - `(0, 1]` → custom ratio
     fn partition_slow_ratio(&self) -> Option<f64> {
-        if self.partition_stall_timeout().is_none() {
-            return None;
-        }
+        self.partition_stall_timeout()?;
         let ratio = options("snuba")
             .ok()
             .and_then(|o| o.get("consumer.partition_slow_ratio").ok())
@@ -303,9 +302,11 @@ impl<Next> HealthCheck<Next> {
 
     /// Relative slowdown: one partition's completed-window commit rate is far
     /// below the median of its *siblings* on this assignment (leave-one-out).
-    /// Including the candidate in the median would dilute the signal on small
-    /// assignments (e.g. 1k vs 6k → inclusive median 3.5k, threshold 875 at
-    /// ratio 0.25, so the slow partition would not fire).
+    ///
+    /// Quiet floor uses the *inclusive* median of all active rates so a single
+    /// hot partition cannot force mostly-quiet peers into the slowdown check.
+    /// The ratio comparison still excludes the candidate so a 2-partition
+    /// collapse (~1k vs ~6k) fires at the default 0.25 ratio.
     fn relative_slowdown_healthy(&self, ratio: f64) -> bool {
         // Active partitions: completed a window while receiving submits.
         let active_rates: Vec<(Partition, f64)> = self
@@ -325,6 +326,13 @@ impl<Next> HealthCheck<Next> {
             return true;
         }
 
+        // Inclusive quiet floor for the whole assignment.
+        let all_rates: Vec<f64> = active_rates.iter().map(|(_, rate)| *rate).collect();
+        let assignment_median = Self::median_rate(&all_rates);
+        if assignment_median < MIN_MEDIAN_SIBLING_RATE {
+            return true;
+        }
+
         for (partition, rate) in &active_rates {
             let sibling_rates: Vec<f64> = active_rates
                 .iter()
@@ -336,10 +344,6 @@ impl<Next> HealthCheck<Next> {
             }
 
             let median_sibling = Self::median_rate(&sibling_rates);
-            if median_sibling < MIN_MEDIAN_SIBLING_RATE {
-                continue;
-            }
-
             let threshold = median_sibling * ratio;
             if *rate < threshold {
                 counter!("arroyo.processing.strategies.healthcheck.partition_slow");
@@ -347,6 +351,7 @@ impl<Next> HealthCheck<Next> {
                     partition = %partition,
                     partition_rate = rate,
                     median_sibling_rate = median_sibling,
+                    assignment_median = assignment_median,
                     ratio = ratio,
                     threshold = threshold,
                     "partition stall watchdog: commit rate far below sibling median"

@@ -229,8 +229,10 @@ These only apply when the **snuba** strategy is active.
      - No active partition's commit rate is below ``ratio × leave-one-out median sibling rate``
        on this assignment (the candidate partition is excluded from the median).
        Catches single-partition throughput collapse where offsets still move slowly.
-       Needs ≥2 active partitions on the pod; quiet assignments (sibling median under
-       50 offsets/s) are ignored.
+       Needs ≥2 active partitions on the pod. Quiet assignments are skipped when the
+       inclusive assignment median is under 50 offsets/s, so one hotter peer cannot
+       force mostly-quiet partitions into the check.
+
 
 Enable examples (sentry-options)::
 
