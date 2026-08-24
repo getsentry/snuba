@@ -21,7 +21,7 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
 from snuba.query.allocation_policies import (
     AllocationPolicy,
-    get_attached_allocation_policies,
+    get_active_allocation_policies,
 )
 from snuba.query.exceptions import QueryPlanException
 from snuba.query.processors.condition_checkers import ConditionChecker
@@ -106,7 +106,7 @@ class ReadableStorage(Storage):
         raise NotImplementedError
 
     def get_allocation_policies(self) -> list[AllocationPolicy]:
-        return get_attached_allocation_policies(ResourceIdentifier(self.get_storage_key()))
+        return get_active_allocation_policies(ResourceIdentifier(self.get_storage_key()))
 
 
 class WritableStorage(Storage):

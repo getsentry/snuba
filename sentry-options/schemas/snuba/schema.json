@@ -300,7 +300,7 @@
       "default": {},
       "description": "Override values for ConfigurableComponent (allocation policy and storage-routing strategy) configs, keyed by the fully-qualified config key '{resource}.{ClassName}.{config}' (parameterized configs append '|{param}:{value}|...', params sorted). Values are numbers cast to each config's declared numeric type (int/float) on read. All current ConfigurableComponent configs are numeric; a non-numeric config would require widening this type. Authoritative source for these configs; a key absent here falls back to the code default. Read-only at runtime and managed in sentry-options-automator. Migrated from the per-component runtime config of the same key."
     },
-    "allocation_policy_attachment": {
+    "allocation_policy": {
       "type": "object",
       "additionalProperties": {
         "type": "array",
@@ -315,6 +315,22 @@
               "items": {
                 "type": "string"
               }
+            },
+            "is_active": {
+              "type": "integer",
+              "optional": true
+            },
+            "is_enforced": {
+              "type": "integer",
+              "optional": true
+            },
+            "concurrent_limit": {
+              "type": "integer",
+              "optional": true
+            },
+            "max_threads": {
+              "type": "integer",
+              "optional": true
             },
             "cross_org_referrer_limits": {
               "type": "object",
@@ -335,7 +351,7 @@
         }
       },
       "default": {},
-      "description": "Which AllocationPolicy classes to construct for a ResourceIdentifier. Keyed by resource (storage key for SNQL, 'EAP' for routing strategies). Each item is {name, required_tenant_types} plus optional cross_org_referrer_limits. An absent or empty entry falls back to PassthroughPolicy. Policy settings (is_enforced, concurrent_limit, …) stay on configurable_component_overrides. Managed in sentry-options-automator."
+      "description": "Which AllocationPolicy classes to construct for a ResourceIdentifier. Keyed by resource (storage key for SNQL, 'EAP' for routing strategies). Each item requires name; required_tenant_types is optional. Optional per-policy settings (is_active, is_enforced, concurrent_limit, max_threads) are applied as constructor default_config_overrides. An absent or empty entry falls back to PassthroughPolicy. Managed in sentry-options-automator."
     },
     "storage_routing_sampled_too_low_threshold": {
       "type": "object",

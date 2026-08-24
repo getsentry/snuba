@@ -1,31 +1,31 @@
 from snuba.configs.configuration import ResourceIdentifier
 from snuba.query.allocation_policies import (
     PassthroughPolicy,
-    get_attached_allocation_policies,
+    get_active_allocation_policies,
 )
 from tests.query.allocation_policies.attachment import (
     CURRENT_EAP_ATTACHMENT,
-    override_allocation_policy_attachment,
+    override_allocation_policy,
 )
 
 
 def test_unset_falls_back_to_passthrough() -> None:
-    policies = get_attached_allocation_policies(ResourceIdentifier("errors"))
+    policies = get_active_allocation_policies(ResourceIdentifier("errors"))
     assert len(policies) == 1
     assert isinstance(policies[0], PassthroughPolicy)
     assert policies[0]._resource_identifier.value == "errors"
 
 
 def test_empty_list_falls_back_to_passthrough() -> None:
-    with override_allocation_policy_attachment({"errors": []}):
-        policies = get_attached_allocation_policies(ResourceIdentifier("errors"))
+    with override_allocation_policy({"errors": []}):
+        policies = get_active_allocation_policies(ResourceIdentifier("errors"))
     assert len(policies) == 1
     assert isinstance(policies[0], PassthroughPolicy)
 
 
 def test_eap_attachment_constructs_named_policies() -> None:
-    with override_allocation_policy_attachment({"EAP": CURRENT_EAP_ATTACHMENT}):
-        policies = get_attached_allocation_policies(ResourceIdentifier("EAP"))
+    with override_allocation_policy({"EAP": CURRENT_EAP_ATTACHMENT}):
+        policies = get_active_allocation_policies(ResourceIdentifier("EAP"))
     assert [p.class_name() for p in policies] == [
         "ConcurrentRateLimitAllocationPolicy",
         "ReferrerGuardRailPolicy",
@@ -37,10 +37,13 @@ def test_eap_attachment_constructs_named_policies() -> None:
         "referrer",
         "project_id",
     }
+    assert policies[0].get_config_value("concurrent_limit") == 66
+    assert policies[0].is_enforced is False
+    assert policies[1].is_active is False
 
 
 def test_unknown_policy_is_skipped() -> None:
-    with override_allocation_policy_attachment(
+    with override_allocation_policy(
         {
             "EAP": [
                 {"name": "DoesNotExist", "required_tenant_types": ["referrer"]},
@@ -51,14 +54,14 @@ def test_unknown_policy_is_skipped() -> None:
             ]
         }
     ):
-        policies = get_attached_allocation_policies(ResourceIdentifier("EAP"))
+        policies = get_active_allocation_policies(ResourceIdentifier("EAP"))
     assert [p.class_name() for p in policies] == ["ReferrerGuardRailPolicy"]
 
 
 def test_all_unknown_falls_back_to_passthrough() -> None:
-    with override_allocation_policy_attachment(
+    with override_allocation_policy(
         {"EAP": [{"name": "DoesNotExist", "required_tenant_types": []}]}
     ):
-        policies = get_attached_allocation_policies(ResourceIdentifier("EAP"))
+        policies = get_active_allocation_policies(ResourceIdentifier("EAP"))
     assert len(policies) == 1
     assert isinstance(policies[0], PassthroughPolicy)
