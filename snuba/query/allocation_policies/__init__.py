@@ -610,7 +610,7 @@ def get_active_allocation_policies(
             )
             continue
 
-        name = spec.pop("name", None)
+        name = spec.get("name", None)
         if not isinstance(name, str):
             logger.warning(
                 "Ignoring allocation_policy entry without name for %s: %r",
