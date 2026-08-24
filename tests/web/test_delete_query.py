@@ -114,7 +114,7 @@ def test_delete_query_with_rejecting_allocation_policy() -> None:
 
     with mock.patch(
         "snuba.web.delete_query._get_delete_allocation_policies",
-        return_value=[RejectPolicy(ResourceIdentifier(StorageKey("doesntmatter")), {})],
+        return_value=[RejectPolicy(ResourceIdentifier(StorageKey("doesntmatter")))],
     ):
         query = Query(
             from_clause=Table(

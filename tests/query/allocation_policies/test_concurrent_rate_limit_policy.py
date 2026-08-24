@@ -39,9 +39,7 @@ MAX_QUERIES_PER_SECOND = 10
 def policy() -> ConcurrentRateLimitAllocationPolicy:
     policy = ConcurrentRateLimitAllocationPolicy(
         storage_key=StorageKey("test"),
-        default_config_overrides={
-            "concurrent_limit": MAX_CONCURRENT_QUERIES,
-        },
+        concurrent_limit=MAX_CONCURRENT_QUERIES,
     )
     return policy
 

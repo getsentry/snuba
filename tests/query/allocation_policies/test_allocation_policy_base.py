@@ -42,18 +42,14 @@ def test_eq() -> None:
 
     assert PassthroughPolicy(
         StorageKey("something"),
-        default_config_overrides={},
     ) == PassthroughPolicy(
         StorageKey("something"),
-        default_config_overrides={},
     )
 
     assert PassthroughPolicy(
         StorageKey("something"),
-        default_config_overrides={},
     ) != SomeAllocationPolicy(
         StorageKey("something"),
-        default_config_overrides={},
     )
 
 
@@ -128,12 +124,12 @@ class InvalidTenantAllocationPolicy(PassthroughPolicy):
 
 def test_passes_through_on_error() -> None:
     with pytest.raises(AttributeError):
-        BadlyWrittenAllocationPolicy(StorageKey("something"), {}).get_quota_allowance(
+        BadlyWrittenAllocationPolicy(StorageKey("something")).get_quota_allowance(
             {}, query_id="deadbeef"
         )
 
     with pytest.raises(ValueError):
-        BadlyWrittenAllocationPolicy(StorageKey("something"), {}).update_quota_balance(
+        BadlyWrittenAllocationPolicy(StorageKey("something")).update_quota_balance(
             None,  # type: ignore[arg-type]
             None,  # type: ignore[arg-type]
             None,  # type: ignore[arg-type]
@@ -142,24 +138,24 @@ def test_passes_through_on_error() -> None:
     # should not raise even though the implementation is buggy (this is the production setting)
     with mock.patch("snuba.settings.RAISE_ON_ALLOCATION_POLICY_FAILURES", False):
         assert (
-            BadlyWrittenAllocationPolicy(StorageKey("something"), {})
+            BadlyWrittenAllocationPolicy(StorageKey("something"))
             .get_quota_allowance({}, query_id="deadbeef")
             .can_run
         )
 
-        BadlyWrittenAllocationPolicy(StorageKey("something"), {}).update_quota_balance(
+        BadlyWrittenAllocationPolicy(StorageKey("something")).update_quota_balance(
             None,  # type: ignore[arg-type]
             None,  # type: ignore[arg-type]
             None,  # type: ignore[arg-type]
         )
 
         assert (
-            not InvalidTenantAllocationPolicy(StorageKey("Something"), {})
+            not InvalidTenantAllocationPolicy(StorageKey("Something"))
             .get_quota_allowance({"some": "tenant"}, "12345")
             .can_run
         )
 
-        InvalidTenantAllocationPolicy(StorageKey("Something"), {}).update_quota_balance(
+        InvalidTenantAllocationPolicy(StorageKey("Something")).update_quota_balance(
             {"some": "tenant"},
             "12345",
             None,  # type: ignore[arg-type]
@@ -168,7 +164,7 @@ def test_passes_through_on_error() -> None:
 
 @pytest.mark.redis_db
 def test_bad_config_keys() -> None:
-    policy = PassthroughPolicy(StorageKey("something"), {})
+    policy = PassthroughPolicy(StorageKey("something"))
     with pytest.raises(InvalidConfig) as err:
         set_component_config(policy, "bad_config", 1)
     assert str(err.value) == "'bad_config' is not a valid config for PassthroughPolicy!"
@@ -219,7 +215,7 @@ class TestAllocationPolicyLogs(TestCase):
     def test_bad_config_key_in_option(self) -> None:
         from tests.configs.component_config import set_raw_component_overrides
 
-        policy = SomeParametrizedConfigPolicy(StorageKey("something"), {})
+        policy = SomeParametrizedConfigPolicy(StorageKey("something"))
         base = policy.component_name()
         bad_keys = [
             f"{base}.my_bad_config|org:10|ref:ref",
@@ -242,7 +238,7 @@ class TestAllocationPolicyLogs(TestCase):
 
 @pytest.fixture(scope="function")
 def policy() -> AllocationPolicy:
-    policy = SomeParametrizedConfigPolicy(StorageKey("something"), {})
+    policy = SomeParametrizedConfigPolicy(StorageKey("something"))
     return policy
 
 
@@ -390,7 +386,7 @@ def test_get_current_configs(policy: AllocationPolicy) -> None:
 @pytest.mark.redis_db
 def test_default_config_override() -> None:
     policy = SomeParametrizedConfigPolicy(
-        StorageKey("some_storage"), {"my_param_config": 420, "is_enforced": 0}
+        StorageKey("some_storage"), my_param_config=420, is_enforced=0
     )
     assert (
         policy.get_config_value("my_param_config", params={"org": 1, "ref": "a"}, validate=True)
@@ -402,9 +398,9 @@ def test_default_config_override() -> None:
 @pytest.mark.redis_db
 def test_bad_defaults() -> None:
     with pytest.raises(ValueError):
-        SomeParametrizedConfigPolicy(StorageKey("some_storage"), {"is_enforced": "0"})
+        SomeParametrizedConfigPolicy(StorageKey("some_storage"), is_enforced="0")
     with pytest.raises(ValueError):
-        SomeParametrizedConfigPolicy(StorageKey("some_storage"), {"my_param_config": False})
+        SomeParametrizedConfigPolicy(StorageKey("some_storage"), my_param_config=False)
 
 
 @pytest.mark.redis_db
@@ -412,15 +408,14 @@ def test_is_not_enforced() -> None:
     MAX_THREADS = 100
     reject_policy = RejectingEverythingAllocationPolicy(
         StorageKey("some_storage"),
-        {
-            "my_param_config": 420,
-            "is_enforced": 1,
-            "max_threads": MAX_THREADS,
-        },
+        my_param_config=420,
+        is_enforced=1,
+        max_threads=MAX_THREADS,
     )
     throttle_policy = ThrottleEverythingAllocationPolicy(
         StorageKey("some_storage"),
-        {"is_enforced": 1, "max_threads": MAX_THREADS},
+        is_enforced=1,
+        max_threads=MAX_THREADS,
     )
     tenant_ids: dict[str, int | str] = {
         "organization_id": 123,
@@ -490,7 +485,6 @@ class TestComponentNameBackwardsCompatibility:
             # Create an instance of the policy
             policy = policy_class(
                 storage_key=storage_key,
-                default_config_overrides={},
             )
 
             expected_old_prefix = f"{storage_key.value}.{policy_class.__name__}"

@@ -286,7 +286,6 @@ class TestSnQLApi(BaseApiTest):
 
         policy = ConcurrentRateLimitAllocationPolicy(
             ResourceIdentifier(StorageKey("errors")),
-            default_config_overrides={},
         )
         set_component_config(policy, "project_override", 0, {"project_id": self.project_id})
 
@@ -1304,7 +1303,7 @@ class TestSnQLApi(BaseApiTest):
     def test_allocation_policy_max_bytes_to_read(self) -> None:
         with patch(
             "snuba.web.db_query._get_allocation_policies",
-            return_value=[MaxBytesPolicy123(ResourceIdentifier(StorageKey("doesntmatter")), {})],
+            return_value=[MaxBytesPolicy123(ResourceIdentifier(StorageKey("doesntmatter")))],
         ):
             response = self.post(
                 "/discover/snql",
@@ -1375,7 +1374,7 @@ class TestSnQLApi(BaseApiTest):
         with patch(
             "snuba.web.db_query._get_allocation_policies",
             return_value=[
-                RejectAllocationPolicy123(ResourceIdentifier(StorageKey("doesntmatter")), {})
+                RejectAllocationPolicy123(ResourceIdentifier(StorageKey("doesntmatter")))
             ],
         ):
             response = self.post(

@@ -23,7 +23,6 @@ QUERY_ID = "deadbeef"
 def policy() -> AllocationPolicy:
     policy = BytesScannedWindowAllocationPolicy(
         storage_key=StorageKey("errors"),
-        default_config_overrides={},
     )
     return policy
 

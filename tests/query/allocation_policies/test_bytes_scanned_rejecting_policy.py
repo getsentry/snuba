@@ -25,7 +25,6 @@ QUERY_ID = "deadbeef"
 def policy() -> AllocationPolicy:
     policy = BytesScannedRejectingPolicy(
         storage_key=ResourceIdentifier(StorageKey("errors")),
-        default_config_overrides={},
     )
     return policy
 

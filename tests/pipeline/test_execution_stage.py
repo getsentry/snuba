@@ -111,7 +111,6 @@ def ch_query() -> Query:
             allocation_policies=[
                 MockAllocationPolicy(
                     ResourceIdentifier(StorageKey("mystorage")),
-                    default_config_overrides={},
                 )
             ],
         ),

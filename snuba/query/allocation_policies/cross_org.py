@@ -45,8 +45,7 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
           args:
             required_tenant_types:
               - referrer
-            default_config_overrides:
-              is_enforced: 0
+            is_enforced: 0
             cross_org_referrer_limits:
               dynamic_sampling.counters.get_org_transaction_volumes:
                 max_threads: 4
@@ -95,12 +94,10 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
     def __init__(
         self,
         storage_key: ResourceIdentifier,
-        default_config_overrides: dict[str, Any] | None = None,
-        **kwargs: str,
+        **kwargs: Any,
     ) -> None:
         super().__init__(
             storage_key,
-            default_config_overrides,
             **kwargs,
         )
         self._registered_cross_org_referrers = cast(

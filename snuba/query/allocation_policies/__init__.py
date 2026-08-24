@@ -305,11 +305,9 @@ class AllocationPolicy(ConfigurableComponent, ABC):
 
         >>> policy = MyAllocationPolicy(
         >>>     storage_key=StorageKey("some_storage"),
-        >>>     # This dictionary overrides whatever defaults are set
-        >>>     # for this class
-        >>>     default_config_overrides={
-        >>>         "is_enforced": False, "fart_noise_level": 100
-        >>>     }
+        >>>     # kwargs override whatever defaults are set for this class
+        >>>     is_enforced=False,
+        >>>     fart_noise_level=100,
         >>> )
 
 
@@ -338,35 +336,31 @@ class AllocationPolicy(ConfigurableComponent, ABC):
     def __init__(
         self,
         storage_key: ResourceIdentifier,
-        default_config_overrides: Mapping[str, Any] | None = None,
-        **kwargs: str,
+        **kwargs: Any,
     ) -> None:
-        if default_config_overrides is None:
-            default_config_overrides = {}
         self._resource_identifier = storage_key
         self._default_config_definitions = [
             AllocationPolicyConfig(
                 name=IS_ENFORCED,
                 description="Toggles whether or not this policy is enforced. If enforced, policy will be able to throttle/reject incoming queries. If not enforced, this policy will not throttle/reject queries if policy is triggered, but all the policy code will still run.",
                 value_type=int,
-                default=default_config_overrides.get(IS_ENFORCED, 1),
+                default=kwargs.get(IS_ENFORCED, 1),
             ),
             AllocationPolicyConfig(
                 name=MAX_THREADS,
                 description="The max threads Clickhouse can use for the query.",
                 value_type=int,
-                default=default_config_overrides.get(MAX_THREADS, 10),
+                default=kwargs.get(MAX_THREADS, 10),
             ),
         ]
         self._overridden_additional_config_definitions = (
-            self._get_overridden_additional_config_defaults(default_config_overrides)
+            self._get_overridden_additional_config_defaults(kwargs)
         )
 
     @classmethod
     def create_minimal_instance(cls, resource_identifier: str) -> ConfigurableComponent:
         return cls(
             storage_key=ResourceIdentifier(resource_identifier),
-            default_config_overrides={},
         )
 
     @property
@@ -408,15 +402,10 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         cls,
         *,
         storage_key: str,
-        default_config_overrides: Mapping[str, Any] | None = None,
-        **kwargs: str,
+        **kwargs: Any,
     ) -> AllocationPolicy:
-        if default_config_overrides is None:
-            default_config_overrides = {}
-
         return cls(
             storage_key=ResourceIdentifier(storage_key),
-            default_config_overrides=default_config_overrides,
             **kwargs,
         )
 
@@ -591,7 +580,6 @@ ALLOCATION_POLICY_KEY = "allocation_policy"
 def _default_passthough_policy(storage_key: str = "default.no_storage_key") -> AllocationPolicy:
     return PassthroughPolicy(
         ResourceIdentifier(StorageKey(storage_key)),
-        default_config_overrides={},
     )
 
 
@@ -606,10 +594,10 @@ def get_active_allocation_policies(
     Reads the ``allocation_policy`` sentry-option (keyed by ResourceIdentifier
     value). An absent or empty entry falls back to a PassthroughPolicy for that
     resource. Tenant types live on the policy class, not the option. Per-policy
-    settings on the item (is_enforced, concurrent_limit, …) become constructor
-    default_config_overrides.
+    settings on the item (is_enforced, concurrent_limit, …) are passed as
+    constructor kwargs.
     """
-    policies = []
+    policies: list[AllocationPolicy] = []
     specs: list[Mapping[str, str]] = get_mapped_option(
         ALLOCATION_POLICY_KEY, resource_identifier.value, []
     )
@@ -622,7 +610,7 @@ def get_active_allocation_policies(
             )
             continue
 
-        name = spec.get("name")
+        name = spec.pop("name", None)
         if not isinstance(name, str):
             logger.warning(
                 "Ignoring allocation_policy entry without name for %s: %r",
@@ -635,7 +623,6 @@ def get_active_allocation_policies(
             policies.append(
                 AllocationPolicy.get_from_name(name).from_kwargs(
                     storage_key=resource_identifier.value,
-                    default_config_overrides=spec,
                     **spec,
                 )
             )

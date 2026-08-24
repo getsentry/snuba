@@ -34,7 +34,7 @@ class PermissiveJoinClause(JoinClause[Table]):
 events_table = Table(
     "errors",
     ColumnSet([]),
-    allocation_policies=[PassthroughPolicy(ResourceIdentifier(StorageKey("flimflam")), {})],
+    allocation_policies=[PassthroughPolicy(ResourceIdentifier(StorageKey("flimflam")))],
     storage_key=StorageKey("errors"),
     final=False,
     sampling_rate=None,
@@ -44,7 +44,7 @@ events_table = Table(
 groups_table = Table(
     "groups",
     ColumnSet([]),
-    allocation_policies=[PassthroughPolicy(ResourceIdentifier(StorageKey("jimjam")), {})],
+    allocation_policies=[PassthroughPolicy(ResourceIdentifier(StorageKey("jimjam")))],
     storage_key=StorageKey("groups"),
     final=False,
     sampling_rate=None,
@@ -97,7 +97,7 @@ join_query = CompositeQuery(
     [
         pytest.param(
             composite_query,
-            [PassthroughPolicy(ResourceIdentifier(StorageKey("flimflam")), {})],
+            [PassthroughPolicy(ResourceIdentifier(StorageKey("flimflam")))],
             id="composite query uses leaf query's allocation policy",
         ),
         pytest.param(
@@ -110,14 +110,14 @@ join_query = CompositeQuery(
                     ),
                 ],
             ),
-            [PassthroughPolicy(ResourceIdentifier(StorageKey("flimflam")), {})],
+            [PassthroughPolicy(ResourceIdentifier(StorageKey("flimflam")))],
             id="double nested composite query uses leaf query's allocation policy",
         ),
         pytest.param(
             join_query,
             [
-                PassthroughPolicy(ResourceIdentifier(StorageKey("flimflam")), {}),
-                PassthroughPolicy(ResourceIdentifier(StorageKey("jimjam")), {}),
+                PassthroughPolicy(ResourceIdentifier(StorageKey("flimflam"))),
+                PassthroughPolicy(ResourceIdentifier(StorageKey("jimjam"))),
             ],
             id="all allocation policies from joins are put together",
         ),
@@ -134,7 +134,7 @@ join_query = CompositeQuery(
                     Literal(None, datetime(2020, 1, 1, 12, 0)),
                 ),
             ),
-            [PassthroughPolicy(ResourceIdentifier(StorageKey("flimflam")), {})],
+            [PassthroughPolicy(ResourceIdentifier(StorageKey("flimflam")))],
             id="simple query uses table's allocation policy",
         ),
     ],
