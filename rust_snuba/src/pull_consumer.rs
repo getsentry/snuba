@@ -288,6 +288,29 @@ async fn run_eap(
     let processor_name = &storage.message_processor.python_class_name;
     let source_topic_name = &consumer_config.raw_topic.physical_topic_name;
 
+    // RowBinary is only wired up for EAPItemsProcessor (matches factory_v2.rs).
+    // Other EAP pipeline processors (e.g. GenericCountersMetricsProcessor) stay on JSON.
+    let is_eap_items = processor_name == "EAPItemsProcessor";
+    let row_binary_processor: Option<crate::processors::ProcessingFunction> = if is_eap_items {
+        Some(crate::processors::eap_items::process_message_row_binary)
+    } else {
+        None
+    };
+    let insert_columns: Option<&'static [&'static str]> = if is_eap_items {
+        let eap_items_emit_received_at = crate::processors::eap_items::emit_received_at();
+        Some(crate::processors::eap_items::EAPItemRow::column_names(
+            eap_items_emit_received_at,
+        ))
+    } else {
+        None
+    };
+    let processor = row_binary_processor.unwrap_or(processor);
+    let insert_format = if is_eap_items {
+        InsertFormat::RowBinary
+    } else {
+        InsertFormat::JsonEachRow
+    };
+
     loop {
         let writer = if dry_run {
             ClickHouseWriterStage::new(DryRunWriter::new(Duration::from_millis(dry_run_latency_ms)))
@@ -296,8 +319,8 @@ async fn run_eap(
                 &storage.clickhouse_cluster,
                 &storage.clickhouse_table_name,
                 storage.name.clone(),
-                InsertFormat::RowBinary,
-                None,
+                insert_format,
+                insert_columns,
             ))
         };
 
