@@ -47,7 +47,6 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
               - referrer
             default_config_overrides:
               is_enforced: 0
-              is_active: 0
             cross_org_referrer_limits:
               dynamic_sampling.counters.get_org_transaction_volumes:
                 max_threads: 4

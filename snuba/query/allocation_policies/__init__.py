@@ -27,7 +27,6 @@ from snuba.utils.sentry import SENTRY_OP
 from snuba.utils.serializable_exception import JsonSerializable, SerializableException
 from snuba.web import QueryResult
 
-IS_ACTIVE = "is_active"
 IS_ENFORCED = "is_enforced"
 MAX_THREADS = "max_threads"
 NO_UNITS = "no_units"
@@ -174,7 +173,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
 
         >>>    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
         >>>         # Define policy specific config definitions, these will be used along
-        >>>         # with the default definitions of the base class. (is_enforced, is_active)
+        >>>         # with the default definitions of the base class. (is_enforced)
         >>>         pass
 
         >>>     # Use your configs in the following methods
@@ -224,16 +223,12 @@ class AllocationPolicy(ConfigurableComponent, ABC):
     Any configuration definition that exists in your sub class' `_additional_config_definitions()` will appear in the
     Capacity Management Snuba Admin UI for the policy. From there you can modify the live values to alter how your policy works.
 
-    The base class comes with 2 built in configs which are accessible as properties of the class itself:
-    - is_active
-        - Use this as a way to skip the policy entirely
+    The base class comes with a built in config accessible as a property of the class itself:
     - is_enforced
-        - Use this to throttle/reject queries OR just log stuff (assuming policy is active)
+        - Use this to throttle/reject queries OR just log stuff. A configured policy is always active.
 
     Eg.
 
-    >>> if not self.is_active:
-    >>>     return
     >>> metrics.increment("something")
     >>> if self.is_enforced:
     >>>     # throttle query
@@ -351,12 +346,6 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         self._resource_identifier = storage_key
         self._default_config_definitions = [
             AllocationPolicyConfig(
-                name=IS_ACTIVE,
-                description="Toggles whether or not this policy is active. If active, policy code will be excecuted. If inactive, the policy code will not run and the query will pass through.",
-                value_type=int,
-                default=default_config_overrides.get(IS_ACTIVE, 1),
-            ),
-            AllocationPolicyConfig(
                 name=IS_ENFORCED,
                 description="Toggles whether or not this policy is enforced. If enforced, policy will be able to throttle/reject incoming queries. If not enforced, this policy will not throttle/reject queries if policy is triggered, but all the policy code will still run.",
                 value_type=int,
@@ -391,10 +380,6 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                 "policy_class": self.__class__.__name__,
             },
         )
-
-    @property
-    def is_active(self) -> bool:
-        return bool(self.get_config_value(IS_ACTIVE)) and settings.ALLOCATION_POLICY_ENABLED
 
     @property
     def is_enforced(self) -> bool:
@@ -451,20 +436,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
             for t, tid in tenant_ids.items():
                 span.set_attribute(f"tenant_ids.{t}", str(tid))
             try:
-                if not self.is_active:
-                    allowance = QuotaAllowance(
-                        can_run=True,
-                        max_threads=self.max_threads,
-                        explanation={},
-                        is_throttled=False,
-                        throttle_threshold=MAX_THRESHOLD,
-                        rejection_threshold=MAX_THRESHOLD,
-                        quota_used=0,
-                        quota_unit=NO_UNITS,
-                        suggestion=NO_SUGGESTION,
-                    )
-                else:
-                    allowance = self._get_quota_allowance(tenant_ids, query_id)
+                allowance = self._get_quota_allowance(tenant_ids, query_id)
             except InvalidTenantsForAllocationPolicy as e:
                 allowance = QuotaAllowance(
                     can_run=False,
@@ -545,8 +517,6 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         result_or_error: QueryResultOrError,
     ) -> None:
         try:
-            if not self.is_active:
-                return None
             return self._update_quota_balance(tenant_ids, query_id, result_or_error)
         except InvalidTenantsForAllocationPolicy:
             # the policy did not do anything because the tenants were invalid, updating is also not necessary

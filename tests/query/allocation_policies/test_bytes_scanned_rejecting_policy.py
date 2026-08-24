@@ -31,7 +31,6 @@ def policy() -> AllocationPolicy:
 
 
 def _configure_policy(policy: AllocationPolicy) -> None:
-    set_component_config(policy, "is_active", 1)
     set_component_config(policy, "is_enforced", 1)
     set_component_config(policy, "max_threads", MAX_THREAD_NUMBER)
     set_component_config(policy, "project_referrer_scan_limit", PROJECT_REFERRER_SCAN_LIMIT)

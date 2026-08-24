@@ -13,16 +13,6 @@ CURRENT_EAP_ATTACHMENT: list[dict[str, Any]] = [
         "concurrent_limit": 66,
         "is_enforced": 0,
     },
-    {
-        "name": "ReferrerGuardRailPolicy",
-        "is_active": 0,
-        "is_enforced": 0,
-    },
-    {
-        "name": "BytesScannedRejectingPolicy",
-        "is_active": 0,
-        "is_enforced": 0,
-    },
 ]
 
 

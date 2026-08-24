@@ -46,7 +46,7 @@ from snuba.web import QueryException
 class MockAllocationPolicy(AllocationPolicy):
     def _additional_config_definitions(self) -> list[Configuration]:
         # Define policy specific config definitions, these will be used along
-        # with the default definitions of the base class. (is_enforced, is_active)
+        # with the default definitions of the base class. (is_enforced)
         return []
 
     def _get_quota_allowance(

@@ -46,8 +46,6 @@ def test_eap_attachment_constructs_named_policies() -> None:
     assert [p.class_name() for p in policies] == [
         "PassthroughPolicy",
         "ConcurrentRateLimitAllocationPolicy",
-        "ReferrerGuardRailPolicy",
-        "BytesScannedRejectingPolicy",
     ]
     assert policies[1]._resource_identifier.value == "EAP"
     assert policies[1].required_tenant_types == {
@@ -57,7 +55,6 @@ def test_eap_attachment_constructs_named_policies() -> None:
     }
     assert policies[1].get_config_value("concurrent_limit") == 66
     assert policies[1].is_enforced is False
-    assert policies[2].is_active is False
 
 
 def test_unknown_policy_is_skipped() -> None:

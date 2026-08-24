@@ -29,7 +29,6 @@ def policy() -> AllocationPolicy:
 
 
 def _configure_policy(policy: AllocationPolicy) -> None:
-    set_component_config(policy, "is_active", 1)
     set_component_config(policy, "is_enforced", 1)
     set_component_config(policy, "max_threads", MAX_THREAD_NUMBER)
     set_component_config(policy, "org_limit_bytes_scanned", ORG_SCAN_LIMIT)
@@ -98,30 +97,6 @@ def test_org_isolation(policy: AllocationPolicy) -> None:
 
 
 @pytest.mark.redis_db
-def test_killswitch(policy: AllocationPolicy) -> None:
-    _configure_policy(policy)
-    set_component_config(policy, "is_active", 0)
-    tenant_ids: dict[str, int | str] = {
-        "organization_id": 123,
-        "referrer": "some_referrer",
-    }
-    policy.update_quota_balance(
-        tenant_ids,
-        QUERY_ID,
-        QueryResultOrError(
-            query_result=QueryResult(
-                result={"profile": {"bytes": 20 * ORG_SCAN_LIMIT}},
-                extra={"stats": {}, "sql": "", "experiments": {}},
-            ),
-            error=None,
-        ),
-    )
-    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
-    # policy is not active so no change
-    assert allowance.max_threads == MAX_THREAD_NUMBER
-
-
-@pytest.mark.redis_db
 def test_enforcement_switch(policy: AllocationPolicy) -> None:
     _configure_policy(policy)
     tenant_ids: dict[str, int | str] = {
@@ -182,7 +157,6 @@ def test_simple_config_values(policy: AllocationPolicy) -> None:
         "org_limit_bytes_scanned",
         "org_limit_bytes_scanned_override",
         "throttled_thread_number",
-        "is_active",
         "is_enforced",
         "max_threads",
     }

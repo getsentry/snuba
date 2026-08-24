@@ -30,7 +30,6 @@ from snuba.query.allocation_policies.concurrent_rate_limit import (
 from snuba.query.allocation_policies.cross_org import CrossOrgQueryAllocationPolicy
 from snuba.query.allocation_policies.per_referrer import ReferrerGuardRailPolicy
 from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
-from snuba.web import QueryResult
 from tests.configs.component_config import (
     delete_component_config,
     set_component_config,
@@ -174,12 +173,6 @@ def test_bad_config_keys() -> None:
         set_component_config(policy, "bad_config", 1)
     assert str(err.value) == "'bad_config' is not a valid config for PassthroughPolicy!"
     with pytest.raises(InvalidConfig) as err:
-        set_component_config(policy, "is_active", "bad_value")
-    assert (
-        str(err.value)
-        == "'is_active' value needs to be of type int (not str) for PassthroughPolicy!"
-    )
-    with pytest.raises(InvalidConfig) as err:
         set_component_config(policy, "is_enforced", "bad_value")
     assert (
         str(err.value)
@@ -239,7 +232,7 @@ class TestAllocationPolicyLogs(TestCase):
             configs = policy.get_current_configs()
 
         # the bad configs are not returned
-        assert len(configs) == 4
+        assert len(configs) == 3
 
         # the bad configs are logged
         assert len(captured.records) == 3
@@ -319,12 +312,6 @@ def test_default_config_overrides(policy: AllocationPolicy) -> None:
     set_component_config(policy, config_key="is_enforced", value=1)
     assert policy.is_enforced == 1
 
-    assert policy.is_active == 1
-    set_component_config(policy, config_key="is_active", value=0)
-    assert policy.is_active == 0
-    set_component_config(policy, config_key="is_active", value=1)
-    assert policy.is_active == 1
-
     assert policy.max_threads == 10
     set_component_config(policy, config_key="max_threads", value=4)
     assert policy.max_threads == 4
@@ -334,7 +321,7 @@ def test_default_config_overrides(policy: AllocationPolicy) -> None:
 
 @pytest.mark.redis_db
 def test_get_current_configs(policy: AllocationPolicy) -> None:
-    assert len(policy_configs := policy.get_current_configs()) == 4
+    assert len(policy_configs := policy.get_current_configs()) == 3
     assert all(
         config in policy_configs
         for config in [
@@ -344,14 +331,6 @@ def test_get_current_configs(policy: AllocationPolicy) -> None:
                 "default": 10,
                 "description": "",
                 "value": 10,
-                "params": {},
-            },
-            {
-                "name": "is_active",
-                "type": "int",
-                "default": 1,
-                "description": "Toggles whether or not this policy is active. If active, policy code will be excecuted. If inactive, the policy code will not run and the query will pass through.",
-                "value": 1,
                 "params": {},
             },
             {
@@ -379,7 +358,7 @@ def test_get_current_configs(policy: AllocationPolicy) -> None:
     )
     set_component_config(policy, config_key="is_enforced", value=0)
     set_component_config(policy, config_key="max_threads", value=4)
-    assert len(policy_configs := policy.get_current_configs()) == 5
+    assert len(policy_configs := policy.get_current_configs()) == 4
     assert {
         "name": "my_param_config",
         "type": "int",
@@ -425,42 +404,7 @@ def test_bad_defaults() -> None:
     with pytest.raises(ValueError):
         SomeParametrizedConfigPolicy(StorageKey("some_storage"), {"is_enforced": "0"})
     with pytest.raises(ValueError):
-        SomeParametrizedConfigPolicy(StorageKey("some_storage"), {"is_active": False})
-    with pytest.raises(ValueError):
         SomeParametrizedConfigPolicy(StorageKey("some_storage"), {"my_param_config": False})
-
-
-@pytest.mark.redis_db
-def test_is_not_active() -> None:
-    # active policy
-    policy = BadlyWrittenAllocationPolicy(
-        StorageKey("some_storage"),
-        {"my_param_config": 420, "is_active": 1, "is_enforced": 0},
-    )
-
-    tenant_ids: dict[str, int | str] = {
-        "organization_id": 123,
-        "referrer": "some_referrer",
-    }
-    result_or_error = QueryResultOrError(
-        query_result=QueryResult(
-            result={"profile": {"bytes": 420}},
-            extra={"stats": {}, "sql": "", "experiments": {}},
-        ),
-        error=None,
-    )
-
-    # Should error since private methods _get_quota_allowance and _update_quota_balance are called
-    with pytest.raises(AttributeError):
-        policy.get_quota_allowance(tenant_ids, "deadbeef")
-    with pytest.raises(ValueError):
-        policy.update_quota_balance(tenant_ids, "deadbeef", result_or_error)
-
-    set_component_config(policy, config_key="is_active", value=0)  # make policy inactive
-
-    # Should not error anymore since private methods are not called due to inactivity
-    policy.get_quota_allowance(tenant_ids, "deadbeef")
-    policy.update_quota_balance(tenant_ids, "deadbeef", result_or_error)
 
 
 @pytest.mark.redis_db
@@ -470,14 +414,13 @@ def test_is_not_enforced() -> None:
         StorageKey("some_storage"),
         {
             "my_param_config": 420,
-            "is_active": 1,
             "is_enforced": 1,
             "max_threads": MAX_THREADS,
         },
     )
     throttle_policy = ThrottleEverythingAllocationPolicy(
         StorageKey("some_storage"),
-        {"is_active": 1, "is_enforced": 1, "max_threads": MAX_THREADS},
+        {"is_enforced": 1, "max_threads": MAX_THREADS},
     )
     tenant_ids: dict[str, int | str] = {
         "organization_id": 123,
