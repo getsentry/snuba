@@ -19,6 +19,7 @@ from snuba.configs.configuration import (
     logger,
 )
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.state.sentry_options import get_mapped_option
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import import_submodules_in_directory
 from snuba.utils.sentry import SENTRY_OP
@@ -430,7 +431,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         assert isinstance(storage_key, str)
         return cls(
             required_tenant_types=required_tenant_types,
-            storage_key=ResourceIdentifier(StorageKey(storage_key)),
+            storage_key=ResourceIdentifier(storage_key),
             default_config_overrides=default_config_overrides,
             **kwargs,
         )
@@ -618,6 +619,71 @@ DEFAULT_PASSTHROUGH_POLICY = PassthroughPolicy(
     required_tenant_types=[],
     default_config_overrides={},
 )
+
+ALLOCATION_POLICY_ATTACHMENT_KEY = "allocation_policy_attachment"
+
+
+def get_attached_allocation_policies(
+    resource_identifier: ResourceIdentifier,
+) -> list[AllocationPolicy]:
+    """Build the AllocationPolicy list configured for ``resource_identifier``.
+
+    Reads the ``allocation_policy_attachment`` sentry-option (keyed by
+    ResourceIdentifier value). An absent or empty entry falls back to a
+    PassthroughPolicy for that resource. Settings (is_enforced, limits, …)
+    still come from ``configurable_component_overrides``.
+    """
+    specs: Any = get_mapped_option(ALLOCATION_POLICY_ATTACHMENT_KEY, resource_identifier.value, [])
+    if not isinstance(specs, list) or not specs:
+        return [
+            PassthroughPolicy(
+                resource_identifier,
+                required_tenant_types=[],
+                default_config_overrides={},
+            )
+        ]
+
+    policies: list[AllocationPolicy] = []
+    for spec in specs:
+        if not isinstance(spec, dict):
+            logger.warning(
+                "Ignoring malformed allocation_policy_attachment entry for %s: %r",
+                resource_identifier.value,
+                spec,
+            )
+            continue
+        name = spec.get("name")
+        if not isinstance(name, str):
+            logger.warning(
+                "Ignoring allocation_policy_attachment entry without name for %s: %r",
+                resource_identifier.value,
+                spec,
+            )
+            continue
+        kwargs: dict[str, Any] = {
+            "storage_key": resource_identifier.value,
+            "required_tenant_types": spec.get("required_tenant_types") or [],
+        }
+        cross_org = spec.get("cross_org_referrer_limits")
+        if cross_org is not None:
+            kwargs["cross_org_referrer_limits"] = cross_org
+        try:
+            policies.append(AllocationPolicy.get_from_name(name).from_kwargs(**kwargs))
+        except Exception:
+            logger.warning(
+                "Failed to construct allocation policy %s for %s",
+                name,
+                resource_identifier.value,
+                exc_info=True,
+            )
+    return policies or [
+        PassthroughPolicy(
+            resource_identifier,
+            required_tenant_types=[],
+            default_config_overrides={},
+        )
+    ]
+
 
 import_submodules_in_directory(
     os.path.dirname(os.path.realpath(__file__)), "snuba.query.allocation_policies"

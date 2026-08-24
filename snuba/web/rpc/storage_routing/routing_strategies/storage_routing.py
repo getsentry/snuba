@@ -39,14 +39,8 @@ from snuba.query.allocation_policies import (
     PolicyData,
     QueryResultOrError,
     QuotaAllowance,
+    get_attached_allocation_policies,
 )
-from snuba.query.allocation_policies.bytes_scanned_rejecting_policy import (
-    BytesScannedRejectingPolicy,
-)
-from snuba.query.allocation_policies.concurrent_rate_limit import (
-    ConcurrentRateLimitAllocationPolicy,
-)
-from snuba.query.allocation_policies.per_referrer import ReferrerGuardRailPolicy
 from snuba.query.allocation_policies.utils import get_max_bytes_to_read
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import record_query
@@ -371,26 +365,9 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         return False
 
     def get_allocation_policies(self) -> list[AllocationPolicy]:
-        # by default all routing strategies share allocation policies since effectively they are all
-        # protecting the same resource (EAP)
-        EAP_RESOURCE_IDENTIFIER = ResourceIdentifier("EAP")
-        return [
-            ConcurrentRateLimitAllocationPolicy(
-                storage_key=EAP_RESOURCE_IDENTIFIER,
-                required_tenant_types=["organization_id", "referrer", "project_id"],
-                default_config_overrides={"is_enforced": 0, "concurrent_limit": 66},
-            ),
-            ReferrerGuardRailPolicy(
-                storage_key=EAP_RESOURCE_IDENTIFIER,
-                required_tenant_types=["referrer"],
-                default_config_overrides={"is_enforced": 0, "is_active": 0},
-            ),
-            BytesScannedRejectingPolicy(
-                storage_key=EAP_RESOURCE_IDENTIFIER,
-                required_tenant_types=["organization_id", "project_id", "referrer"],
-                default_config_overrides={"is_active": 0, "is_enforced": 0},
-            ),
-        ]
+        # All routing strategies share allocation policies: they protect the same
+        # resource (EAP). The list is configured via allocation_policy_attachment.
+        return get_attached_allocation_policies(ResourceIdentifier("EAP"))
 
     def get_delete_allocation_policies(self) -> list[AllocationPolicy]:
         return []
