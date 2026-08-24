@@ -37,7 +37,7 @@ const FIRE_AND_FORGET_PROCESSORS: &[&str] = &[
 ];
 
 /// Allowed processors for the EAP pipeline.
-const EAP_PROCESSORS: &[&str] = &["EAPItemsProcessor", "GenericCountersMetricsProcessor"];
+const EAP_PROCESSORS: &[&str] = &["EAPItemsProcessor"];
 
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
@@ -160,10 +160,12 @@ fn pull_consumer_impl(
     );
     let topic = Topic::new(&consumer_config.raw_topic.physical_topic_name);
 
+    let eap_items_emit_received_at = crate::processors::eap_items::emit_received_at();
+
     let processor_config = ProcessorConfig {
         env_config: env_config.clone(),
         storage_name: storage.name.clone(),
-        ..Default::default()
+        eap_items_emit_received_at,
     };
 
     let max_batch_size = consumer_config.max_batch_size as u64;
@@ -183,7 +185,6 @@ fn pull_consumer_impl(
         let result = if is_eap {
             run_eap(
                 &source,
-                processor,
                 &processor_config,
                 &storage,
                 &consumer_config,
@@ -272,7 +273,6 @@ async fn run_fire_and_forget(
 #[allow(clippy::too_many_arguments)]
 async fn run_eap(
     source: &KafkaSource,
-    processor: crate::processors::ProcessingFunction,
     processor_config: &ProcessorConfig,
     storage: &config::StorageConfig,
     consumer_config: &config::ConsumerConfig,
@@ -288,28 +288,14 @@ async fn run_eap(
     let processor_name = &storage.message_processor.python_class_name;
     let source_topic_name = &consumer_config.raw_topic.physical_topic_name;
 
-    // RowBinary is only wired up for EAPItemsProcessor (matches factory_v2.rs).
-    // Other EAP pipeline processors (e.g. GenericCountersMetricsProcessor) stay on JSON.
-    let is_eap_items = processor_name == "EAPItemsProcessor";
-    let row_binary_processor: Option<crate::processors::ProcessingFunction> = if is_eap_items {
-        Some(crate::processors::eap_items::process_message_row_binary)
-    } else {
-        None
-    };
-    let insert_columns: Option<&'static [&'static str]> = if is_eap_items {
-        let eap_items_emit_received_at = crate::processors::eap_items::emit_received_at();
+    // EAP pipeline is EAPItemsProcessor-only; RowBinary matches factory_v2.rs.
+    assert_eq!(processor_name, "EAPItemsProcessor");
+    let processor = crate::processors::eap_items::process_message_row_binary;
+    let insert_format = InsertFormat::RowBinary;
+    let insert_columns: Option<&'static [&'static str]> =
         Some(crate::processors::eap_items::EAPItemRow::column_names(
-            eap_items_emit_received_at,
-        ))
-    } else {
-        None
-    };
-    let processor = row_binary_processor.unwrap_or(processor);
-    let insert_format = if is_eap_items {
-        InsertFormat::RowBinary
-    } else {
-        InsertFormat::JsonEachRow
-    };
+            processor_config.eap_items_emit_received_at,
+        ));
 
     loop {
         let writer = if dry_run {
