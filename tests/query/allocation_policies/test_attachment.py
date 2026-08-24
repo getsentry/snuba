@@ -44,17 +44,16 @@ def test_eap_attachment_constructs_named_policies() -> None:
         policies = get_active_allocation_policies(ResourceIdentifier("EAP"))
 
     assert [p.class_name() for p in policies] == [
-        "PassthroughPolicy",
         "ConcurrentRateLimitAllocationPolicy",
     ]
-    assert policies[1]._resource_identifier.value == "EAP"
-    assert policies[1].required_tenant_types == {
+    assert policies[0]._resource_identifier.value == "EAP"
+    assert policies[0].required_tenant_types == {
         "organization_id",
         "project_id",
         "referrer",
     }
-    assert policies[1].get_config_value("concurrent_limit") == 66
-    assert policies[1].is_enforced is False
+    assert policies[0].get_config_value("concurrent_limit") == 66
+    assert policies[0].is_enforced is False
 
 
 def test_unknown_policy_is_skipped() -> None:
@@ -67,7 +66,7 @@ def test_unknown_policy_is_skipped() -> None:
         }
     ):
         policies = get_active_allocation_policies(ResourceIdentifier("EAP"))
-    assert [p.class_name() for p in policies] == ["PassthroughPolicy", "ReferrerGuardRailPolicy"]
+    assert [p.class_name() for p in policies] == ["ReferrerGuardRailPolicy"]
 
 
 @pytest.mark.parametrize(
@@ -79,9 +78,9 @@ def test_each_policy_constructs(spec: dict[str, object]) -> None:
     with override_allocation_policy({"errors": [spec]}):
         policies = get_active_allocation_policies(ResourceIdentifier("errors"))
 
-    assert [p.class_name() for p in policies] == ["PassthroughPolicy", spec["name"]]
+    assert [p.class_name() for p in policies] == [spec["name"]]
 
-    constructed = policies[1]
+    constructed = policies[0]
     assert constructed._resource_identifier.value == "errors"
     assert constructed.required_tenant_types == type(constructed).required_tenant_types
     assert constructed.is_enforced is False

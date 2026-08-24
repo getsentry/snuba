@@ -347,18 +347,6 @@ def test_metrics_output() -> None:
                 "time_budget": 8000,
             },
             "allocation_policies_recommendations": {
-                "PassthroughPolicy": {
-                    "can_run": True,
-                    "max_threads": 10,
-                    "explanation": {"storage_key": "EAP"},
-                    "is_throttled": False,
-                    "throttle_threshold": 1000000000000,
-                    "rejection_threshold": 1000000000000,
-                    "quota_used": 0,
-                    "quota_unit": "no_units",
-                    "suggestion": "no_suggestion",
-                    "max_bytes_to_read": 0,
-                },
                 "ConcurrentRateLimitAllocationPolicy": {
                     "can_run": True,
                     "max_threads": 10,

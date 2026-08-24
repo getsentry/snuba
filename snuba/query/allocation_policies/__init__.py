@@ -609,14 +609,10 @@ def get_active_allocation_policies(
     settings on the item (is_enforced, concurrent_limit, …) become constructor
     default_config_overrides.
     """
-    policies = [_default_passthough_policy(resource_identifier.value)]
-
+    policies = []
     specs: list[Mapping[str, str]] = get_mapped_option(
         ALLOCATION_POLICY_KEY, resource_identifier.value, []
     )
-    if not isinstance(specs, list):
-        return policies
-
     for spec in specs:
         if not isinstance(spec, dict):
             logger.warning(
@@ -650,7 +646,7 @@ def get_active_allocation_policies(
                 resource_identifier.value,
             )
 
-    return policies
+    return policies or [_default_passthough_policy(resource_identifier.value)]
 
 
 import_submodules_in_directory(
