@@ -313,7 +313,7 @@ def test_metrics_output() -> None:
 
         # query_id is a uuid, so we don't need to assert it
         recorded_payload["query_list"][0]["stats"].pop("query_id")
-        assert recorded_payload["query_list"][0]["stats"] == {
+        expected_stats = {
             "extra_info": {
                 "sampling_in_storage_estimation_time_overhead": {
                     "type": "timing",
@@ -347,6 +347,18 @@ def test_metrics_output() -> None:
                 "time_budget": 8000,
             },
             "allocation_policies_recommendations": {
+                "PassthroughPolicy": {
+                    "can_run": True,
+                    "max_threads": 10,
+                    "explanation": {"storage_key": "EAP"},
+                    "is_throttled": False,
+                    "throttle_threshold": 1000000000000,
+                    "rejection_threshold": 1000000000000,
+                    "quota_used": 0,
+                    "quota_unit": "no_units",
+                    "suggestion": "no_suggestion",
+                    "max_bytes_to_read": 0,
+                },
                 "ConcurrentRateLimitAllocationPolicy": {
                     "can_run": True,
                     "max_threads": 10,
@@ -424,6 +436,8 @@ def test_metrics_output() -> None:
                 "trace_item_type": "span",
             },
         }
+
+        assert recorded_payload["query_list"][0]["stats"] == expected_stats
         schema = get_codec("snuba-queries")
         payload_bytes = json.dumps(recorded_payload).encode("utf-8")
         schema.decode(payload_bytes)

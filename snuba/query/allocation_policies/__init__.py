@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from abc import ABC, abstractmethod
+from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, cast
@@ -341,8 +342,8 @@ class AllocationPolicy(ConfigurableComponent, ABC):
     def __init__(
         self,
         storage_key: ResourceIdentifier,
-        required_tenant_types: list[str],
-        default_config_overrides: dict[str, Any],
+        required_tenant_types: Iterable[str],
+        default_config_overrides: Mapping[str, Any],
         **kwargs: str,
     ) -> None:
         self._required_tenant_types = set(required_tenant_types)
@@ -419,16 +420,17 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         return bool(tenant_ids.get("cross_org_query", False))
 
     @classmethod
-    def from_kwargs(cls, **kwargs: str) -> AllocationPolicy:
-        required_tenant_types = kwargs.pop("required_tenant_types", None)
-        storage_key = kwargs.pop("storage_key", None)
-        default_config_overrides: dict[str, Any] = cast(
-            "dict[str, Any]", kwargs.pop("default_config_overrides", {})
-        )
-        assert isinstance(required_tenant_types, list), (
-            "required_tenant_types must be a list of strings"
-        )
-        assert isinstance(storage_key, str)
+    def from_kwargs(
+        cls,
+        *,
+        storage_key: str,
+        required_tenant_types: Iterable[str],
+        default_config_overrides: Mapping[str, Any] | None = None,
+        **kwargs: str,
+    ) -> AllocationPolicy:
+        if default_config_overrides is None:
+            default_config_overrides = {}
+
         return cls(
             required_tenant_types=required_tenant_types,
             storage_key=ResourceIdentifier(storage_key),
@@ -614,15 +616,20 @@ class PassthroughPolicy(AllocationPolicy):
         pass
 
 
-DEFAULT_PASSTHROUGH_POLICY = PassthroughPolicy(
-    ResourceIdentifier(StorageKey("default.no_storage_key")),
-    required_tenant_types=[],
-    default_config_overrides={},
-)
-
 ALLOCATION_POLICY_KEY = "allocation_policy"
 
 _POLICY_SETTING_KEYS = ("is_active", "is_enforced", "concurrent_limit", "max_threads")
+
+
+def _default_passthough_policy(storage_key: str = "default.no_storage_key") -> AllocationPolicy:
+    return PassthroughPolicy(
+        ResourceIdentifier(StorageKey(storage_key)),
+        required_tenant_types=[],
+        default_config_overrides={},
+    )
+
+
+DEFAULT_PASSTHROUGH_POLICY = _default_passthough_policy()
 
 
 def get_active_allocation_policies(
@@ -635,17 +642,14 @@ def get_active_allocation_policies(
     resource. Per-policy settings on the item (is_enforced, concurrent_limit, …)
     become constructor default_config_overrides.
     """
-    specs: Any = get_mapped_option(ALLOCATION_POLICY_KEY, resource_identifier.value, [])
-    if not isinstance(specs, list) or not specs:
-        return [
-            PassthroughPolicy(
-                resource_identifier,
-                required_tenant_types=[],
-                default_config_overrides={},
-            )
-        ]
+    policies = [_default_passthough_policy(resource_identifier.value)]
 
-    policies: list[AllocationPolicy] = []
+    specs: list[Mapping[str, str]] = get_mapped_option(
+        ALLOCATION_POLICY_KEY, resource_identifier.value, []
+    )
+    if not isinstance(specs, list):
+        return policies
+
     for spec in specs:
         if not isinstance(spec, dict):
             logger.warning(
@@ -654,6 +658,7 @@ def get_active_allocation_policies(
                 spec,
             )
             continue
+
         name = spec.get("name")
         if not isinstance(name, str):
             logger.warning(
@@ -662,30 +667,26 @@ def get_active_allocation_policies(
                 spec,
             )
             continue
-        default_config_overrides = {key: spec[key] for key in _POLICY_SETTING_KEYS if key in spec}
-        kwargs: dict[str, Any] = {
-            "storage_key": resource_identifier.value,
-            "required_tenant_types": spec.get("required_tenant_types") or [],
-            "default_config_overrides": default_config_overrides,
-        }
-        cross_org = spec.get("cross_org_referrer_limits")
-        if cross_org is not None:
-            kwargs["cross_org_referrer_limits"] = cross_org
+
         try:
-            policies.append(AllocationPolicy.get_from_name(name).from_kwargs(**kwargs))
+            default_config_overrides: Mapping[str, str] = {
+                key: spec[key] for key in _POLICY_SETTING_KEYS if key in spec
+            }
+            policies.append(
+                AllocationPolicy.get_from_name(name).from_kwargs(
+                    storage_key=resource_identifier.value,
+                    default_config_overrides=default_config_overrides,
+                    **spec,
+                )
+            )
         except InvalidConfigKeyError:
             logger.warning(
                 "Unknown allocation policy %s for %s",
                 name,
                 resource_identifier.value,
             )
-    return policies or [
-        PassthroughPolicy(
-            resource_identifier,
-            required_tenant_types=[],
-            default_config_overrides={},
-        )
-    ]
+
+    return policies
 
 
 import_submodules_in_directory(
