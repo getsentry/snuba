@@ -43,7 +43,7 @@ ALL_ROLE = Role("all", actions={ExecuteAllAction([MigrationResource("test_migrat
     ],
 )
 def test_get_group_policies(roles: Sequence[Role], expected_policies: set[MigrationPolicy]) -> None:
-    user = AdminUser("meredith@sentry.io", "123", roles=roles)
+    user = AdminUser("user@example.com", "123", roles=roles)
     results = get_migration_group_policies(user)
     assert {r.__class__ for r in results["test_migration"]} == {
         e.__class__ for e in expected_policies
@@ -51,6 +51,6 @@ def test_get_group_policies(roles: Sequence[Role], expected_policies: set[Migrat
 
 
 def test_get_migration_group_policies_sans_roles() -> None:
-    user = AdminUser("meredith@sentry.io", "123", roles=[])
+    user = AdminUser("user@example.com", "123", roles=[])
     results = get_migration_group_policies(user)
     assert results == {}
