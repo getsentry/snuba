@@ -10,19 +10,16 @@ from snuba.query.allocation_policies import ALLOCATION_POLICY_KEY
 CURRENT_EAP_ATTACHMENT: list[dict[str, Any]] = [
     {
         "name": "ConcurrentRateLimitAllocationPolicy",
-        "required_tenant_types": ["organization_id", "referrer", "project_id"],
         "concurrent_limit": 66,
         "is_enforced": 0,
     },
     {
         "name": "ReferrerGuardRailPolicy",
-        "required_tenant_types": ["referrer"],
         "is_active": 0,
         "is_enforced": 0,
     },
     {
         "name": "BytesScannedRejectingPolicy",
-        "required_tenant_types": ["organization_id", "project_id", "referrer"],
         "is_active": 0,
         "is_enforced": 0,
     },

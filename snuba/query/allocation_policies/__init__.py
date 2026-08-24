@@ -339,13 +339,19 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         See `_build_config_key()` for more info.
     """
 
+    required_tenant_types: frozenset[str] = frozenset()
+
     def __init__(
         self,
         storage_key: ResourceIdentifier,
-        required_tenant_types: Iterable[str],
-        default_config_overrides: Mapping[str, Any],
+        required_tenant_types: Iterable[str] | None = None,
+        default_config_overrides: Mapping[str, Any] | None = None,
         **kwargs: str,
     ) -> None:
+        if required_tenant_types is None:
+            required_tenant_types = self.required_tenant_types
+        if default_config_overrides is None:
+            default_config_overrides = {}
         self._required_tenant_types = set(required_tenant_types)
         self._resource_identifier = storage_key
         self._default_config_definitions = [
@@ -376,7 +382,6 @@ class AllocationPolicy(ConfigurableComponent, ABC):
     def create_minimal_instance(cls, resource_identifier: str) -> ConfigurableComponent:
         return cls(
             storage_key=ResourceIdentifier(resource_identifier),
-            required_tenant_types=[],
             default_config_overrides={},
         )
 
@@ -424,7 +429,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         cls,
         *,
         storage_key: str,
-        required_tenant_types: Iterable[str],
+        required_tenant_types: Iterable[str] | None = None,
         default_config_overrides: Mapping[str, Any] | None = None,
         **kwargs: str,
     ) -> AllocationPolicy:
@@ -589,6 +594,8 @@ class AllocationPolicy(ConfigurableComponent, ABC):
 
 
 class PassthroughPolicy(AllocationPolicy):
+    required_tenant_types: frozenset[str] = frozenset()
+
     def _additional_config_definitions(self) -> list[Configuration]:
         return []
 
@@ -624,7 +631,6 @@ _POLICY_SETTING_KEYS = ("is_active", "is_enforced", "concurrent_limit", "max_thr
 def _default_passthough_policy(storage_key: str = "default.no_storage_key") -> AllocationPolicy:
     return PassthroughPolicy(
         ResourceIdentifier(StorageKey(storage_key)),
-        required_tenant_types=[],
         default_config_overrides={},
     )
 
@@ -639,8 +645,9 @@ def get_active_allocation_policies(
 
     Reads the ``allocation_policy`` sentry-option (keyed by ResourceIdentifier
     value). An absent or empty entry falls back to a PassthroughPolicy for that
-    resource. Per-policy settings on the item (is_enforced, concurrent_limit, …)
-    become constructor default_config_overrides.
+    resource. Tenant types live on the policy class, not the option. Per-policy
+    settings on the item (is_enforced, concurrent_limit, …) become constructor
+    default_config_overrides.
     """
     policies = [_default_passthough_policy(resource_identifier.value)]
 
@@ -669,13 +676,10 @@ def get_active_allocation_policies(
             continue
 
         try:
-            default_config_overrides: Mapping[str, str] = {
-                key: spec[key] for key in _POLICY_SETTING_KEYS if key in spec
-            }
             policies.append(
                 AllocationPolicy.get_from_name(name).from_kwargs(
                     storage_key=resource_identifier.value,
-                    default_config_overrides=default_config_overrides,
+                    default_config_overrides=spec,
                     **spec,
                 )
             )

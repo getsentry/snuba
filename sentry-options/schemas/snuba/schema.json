@@ -310,12 +310,6 @@
             "name": {
               "type": "string"
             },
-            "required_tenant_types": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
             "is_active": {
               "type": "integer",
               "optional": true
@@ -351,7 +345,7 @@
         }
       },
       "default": {},
-      "description": "Which AllocationPolicy classes to construct for a ResourceIdentifier. Keyed by resource (storage key for SNQL, 'EAP' for routing strategies). Each item requires name; required_tenant_types is optional. Optional per-policy settings (is_active, is_enforced, concurrent_limit, max_threads) are applied as constructor default_config_overrides. An absent or empty entry falls back to PassthroughPolicy. Managed in sentry-options-automator."
+      "description": "Which AllocationPolicy classes to construct for a ResourceIdentifier. Keyed by resource (storage key for SNQL, 'EAP' for routing strategies). Each item requires name. Tenant types are hardcoded on the policy class. Optional per-policy settings (is_active, is_enforced, concurrent_limit, max_threads) are applied as constructor default_config_overrides. An absent or empty entry falls back to PassthroughPolicy. Managed in sentry-options-automator."
     },
     "storage_routing_sampled_too_low_threshold": {
       "type": "object",

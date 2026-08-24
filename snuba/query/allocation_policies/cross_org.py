@@ -35,6 +35,8 @@ SUGGESTION = "scan less concurrent queries"
 
 
 class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
+    required_tenant_types: frozenset[str] = frozenset({"referrer"})
+
     """A case-by-case allocation policy for cross-org queries. All referrers affected by this policy have to be registered
     in this class's configuration through the `cross_org_referrer_limits` parameter. Example:
 
