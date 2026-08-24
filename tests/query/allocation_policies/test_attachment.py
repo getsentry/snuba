@@ -50,7 +50,7 @@ def test_eap_attachment_constructs_named_policies() -> None:
         "BytesScannedRejectingPolicy",
     ]
     assert policies[1]._resource_identifier.value == "EAP"
-    assert policies[1]._required_tenant_types == {
+    assert policies[1].required_tenant_types == {
         "organization_id",
         "project_id",
         "referrer",
@@ -86,7 +86,7 @@ def test_each_policy_constructs(spec: dict[str, object]) -> None:
 
     constructed = policies[1]
     assert constructed._resource_identifier.value == "errors"
-    assert constructed._required_tenant_types == set(type(constructed).required_tenant_types)
+    assert constructed.required_tenant_types == type(constructed).required_tenant_types
     assert constructed.is_enforced is False
 
 

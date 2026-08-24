@@ -96,13 +96,11 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
     def __init__(
         self,
         storage_key: ResourceIdentifier,
-        required_tenant_types: list[str],
-        default_config_overrides: dict[str, Any],
+        default_config_overrides: dict[str, Any] | None = None,
         **kwargs: str,
     ) -> None:
         super().__init__(
             storage_key,
-            required_tenant_types,
             default_config_overrides,
             **kwargs,
         )

@@ -570,9 +570,7 @@ def test_routing_strategy_with_rejecting_allocation_policy() -> None:
     with mock.patch.object(
         BaseRoutingStrategy,
         "get_allocation_policies",
-        return_value=[
-            RejectionPolicy(ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {})
-        ],
+        return_value=[RejectionPolicy(ResourceIdentifier(StorageKey("doesntmatter")), {})],
     ):
         with pytest.raises(RPCAllocationPolicyException) as excinfo:
             EndpointTimeSeries().execute(_get_in_msg())
@@ -630,12 +628,8 @@ def test_routing_strategy_with_throttling_allocation_policy() -> None:
 
     test_strategy = TestRoutingStrategyWithCustomPolicies(
         policies=[
-            ThrottleAllocationPolicy(
-                ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
-            ),
-            ThrottleAllocationPolicyDuplicate(
-                ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
-            ),
+            ThrottleAllocationPolicy(ResourceIdentifier(StorageKey("doesntmatter")), {}),
+            ThrottleAllocationPolicyDuplicate(ResourceIdentifier(StorageKey("doesntmatter")), {}),
         ]
     )
     routing_decision = test_strategy.get_routing_decision(deepcopy(ROUTING_CONTEXT))
@@ -724,10 +718,8 @@ def test_allocation_policy_updates_quota() -> None:
         BaseRoutingStrategy,
         "get_allocation_policies",
         return_value=[
-            QueryCountPolicy(ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}),
-            QueryCountPolicyDuplicate(
-                ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
-            ),
+            QueryCountPolicy(ResourceIdentifier(StorageKey("doesntmatter")), {}),
+            QueryCountPolicyDuplicate(ResourceIdentifier(StorageKey("doesntmatter")), {}),
         ],
     ):
         for _ in range(MAX_QUERIES_TO_RUN):
@@ -774,7 +766,7 @@ def test_policy_sets_max_bytes_to_read() -> None:
 
     test_strategy = TestRoutingStrategyWithCustomPolicies(
         policies=[
-            MaximumBytesPolicy(ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}),
+            MaximumBytesPolicy(ResourceIdentifier(StorageKey("doesntmatter")), {}),
         ]
     )
 

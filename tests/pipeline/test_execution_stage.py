@@ -111,7 +111,6 @@ def ch_query() -> Query:
             allocation_policies=[
                 MockAllocationPolicy(
                     ResourceIdentifier(StorageKey("mystorage")),
-                    required_tenant_types=["organization_id", "referrer"],
                     default_config_overrides={},
                 )
             ],

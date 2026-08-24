@@ -20,7 +20,6 @@ class TestCrossOrgQueryAllocationPolicy:
         policy = CrossOrgQueryAllocationPolicy.from_kwargs(
             **{
                 "storage_key": "generic_metrics_counters",
-                "required_tenant_types": ["referrer"],
                 "cross_org_referrer_limits": {
                     "statistical_detectors": {
                         "concurrent_limit": 1,
@@ -62,7 +61,6 @@ class TestCrossOrgQueryAllocationPolicy:
         [
             {
                 "storage_key": "generic_metrics_counters",
-                "required_tenant_types": ["referrer"],
                 "cross_org_referrer_limits": {
                     "statistical_detectors": {
                         "max_threads": 1,
@@ -71,7 +69,6 @@ class TestCrossOrgQueryAllocationPolicy:
             },
             {
                 "storage_key": "generic_metrics_counters",
-                "required_tenant_types": ["referrer"],
                 "cross_org_referrer_limits": {
                     "statistical_detectors": {
                         "concurrent_limit": 2,
@@ -80,7 +77,6 @@ class TestCrossOrgQueryAllocationPolicy:
             },
             {
                 "storage_key": "generic_metrics_counters",
-                "required_tenant_types": ["referrer"],
                 "cross_org_referrer_limits": {
                     "statistical_detectors": {"max_threads": {}, "concurrent_limit": 2},
                 },
@@ -96,7 +92,6 @@ class TestCrossOrgQueryAllocationPolicy:
         policy = CrossOrgQueryAllocationPolicy.from_kwargs(
             **{
                 "storage_key": "generic_metrics_counters",
-                "required_tenant_types": ["referrer"],
                 "cross_org_referrer_limits": {
                     "statistical_detectors": {
                         "concurrent_limit": 1,
@@ -139,7 +134,6 @@ class TestCrossOrgQueryAllocationPolicy:
         policy = CrossOrgQueryAllocationPolicy.from_kwargs(
             **{
                 "storage_key": "generic_metrics_counters",
-                "required_tenant_types": ["referrer"],
                 "cross_org_referrer_limits": {
                     "statistical_detectors": {
                         "concurrent_limit": 1,

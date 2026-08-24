@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 from abc import ABC, abstractmethod
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, cast
@@ -199,7 +199,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
     To use it:
 
         >>> policy = MyAllocationPolicy(
-        >>>     StorageKey("mystorage"), required_tenant_types=["organization_id", "referrer"]
+        >>>     StorageKey("mystorage"),
         >>> )
         >>> allowance = policy.get_quota_allowance({"organization_id": 1234, "referrer": "myreferrer"}, query_id="deadbeef")
         >>> result = run_db_query(allowance)
@@ -310,7 +310,6 @@ class AllocationPolicy(ConfigurableComponent, ABC):
 
         >>> policy = MyAllocationPolicy(
         >>>     storage_key=StorageKey("some_storage"),
-        >>>     required_tenant_types=["foo"],
         >>>     # This dictionary overrides whatever defaults are set
         >>>     # for this class
         >>>     default_config_overrides={
@@ -344,15 +343,11 @@ class AllocationPolicy(ConfigurableComponent, ABC):
     def __init__(
         self,
         storage_key: ResourceIdentifier,
-        required_tenant_types: Iterable[str] | None = None,
         default_config_overrides: Mapping[str, Any] | None = None,
         **kwargs: str,
     ) -> None:
-        if required_tenant_types is None:
-            required_tenant_types = self.required_tenant_types
         if default_config_overrides is None:
             default_config_overrides = {}
-        self._required_tenant_types = set(required_tenant_types)
         self._resource_identifier = storage_key
         self._default_config_definitions = [
             AllocationPolicyConfig(
@@ -418,7 +413,6 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         return (
             bool(self.__class__ == other.__class__)
             and self._resource_identifier == other._resource_identifier
-            and self._required_tenant_types == other._required_tenant_types
         )
 
     def is_cross_org_query(self, tenant_ids: dict[str, str | int]) -> bool:
@@ -429,7 +423,6 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         cls,
         *,
         storage_key: str,
-        required_tenant_types: Iterable[str] | None = None,
         default_config_overrides: Mapping[str, Any] | None = None,
         **kwargs: str,
     ) -> AllocationPolicy:
@@ -437,7 +430,6 @@ class AllocationPolicy(ConfigurableComponent, ABC):
             default_config_overrides = {}
 
         return cls(
-            required_tenant_types=required_tenant_types,
             storage_key=ResourceIdentifier(storage_key),
             default_config_overrides=default_config_overrides,
             **kwargs,
