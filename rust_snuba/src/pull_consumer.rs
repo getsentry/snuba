@@ -296,7 +296,7 @@ async fn run_eap(
                 &storage.clickhouse_cluster,
                 &storage.clickhouse_table_name,
                 storage.name.clone(),
-                InsertFormat::JsonEachRow,
+                InsertFormat::RowBinary,
                 None,
             ))
         };
