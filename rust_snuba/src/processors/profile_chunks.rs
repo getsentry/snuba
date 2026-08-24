@@ -6,13 +6,13 @@ use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::processors::utils::enforce_retention;
+use crate::processors::utils::enforce_standard_retention;
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
     payload: KafkaPayload,
     metadata: KafkaMessageMetadata,
-    config: &ProcessorConfig,
+    _config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromChunkMessage = serde_json::from_slice(payload_bytes)?;
@@ -21,7 +21,7 @@ pub fn process_message(
 
     chunk.offset = metadata.offset;
     chunk.partition = metadata.partition;
-    chunk.retention_days = Some(enforce_retention(chunk.retention_days, &config.env_config));
+    chunk.retention_days = Some(enforce_standard_retention(chunk.retention_days));
 
     InsertBatch::from_rows([chunk], origin_timestamp)
 }

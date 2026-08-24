@@ -11,7 +11,7 @@ use crate::{
     KafkaMessageMetadata, ProcessorConfig,
 };
 
-use super::utils::enforce_retention;
+use super::utils::enforce_standard_retention;
 
 /// Generate a timeseries ID from the given parameters. Timeseries IDs are used to
 /// uniquely identify a timeseries in the database. This implemenation is based on
@@ -108,13 +108,13 @@ impl Parse for MetricsRawRow {
     fn parse(
         from: FromMetricsMessage,
         meta: KafkaMessageMetadata,
-        config: &ProcessorConfig,
+        _config: &ProcessorConfig,
     ) -> anyhow::Result<Option<MetricsRawRow>> {
         let timeseries_id =
             generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
 
         let (tag_keys, tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
-        let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
+        let retention_days = enforce_standard_retention(Some(from.retention_days));
 
         Ok(Some(MetricsRawRow {
             use_case_id: from.use_case_id,

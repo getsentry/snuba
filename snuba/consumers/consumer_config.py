@@ -48,9 +48,6 @@ class TopicConfig:
 class EnvConfig:
     sentry_dsn: str | None
     dogstatsd_socket_path: str | None
-    default_retention_days: int
-    lower_retention_days: int
-    valid_retention_days: list[int]
     record_cogs: bool
     project_stacktrace_blacklist: list[int]
 
@@ -121,18 +118,10 @@ def _resolve_topic_config(
 
 
 def _resolve_env_config() -> EnvConfig:
-    sentry_dsn = settings.SENTRY_DSN
-    default_retention_days = settings.DEFAULT_RETENTION_DAYS
-    lower_retention_days = settings.LOWER_RETENTION_DAYS
-    valid_retention_days = list(settings.VALID_RETENTION_DAYS)
-    record_cogs = settings.RECORD_COGS
     return EnvConfig(
-        sentry_dsn=sentry_dsn,
+        sentry_dsn=settings.SENTRY_DSN,
         dogstatsd_socket_path=settings.DOGSTATSD_SOCKET_PATH,
-        default_retention_days=default_retention_days,
-        lower_retention_days=lower_retention_days,
-        valid_retention_days=valid_retention_days,
-        record_cogs=record_cogs,
+        record_cogs=settings.RECORD_COGS,
         project_stacktrace_blacklist=list(settings.PROJECT_STACKTRACE_BLACKLIST),
     )
 
