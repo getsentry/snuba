@@ -23,6 +23,7 @@ members = [
     "rust-snuba",
     "snuba",
 ]
+constraints = [{ name = "setuptools", specifier = "<82.0.0" }]
 
 [[package]]
 name = "alabaster"
@@ -1195,10 +1196,10 @@ wheels = [
 
 [[package]]
 name = "setuptools"
-version = "83.0.0"
+version = "80.10.2"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/setuptools-83.0.0-py3-none-any.whl", hash = "sha256:29b23c360f22f414dc7336bb39178cc7bcbf6021ed2733cde173f09dba19abb3" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/setuptools-80.10.2-py3-none-any.whl", hash = "sha256:95b30ddfb717250edb492926c92b5221f7ef3fbcc2b07579bcd4a27da21d0173" },
 ]
 
 [[package]]

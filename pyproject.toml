@@ -59,6 +59,12 @@ members = ["rust_snuba"]
 # snuba is CPython-only (prod Docker image + .python-version), so constrain the
 # resolver to CPython. This skips PyPy-only deps that aren't on our internal mirror
 # (e.g. flask-compress requires brotlicffi under PyPy, which we don't stock).
+#
+# setuptools>=82 removed pkg_resources, which supervisor (via devservices) still
+# imports at runtime. Pin below that until supervisor stops needing it.
+constraint-dependencies = [
+    "setuptools<82.0.0",
+]
 environments = [
     "sys_platform == 'darwin' and platform_python_implementation == 'CPython'",
     "sys_platform == 'linux' and platform_python_implementation == 'CPython'",
