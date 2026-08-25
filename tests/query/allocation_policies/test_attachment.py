@@ -5,6 +5,9 @@ from snuba.query.allocation_policies import (
     PassthroughPolicy,
     get_active_allocation_policies,
 )
+from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
+    OutcomesBasedRoutingStrategy,
+)
 from tests.query.allocation_policies.attachment import (
     CURRENT_EAP_ATTACHMENT,
     match_block,
@@ -285,3 +288,36 @@ def test_match_requires_every_key() -> None:
     assert [p.class_name() for p in both] == names
     assert [p.class_name() for p in org_only] == ["ConcurrentRateLimitAllocationPolicy"]
     assert [p.class_name() for p in other_referrer] == ["ConcurrentRateLimitAllocationPolicy"]
+
+
+def test_eap_routing_strategy_uses_tenant_ids() -> None:
+    with override_allocation_policy(
+        {
+            "EAP": [
+                {
+                    "match": {},
+                    "policies": [
+                        {
+                            "name": "ConcurrentRateLimitAllocationPolicy",
+                            "is_enforced": 0,
+                        }
+                    ],
+                },
+                {
+                    "match": {"organization_id": [1]},
+                    "policies": [
+                        {"name": "ReferrerGuardRailPolicy", "is_enforced": 0},
+                    ],
+                },
+            ]
+        }
+    ):
+        strategy = OutcomesBasedRoutingStrategy()
+        for_org_1 = strategy.get_allocation_policies({"organization_id": 1})
+        for_org_2 = strategy.get_allocation_policies({"organization_id": 2})
+
+    assert [p.class_name() for p in for_org_1] == [
+        "ConcurrentRateLimitAllocationPolicy",
+        "ReferrerGuardRailPolicy",
+    ]
+    assert [p.class_name() for p in for_org_2] == ["ConcurrentRateLimitAllocationPolicy"]
