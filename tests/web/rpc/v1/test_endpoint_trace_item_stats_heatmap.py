@@ -20,7 +20,10 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.utils.metrics.timer import Timer
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.endpoint_trace_item_stats import EndpointTraceItemStats
+from snuba.web.rpc.v1.resolvers.R_eap_items.heatmap_builder import HeatmapBuilder
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import (
@@ -381,3 +384,28 @@ class TestTraceItemStatsHeatmap(BaseApiTest):
                 values=[10, 0, 0, 10, 0, 0, 10, 0, 0, 10],
             ),
         ]
+
+
+def test_heatmap_bucket_limit_applies_to_non_int_types() -> None:
+    heatmap = HeatmapRequest(
+        x_attribute=AttributeKey(type=AttributeKey.TYPE_STRING, name="span.op"),
+        y_attribute=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="duration"),
+        num_y_buckets=101,
+    )
+    in_msg = TraceItemStatsRequest(
+        meta=RequestMeta(
+            project_ids=[1],
+            organization_id=1,
+            referrer="test",
+            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+        )
+    )
+    builder = HeatmapBuilder(
+        heatmap=heatmap,
+        in_msg=in_msg,
+        routing_decision=None,  # type: ignore[arg-type]
+        timer=Timer("test"),
+        max_buckets=100,
+    )
+    with pytest.raises(BadSnubaRPCRequestException, match="Max allowed buckets is 100"):
+        builder.build()
