@@ -244,11 +244,11 @@ class AttributeValuesRequest(
         # that returned values round-trip as filter inputs.
         is_boolean = in_msg.key.type == AttributeKey.TYPE_BOOLEAN
         is_array_value = in_msg.key.type == AttributeKey.TYPE_ARRAY_STRING
-        values, arr_values, counts = [], [], []
+        values, array_values, counts = [], [], []
         for row in res.result.get("data", []):
             value = row["attr_value"]
             if is_array_value:
-                arr_values.append(value)
+                array_values.append(value)
             else:
                 values.append(str(bool(value)).lower() if is_boolean else value)
             counts.append(row.get("count()", 0))
@@ -256,13 +256,13 @@ class AttributeValuesRequest(
         if len(values) == 0:
             return TraceItemAttributeValuesResponse(
                 values=values,
-                arr_values=arr_values,
+                arr_values=array_values,
                 counts=counts,
                 page_token=None,
             )
         return TraceItemAttributeValuesResponse(
             values=values,
-            arr_values=arr_values,
+            arr_values=array_values,
             counts=counts,
             page_token=(
                 PageToken(
