@@ -24,7 +24,6 @@ from snuba.query.allocation_policies import (
     NO_UNITS,
     AllocationPolicy,
     AllocationPolicyViolations,
-    PassthroughPolicy,
     QueryResultOrError,
     QuotaAllowance,
 )
@@ -245,7 +244,7 @@ def test_query_settings_from_config(
 
 
 def _build_test_query(
-    select_expression: str, allocation_policies: list[AllocationPolicy] | None = None
+    select_expression: str,
 ) -> tuple[ClickhouseQuery, Storage, AttributionInfo]:
     storage = get_storage(StorageKey("errors_ro"))
     data_source = storage.get_schema().get_data_source()
@@ -256,7 +255,6 @@ def _build_test_query(
                 data_source.get_table_name(),
                 schema=storage.get_schema().get_columns(),
                 final=False,
-                allocation_policies=allocation_policies or storage.get_allocation_policies(),
                 storage_key=storage.get_storage_key(),
             ),
             selected_columns=[
@@ -469,10 +467,7 @@ def test_empty_result_meta_prefers_alias_over_name() -> None:
 def test_db_record_bytes_scanned() -> None:
     dataset_name = "events"
     storage_key = StorageKey("errors_ro")
-    query, storage, attribution_info = _build_test_query(
-        "count(distinct(project_id))",
-        allocation_policies=[PassthroughPolicy(ResourceIdentifier(storage_key))],
-    )
+    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
 
     query_metadata_list: list[ClickhouseQueryMetadata] = []
     stats: dict[str, Any] = {}
@@ -1326,29 +1321,28 @@ def test_policy_sets_max_bytes_to_read() -> None:
         ) -> None:
             pass
 
-    query, storage, attribution_info = _build_test_query(
-        "count(distinct(project_id))",
-        [
-            MaxBytesPolicy(ResourceIdentifier(StorageKey("doesntmatter"))),
-        ],
-    )
+    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
 
     query_metadata_list: list[ClickhouseQueryMetadata] = []
     stats: dict[str, Any] = {}
     settings = HTTPQuerySettings()
-    db_query(
-        clickhouse_query=query,
-        query_settings=settings,
-        attribution_info=attribution_info,
-        dataset_name="events",
-        query_metadata_list=query_metadata_list,
-        formatted_query=format_query(query),
-        reader=storage.get_cluster().get_reader(),
-        timer=Timer("foo"),
-        stats=stats,
-        trace_id="trace_id",
-        robust=False,
-    )
+    with mock.patch(
+        "snuba.web.db_query._get_allocation_policies",
+        return_value=[MaxBytesPolicy(ResourceIdentifier(StorageKey("doesntmatter")))],
+    ):
+        db_query(
+            clickhouse_query=query,
+            query_settings=settings,
+            attribution_info=attribution_info,
+            dataset_name="events",
+            query_metadata_list=query_metadata_list,
+            formatted_query=format_query(query),
+            reader=storage.get_cluster().get_reader(),
+            timer=Timer("foo"),
+            stats=stats,
+            trace_id="trace_id",
+            robust=False,
+        )
 
     assert stats["quota_allowance"] == {
         "details": {

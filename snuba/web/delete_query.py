@@ -144,7 +144,6 @@ def _delete_from_table(
             table,
             ColumnSet([]),
             storage_key=storage.get_storage_key(),
-            allocation_policies=storage.get_delete_allocation_policies(),
         ),
         condition=where_clause,
         on_cluster=on_cluster,

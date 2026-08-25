@@ -151,7 +151,6 @@ def test_get_allocation_policies_uses_tenant_ids() -> None:
             "errors",
             ColumnSet([]),
             storage_key=StorageKey("errors"),
-            allocation_policies=[PassthroughPolicy(ResourceIdentifier(StorageKey("flimflam")))],
         )
     )
     with override_allocation_policy(

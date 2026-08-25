@@ -109,11 +109,6 @@ def ch_query() -> Query:
                 ]
             ),
             storage_key=StorageKey.TRANSACTIONS,
-            allocation_policies=[
-                MockAllocationPolicy(
-                    ResourceIdentifier(StorageKey("mystorage")),
-                )
-            ],
         ),
         selected_columns=[
             SelectedExpression(
