@@ -54,6 +54,7 @@ def _map_key_names_for_existence_check(request_key: AttributeKey) -> list[str]:
 _ATTRIBUTE_TYPE_TO_COLUMN: dict["AttributeKey.Type.ValueType", str] = {
     AttributeKey.TYPE_STRING: "attributes_string",
     AttributeKey.TYPE_BOOLEAN: "attributes_bool",
+    AttributeKey.TYPE_ARRAY_STRING: "attributes_array_string",
 }
 
 
@@ -242,19 +243,26 @@ class AttributeValuesRequest(
         # to the lowercase "true"/"false" form used across the EAP filter API so
         # that returned values round-trip as filter inputs.
         is_boolean = in_msg.key.type == AttributeKey.TYPE_BOOLEAN
-        values, counts = [], []
+        is_array_value = in_msg.key.type == AttributeKey.TYPE_ARRAY_STRING
+        values, arr_values, counts = [],[], []
         for row in res.result.get("data", []):
             value = row["attr_value"]
-            values.append(str(bool(value)).lower() if is_boolean else value)
+            if is_array_value:
+                arr_values.append(value)
+            else:
+                values.append(str(bool(value)).lower() if is_boolean else value)
             counts.append(row.get("count()", 0))
+
         if len(values) == 0:
             return TraceItemAttributeValuesResponse(
                 values=values,
+                arr_values=arr_values,
                 counts=counts,
                 page_token=None,
             )
         return TraceItemAttributeValuesResponse(
             values=values,
+            arr_values=arr_values,
             counts=counts,
             page_token=(
                 PageToken(
