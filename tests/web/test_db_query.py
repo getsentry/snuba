@@ -984,31 +984,32 @@ def test_allocation_policy_threads_applied_to_query() -> None:
             )
 
     # Should limit to minimal threads across policies
-    query, storage, attribution_info = _build_test_query(
-        "count(distinct(project_id))",
-        [
-            ThreadLimitPolicy(ResourceIdentifier(StorageKey("doesntmatter"))),
-            ThreadLimitPolicyDuplicate(ResourceIdentifier(StorageKey("doesntmatter"))),
-        ],
-    )
+    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
 
     query_metadata_list: list[ClickhouseQueryMetadata] = []
     stats: dict[str, Any] = {}
     settings = HTTPQuerySettings()
     settings.set_resource_quota(ResourceQuota(max_threads=420))
-    db_query(
-        clickhouse_query=query,
-        query_settings=settings,
-        attribution_info=attribution_info,
-        dataset_name="events",
-        query_metadata_list=query_metadata_list,
-        formatted_query=format_query(query),
-        reader=storage.get_cluster().get_reader(),
-        timer=Timer("foo"),
-        stats=stats,
-        trace_id="trace_id",
-        robust=False,
-    )
+    with mock.patch(
+        "snuba.web.db_query._get_allocation_policies",
+        return_value=[
+            ThreadLimitPolicy(ResourceIdentifier(StorageKey("doesntmatter"))),
+            ThreadLimitPolicyDuplicate(ResourceIdentifier(StorageKey("doesntmatter"))),
+        ],
+    ):
+        db_query(
+            clickhouse_query=query,
+            query_settings=settings,
+            attribution_info=attribution_info,
+            dataset_name="events",
+            query_metadata_list=query_metadata_list,
+            formatted_query=format_query(query),
+            reader=storage.get_cluster().get_reader(),
+            timer=Timer("foo"),
+            stats=stats,
+            trace_id="trace_id",
+            robust=False,
+        )
     resource_quota = settings.get_resource_quota()
     assert resource_quota is not None
     assert resource_quota.max_threads == POLICY_THREADS
@@ -1093,31 +1094,32 @@ def test_allocation_policy_updates_quota() -> None:
             queries_run_duplicate += 1
 
     # the first policy will error and short circuit the rest
-    query, storage, attribution_info = _build_test_query(
-        "count(distinct(project_id))",
-        [
-            CountQueryPolicy(ResourceIdentifier(StorageKey("doesntmatter"))),
-            CountQueryPolicyDuplicate(ResourceIdentifier(StorageKey("doesntmatter"))),
-        ],
-    )
+    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
 
     def _run_query() -> None:
         query_metadata_list: list[ClickhouseQueryMetadata] = []
         stats: dict[str, Any] = {}
         settings = HTTPQuerySettings()
-        db_query(
-            clickhouse_query=query,
-            query_settings=settings,
-            attribution_info=attribution_info,
-            dataset_name="events",
-            query_metadata_list=query_metadata_list,
-            formatted_query=format_query(query),
-            reader=storage.get_cluster().get_reader(),
-            timer=Timer("foo"),
-            stats=stats,
-            trace_id="trace_id",
-            robust=False,
-        )
+        with mock.patch(
+            "snuba.web.db_query._get_allocation_policies",
+            return_value=[
+                CountQueryPolicy(ResourceIdentifier(StorageKey("doesntmatter"))),
+                CountQueryPolicyDuplicate(ResourceIdentifier(StorageKey("doesntmatter"))),
+            ],
+        ):
+            db_query(
+                clickhouse_query=query,
+                query_settings=settings,
+                attribution_info=attribution_info,
+                dataset_name="events",
+                query_metadata_list=query_metadata_list,
+                formatted_query=format_query(query),
+                reader=storage.get_cluster().get_reader(),
+                timer=Timer("foo"),
+                stats=stats,
+                trace_id="trace_id",
+                robust=False,
+            )
 
     for _ in range(MAX_QUERIES_TO_RUN):
         _run_query()

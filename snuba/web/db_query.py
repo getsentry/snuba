@@ -27,6 +27,7 @@ from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_dsl.accessors import get_time_range_estimate
 from snuba.clickhouse.query_profiler import generate_profile
 from snuba.configs.configuration import ResourceIdentifier
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
 from snuba.query import ProcessableQuery
 from snuba.query.allocation_policies import (
@@ -35,6 +36,7 @@ from snuba.query.allocation_policies import (
     AllocationPolicyViolations,
     QueryResultOrError,
     QuotaAllowance,
+    get_active_allocation_policies,
 )
 from snuba.query.allocation_policies.utils import get_max_bytes_to_read
 from snuba.query.composite import CompositeQuery
@@ -579,24 +581,25 @@ def _raw_query(
 
 def _get_allocation_policies(
     query: Query | CompositeQuery[Table],
+    tenant_ids: Mapping[str, str | int] | None = None,
 ) -> list[AllocationPolicy]:
     collector = _PolicyCollector()
     collector.visit(query)
-    return collector.policies
+    return [
+        policy
+        for storage_key in collector.storage_keys
+        for policy in get_active_allocation_policies(ResourceIdentifier(storage_key), tenant_ids)
+    ]
 
 
 class _PolicyCollector(DataSourceVisitor[None, Table], JoinVisitor[None, Table]):
-    """
-    Find all the allocation_policies for a query by traversing all the data sources
-    recursively, collect them into a list
-
-    """
+    """Collect storage keys from every Table in the query."""
 
     def __init__(self) -> None:
-        self.policies: list[AllocationPolicy] = []
+        self.storage_keys: list[StorageKey] = []
 
     def _visit_simple_source(self, data_source: Table) -> None:
-        self.policies.extend(data_source.allocation_policies)
+        self.storage_keys.append(data_source.storage_key)
 
     def _visit_join(self, data_source: JoinClause[Table]) -> None:
         return self.visit_join_clause(data_source)
@@ -688,7 +691,7 @@ def db_query(
         allocation policy be applied at the top level of the db_query process
     """
 
-    allocation_policies = _get_allocation_policies(clickhouse_query)
+    allocation_policies = _get_allocation_policies(clickhouse_query, attribution_info.tenant_ids)
     query_id = uuid.uuid4().hex
     result = None
     error = None

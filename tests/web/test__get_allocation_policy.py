@@ -22,6 +22,7 @@ from snuba.query.data_source.join import (
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.web.db_query import _get_allocation_policies
+from tests.query.allocation_policies.attachment import override_allocation_policy
 
 
 class PermissiveJoinClause(JoinClause[Table]):
@@ -34,7 +35,6 @@ class PermissiveJoinClause(JoinClause[Table]):
 events_table = Table(
     "errors",
     ColumnSet([]),
-    allocation_policies=[PassthroughPolicy(ResourceIdentifier(StorageKey("flimflam")))],
     storage_key=StorageKey("errors"),
     final=False,
     sampling_rate=None,
@@ -44,7 +44,6 @@ events_table = Table(
 groups_table = Table(
     "groups",
     ColumnSet([]),
-    allocation_policies=[PassthroughPolicy(ResourceIdentifier(StorageKey("jimjam")))],
     storage_key=StorageKey("groups"),
     final=False,
     sampling_rate=None,
@@ -97,7 +96,7 @@ join_query = CompositeQuery(
     [
         pytest.param(
             composite_query,
-            [PassthroughPolicy(ResourceIdentifier(StorageKey("flimflam")))],
+            [PassthroughPolicy(ResourceIdentifier(StorageKey("errors")))],
             id="composite query uses leaf query's allocation policy",
         ),
         pytest.param(
@@ -110,14 +109,14 @@ join_query = CompositeQuery(
                     ),
                 ],
             ),
-            [PassthroughPolicy(ResourceIdentifier(StorageKey("flimflam")))],
+            [PassthroughPolicy(ResourceIdentifier(StorageKey("errors")))],
             id="double nested composite query uses leaf query's allocation policy",
         ),
         pytest.param(
             join_query,
             [
-                PassthroughPolicy(ResourceIdentifier(StorageKey("flimflam"))),
-                PassthroughPolicy(ResourceIdentifier(StorageKey("jimjam"))),
+                PassthroughPolicy(ResourceIdentifier(StorageKey("errors"))),
+                PassthroughPolicy(ResourceIdentifier(StorageKey("groups"))),
             ],
             id="all allocation policies from joins are put together",
         ),
@@ -134,7 +133,7 @@ join_query = CompositeQuery(
                     Literal(None, datetime(2020, 1, 1, 12, 0)),
                 ),
             ),
-            [PassthroughPolicy(ResourceIdentifier(StorageKey("flimflam")))],
+            [PassthroughPolicy(ResourceIdentifier(StorageKey("errors")))],
             id="simple query uses table's allocation policy",
         ),
     ],
@@ -144,3 +143,43 @@ def test__get_allocation_policies(
     expected_allocation_policies: list[AllocationPolicy],
 ) -> None:
     assert _get_allocation_policies(query) == expected_allocation_policies
+
+
+def test_get_allocation_policies_uses_tenant_ids() -> None:
+    query = ClickhouseQuery(
+        from_clause=Table(
+            "errors",
+            ColumnSet([]),
+            storage_key=StorageKey("errors"),
+            allocation_policies=[PassthroughPolicy(ResourceIdentifier(StorageKey("flimflam")))],
+        )
+    )
+    with override_allocation_policy(
+        {
+            "errors": [
+                {
+                    "match": {},
+                    "policies": [
+                        {
+                            "name": "ConcurrentRateLimitAllocationPolicy",
+                            "is_enforced": 0,
+                        }
+                    ],
+                },
+                {
+                    "match": {"organization_id": [1]},
+                    "policies": [
+                        {"name": "ReferrerGuardRailPolicy", "is_enforced": 0},
+                    ],
+                },
+            ]
+        }
+    ):
+        for_org_1 = _get_allocation_policies(query, {"organization_id": 1})
+        for_org_2 = _get_allocation_policies(query, {"organization_id": 2})
+
+    assert [p.class_name() for p in for_org_1] == [
+        "ConcurrentRateLimitAllocationPolicy",
+        "ReferrerGuardRailPolicy",
+    ]
+    assert [p.class_name() for p in for_org_2] == ["ConcurrentRateLimitAllocationPolicy"]
