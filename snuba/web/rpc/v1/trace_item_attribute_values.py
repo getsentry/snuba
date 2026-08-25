@@ -256,13 +256,13 @@ class AttributeValuesRequest(
         if len(values) == 0:
             return TraceItemAttributeValuesResponse(
                 values=values,
-                arr_values=array_values,
+                array_values=array_values,
                 counts=counts,
                 page_token=None,
             )
         return TraceItemAttributeValuesResponse(
             values=values,
-            arr_values=array_values,
+            array_values=array_values,
             counts=counts,
             page_token=(
                 PageToken(
