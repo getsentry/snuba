@@ -93,7 +93,10 @@ def update_attribution_info(
 
     attribution_info["app_id"] = get_app_id(request_parts.attribution_info["app_id"])
     attribution_info["referrer"] = referrer
-    attribution_info["tenant_ids"] = request_parts.attribution_info["tenant_ids"]
+    attribution_info["tenant_ids"] = dict(request_parts.attribution_info["tenant_ids"])
+    # cross_org_query is an internal exemption for system-initiated queries.
+    # Clients must not set it on SNQL requests to skip allocation quotas.
+    attribution_info["tenant_ids"].pop("cross_org_query", None)
 
     if "project_id" not in attribution_info["tenant_ids"] and query_project_id is not None:
         attribution_info["tenant_ids"]["project_id"] = query_project_id

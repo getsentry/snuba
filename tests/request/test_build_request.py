@@ -185,6 +185,39 @@ def test_tenant_ids(
 
 
 @pytest.mark.redis_db
+def test_client_cross_org_query_flag_is_stripped() -> None:
+    dataset = get_dataset("events")
+    schema = RequestSchema.build(HTTPQuerySettings)
+    request = build_request(
+        {
+            "query": (
+                "MATCH (events) "
+                "SELECT count() AS count BY time "
+                "WHERE "
+                "project_id IN tuple(1) AND "
+                "timestamp >= toDateTime('2011-07-01T19:54:15') AND "
+                "timestamp < toDateTime('2018-07-06T19:54:15') "
+                "LIMIT 1000 "
+                "GRANULARITY 60"
+            ),
+            "tenant_ids": {
+                "organization_id": 1,
+                "referrer": "my_request",
+                "cross_org_query": 1,
+            },
+        },
+        parse_snql_query,
+        HTTPQuerySettings,
+        schema,
+        dataset,
+        Timer("test"),
+        "my_request",
+    )
+    assert "cross_org_query" not in request.attribution_info.tenant_ids
+    assert request.attribution_info.tenant_ids["organization_id"] == 1
+
+
+@pytest.mark.redis_db
 @override_options("snuba", {"snql_disabled_dataset": {"events": True}})
 def test_disabled_dataset() -> None:
     dataset = get_dataset("events")

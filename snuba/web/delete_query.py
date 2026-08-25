@@ -316,7 +316,10 @@ def _get_attribution_info(attribution_info: Mapping[str, Any]) -> AttributionInf
     info = dict(attribution_info)
     info["app_id"] = get_app_id(attribution_info["app_id"])
     info["referrer"] = attribution_info["referrer"]
-    info["tenant_ids"] = attribution_info["tenant_ids"]
+    info["tenant_ids"] = dict(attribution_info["tenant_ids"])
+    # cross_org_query is an internal exemption for system-initiated queries.
+    # Clients must not set it on HTTP requests to skip allocation quotas.
+    info["tenant_ids"].pop("cross_org_query", None)
     return AttributionInfo(**info)
 
 
