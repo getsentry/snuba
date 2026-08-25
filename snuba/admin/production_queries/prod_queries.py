@@ -15,14 +15,13 @@ from snuba.query.conditions import (
     is_in_condition_pattern,
 )
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
+from snuba.query.data_source.projects_finder import ProjectsFinder
 from snuba.query.data_source.simple import LogicalDataSource
 from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Expression
-from snuba.query.expressions import FunctionCall as FunctionCallExpr
-from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.matchers import Any as AnyMatcher
-from snuba.query.matchers import Column, FunctionCall, Literal, Param, String
+from snuba.query.matchers import Column, FunctionCall, Literal, String
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query
 from snuba.request.schema import RequestSchema
@@ -63,7 +62,7 @@ def _validate_projects_in_query(body: dict[str, Any], dataset: Dataset) -> None:
     query = parse_snql_query(request_parts.query["query"], dataset)
     if _or_branch_missing_project_id_in_query(query):
         raise InvalidQueryException("Every OR branch must constrain project_id")
-    project_ids = _ProjectIdsMentioned().visit(query)
+    project_ids = ProjectsFinder().visit(query)
 
     if project_ids == set():
         raise InvalidQueryException("Missing project ID")
@@ -149,75 +148,3 @@ class _OrBranchMissingProjectId(
 
     def visit_join_clause(self, node: JoinClause[LogicalDataSource]) -> bool:
         return node.left_node.accept(self) or node.right_node.accept(self)
-
-
-def _project_ids_from_eq_or_in(condition: Expression) -> set[int] | None:
-    eq = FunctionCall(
-        String(ConditionFunctions.EQ),
-        (
-            Column(column_name=String("project_id")),
-            Literal(value=Param("object_id", AnyMatcher(int))),
-        ),
-    ).match(condition)
-    if eq is not None:
-        return {eq.integer("object_id")}
-    in_match = is_in_condition_pattern(Column(column_name=String("project_id"))).match(condition)
-    if in_match is not None:
-        sequence = in_match.expression("sequence")
-        assert isinstance(sequence, FunctionCallExpr)
-        return {
-            lit.value
-            for lit in sequence.parameters
-            if isinstance(lit, LiteralExpr) and isinstance(lit.value, int)
-        }
-    return None
-
-
-def _project_ids_mentioned_in_condition(condition: Expression | None) -> set[int]:
-    if condition is None:
-        return set()
-    leaf_ids = _project_ids_from_eq_or_in(condition)
-    if leaf_ids is not None:
-        return leaf_ids
-    or_branches = get_first_level_or_conditions(condition)
-    if len(or_branches) > 1:
-        mentioned: set[int] = set()
-        for branch in or_branches:
-            mentioned |= _project_ids_mentioned_in_condition(branch)
-        return mentioned
-    and_terms = get_first_level_and_conditions(or_branches[0])
-    if len(and_terms) == 1:
-        # Leaf that is not a project_id EQ/IN (e.g. timestamp comparison).
-        # Recursing would rematch the same node forever.
-        return set()
-    mentioned = set()
-    for term in and_terms:
-        mentioned |= _project_ids_mentioned_in_condition(term)
-    return mentioned
-
-
-class _ProjectIdsMentioned(
-    DataSourceVisitor[set[int], LogicalDataSource],
-    JoinVisitor[set[int], LogicalDataSource],
-):
-    """Union of every project_id literal in EQ/IN conditions (AND does not intersect)."""
-
-    def _visit_simple_source(self, data_source: LogicalDataSource) -> set[int]:
-        return set()
-
-    def _visit_join(self, data_source: JoinClause[LogicalDataSource]) -> set[int]:
-        return self.visit_join_clause(data_source)
-
-    def _visit_simple_query(self, data_source: ProcessableQuery[LogicalDataSource]) -> set[int]:
-        return _project_ids_mentioned_in_condition(data_source.get_condition())
-
-    def _visit_composite_query(self, data_source: CompositeQuery[LogicalDataSource]) -> set[int]:
-        return self.visit(data_source.get_from_clause()) | _project_ids_mentioned_in_condition(
-            data_source.get_condition()
-        )
-
-    def visit_individual_node(self, node: IndividualNode[LogicalDataSource]) -> set[int]:
-        return self.visit(node.data_source)
-
-    def visit_join_clause(self, node: JoinClause[LogicalDataSource]) -> set[int]:
-        return node.left_node.accept(self) | node.right_node.accept(self)
