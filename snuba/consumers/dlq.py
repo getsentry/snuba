@@ -18,19 +18,9 @@ from snuba.redis import RedisClientKey, get_redis_client
 redis_client = get_redis_client(RedisClientKey.DLQ)
 DLQ_REDIS_KEY = "dlq_instruction"
 
-# The instruction key must expire, so that a replay that is never cleared cannot leave
-# the key in Redis forever.
-# The consumer rewrites the key when it starts the replay (see
-# mark_instruction_in_progress), so the expiry must cover one replay, not the waiting
-# time plus the replay.
-# Nothing in the code limits max_messages_to_process, so there is no hard bound on how
-# long a replay runs. Seven days is a judgement call. It is much longer than any replay
-# we expect, and it also covers an instruction that waits while no DLQ consumer runs.
-# The expiry is set long because the key is the only record that a replay was asked for.
-# If it expires while a replay runs, the replay itself continues, because nothing reads
-# the key again after the replay starts. The risk is that an operator sees no replay in
-# progress and issues a new instruction, which the running consumer then deletes when it
-# calls clear_instruction at the end.
+# Instruction keys have expiries to handle replays which are never cleared.
+# Consumer rewrites key when replay is started, expiry covers the one replay.
+# Went with 7 days because it's longer than any replay.
 DLQ_INSTRUCTION_TTL_SECONDS = 7 * 24 * 60 * 60
 
 
