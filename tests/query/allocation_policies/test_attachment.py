@@ -7,6 +7,7 @@ from snuba.query.allocation_policies import (
 )
 from tests.query.allocation_policies.attachment import (
     CURRENT_EAP_ATTACHMENT,
+    match_block,
     override_allocation_policy,
 )
 
@@ -59,10 +60,12 @@ def test_eap_attachment_constructs_named_policies() -> None:
 def test_unknown_policy_is_skipped() -> None:
     with override_allocation_policy(
         {
-            "EAP": [
-                {"name": "DoesNotExist"},
-                {"name": "ReferrerGuardRailPolicy"},
-            ]
+            "EAP": match_block(
+                [
+                    {"name": "DoesNotExist"},
+                    {"name": "ReferrerGuardRailPolicy"},
+                ]
+            )
         }
     ):
         policies = get_active_allocation_policies(ResourceIdentifier("EAP"))
@@ -75,7 +78,7 @@ def test_unknown_policy_is_skipped() -> None:
     ids=lambda spec: str(spec["name"]),
 )
 def test_each_policy_constructs(spec: dict[str, object]) -> None:
-    with override_allocation_policy({"errors": [spec]}):
+    with override_allocation_policy({"errors": match_block([spec])}):
         policies = get_active_allocation_policies(ResourceIdentifier("errors"))
 
     assert [p.class_name() for p in policies] == [spec["name"]]
@@ -87,7 +90,7 @@ def test_each_policy_constructs(spec: dict[str, object]) -> None:
 
 
 def test_all_unknown_falls_back_to_passthrough() -> None:
-    with override_allocation_policy({"EAP": [{"name": "DoesNotExist"}]}):
+    with override_allocation_policy({"EAP": match_block([{"name": "DoesNotExist"}])}):
         policies = get_active_allocation_policies(ResourceIdentifier("EAP"))
     assert len(policies) == 1
     assert isinstance(policies[0], PassthroughPolicy)

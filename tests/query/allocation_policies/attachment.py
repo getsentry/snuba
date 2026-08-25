@@ -6,14 +6,21 @@ from sentry_options.testing import override_options
 
 from snuba.query.allocation_policies import ALLOCATION_POLICY_KEY
 
+
+def match_block(policies: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [{"match": {}, "policies": policies}]
+
+
 # Today's live EAP attachment (was hardcoded on StorageRouting).
-CURRENT_EAP_ATTACHMENT: list[dict[str, Any]] = [
-    {
-        "name": "ConcurrentRateLimitAllocationPolicy",
-        "concurrent_limit": 66,
-        "is_enforced": 0,
-    },
-]
+CURRENT_EAP_ATTACHMENT: list[dict[str, Any]] = match_block(
+    [
+        {
+            "name": "ConcurrentRateLimitAllocationPolicy",
+            "concurrent_limit": 66,
+            "is_enforced": 0,
+        },
+    ]
+)
 
 
 @contextmanager

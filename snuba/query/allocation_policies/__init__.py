@@ -592,15 +592,26 @@ def get_active_allocation_policies(
     """Build the AllocationPolicy list configured for ``resource_identifier``.
 
     Reads the ``allocation_policy`` sentry-option (keyed by ResourceIdentifier
-    value). An absent or empty entry falls back to a PassthroughPolicy for that
-    resource. Tenant types live on the policy class, not the option. Per-policy
-    settings on the item (is_enforced, concurrent_limit, …) are passed as
-    constructor kwargs.
+    value). Each resource is a list of match blocks; this reader uses the first
+    block's ``policies`` list (``match`` is ignored). An absent or empty entry
+    falls back to a PassthroughPolicy for that resource. Tenant types live on
+    the policy class, not the option. Per-policy settings on the item
+    (is_enforced, concurrent_limit, …) are passed as constructor kwargs.
     """
     policies: list[AllocationPolicy] = []
-    specs: list[Mapping[str, str]] = get_mapped_option(
+    blocks: list[Mapping[str, Any]] = get_mapped_option(
         ALLOCATION_POLICY_KEY, resource_identifier.value, []
     )
+    first = blocks[0] if blocks else {}
+    specs: list[Any] = first.get("policies", []) if isinstance(first, dict) else []
+    if not isinstance(specs, list):
+        logger.warning(
+            "Ignoring allocation_policy block without policies list for %s: %r",
+            resource_identifier.value,
+            first,
+        )
+        specs = []
+
     for spec in specs:
         if not isinstance(spec, dict):
             logger.warning(
