@@ -6,6 +6,8 @@ from arroyo.processing.strategies.abstract import ProcessingStrategy
 from arroyo.types import BrokerValue, Message, Partition, Topic
 
 from snuba.consumers.dlq import (
+    DLQ_INSTRUCTION_TTL_SECONDS,
+    DLQ_REDIS_KEY,
     DlqInstruction,
     DlqInstructionStatus,
     DlqReplayPolicy,
@@ -13,6 +15,7 @@ from snuba.consumers.dlq import (
     clear_instruction,
     load_instruction,
     mark_instruction_in_progress,
+    redis_client,
     store_instruction,
 )
 from snuba.datasets.storages.storage_key import StorageKey
@@ -42,12 +45,28 @@ def test_store_instruction() -> None:
     )
     store_instruction(instruction)
     assert load_instruction() == instruction
+    # The instruction key must expire, so that a dropped replay cannot leave it in
+    # Redis forever. Check the value, not only that some expiry is set, so that a
+    # wrong unit does not pass.
+    assert (
+        DLQ_INSTRUCTION_TTL_SECONDS - 10
+        < redis_client.ttl(DLQ_REDIS_KEY)
+        <= DLQ_INSTRUCTION_TTL_SECONDS
+    )
     mark_instruction_in_progress()
     loaded_instruction = load_instruction()
     assert loaded_instruction is not None
     assert loaded_instruction.status == DlqInstructionStatus.IN_PROGRESS
+    # The start of the replay rewrites the key, which restarts the expiry.
+    assert (
+        DLQ_INSTRUCTION_TTL_SECONDS - 10
+        < redis_client.ttl(DLQ_REDIS_KEY)
+        <= DLQ_INSTRUCTION_TTL_SECONDS
+    )
     clear_instruction()
     assert load_instruction() is None
+    # clear_instruction removes the key, it does not only let it expire.
+    assert redis_client.exists(DLQ_REDIS_KEY) == 0
 
 
 def test_exit_after_n_messages() -> None:
