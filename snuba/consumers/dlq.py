@@ -18,6 +18,11 @@ from snuba.redis import RedisClientKey, get_redis_client
 redis_client = get_redis_client(RedisClientKey.DLQ)
 DLQ_REDIS_KEY = "dlq_instruction"
 
+# Instruction keys have expiries to handle replays which are never cleared.
+# Consumer rewrites key when replay is started, expiry covers the one replay.
+# Went with 7 days because it's longer than any replay.
+DLQ_INSTRUCTION_TTL_SECONDS = 7 * 24 * 60 * 60
+
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +108,7 @@ def clear_instruction() -> None:
 
 
 def store_instruction(instruction: DlqInstruction) -> None:
-    redis_client.set(DLQ_REDIS_KEY, instruction.to_bytes())
+    redis_client.set(DLQ_REDIS_KEY, instruction.to_bytes(), ex=DLQ_INSTRUCTION_TTL_SECONDS)
 
 
 TPayload = TypeVar("TPayload")
