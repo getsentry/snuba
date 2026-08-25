@@ -96,3 +96,47 @@ def test_get_object_ids_in_query_ast(
     )
     project_ids = get_object_ids_in_query_ast(query, "project_id")
     assert project_ids == expected_project_ids
+
+
+def test_and_of_or_union_keeps_mentioned_ids() -> None:
+    condition = binary_condition(
+        BooleanFunctions.AND,
+        binary_condition(
+            BooleanFunctions.OR,
+            FunctionCall(
+                None,
+                "equals",
+                (Column("_snuba_project_id", None, "project_id"), Literal(None, 1)),
+            ),
+            FunctionCall(
+                None,
+                "equals",
+                (Column("_snuba_project_id", None, "project_id"), Literal(None, 42069)),
+            ),
+        ),
+        binary_condition(
+            BooleanFunctions.OR,
+            FunctionCall(
+                None,
+                "equals",
+                (Column("_snuba_project_id", None, "project_id"), Literal(None, 1)),
+            ),
+            FunctionCall(
+                None,
+                "equals",
+                (Column("_snuba_platform", None, "platform"), Literal(None, "x")),
+            ),
+        ),
+    )
+    query = Query(
+        QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
+        selected_columns=[
+            SelectedExpression("platform", Column("_snuba_platform", None, "platform")),
+        ],
+        condition=condition,
+    )
+    assert get_object_ids_in_query_ast(query, "project_id") == {1}
+    assert get_object_ids_in_query_ast(query, "project_id", intersect_and=False) == {
+        1,
+        42069,
+    }
