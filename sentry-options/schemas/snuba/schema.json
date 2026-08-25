@@ -383,7 +383,7 @@
         }
       },
       "default": {},
-      "description": "Which AllocationPolicy classes to construct for a ResourceIdentifier. Keyed by resource (storage key for SNQL, 'EAP' for routing strategies). Each resource is a list of match blocks ({match, policies, remove?}). match keys (organization_id, project_id, referrer) are lists; AND across keys, OR within a key; match: {} always matches. Matching blocks apply in file order: remove names, then add/replace policies by name. Each policy item requires name. A configured policy is active. Tenant types are hardcoded on the policy class. Optional per-policy settings (is_enforced, concurrent_limit, max_threads) are applied as constructor default_config_overrides. An absent or empty result falls back to PassthroughPolicy. Managed in sentry-options-automator."
+      "description": "Which AllocationPolicy classes to construct for a ResourceIdentifier. Keyed by resource (storage key for SNQL, 'EAP' for routing strategies). Each resource is a list of match blocks ({match, policies, remove?}). match keys (organization_id, project_id, referrer) are lists; AND across keys, OR within a key; match: {} always matches. Matching blocks apply in file order: remove names, then add/replace policies by name. Each policy item requires name. A configured policy is active. Optional per-policy settings (is_enforced, concurrent_limit, max_threads) are applied as constructor default_config_overrides. An absent or empty result falls back to PassthroughPolicy. Managed in sentry-options-automator."
     },
     "storage_routing_sampled_too_low_threshold": {
       "type": "object",

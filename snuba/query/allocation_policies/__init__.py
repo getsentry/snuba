@@ -331,8 +331,6 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         See `_build_config_key()` for more info.
     """
 
-    required_tenant_types: frozenset[str] = frozenset()
-
     def __init__(
         self,
         storage_key: ResourceIdentifier,
@@ -545,8 +543,6 @@ class AllocationPolicy(ConfigurableComponent, ABC):
 
 
 class PassthroughPolicy(AllocationPolicy):
-    required_tenant_types: frozenset[str] = frozenset()
-
     def _additional_config_definitions(self) -> list[Configuration]:
         return []
 
