@@ -28,7 +28,7 @@ jobs:
     if: github.repository_owner == 'getsentry'
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-    - uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
+    - uses: getsentry/action-build-and-push-images@8a785ee066b116b5fbcad72237f4ea68471954ad
       with:
         image_name: 'snuba'
         platforms: linux/${{ matrix.platform }}
@@ -50,7 +50,7 @@ jobs:
     if: ${{ github.ref_name == 'master' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
+      - uses: getsentry/action-build-and-push-images@8a785ee066b116b5fbcad72237f4ea68471954ad
         with:
           image_name: 'snuba'
           platforms: linux/amd64
@@ -81,7 +81,7 @@ jobs:
     if: github.repository_owner == 'getsentry'
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-    - uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
+    - uses: getsentry/action-build-and-push-images@8a785ee066b116b5fbcad72237f4ea68471954ad
       with:
         image_name: 'snuba'
         platforms: linux/${{ matrix.platform }}
