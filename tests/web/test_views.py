@@ -32,6 +32,27 @@ def snuba_api() -> FlaskClient:
     return application.test_client()
 
 
+def test_drop_rejected_when_not_testing(
+    snuba_api: FlaskClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("snuba.web.views.settings.TESTING", False)
+    monkeypatch.delenv("DEBUG", raising=False)
+    response = snuba_api.post("/tests/events/drop")
+    assert response.status_code == 403
+    assert b"TESTING" in response.data
+
+
+def test_drop_allowed_when_debug_env_set(
+    snuba_api: FlaskClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("snuba.web.views.settings.TESTING", False)
+    monkeypatch.setenv("DEBUG", "1")
+    monkeypatch.setattr("snuba.web.views.truncate_dataset", lambda dataset: None)
+    monkeypatch.setattr("snuba.web.views.all_redis_clients", lambda: [])
+    response = snuba_api.post("/tests/events/drop")
+    assert response.status_code == 200
+
+
 def test_response_dumping() -> None:
     data: dict[str, Any] = {
         "data": [

@@ -3,6 +3,7 @@ from __future__ import annotations
 import atexit
 import functools
 import logging
+import os
 import time
 from collections.abc import Callable, Mapping, MutableMapping, MutableSequence, Sequence
 from datetime import datetime
@@ -691,6 +692,17 @@ if application.debug or application.testing:
 
     @application.route("/tests/<dataset:dataset>/drop", methods=["POST"])
     def drop(*, dataset: Dataset) -> RespTuple:
+        # DEBUG is True in base settings and must not enable this route.
+        # TESTING covers snuba's own pytest; an explicit DEBUG=1 env is what
+        # getsentry CI and local docker-compose set to reset datasets.
+        debug_explicitly_enabled = os.environ.get("DEBUG", "").lower() in ("1", "true")
+        if not settings.TESTING and not debug_explicitly_enabled:
+            return (
+                "Drop is only allowed when TESTING is enabled or DEBUG=1 is set",
+                403,
+                {"Content-Type": "text/plain"},
+            )
+
         truncate_dataset(dataset)
         for redis_client in all_redis_clients():
             redis_client.flushdb()
