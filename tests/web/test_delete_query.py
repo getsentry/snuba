@@ -24,7 +24,7 @@ from snuba.query.data_source.simple import Table
 from snuba.query.dsl import and_cond, column, equals, literal
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.web import QueryException
-from snuba.web.delete_query import _execute_query
+from snuba.web.delete_query import _execute_query, _get_attribution_info
 
 
 @pytest.mark.eap
@@ -155,3 +155,25 @@ def test_delete_query_with_rejecting_allocation_policy() -> None:
         assert update_called, (
             "update_quota_balance should have been called even though the query was rejected but was not"
         )
+
+
+def test_client_cross_org_query_flag_is_stripped() -> None:
+    tenant_ids: dict[str, str | int] = {
+        "organization_id": 1,
+        "referrer": "my_request",
+        "cross_org_query": 1,
+    }
+    info = _get_attribution_info(
+        {
+            "tenant_ids": tenant_ids,
+            "referrer": "my_request",
+            "app_id": "test",
+            "team": "test",
+            "parent_api": "test",
+            "feature": "test",
+        }
+    )
+    assert "cross_org_query" not in info.tenant_ids
+    assert info.tenant_ids["organization_id"] == 1
+    # Original mapping from the request body must not be mutated.
+    assert "cross_org_query" in tenant_ids

@@ -111,6 +111,25 @@ def test_deletes_not_enabled_runtime_config() -> None:
 @pytest.mark.redis_db
 @patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10)
 @patch("snuba.web.bulk_delete_query.produce_delete_query")
+def test_client_cross_org_query_flag_is_stripped(
+    mock_produce_query: Mock, mock_enforce_rows: Mock
+) -> None:
+    storage = get_writable_storage(StorageKey("search_issues"))
+    conditions = {"project_id": [1], "group_id": [1, 2, 3, 4]}
+    attr_info = get_attribution_info({"project_id": 1, "organization_id": 1, "cross_org_query": 1})
+
+    delete_from_storage(storage, conditions, attr_info)
+
+    mock_produce_query.assert_called_once()
+    produced = mock_produce_query.call_args[0][0]
+    assert "cross_org_query" not in produced["tenant_ids"]
+    assert produced["tenant_ids"]["organization_id"] == 1
+    assert produced["tenant_ids"]["project_id"] == 1
+
+
+@pytest.mark.redis_db
+@patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10)
+@patch("snuba.web.bulk_delete_query.produce_delete_query")
 @override_options("snuba", {"lw_deletes_killswitch": {"search_issues": "[1]"}})
 def test_deletes_killswitch(mock_produce_query: Mock, mock_enforce_rows: Mock) -> None:
     storage = get_writable_storage(StorageKey("search_issues"))
