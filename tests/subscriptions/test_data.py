@@ -233,7 +233,13 @@ class TestBuildRequest(BaseSubscriptionTest, TestBuildRequestBase):
         self.compare_conditions(subscription, exception, "count", expected_value)
 
 
-def test_rpc_build_request_rebinds_project_and_org() -> None:
+@pytest.mark.parametrize(
+    "metadata, expected_org",
+    [({"organization": 1}, 1), ({}, 0)],
+)
+def test_rpc_build_request_rebinds_project_and_org(
+    metadata: dict[str, int], expected_org: int
+) -> None:
     stored = TimeSeriesRequest(
         meta=RequestMeta(
             project_ids=[999],
@@ -259,7 +265,7 @@ def test_rpc_build_request_rebinds_project_and_org() -> None:
         request_name="TimeSeriesRequest",
         request_version="v1",
         entity=get_entity(EntityKey.EAP_ITEMS),
-        metadata={"organization": 1},
+        metadata=metadata,
     )
     request = subscription.build_request(
         None,  # type: ignore[arg-type]
@@ -268,4 +274,4 @@ def test_rpc_build_request_rebinds_project_and_org() -> None:
         Timer("test"),
     )
     assert list(request.meta.project_ids) == [1]
-    assert request.meta.organization_id == 1
+    assert request.meta.organization_id == expected_org

@@ -232,9 +232,7 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
 
         request_class.meta.referrer = referrer
         request_class.meta.project_ids[:] = [self.project_id]
-        organization_id = self.metadata.get("organization")
-        if organization_id is not None:
-            request_class.meta.organization_id = int(organization_id)
+        request_class.meta.organization_id = int(self.metadata.get("organization") or 0)
 
         request_class.granularity_secs = self.time_window_sec
 
