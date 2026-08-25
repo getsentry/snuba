@@ -405,7 +405,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         **kwargs: Any,
     ) -> AllocationPolicy:
         return cls(
-            storage_key=ResourceIdentifier(storage_key),
+            storage_key=ResourceIdentifier(StorageKey(storage_key)),
             **kwargs,
         )
 
