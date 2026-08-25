@@ -229,7 +229,7 @@ wheels = [
 
 [[package]]
 name = "devservices"
-version = "1.2.1"
+version = "1.5.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 dependencies = [
     { name = "packaging" },
@@ -239,7 +239,7 @@ dependencies = [
     { name = "supervisor" },
 ]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/devservices-1.2.1-py3-none-any.whl", hash = "sha256:7c76ab711550cd1f42bd99b12edfcbdb1792fb7df0b7fec51eb13a2e2ff5df1b" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/devservices-1.5.0-py3-none-any.whl", hash = "sha256:9675af4c9274fa472a2aefae60a2deff6630c7364e443d6a3d29c48c9953d6a5" },
 ]
 
 [[package]]
@@ -1194,14 +1194,6 @@ wheels = [
 ]
 
 [[package]]
-name = "setuptools"
-version = "83.0.0"
-source = { registry = "https://pypi.devinfra.sentry.io/simple" }
-wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/setuptools-83.0.0-py3-none-any.whl", hash = "sha256:29b23c360f22f414dc7336bb39178cc7bcbf6021ed2733cde173f09dba19abb3" },
-]
-
-[[package]]
 name = "simplejson"
 version = "3.17.6"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
@@ -1318,7 +1310,7 @@ requires-dist = [
     { name = "clickhouse-connect", specifier = ">=1.6.0" },
     { name = "confluent-kafka", specifier = ">=2.7.0" },
     { name = "datadog", specifier = ">=0.49.1" },
-    { name = "devservices", specifier = ">=1.2.1" },
+    { name = "devservices", specifier = ">=1.5.0" },
     { name = "fastjsonschema", specifier = ">=2.16.2" },
     { name = "flask", specifier = ">=3.1.0" },
     { name = "flask-compress", specifier = ">=1.15" },
@@ -1362,7 +1354,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "devservices", specifier = ">=1.2.1" },
+    { name = "devservices", specifier = ">=1.5.0" },
     { name = "freezegun", specifier = ">=1.5.5" },
     { name = "mypy", specifier = ">=1.18.2" },
     { name = "pre-commit", specifier = ">=4.2.0" },
@@ -1513,13 +1505,10 @@ wheels = [
 
 [[package]]
 name = "supervisor"
-version = "4.2.5"
+version = "4.3.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
-dependencies = [
-    { name = "setuptools" },
-]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/supervisor-4.2.5-py2.py3-none-any.whl", hash = "sha256:2ecaede32fc25af814696374b79e42644ecaba5c09494c51016ffda9602d0f08" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/supervisor-4.3.0-py2.py3-none-any.whl", hash = "sha256:0bcb763fddafba410f35cbde226aa7f8514b9fb82eb05a0c85f6588d1c13f8db" },
 ]
 
 [[package]]
