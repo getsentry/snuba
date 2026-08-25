@@ -244,7 +244,7 @@ class AttributeValuesRequest(
         # that returned values round-trip as filter inputs.
         is_boolean = in_msg.key.type == AttributeKey.TYPE_BOOLEAN
         is_array_value = in_msg.key.type == AttributeKey.TYPE_ARRAY_STRING
-        values, arr_values, counts = [],[], []
+        values, arr_values, counts = [], [], []
         for row in res.result.get("data", []):
             value = row["attr_value"]
             if is_array_value:
