@@ -9,8 +9,12 @@ from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
     TraceItemAttributeValuesRequest,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
-from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    Array,
+    AttributeKey,
+    AttributeValue,
+)
+from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue
 from sentry_protos.snuba.v1.trace_item_pb2 import TraceItem as TraceItemMessage
 
 from snuba.datasets.storages.factory import get_writable_storage
@@ -278,6 +282,11 @@ class TestTraceItemAttributes(BaseApiTest):
         res = AttributeValuesRequest().execute(req)
         assert res.values == [item_id]
         assert res.counts == [1]
+        # The short-circuit runs no query, so it reports the value and count but no last_seen.
+        assert [(datum.value, datum.count) for datum in res.value_data] == [
+            (AttributeValue(val_str=item_id), 1)
+        ]
+        assert not res.value_data[0].HasField("last_seen")
 
     def test_deprecated_alias_attribute(self) -> None:
         """db.system.name request returns values stored only under deprecated key db.system."""
@@ -395,3 +404,133 @@ class TestTraceItemAttributes(BaseApiTest):
         )
         with pytest.raises(BadSnubaRPCRequestException):
             AttributeValuesRequest().execute(message)
+
+    def _write_array_values(self) -> None:
+        # Written per-test (not in the shared fixture) so the extra items don't
+        # perturb the count-based assertions in other tests. ["hi", "hello"] is
+        # written twice so the array path exercises a count > 1.
+        items_storage = get_writable_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            items_storage,
+            [
+                gen_item_message(
+                    start_timestamp=BASE_TIME,
+                    attributes={
+                        "sentry.array_str": AnyValue(
+                            array_value=ArrayValue(
+                                values=[AnyValue(string_value=v) for v in array_value]
+                            )
+                        ),
+                    },
+                )
+                for array_value in (["hi", "hello"], ["bye", "hello"], ["hi", "hello"])
+            ],
+        )
+
+    @staticmethod
+    def _str_array(*values: str) -> AttributeValue:
+        return AttributeValue(val_array=Array(values=[AttributeValue(val_str=v) for v in values]))
+
+    def test_array_string_values(self, setup_teardown: Any) -> None:
+        # Array-of-string keys are returned whole, as a typed val_array, in value_data.
+        self._write_array_values()
+        message = TraceItemAttributeValuesRequest(
+            meta=COMMON_META,
+            limit=5,
+            key=AttributeKey(name="sentry.array_str", type=AttributeKey.TYPE_ARRAY_STRING),
+        )
+        response = AttributeValuesRequest().execute(message)
+        assert [(datum.value, datum.count) for datum in response.value_data] == [
+            (self._str_array("hi", "hello"), 2),
+            (self._str_array("bye", "hello"), 1),
+        ]
+        # The deprecated string-only fields carry nothing for array keys: they cannot
+        # represent an array, and this endpoint rejected array keys before value_data
+        # existed, so no caller can be relying on them.
+        assert response.values == []
+        assert response.counts == []
+
+    def test_array_pagination(self, setup_teardown: Any) -> None:
+        # The page token is derived from value_data, so array responses paginate too
+        # (they populate none of the deprecated `values`).
+        self._write_array_values()
+        message = TraceItemAttributeValuesRequest(
+            meta=COMMON_META,
+            limit=1,
+            key=AttributeKey(name="sentry.array_str", type=AttributeKey.TYPE_ARRAY_STRING),
+        )
+        first = AttributeValuesRequest().execute(message)
+        assert [datum.value for datum in first.value_data] == [self._str_array("hi", "hello")]
+        assert first.page_token.offset == 1
+
+        second = AttributeValuesRequest().execute(
+            TraceItemAttributeValuesRequest(
+                meta=COMMON_META,
+                limit=1,
+                key=AttributeKey(name="sentry.array_str", type=AttributeKey.TYPE_ARRAY_STRING),
+                page_token=first.page_token,
+            )
+        )
+        assert [datum.value for datum in second.value_data] == [self._str_array("bye", "hello")]
+
+    def test_value_data_mirrors_deprecated_fields(self, setup_teardown: Any) -> None:
+        # Backwards compatibility: string values land in both the deprecated
+        # values/counts arrays and the new value_data, in the same order.
+        message = TraceItemAttributeValuesRequest(
+            meta=COMMON_META,
+            limit=5,
+            key=AttributeKey(name="tag1", type=AttributeKey.TYPE_STRING),
+        )
+        response = AttributeValuesRequest().execute(message)
+        assert [datum.value.val_str for datum in response.value_data] == list(response.values)
+        assert [datum.count for datum in response.value_data] == list(response.counts)
+        assert [datum.value.val_str for datum in response.value_data] == [
+            "derpderp",
+            "blah",
+            "durp",
+            "herp",
+            "herpderp",
+        ]
+
+    def test_value_data_booleans_are_typed(self, setup_teardown: Any) -> None:
+        # value_data carries a real val_bool; the deprecated `values` keeps the
+        # lowercase string form that existing callers feed back in as filters.
+        message = TraceItemAttributeValuesRequest(
+            meta=COMMON_META,
+            limit=5,
+            key=AttributeKey(name="custom_flag", type=AttributeKey.TYPE_BOOLEAN),
+        )
+        response = AttributeValuesRequest().execute(message)
+        assert [datum.value for datum in response.value_data] == [
+            AttributeValue(val_bool=False),
+            AttributeValue(val_bool=True),
+        ]
+        assert response.values == ["false", "true"]
+        assert response.counts == [1, 1]
+
+    def test_last_seen_populated(self, setup_teardown: Any) -> None:
+        message = TraceItemAttributeValuesRequest(
+            meta=COMMON_META,
+            limit=5,
+            key=AttributeKey(name="tag1", type=AttributeKey.TYPE_STRING),
+        )
+        response = AttributeValuesRequest().execute(message)
+        assert response.value_data
+        for datum in response.value_data:
+            assert datum.HasField("last_seen")
+            assert (
+                COMMON_META.start_timestamp.seconds
+                <= datum.last_seen.seconds
+                <= COMMON_META.end_timestamp.seconds
+            )
+
+    def test_empty_results_have_no_value_data(self) -> None:
+        req = TraceItemAttributeValuesRequest(
+            meta=COMMON_META,
+            key=AttributeKey(name="tag1", type=AttributeKey.TYPE_STRING),
+            value_substring_match="this_definitely_doesnt_exist_93710",
+        )
+        res = AttributeValuesRequest().execute(req)
+        assert list(res.value_data) == []
+        assert res.values == []
+        assert res.counts == []
