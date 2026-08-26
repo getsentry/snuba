@@ -139,6 +139,27 @@ TESTS = [
         5,
         id="Metrics sets subscription",
     ),
+    pytest.param(
+        EntityKey.METRICS_SETS,
+        Query(
+            QueryEntity(
+                EntityKey.METRICS_SETS,
+                get_entity(EntityKey.METRICS_SETS).get_data_model(),
+            ),
+            selected_columns=[
+                SelectedExpression("time", Column("_snuba_timestamp", None, "timestamp")),
+            ],
+            condition=binary_condition(
+                "equals",
+                Column("_snuba_project_id", None, "project_id"),
+                Literal(None, 1),
+            ),
+        ),
+        {"organization_id": 1},
+        None,
+        5,
+        id="Metrics sets subscription with renamed organization key",
+    ),
 ]
 
 

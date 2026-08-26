@@ -78,15 +78,21 @@ SUBSCRIPTION_DATA_PAYLOAD_KEYS = {
 
 REQUEST_TYPE_ALLOWLIST = [("TimeSeriesRequest", "v1")]
 
-# Subscription metadata key holding the organization id. This is the key the metrics
-# entities' subscription processors are configured with, so it is also what gets
-# persisted for them.
-ORGANIZATION_METADATA_KEY = "organization"
+# Subscription metadata key holding the organization id.
+ORGANIZATION_ID_METADATA_KEY = "organization_id"
+# The metrics entities' subscription processors are configured with this key, so it is
+# what gets persisted for them and what every subscription stored before the rename
+# carries. Those payloads live in Redis until their subscriptions are recreated, and
+# `AddColumnCondition` raises when its configured key is missing, so the processors keep
+# using it and we read both here.
+LEGACY_ORGANIZATION_METADATA_KEY = "organization"
 
 
 def get_organization_id(metadata: Mapping[str, Any]) -> int | None:
     """Return the organization id from subscription metadata, if it has one."""
-    organization_id = metadata.get(ORGANIZATION_METADATA_KEY)
+    organization_id = metadata.get(
+        ORGANIZATION_ID_METADATA_KEY, metadata.get(LEGACY_ORGANIZATION_METADATA_KEY)
+    )
     return int(organization_id) if organization_id is not None else None
 
 
@@ -309,7 +315,7 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
 
         metadata = {}
         if item.time_series_request.meta:
-            metadata[ORGANIZATION_METADATA_KEY] = item.time_series_request.meta.organization_id
+            metadata[ORGANIZATION_ID_METADATA_KEY] = item.time_series_request.meta.organization_id
 
         return RPCSubscriptionData(
             project_id=item.time_series_request.meta.project_ids[0],
@@ -508,10 +514,14 @@ class SnQLSubscriptionData(_SubscriptionData[Request]):
                 subscription_data_dict.update(processor.to_dict(self.metadata))
 
         # Entities without an organization subscription processor would otherwise drop
-        # the organization, leaving their stored subscriptions unattributable.
+        # the organization, leaving their stored subscriptions unattributable. The
+        # processors persist the legacy key themselves, so only add ours when absent.
         organization_id = get_organization_id(self.metadata)
-        if organization_id is not None and ORGANIZATION_METADATA_KEY not in subscription_data_dict:
-            subscription_data_dict[ORGANIZATION_METADATA_KEY] = organization_id
+        if (
+            organization_id is not None
+            and LEGACY_ORGANIZATION_METADATA_KEY not in subscription_data_dict
+        ):
+            subscription_data_dict[ORGANIZATION_ID_METADATA_KEY] = organization_id
 
         return subscription_data_dict
 

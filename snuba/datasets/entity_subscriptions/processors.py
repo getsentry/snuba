@@ -39,16 +39,28 @@ class EntitySubscriptionProcessor(metaclass=RegisteredClass):
 
 
 class AddColumnCondition(EntitySubscriptionProcessor):
-    def __init__(self, extra_condition_data_key: str, extra_condition_column: str):
+    def __init__(
+        self,
+        extra_condition_data_key: str,
+        extra_condition_column: str,
+        fallback_data_key: str | None = None,
+    ):
         self.extra_condition_data_key = extra_condition_data_key
         self.extra_condition_column = extra_condition_column
+        # Lets a renamed payload key be accepted alongside the configured one, so
+        # subscriptions stored under either key keep working.
+        self.fallback_data_key = fallback_data_key
+
+    def _get_value(self, metadata: Mapping[str, Any]) -> Any:
+        for key in (self.extra_condition_data_key, self.fallback_data_key):
+            if key is not None and key in metadata:
+                return metadata[key]
+        raise InvalidQueryException(
+            f"'{self.extra_condition_data_key}' not found in metadata: {metadata}"
+        )
 
     def to_dict(self, metadata: Mapping[str, Any]) -> Mapping[str, Any]:
-        if self.extra_condition_data_key not in metadata:
-            raise InvalidQueryException(
-                f"{self.extra_condition_data_key} not found in metadata: {metadata}"
-            )
-        return {self.extra_condition_data_key: metadata[self.extra_condition_data_key]}
+        return {self.extra_condition_data_key: self._get_value(metadata)}
 
     def process(
         self,
@@ -56,15 +68,10 @@ class AddColumnCondition(EntitySubscriptionProcessor):
         metadata: Mapping[str, Any],
         offset: int | None = None,
     ) -> None:
-        if self.extra_condition_data_key not in metadata:
-            raise InvalidQueryException(
-                f"'{self.extra_condition_data_key}' not found in metadata: {metadata}"
-            )
-
         condition_to_add: Expression = binary_condition(
             ConditionFunctions.EQ,
             Column(None, None, self.extra_condition_column),
-            Literal(None, metadata[self.extra_condition_data_key]),
+            Literal(None, self._get_value(metadata)),
         )
         condition = query.get_condition()
         if condition:

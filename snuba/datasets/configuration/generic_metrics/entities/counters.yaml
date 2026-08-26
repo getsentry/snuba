@@ -132,6 +132,7 @@ subscription_processors:
   - processor: AddColumnCondition
     args:
       extra_condition_data_key: organization
+      fallback_data_key: organization_id
       extra_condition_column: org_id
 subscription_validators:
   - validator: AggregationValidator

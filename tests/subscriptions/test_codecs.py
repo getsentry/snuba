@@ -104,7 +104,7 @@ def build_rpc_subscription_data(
 RPC_CASES = [
     pytest.param(
         build_rpc_subscription_data_from_proto,
-        {"organization": 1},
+        {"organization_id": 1},
         EntityKey.EAP_ITEMS,
         id="rpc",
     ),
