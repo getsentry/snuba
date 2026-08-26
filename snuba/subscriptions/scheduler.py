@@ -18,6 +18,7 @@ from snuba.subscriptions.data import (
     Subscription,
     SubscriptionIdentifier,
     SubscriptionWithMetadata,
+    get_organization_id,
 )
 from snuba.subscriptions.data import SubscriptionScheduler as SubscriptionSchedulerBase
 from snuba.subscriptions.store import SubscriptionDataStore
@@ -273,8 +274,7 @@ def filter_subscriptions(
             for subscription in subscriptions:
                 # get the metadata and org_id from the Subscription
                 sub_data = subscription.data
-                sub_metadata = sub_data.metadata
-                org_id = sub_metadata["organization"]
+                org_id = get_organization_id(sub_data.metadata)
 
                 if org_id is not None:
                     # map the org_id to the slice ID

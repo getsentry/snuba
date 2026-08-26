@@ -78,6 +78,17 @@ SUBSCRIPTION_DATA_PAYLOAD_KEYS = {
 
 REQUEST_TYPE_ALLOWLIST = [("TimeSeriesRequest", "v1")]
 
+# Subscription metadata key holding the organization id. This is the key the metrics
+# entities' subscription processors are configured with, so it is also what gets
+# persisted for them.
+ORGANIZATION_METADATA_KEY = "organization"
+
+
+def get_organization_id(metadata: Mapping[str, Any]) -> int | None:
+    """Return the organization id from subscription metadata, if it has one."""
+    organization_id = metadata.get(ORGANIZATION_METADATA_KEY)
+    return int(organization_id) if organization_id is not None else None
+
 
 class SubscriptionType(Enum):
     SNQL = "snql"
@@ -232,9 +243,9 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
 
         request_class.meta.referrer = referrer
         request_class.meta.project_ids[:] = [self.project_id]
-        organization_id = self.metadata.get("organization")
+        organization_id = get_organization_id(self.metadata)
         if organization_id is not None:
-            request_class.meta.organization_id = int(organization_id)
+            request_class.meta.organization_id = organization_id
 
         request_class.granularity_secs = self.time_window_sec
 
@@ -298,7 +309,7 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
 
         metadata = {}
         if item.time_series_request.meta:
-            metadata["organization"] = item.time_series_request.meta.organization_id
+            metadata[ORGANIZATION_METADATA_KEY] = item.time_series_request.meta.organization_id
 
         return RPCSubscriptionData(
             project_id=item.time_series_request.meta.project_ids[0],
@@ -422,13 +433,12 @@ class SnQLSubscriptionData(_SubscriptionData[Request]):
 
         tenant_ids = {**self.tenant_ids}
         tenant_ids["referrer"] = referrer
-        # Entities with an `organization` subscription processor (the metrics entities)
-        # persist the real organization id in metadata, so prefer it over the placeholder
-        # that attribution applies when no organization is known.
+        # Subscription metadata carries the real organization id, so prefer it over the
+        # placeholder that attribution applies when no organization is known.
         if "organization_id" not in tenant_ids:
-            organization_id = self.metadata.get("organization")
+            organization_id = get_organization_id(self.metadata)
             if organization_id is not None:
-                tenant_ids["organization_id"] = int(organization_id)
+                tenant_ids["organization_id"] = organization_id
 
         request = build_request(
             {
@@ -496,6 +506,13 @@ class SnQLSubscriptionData(_SubscriptionData[Request]):
         if subscription_processors:
             for processor in subscription_processors:
                 subscription_data_dict.update(processor.to_dict(self.metadata))
+
+        # Entities without an organization subscription processor would otherwise drop
+        # the organization, leaving their stored subscriptions unattributable.
+        organization_id = get_organization_id(self.metadata)
+        if organization_id is not None and ORGANIZATION_METADATA_KEY not in subscription_data_dict:
+            subscription_data_dict[ORGANIZATION_METADATA_KEY] = organization_id
+
         return subscription_data_dict
 
 

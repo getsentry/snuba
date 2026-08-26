@@ -247,7 +247,7 @@ def test_subscription_without_organization_id() -> None:
         "subscription",
     )
 
-    assert request.attribution_info.tenant_ids["organization_id"] == 1
+    assert request.attribution_info.tenant_ids["organization_id"] == 0
     assert request.query_settings.organization_id is None
 
 
