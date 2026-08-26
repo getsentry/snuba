@@ -300,7 +300,7 @@
       "default": {},
       "description": "Override values for ConfigurableComponent (allocation policy and storage-routing strategy) configs, keyed by the fully-qualified config key '{resource}.{ClassName}.{config}' (parameterized configs append '|{param}:{value}|...', params sorted). Values are numbers cast to each config's declared numeric type (int/float) on read. All current ConfigurableComponent configs are numeric; a non-numeric config would require widening this type. Authoritative source for these configs; a key absent here falls back to the code default. Read-only at runtime and managed in sentry-options-automator. Migrated from the per-component runtime config of the same key."
     },
-    "allocation_policy": {
+    "allocation_policies": {
       "type": "object",
       "additionalProperties": {
         "type": "array",

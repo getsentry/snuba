@@ -366,7 +366,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
 
     def get_allocation_policies(self) -> list[AllocationPolicy]:
         # All routing strategies share allocation policies: they protect the same
-        # resource (EAP). The list is configured via allocation_policy.
+        # resource (EAP). The list is configured via allocation_policies.
         return get_active_allocation_policies(ResourceIdentifier("EAP"))
 
     def get_delete_allocation_policies(self) -> list[AllocationPolicy]:

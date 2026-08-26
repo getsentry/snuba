@@ -574,7 +574,7 @@ class PassthroughPolicy(AllocationPolicy):
         pass
 
 
-ALLOCATION_POLICY_KEY = "allocation_policy"
+ALLOCATION_POLICY_KEY = "allocation_policies"
 
 
 def _default_passthough_policy(storage_key: str = "default.no_storage_key") -> AllocationPolicy:
@@ -591,7 +591,7 @@ def get_active_allocation_policies(
 ) -> list[AllocationPolicy]:
     """Build the AllocationPolicy list configured for ``resource_identifier``.
 
-    Reads the ``allocation_policy`` sentry-option (keyed by ResourceIdentifier
+    Reads the ``allocation_policies`` sentry-option (keyed by ResourceIdentifier
     value). Each resource is a list of match blocks; this reader uses the first
     block's ``policies`` list (``match`` is ignored). An absent or empty entry
     falls back to a PassthroughPolicy for that resource. Tenant types live on
