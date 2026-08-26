@@ -2,6 +2,7 @@ from collections.abc import Sequence
 from typing import Any
 
 import pytest
+from sentry_options.testing import override_options
 
 from snuba.clickhouse.columns import UUID, ColumnSet, String, UInt
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
@@ -643,6 +644,24 @@ def test_format_clickhouse_specific_query() -> None:
     )
 
     assert clickhouse_query.get_sql() == expected
+
+
+@override_options("snuba", {"disable_query_final": True})
+def test_format_omits_final_when_killswitch_enabled() -> None:
+    query = Query(
+        Table(
+            "my_table",
+            ColumnSet([]),
+            final=True,
+            sampling_rate=0.1,
+            storage_key=StorageKey("dontmatter"),
+        ),
+        selected_columns=[
+            SelectedExpression("column1", Column(None, None, "column1")),
+        ],
+    )
+
+    assert format_query(query).get_sql() == "SELECT column1 FROM my_table SAMPLE 0.1"
 
 
 def test_delete_query() -> None:

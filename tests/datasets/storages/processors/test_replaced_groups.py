@@ -151,6 +151,28 @@ def test_without_turbo_with_projects_needing_final(query: ClickhouseQuery) -> No
 
 
 @pytest.mark.redis_db
+@override_options("snuba", {"disable_query_final": True})
+def test_disable_query_final_killswitch(query: ClickhouseQuery) -> None:
+    ProjectsQueryFlags.set_project_needs_final(
+        2,
+        ReplacerState.ERRORS,
+        ReplacementType.EXCLUDE_GROUPS,
+    )
+
+    query_settings = HTTPQuerySettings()
+    PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS.value).process_query(
+        query, query_settings
+    )
+
+    assert query.get_condition() == build_in("project_id", [2])
+    assert not query.get_from_clause().final
+    assert (
+        "do_not_merge_across_partitions_select_final"
+        not in query_settings.get_clickhouse_settings()
+    )
+
+
+@pytest.mark.redis_db
 def test_without_turbo_without_projects_needing_final(query: ClickhouseQuery) -> None:
     PostReplacementConsistencyEnforcer("project_id", None).process_query(query, HTTPQuerySettings())
 

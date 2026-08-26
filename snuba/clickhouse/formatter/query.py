@@ -29,6 +29,7 @@ from snuba.query.data_source.join import (
 from snuba.query.data_source.simple import Table
 from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.expressions import Expression, ExpressionVisitor
+from snuba.query.final import query_final_disabled
 from snuba.query.parsing import ParsingContext
 
 FormattableQuery = Query | CompositeQuery[Table]
@@ -67,7 +68,7 @@ class DataSourceFormatter(DataSourceVisitor[FormattedNode, Table]):
         Formats a simple table data source.
         """
 
-        final = " FINAL" if data_source.final else ""
+        final = " FINAL" if data_source.final and not query_final_disabled() else ""
         sample = f" SAMPLE {data_source.sampling_rate}" if data_source.sampling_rate else ""
         return StringNode(f"{data_source.table_name}{final}{sample}")
 
