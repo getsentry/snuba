@@ -278,6 +278,12 @@ allocation_policies:
         - referrer
       default_config_overrides:
         is_enforced: 0
+  - name: ReferrerGuardRailPolicy
+    args:
+      required_tenant_types:
+        - referrer
+      default_config_overrides:
+        is_enforced: 0
 query_processors:
   - processor: UniqInSelectAndHavingProcessor
   - processor: TupleUnaliaser

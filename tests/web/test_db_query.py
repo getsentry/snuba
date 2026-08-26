@@ -563,6 +563,20 @@ def test_db_query_success() -> None:
                 "quota_unit": "bytes",
                 "suggestion": "no_suggestion",
             },
+            "ReferrerGuardRailPolicy": {
+                "can_run": True,
+                "max_threads": 10,
+                "max_bytes_to_read": 0,
+                "explanation": {
+                    "storage_key": "errors_ro",
+                },
+                "is_throttled": False,
+                "throttle_threshold": 66,
+                "rejection_threshold": 100,
+                "quota_used": 1,
+                "quota_unit": "concurrent_queries",
+                "suggestion": "no_suggestion",
+            },
         },
     }
 
