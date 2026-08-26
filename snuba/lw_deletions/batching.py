@@ -58,6 +58,14 @@ class ReduceRowsBuffer(Generic[TPayload, TResult]):
             or self._buffered_messages >= MAX_BUFFERED_MESSAGES
         )
 
+    @property
+    def readiness_reason(self) -> str:
+        if self._buffer_size >= self.max_batch_size:
+            return "size"
+        if time.time() >= self._buffer_until:
+            return "time"
+        return "message_count"
+
     def append(self, message: BaseValue[TPayload]) -> None:
         """
         Instead of increasing the buffer size based on the number

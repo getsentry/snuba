@@ -3911,8 +3911,8 @@ dependencies = [
 
 [[package]]
 name = "sentry_arroyo"
-version = "2.42.0"
-source = "git+https://github.com/getsentry/arroyo?branch=rbroughan%2Fpull-based-arroyo-part-2#7c5b1d7f453000cd1a8ebe4f5425a1df6e12701c"
+version = "2.43.0"
+source = "git+https://github.com/getsentry/arroyo?branch=rbroughan%2Fpull-based-arroyo-part-2#ad99a41a4a59f62a0b176871a46cab2e4402c0c6"
 dependencies = [
  "async-stream",
  "chrono",
