@@ -11,6 +11,7 @@ from snuba.clickhouse.query_dsl.accessors import (
 )
 from snuba.query.conditions import not_in_condition
 from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba.query.final import query_final_disabled
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings, SubscriptionQuerySettings
 from snuba.replacers.projects_query_flags import ProjectsQueryFlags
@@ -133,6 +134,10 @@ class PostReplacementConsistencyEnforcer(ClickhouseQueryProcessor):
                     )
                 )
 
+        if set_final and query_final_disabled():
+            metrics.increment(name="query_final_disabled")
+            set_final = False
+
         if (
             set_final
             and self.__replacer_state_name is not None
@@ -159,6 +164,9 @@ class PostReplacementConsistencyEnforcer(ClickhouseQueryProcessor):
         on the results of the query. This is very performance heavy and
         should be avoided whenever possible.
         """
+        if final and query_final_disabled():
+            metrics.increment(name="query_final_disabled")
+            final = False
         query.set_from_clause(replace(query.get_from_clause(), final=final))
 
     def _query_overlaps_replacements(

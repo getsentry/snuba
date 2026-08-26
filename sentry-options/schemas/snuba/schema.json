@@ -375,6 +375,11 @@
       "default": false,
       "description": "When true, queries missing mandatory condition columns raise an assertion; otherwise the omission is only logged."
     },
+    "disable_query_final": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, no query emits the ClickHouse FINAL keyword, regardless of replacement flags, SNQL final, or other processors."
+    },
     "skip_final_subscriptions_projects": {
       "type": "string",
       "default": "[]",
