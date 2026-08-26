@@ -37,6 +37,7 @@ from snuba.processor import (
     ReplacementType,
     _hashify,
 )
+from snuba.query.final import query_final_disabled
 from snuba.replacers.projects_query_flags import ProjectsQueryFlags
 from snuba.replacers.replacements_and_expiry import (
     get_config_auto_replacements_bypass_projects,
@@ -58,6 +59,14 @@ In theory this will be needed only during the events to errors migration.
 
 logger = logging.getLogger(__name__)
 metrics = MetricsWrapper(environment.metrics, "errors.replacer")
+
+
+def _final_clause() -> str:
+    """ClickHouse FINAL on replacement SELECTs, omitted when the killswitch is on."""
+    if query_final_disabled():
+        metrics.increment("query_final_disabled")
+        return ""
+    return " FINAL"
 
 
 @dataclass(frozen=True)
@@ -357,7 +366,7 @@ class ReplaceGroupReplacement(Replacement):
         return f"""\
             INSERT INTO {table_name} ({all_columns})
             SELECT {select_columns}
-            FROM {table_name} FINAL
+            FROM {table_name}{_final_clause()}
             {self._where_clause}
         """
 
@@ -425,7 +434,7 @@ class DeleteGroupsReplacement(Replacement):
         return f"""\
             INSERT INTO {table_name} ({required_columns})
             SELECT {select_columns}
-            FROM {table_name} FINAL
+            FROM {table_name}{_final_clause()}
             {self._where_clause}
         """
 
@@ -481,7 +490,7 @@ class TombstoneEventsReplacement(Replacement):
         return f"""\
             INSERT INTO {table_name} ({required_columns})
             SELECT {select_columns}
-            FROM {table_name} FINAL
+            FROM {table_name}{_final_clause()}
             {self._where_clause}
         """
 
@@ -644,7 +653,7 @@ class MergeReplacement(Replacement):
         return f"""\
             INSERT INTO {table_name} ({all_columns})
             SELECT {select_columns}
-            FROM {table_name} FINAL
+            FROM {table_name}{_final_clause()}
             {self._where_clause}
         """
 
@@ -736,7 +745,7 @@ class UnmergeGroupsReplacement(Replacement):
         return f"""\
             INSERT INTO {table_name} ({all_columns})
             SELECT {select_columns}
-            FROM {table_name} FINAL
+            FROM {table_name}{_final_clause()}
             {self._where_clause}
         """
 
@@ -832,7 +841,7 @@ class DeleteTagReplacement(Replacement):
         return f"""\
             INSERT INTO {table_name} ({all_columns})
             SELECT {select_columns}
-            FROM {table_name} FINAL
+            FROM {table_name}{_final_clause()}
             {self._where_clause}
         """
 

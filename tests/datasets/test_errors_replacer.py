@@ -846,6 +846,51 @@ class TestReplacerProcess(BaseTest):
             group_ids=[1, 2, 3]
         )
 
+    @pytest.mark.parametrize(
+        "replacement_type, extra",
+        [
+            (ReplacementType.END_DELETE_GROUPS, {"group_ids": [1, 2, 3]}),
+            (
+                ReplacementType.TOMBSTONE_EVENTS,
+                {"event_ids": ["00e24a150d7f4ee4b142b61b4d893b6d"]},
+            ),
+            (
+                ReplacementType.REPLACE_GROUP,
+                {"event_ids": ["00e24a150d7f4ee4b142b61b4d893b6d"], "new_group_id": 2},
+            ),
+            (ReplacementType.END_MERGE, {"new_group_id": 2, "previous_group_ids": [1, 2]}),
+            (
+                ReplacementType.END_UNMERGE,
+                {"previous_group_id": 1, "new_group_id": 2, "hashes": ["a" * 32]},
+            ),
+            (ReplacementType.END_DELETE_TAG, {"tag": "sentry:user"}),
+        ],
+    )
+    def test_disable_query_final_omits_final(
+        self, replacement_type: ReplacementType, extra: dict[str, Any]
+    ) -> None:
+        timestamp = datetime.now()
+        message = (
+            2,
+            replacement_type,
+            {
+                "project_id": self.project_id,
+                "datetime": timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                **extra,
+            },
+        )
+        meta_and_replacement = self.replacer.process_message(self._wrap(message))
+        assert meta_and_replacement is not None
+        _, replacement = meta_and_replacement
+        assert isinstance(replacement, errors_replacer.Replacement)
+
+        with override_options("snuba", {"disable_query_final": True}):
+            query = replacement.get_insert_query("foo")
+
+        assert query is not None
+        assert " FINAL" not in query
+        assert re.search(r"FROM foo\s+WHERE", query) is not None
+
     def test_project_bypass(self) -> None:
         timestamp = datetime.now()
         message = (
