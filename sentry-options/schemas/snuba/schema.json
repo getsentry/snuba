@@ -390,6 +390,14 @@
       "default": 256,
       "description": "Maximum number of group ids excluded from a query before it falls back to FINAL instead of an exclusion set."
     },
+    "max_groups_final_bypass_org_ids": {
+      "type": "array",
+      "items": {
+        "type": "integer"
+      },
+      "default": [],
+      "description": "Organization ids for which the post-replacement consistency processor skips the max-groups fallback to FINAL. Affected queries may return stale or replaced rows until ClickHouse merges complete."
+    },
     "skip_seen_offsets": {
       "type": "boolean",
       "default": false,
