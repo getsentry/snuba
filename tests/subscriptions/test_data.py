@@ -1,5 +1,6 @@
 import base64
 from datetime import datetime
+from typing import Any
 
 import pytest
 from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
@@ -22,6 +23,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.factory import get_dataset
 from snuba.query.exceptions import InvalidQueryException
 from snuba.subscriptions.data import (
     RPCSubscriptionData,
@@ -269,3 +271,50 @@ def test_rpc_build_request_rebinds_project_and_org() -> None:
     )
     assert list(request.meta.project_ids) == [1]
     assert request.meta.organization_id == 1
+
+
+SNQL_SUBSCRIPTION_QUERY = (
+    "MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3] "
+    "WHERE org_id = 1 AND project_id IN tuple(1) AND metric_id = 7 "
+    "AND tags[3] IN tuple(13, 4) "
+)
+
+
+@pytest.mark.redis_db
+@pytest.mark.parametrize(
+    "metadata, tenant_ids, expected_organization_id",
+    [
+        pytest.param({"organization": 4567}, {}, 4567, id="organization from metadata"),
+        pytest.param(
+            {"organization": 4567},
+            {"organization_id": 89},
+            89,
+            id="explicit tenant id wins over metadata",
+        ),
+    ],
+)
+def test_snql_build_request_organization_id(
+    metadata: dict[str, Any],
+    tenant_ids: dict[str, Any],
+    expected_organization_id: int,
+) -> None:
+    """Entities that persist the organization in metadata should attribute their queries
+    to the real organization rather than the placeholder."""
+    subscription = SnQLSubscriptionData(
+        project_id=1,
+        query=SNQL_SUBSCRIPTION_QUERY,
+        time_window_sec=3600,
+        resolution_sec=60,
+        entity=get_entity(EntityKey.METRICS_COUNTERS),
+        metadata={"granularity": 3600, **metadata},
+        tenant_ids=tenant_ids,
+    )
+
+    request = subscription.build_request(
+        get_dataset("metrics"),
+        datetime.utcnow(),
+        None,
+        Timer("test"),
+    )
+
+    assert request.query_settings.organization_id == expected_organization_id

@@ -422,8 +422,13 @@ class SnQLSubscriptionData(_SubscriptionData[Request]):
 
         tenant_ids = {**self.tenant_ids}
         tenant_ids["referrer"] = referrer
-        # A missing organization id is backfilled with a placeholder during attribution,
-        # in build_request, so it never reaches per-organization query behavior.
+        # Entities with an `organization` subscription processor (the metrics entities)
+        # persist the real organization id in metadata, so prefer it over the placeholder
+        # that attribution applies when no organization is known.
+        if "organization_id" not in tenant_ids:
+            organization_id = self.metadata.get("organization")
+            if organization_id is not None:
+                tenant_ids["organization_id"] = int(organization_id)
 
         request = build_request(
             {
