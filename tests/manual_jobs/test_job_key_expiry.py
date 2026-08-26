@@ -19,8 +19,7 @@ job_spec = JobSpec(job_id=JOB_ID, job_type="ToyJob")
 
 @pytest.mark.redis_db
 def test_job_state_keys_expire() -> None:
-    """Every key a job run leaves behind must expire. Without this the four keys
-    per job id stay in Redis forever on a long-lived cluster."""
+    """Every key a job run leaves behind must expire"""
     run_job(job_spec)
 
     for build_key in (
