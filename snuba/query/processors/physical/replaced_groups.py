@@ -21,6 +21,7 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 metrics = MetricsWrapper(environment.metrics, "processors.replaced_groups")
 FINAL_METRIC = "final"
 CONSISTENCY_DENYLIST_METRIC = "post_replacement_consistency_projects_denied"
+CONSISTENCY_ENFORCER_BYPASSED_METRIC = "consistency_enforcer_bypassed"
 MAX_GROUPS_FINAL_DISABLED_METRIC = "max_groups_final_disabled"
 MAX_GROUPS_FINAL_BYPASS_ORG_IDS_OPTION = "max_groups_final_bypass_org_ids"
 
@@ -45,6 +46,13 @@ class PostReplacementConsistencyEnforcer(ClickhouseQueryProcessor):
         )
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
+        if get_option("bypass_post_replacement_consistency_enforcer", False):
+            metrics.increment(
+                name=CONSISTENCY_ENFORCER_BYPASSED_METRIC,
+                tags={"referrer": query_settings.referrer},
+            )
+            return
+
         if query_settings.get_turbo():
             return
 

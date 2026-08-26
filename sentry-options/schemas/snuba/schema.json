@@ -385,6 +385,11 @@
       "default": "[]",
       "description": "Bracketed comma-separated list of project ids that are forced to FINAL after a replacement."
     },
+    "bypass_post_replacement_consistency_enforcer": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, the post-replacement consistency processor does not add FINAL or group-id exclusions to queries. Results may include stale or replaced rows until ClickHouse merges complete."
+    },
     "max_group_ids_exclude": {
       "type": "integer",
       "default": 256,

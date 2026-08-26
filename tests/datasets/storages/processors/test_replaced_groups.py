@@ -131,6 +131,43 @@ def test_with_turbo(query: ClickhouseQuery) -> None:
 
 
 @pytest.mark.redis_db
+@override_options("snuba", {"bypass_post_replacement_consistency_enforcer": True})
+def test_global_bypass_skips_final(query: ClickhouseQuery) -> None:
+    ProjectsQueryFlags.set_project_needs_final(
+        2,
+        ReplacerState.ERRORS,
+        ReplacementType.EXCLUDE_GROUPS,
+    )
+    query_settings = HTTPQuerySettings()
+
+    PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS.value).process_query(
+        query, query_settings
+    )
+
+    assert query.get_condition() == build_in("project_id", [2])
+    assert not query.get_from_clause().final
+    assert query_settings.get_clickhouse_settings() == {}
+
+
+@pytest.mark.redis_db
+@override_options("snuba", {"bypass_post_replacement_consistency_enforcer": True})
+def test_global_bypass_skips_group_exclusions(query: ClickhouseQuery) -> None:
+    ProjectsQueryFlags.set_project_exclude_groups(
+        2,
+        [100, 101, 102],
+        ReplacerState.ERRORS,
+        ReplacementType.EXCLUDE_GROUPS,
+    )
+
+    PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS.value).process_query(
+        query, HTTPQuerySettings()
+    )
+
+    assert query.get_condition() == build_in("project_id", [2])
+    assert not query.get_from_clause().final
+
+
+@pytest.mark.redis_db
 def test_without_turbo_with_projects_needing_final(query: ClickhouseQuery) -> None:
     ProjectsQueryFlags.set_project_needs_final(
         2,
