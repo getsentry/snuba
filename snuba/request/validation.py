@@ -216,7 +216,7 @@ def _get_settings_object(
     # Only a real organization id from the request may drive per-organization query
     # behavior. The subscription placeholder is applied later, to attribution only.
     organization_id = request_parts.attribution_info["tenant_ids"].get("organization_id")
-    if not isinstance(organization_id, int) or isinstance(organization_id, bool):
+    if not isinstance(organization_id, int):
         organization_id = None
 
     if settings_class == HTTPQuerySettings:
