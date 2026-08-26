@@ -20,7 +20,7 @@ from snuba.query.data_source.simple import Entity
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query
-from snuba.query.query_settings import HTTPQuerySettings
+from snuba.query.query_settings import HTTPQuerySettings, SubscriptionQuerySettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
 from snuba.utils.metrics.timer import Timer
@@ -216,6 +216,80 @@ def test_client_cross_org_query_flag_is_stripped() -> None:
     )
     assert "cross_org_query" not in request.attribution_info.tenant_ids
     assert request.attribution_info.tenant_ids["organization_id"] == 1
+
+
+SUBSCRIPTION_QUERY = (
+    "MATCH (events) "
+    "SELECT count() AS count BY time "
+    "WHERE "
+    "project_id IN tuple(1) AND "
+    "timestamp >= toDateTime('2011-07-01T19:54:15') AND "
+    "timestamp < toDateTime('2018-07-06T19:54:15') "
+    "LIMIT 1000 "
+    "GRANULARITY 60"
+)
+
+
+@pytest.mark.redis_db
+def test_subscription_without_organization_id() -> None:
+    """A subscription with no organization tenant id still gets a placeholder org for
+    attribution, but must not inherit it as a real org for query behavior."""
+    dataset = get_dataset("events")
+    schema = RequestSchema.build(SubscriptionQuerySettings)
+
+    request = build_request(
+        {"query": SUBSCRIPTION_QUERY, "tenant_ids": {"referrer": "subscription"}},
+        parse_snql_query,
+        SubscriptionQuerySettings,
+        schema,
+        dataset,
+        Timer("test"),
+        "subscription",
+    )
+
+    assert request.attribution_info.tenant_ids["organization_id"] == 1
+    assert request.query_settings.organization_id is None
+
+
+@pytest.mark.redis_db
+def test_subscription_with_organization_id() -> None:
+    dataset = get_dataset("events")
+    schema = RequestSchema.build(SubscriptionQuerySettings)
+
+    request = build_request(
+        {
+            "query": SUBSCRIPTION_QUERY,
+            "tenant_ids": {"organization_id": 42, "referrer": "subscription"},
+        },
+        parse_snql_query,
+        SubscriptionQuerySettings,
+        schema,
+        dataset,
+        Timer("test"),
+        "subscription",
+    )
+
+    assert request.attribution_info.tenant_ids["organization_id"] == 42
+    assert request.query_settings.organization_id == 42
+
+
+@pytest.mark.redis_db
+def test_http_query_without_organization_id() -> None:
+    dataset = get_dataset("events")
+    schema = RequestSchema.build(HTTPQuerySettings)
+
+    request = build_request(
+        {"query": SUBSCRIPTION_QUERY, "tenant_ids": {"referrer": "my_request"}},
+        parse_snql_query,
+        HTTPQuerySettings,
+        schema,
+        dataset,
+        Timer("test"),
+        "my_request",
+    )
+
+    assert "organization_id" not in request.attribution_info.tenant_ids
+    assert request.query_settings.organization_id is None
 
 
 @pytest.mark.redis_db

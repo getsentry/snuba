@@ -396,7 +396,7 @@
         "type": "integer"
       },
       "default": [],
-      "description": "Organization ids for which the post-replacement consistency processor skips the max-groups fallback to FINAL. Affected queries may return stale or replaced rows until ClickHouse merges complete."
+      "description": "Organization ids for which the post-replacement consistency processor skips the max-groups fallback to FINAL. Affected queries may return stale or replaced rows until ClickHouse merges complete. Only organization ids supplied by the request are matched, so queries with no organization attribution never bypass FINAL."
     },
     "skip_seen_offsets": {
       "type": "boolean",

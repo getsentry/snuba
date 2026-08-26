@@ -39,6 +39,11 @@ from snuba.utils.sentry import SENTRY_OP, set_tag_and_attribute
 
 metrics = MetricsWrapper(environment.metrics, "snuba.validation")
 
+# Allocation policies require an organization tenant id, but subscription payloads
+# do not always carry one. Such queries are attributed to this placeholder org.
+# TODO: Subscription queries should always have a real organization id.
+PLACEHOLDER_SUBSCRIPTION_ORGANIZATION_ID = 1
+
 
 class Parser(Protocol):
     def __call__(
@@ -87,7 +92,10 @@ def _consistent_override(original_setting: bool, referrer: str) -> bool:
 
 
 def update_attribution_info(
-    request_parts: RequestParts, referrer: str, query_project_id: int | None
+    request_parts: RequestParts,
+    referrer: str,
+    query_project_id: int | None,
+    is_subscription: bool = False,
 ) -> dict[str, Any]:
     attribution_info = dict(request_parts.attribution_info)
 
@@ -100,6 +108,9 @@ def update_attribution_info(
 
     if "project_id" not in attribution_info["tenant_ids"] and query_project_id is not None:
         attribution_info["tenant_ids"]["project_id"] = query_project_id
+
+    if is_subscription and "organization_id" not in attribution_info["tenant_ids"]:
+        attribution_info["tenant_ids"]["organization_id"] = PLACEHOLDER_SUBSCRIPTION_ORGANIZATION_ID
 
     return attribution_info
 
@@ -200,8 +211,10 @@ def _get_settings_object(
     request_parts: RequestParts,
     referrer: str,
 ) -> HTTPQuerySettings | SubscriptionQuerySettings:
+    # Only a real organization id from the request may drive per-organization query
+    # behavior. The subscription placeholder is applied later, to attribution only.
     organization_id = request_parts.attribution_info["tenant_ids"].get("organization_id")
-    if not isinstance(organization_id, int):
+    if not isinstance(organization_id, int) or isinstance(organization_id, bool):
         organization_id = None
 
     if settings_class == HTTPQuerySettings:
@@ -232,9 +245,14 @@ def _get_project_id(query: Query | CompositeQuery[LogicalDataSource]) -> int | N
 
 
 def _get_attribution_info(
-    request_parts: RequestParts, referrer: str, query_project_id: int | None
+    request_parts: RequestParts,
+    referrer: str,
+    query_project_id: int | None,
+    is_subscription: bool = False,
 ) -> AttributionInfo:
-    return AttributionInfo(**update_attribution_info(request_parts, referrer, query_project_id))
+    return AttributionInfo(
+        **update_attribution_info(request_parts, referrer, query_project_id, is_subscription)
+    )
 
 
 def _build_request(
@@ -252,7 +270,12 @@ def _build_request(
     if query_project_id:
         set_tag_and_attribute("snuba_project_id", query_project_id)
 
-    attribution_info = _get_attribution_info(request_parts, referrer, query_project_id)
+    attribution_info = _get_attribution_info(
+        request_parts,
+        referrer,
+        query_project_id,
+        is_subscription=isinstance(settings, SubscriptionQuerySettings),
+    )
 
     return Request(
         id=uuid.uuid4(),

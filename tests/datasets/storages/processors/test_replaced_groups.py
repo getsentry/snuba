@@ -14,7 +14,11 @@ from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.processors.physical.replaced_groups import (
     PostReplacementConsistencyEnforcer,
 )
-from snuba.query.query_settings import HTTPQuerySettings, SubscriptionQuerySettings
+from snuba.query.query_settings import (
+    HTTPQuerySettings,
+    QuerySettings,
+    SubscriptionQuerySettings,
+)
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.replacers.projects_query_flags import ProjectsQueryFlags
 from snuba.replacers.replacer_processor import ReplacerState
@@ -277,6 +281,41 @@ def test_too_many_groups_final_not_disabled_for_other_organization(
 
     PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS.value).process_query(
         query, HTTPQuerySettings(organization_id=2)
+    )
+
+    assert query.get_from_clause().final
+
+
+@pytest.mark.redis_db
+@override_options(
+    "snuba",
+    {
+        "max_group_ids_exclude": 2,
+        "max_groups_final_bypass_org_ids": [1],
+    },
+)
+@pytest.mark.parametrize(
+    "query_settings",
+    [
+        pytest.param(HTTPQuerySettings(), id="http"),
+        pytest.param(SubscriptionQuerySettings(), id="subscription"),
+    ],
+)
+def test_too_many_groups_final_not_disabled_without_organization(
+    query: ClickhouseQuery, query_settings: QuerySettings
+) -> None:
+    """Queries with no organization attribution must never match the bypass list, so
+    that the subscription placeholder org cannot silently disable FINAL for all of
+    them."""
+    ProjectsQueryFlags.set_project_exclude_groups(
+        2,
+        [100, 101, 102],
+        ReplacerState.ERRORS,
+        ReplacementType.EXCLUDE_GROUPS,
+    )
+
+    PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS.value).process_query(
+        query, query_settings
     )
 
     assert query.get_from_clause().final

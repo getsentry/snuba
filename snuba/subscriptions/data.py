@@ -422,9 +422,8 @@ class SnQLSubscriptionData(_SubscriptionData[Request]):
 
         tenant_ids = {**self.tenant_ids}
         tenant_ids["referrer"] = referrer
-        if "organization_id" not in tenant_ids:
-            # TODO: Subscriptions queries should have an org ID
-            tenant_ids["organization_id"] = 1
+        # A missing organization id is backfilled with a placeholder during attribution,
+        # in build_request, so it never reaches per-organization query behavior.
 
         request = build_request(
             {
