@@ -161,7 +161,8 @@ function(region) {
   environment_variables: {
     SENTRY_REGION: region,
     // Required for checkruns.
-    GITHUB_TOKEN: '{{SECRET:[devinfra-github][token]}}',
+    GITHUB_APP_ID: '{{SECRET:[devinfra-github][app_id]}}',
+    GITHUB_APP_PRIVATE_KEY: '{{SECRET:[devinfra-github][private_key]}}',
     GOCD_ACCESS_TOKEN: '{{SECRET:[devinfra][gocd_access_token]}}',
   },
   lock_behavior: 'unlockWhenFinished',
