@@ -39,11 +39,11 @@ from snuba.utils.sentry import SENTRY_OP, set_tag_and_attribute
 
 metrics = MetricsWrapper(environment.metrics, "snuba.validation")
 
-# Allocation policies require an organization tenant id, but subscription payloads
-# do not always carry one. Such queries are attributed to this placeholder, which
-# matches the querylog sentinel for an unknown organization and can never collide
-# with a real organization id.
-# TODO: Subscription queries should always have a real organization id.
+# Allocation policies require an organization tenant id, but subscriptions stored
+# before Sentry started sending one carry no organization until they are recreated.
+# Those queries are attributed to this placeholder, which matches the querylog
+# sentinel for an unknown organization and can never collide with a real one, so a
+# nonzero count here measures how many such subscriptions are left.
 PLACEHOLDER_SUBSCRIPTION_ORGANIZATION_ID = 0
 
 
