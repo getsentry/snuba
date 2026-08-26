@@ -95,6 +95,7 @@ def test_build_request(body: dict[str, Any], condition: Expression) -> None:
     )
 
     assert request.referrer == "my_request"
+    assert request.query_settings.organization_id == 1
     assert dict(request.original_body) == body
     status, differences = request.query.equals(expected_query)
     assert status, f"Query mismatch: {differences}"
