@@ -1,7 +1,7 @@
 """Behaviour only v2 can provide: per-type attribute keys, summed item counts, last_seen.
 
-Behaviour shared with v1 is covered against both storages by the parameterized suite in
-``test_endpoint_trace_item_attribute_names.py``.
+Shared behaviour is covered against v2 by ``test_endpoint_trace_item_attribute_names.py``.
+The v1 table is no longer written to.
 """
 
 import uuid
@@ -241,20 +241,12 @@ class TestTraceItemAttributeNamesV2(BaseApiTest):
         ]
 
     def test_count_sums_occurrence_column(self) -> None:
-        """Rows carry an occurrence `count`, so this sums to the number of items. The same
-        request on v1 counts attribute sets, which here is 1."""
+        """Rows carry an occurrence `count`, so this sums to the number of items."""
         res = EndpointTraceItemAttributeNames().execute(
             _request(AttributeKey.Type.TYPE_STRING, order_by_count=True)
         )
         counts = {attr.name: attr.count for attr in res.attributes}
         assert counts == {"probe_str": NUM_ITEMS}
-
-        with override_options("snuba", {CO_OCCURRING_ATTRS_V2_OPTION: False}):
-            v1_res = EndpointTraceItemAttributeNames().execute(
-                _request(AttributeKey.Type.TYPE_STRING, order_by_count=True)
-            )
-        v1_counts = {attr.name: attr.count for attr in v1_res.attributes}
-        assert v1_counts == {"probe_str": 1}
 
     def test_count_populated_for_int_and_array_keys(self) -> None:
         """Available for the types v1 cannot surface at all."""
@@ -374,14 +366,6 @@ class TestCoOccurringV2DateGate(BaseApiTest):
         with override_options("snuba", {CO_OCCURRING_ATTRS_V2_OPTION: False}):
             assert self._storage_for_start(self.V2_START) == CO_OCCURRING_ATTRS_STORAGE_KEY
 
-    def test_gated_fallback_still_returns_attributes(self) -> None:
-        """Served by v1, so it must still return attributes rather than an empty result."""
-        req = _request(AttributeKey.Type.TYPE_STRING)
-        req.meta.start_timestamp.FromDatetime(self.V2_START - timedelta(days=30))
-        assert _queried_storage_key(req) == CO_OCCURRING_ATTRS_STORAGE_KEY
-        res = EndpointTraceItemAttributeNames().execute(req)
-        assert [attr.name for attr in res.attributes] == ["probe_str"]
-
 
 @pytest.mark.eap
 @pytest.mark.redis_db
@@ -487,44 +471,6 @@ class TestLastSeen(BaseApiTest):
         assert attributes
         for attribute in attributes:
             assert not attribute.HasField("last_seen")
-
-    @pytest.mark.parametrize("route_index", [0, 1], ids=["flag_off", "date_gate"])
-    def test_recency_ordering_degrades_to_count_on_v1(self, route_index: int) -> None:
-        """v1 has no last_seen, so a recency request falls back to frequency ordering rather
-        than failing, and stays detectable because last_seen is absent from the response.
-
-        Covers both ways a request lands on v1: the flag being off, and the date gate.
-        """
-        with override_options("snuba", ROUTES_TO_V1[route_index]):
-            attributes = self._run(
-                column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN
-            )
-        # No error, and the attributes still come back — in count order, which over this
-        # data is the exact reverse of the recency order that was asked for.
-        assert [a.name for a in attributes] == self.BY_COUNT_DESC
-        # Counts are populated; last_seen cannot be, so it stays unset.
-        assert all(a.HasField("count") for a in attributes)
-        assert all(not a.HasField("last_seen") for a in attributes)
-
-    @pytest.mark.parametrize("route_index", [0, 1], ids=["flag_off", "date_gate"])
-    def test_degraded_ordering_matches_a_real_count_ordering(self, route_index: int) -> None:
-        """Catches the ordering being derived inconsistently between the ClickHouse ORDER BY
-        and the Python re-sort, which would make the two drift apart."""
-        with override_options("snuba", ROUTES_TO_V1[route_index]):
-            degraded = self._run(
-                column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN
-            )
-            by_count = self._run(column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT)
-        assert [a.name for a in degraded] == [a.name for a in by_count]
-        assert [a.count for a in degraded] == [a.count for a in by_count]
-
-    def test_other_orderings_still_work_on_v1(self) -> None:
-        """Only recency ordering degrades."""
-        with override_options("snuba", {CO_OCCURRING_ATTRS_V2_OPTION: False}):
-            by_count = self._run(column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT)
-            assert [a.name for a in by_count] == self.BY_COUNT_DESC
-            # v1 cannot report last_seen, so it must be left unset rather than zeroed.
-            assert all(not a.HasField("last_seen") for a in by_count)
 
     def test_recency_ordering_is_honoured_on_v2(self) -> None:
         """Guard against the degrade firing when it should not."""
