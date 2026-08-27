@@ -13,7 +13,11 @@ from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
-from snuba.protos.common import ATTRIBUTES_TO_COALESCE
+from snuba.protos.common import (
+    ATTRIBUTES_TO_COALESCE,
+    PROTO_ARRAY_TYPE_TO_COLUMN,
+    PROTO_TYPE_TO_ATTRIBUTE_COLUMN,
+)
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import combine_or_conditions
@@ -50,29 +54,22 @@ def _map_key_names_for_existence_check(request_key: AttributeKey) -> list[str]:
     return names
 
 
-# Attribute value types this endpoint can enumerate, mapped to the ClickHouse
-# attribute map they live in. `value_data` carries each value as a typed
-# AttributeValue; the deprecated `values` field only carries strings, so it is
-# populated for the types with a well-defined string form (see _execute).
-_ATTRIBUTE_TYPE_TO_COLUMN: dict["AttributeKey.Type.ValueType", str] = {
-    AttributeKey.TYPE_STRING: "attributes_string",
-    AttributeKey.TYPE_BOOLEAN: "attributes_bool",
-    AttributeKey.TYPE_ARRAY_STRING: "attributes_array_string",
-}
-
-
 def _build_conditions(request: TraceItemAttributeValuesRequest) -> Expression:
     attribute_key = attribute_key_to_expression(request.key)
 
-    try:
-        attributes_column = _ATTRIBUTE_TYPE_TO_COLUMN[request.key.type]
-    except KeyError as e:
+    # Allows for all scalar/typed array types (doesn't include TYPE_ARRAY)
+    attributes_column = PROTO_TYPE_TO_ATTRIBUTE_COLUMN.get(
+        request.key.type
+    ) or PROTO_ARRAY_TYPE_TO_COLUMN.get(request.key.type)
+    if attributes_column is None:
         raise BadSnubaRPCRequestException(
-            "Only string, boolean and array-of-string attributes can be used"
-        ) from e
+            f"{AttributeKey.Type.Name(request.key.type)} attributes cannot be used; "
+            "use a typed array type (e.g. TYPE_ARRAY_STRING)"
+        )
 
     # Key existence via map_key_exists (has(mapKeys(col), key)); routed to the
-    # right bucket for the bucketed string/float maps and the un-bucketed bool map.
+    # right bucket for the bucketed string/float maps and left as-is for the
+    # un-bucketed bool and array maps.
     key_existence = combine_or_conditions(
         [
             map_key_exists(column(attributes_column), name)
@@ -120,10 +117,10 @@ def _build_query(
     ) GROUP BY attr_value ORDER BY count() DESC, attr_value ASC LIMIT 1000
 
 
-    This query will match the first 10000 occurrences of an attribute value and then deduplicate them,
-    this gives a large speedup to the query at the cost of ordering and paginating all values.
-    `count()` and `last_seen` are therefore aggregates over that sample, not over every
-    matching item.
+    This query will match the 10000 most recent occurrences of an attribute value and then
+    deduplicate them, this gives a large speedup to the query at the cost of ordering and
+    paginating all values. `count()` and `last_seen` are therefore aggregates over that
+    sample, not over every matching item.
     """
     if request.limit > 10000:
         raise BadSnubaRPCRequestException("Limit can be at most 10000")
@@ -157,8 +154,8 @@ def _build_query(
     add_existence_check_to_map_attribute_reads(inner_query)
     # Under SORT_SEMVER, tiebreak equally-frequent values by the semver key
     # instead of lexicographically (count() stays the primary ordering). Only
-    # string values: semver_sort_key uses string functions, so boolean keys
-    # (also enumerable here) keep plain ordering, like the table resolver's guard.
+    # string values: semver_sort_key uses string functions, so every other type
+    # enumerable here keeps plain ordering, like the table resolver's guard.
     if (
         request.order_by.sort == TraceItemAttributeValuesRequest.OrderBy.SORT_SEMVER
         and request.key.type == AttributeKey.TYPE_STRING

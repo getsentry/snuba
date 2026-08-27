@@ -396,11 +396,47 @@ class TestTraceItemAttributes(BaseApiTest):
         with pytest.raises(BadSnubaRPCRequestException):
             AttributeValuesRequest().execute(message)
 
-    def test_unsupported_attribute_type_rejected(self, setup_teardown: Any) -> None:
+    def _write_numeric_values(self) -> None:
+        # Written per-test (not in the shared fixture) so the extra items don't
+        # perturb the count-based assertions in other tests. 1.5 is written twice
+        # so the numeric path exercises a count > 1.
+        items_storage = get_writable_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            items_storage,
+            [
+                gen_item_message(
+                    start_timestamp=BASE_TIME,
+                    attributes={"custom_measurement": AnyValue(double_value=v)},
+                )
+                for v in (1.5, 1.5, 2.5)
+            ],
+        )
+
+    def test_numeric_values(self, setup_teardown: Any) -> None:
+        # Any type the storage holds can be enumerated: numeric keys come back as a
+        # typed val_double in value_data.
+        self._write_numeric_values()
         message = TraceItemAttributeValuesRequest(
             meta=COMMON_META,
             limit=5,
-            key=AttributeKey(name="sentry.duration_ms", type=AttributeKey.TYPE_DOUBLE),
+            key=AttributeKey(name="custom_measurement", type=AttributeKey.TYPE_DOUBLE),
+        )
+        response = AttributeValuesRequest().execute(message)
+        assert [(datum.value, datum.count) for datum in response.value_data] == [
+            (AttributeValue(val_double=1.5), 2),
+            (AttributeValue(val_double=2.5), 1),
+        ]
+        # The deprecated string-only fields carry nothing for non-string/bool keys.
+        assert response.values == []
+        assert response.counts == []
+
+    def test_untyped_array_rejected(self, setup_teardown: Any) -> None:
+        # The deprecated untyped TYPE_ARRAY has no element type, so there is no single
+        # attribute map column to enumerate; element-typed array keys are supported.
+        message = TraceItemAttributeValuesRequest(
+            meta=COMMON_META,
+            limit=5,
+            key=AttributeKey(name="sentry.array_str", type=AttributeKey.TYPE_ARRAY),
         )
         with pytest.raises(BadSnubaRPCRequestException):
             AttributeValuesRequest().execute(message)
