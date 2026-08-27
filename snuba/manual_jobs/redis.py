@@ -8,14 +8,11 @@ from snuba.utils.serializable_exception import SerializableException
 
 _redis_client = get_redis_client(RedisClientKey.MANUAL_JOBS)
 
-# One run of a job may hold the lock for this long
 MANUAL_JOB_LOCK_TTL_SECONDS = 24 * 60 * 60
 
-# How long the record of a job run stays in Redis -
-# past 90 days the rows a job touched have aged out anyway.
+# Past 90 days the rows a job touches have aged out anyway
 MANUAL_JOB_STATE_TTL_SECONDS = 90 * 24 * 60 * 60
 
-# Longest log the runner keeps for one job
 MANUAL_JOB_LOG_MAX_LINES = 500
 
 
