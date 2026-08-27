@@ -41,6 +41,10 @@ from snuba.web.db_query import (
     db_query,
     execute_query,
 )
+from tests.query.allocation_policies.attachment import (
+    match_block,
+    override_allocation_policy,
+)
 
 test_data = [
     pytest.param(
@@ -499,39 +503,35 @@ def test_db_record_bytes_scanned() -> None:
 @pytest.mark.events_db
 @pytest.mark.redis_db
 def test_db_query_success() -> None:
-    query, storage, _ = _build_test_query("count(distinct(project_id))")
-    # Use a unique tenant so leftover Redis quota from other tests does not affect
-    # this assertion. BytesScannedRejectingPolicy keys by (org|project, referrer).
-    attribution_info = AttributionInfo(
-        app_id=AppID(key="key"),
-        tenant_ids={
-            "referrer": "test_db_query_success",
-            "organization_id": 987654321,
-        },
-        referrer="test_db_query_success",
-        team=None,
-        feature=None,
-        parent_api=None,
-    )
+    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
 
     query_metadata_list: list[ClickhouseQueryMetadata] = []
     stats: dict[str, Any] = {}
 
-    result = db_query(
-        clickhouse_query=query,
-        query_settings=HTTPQuerySettings(),
-        attribution_info=attribution_info,
-        dataset_name="events",
-        query_metadata_list=query_metadata_list,
-        formatted_query=format_query(query),
-        reader=storage.get_cluster().get_reader(),
-        timer=Timer("foo"),
-        stats=stats,
-        trace_id="trace_id",
-        robust=False,
-    )
+    with override_allocation_policy(
+        {
+            "errors_ro": match_block(
+                [
+                    {"name": "PassthroughPolicy", "is_enforced": 0},
+                ]
+            )
+        }
+    ):
+        result = db_query(
+            clickhouse_query=query,
+            query_settings=HTTPQuerySettings(),
+            attribution_info=attribution_info,
+            dataset_name="events",
+            query_metadata_list=query_metadata_list,
+            formatted_query=format_query(query),
+            reader=storage.get_cluster().get_reader(),
+            timer=Timer("foo"),
+            stats=stats,
+            trace_id="trace_id",
+            robust=False,
+        )
 
-    assert stats["quota_allowance"] == {
+    expected_quota_allowance = {
         "summary": {
             "threads_used": 10,
             "is_successful": True,
@@ -543,42 +543,24 @@ def test_db_query_success() -> None:
             "throttled_by": {},
         },
         "details": {
-            "BytesScannedRejectingPolicy": {
+            "PassthroughPolicy": {
                 "can_run": True,
                 "max_threads": 10,
                 "max_bytes_to_read": 0,
                 "explanation": {
-                    "reason": "within_limit",
                     "storage_key": "errors_ro",
                 },
                 "is_throttled": False,
-                "throttle_threshold": 1706666666666,
-                "rejection_threshold": 2560000000000,
-                # probe requests 1e12 against the org limit (2.56e12), so used is limit-probe
-                "quota_used": 1560000000000,
-                "quota_unit": "bytes",
-                "suggestion": "no_suggestion",
-            },
-            "ReferrerGuardRailPolicy": {
-                "can_run": True,
-                "max_threads": 10,
-                "max_bytes_to_read": 0,
-                "explanation": {
-                    "reason": "within limit",
-                    "policy": "referrer_guard_rail_policy",
-                    "referrer": "test_db_query_success",
-                    "storage_key": "errors_ro",
-                },
-                "is_throttled": False,
-                "throttle_threshold": 66,
-                "rejection_threshold": 100,
-                "quota_used": 1,
-                "quota_unit": "concurrent_queries",
-                "suggestion": "no_suggestion",
+                "throttle_threshold": MAX_THRESHOLD,
+                "rejection_threshold": MAX_THRESHOLD,
+                "quota_used": 0,
+                "quota_unit": NO_UNITS,
+                "suggestion": NO_SUGGESTION,
             },
         },
     }
 
+    assert stats["quota_allowance"] == expected_quota_allowance
     assert len(query_metadata_list) == 1
     assert result.extra["stats"] == stats
     assert result.extra["sql"] is not None
