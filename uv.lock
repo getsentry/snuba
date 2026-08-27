@@ -1344,7 +1344,7 @@ requires-dist = [
     { name = "sentry-usage-accountant", specifier = ">=0.0.11" },
     { name = "simplejson", specifier = ">=3.17.6" },
     { name = "snuba-sdk", specifier = ">=3.0.39" },
-    { name = "sql-metadata", specifier = ">=2.11.0" },
+    { name = "sql-metadata", specifier = ">=3.0.1" },
     { name = "sqlparse", specifier = ">=0.6.0" },
     { name = "structlog", specifier = ">=22.3.0" },
     { name = "structlog-sentry", specifier = ">=2.0.0" },
