@@ -109,13 +109,13 @@ def _build_query(
         AND project_id = 1 AND organization_id=1 AND item_type=1
         AND less(timestamp, toDateTime(1741910400))
         AND greaterOrEquals(timestamp, toDateTime(1741651200))
-        ORDER BY attr_value
+        ORDER BY organization_id DESC, project_id DESC, item_type DESC, timestamp DESC
         LIMIT 10000
     ) ORDER BY attr_value LIMIT 1000
 
 
-    This query will match the first 10000 occurrences of an attribute value and then deduplicate them,
-    this gives a large speedup to the query at the cost of ordering and paginating all values
+    This query samples the 10000 most recent matching items and then deduplicates them,
+    which gives a large speedup at the cost of ordering and paginating all values.
     """
     if request.limit > 10000:
         raise BadSnubaRPCRequestException("Limit can be at most 10000")
@@ -132,6 +132,12 @@ def _build_query(
         from_clause=entity,
         selected_columns=[SelectedExpression(name=attr_value.alias, expression=attr_value)],
         condition=_build_conditions(request),
+        # Order newest-first. ClickHouse reads in sort-key order when the ORDER BY is a
+        # prefix of the table's sort key (optimize_read_in_order=1 is the default)
+        order_by=[
+            OrderBy(direction=OrderByDirection.DESC, expression=column(col))
+            for col in ("organization_id", "project_id", "item_type", "timestamp")
+        ],
         offset=0,
         limit=10000,
     )
