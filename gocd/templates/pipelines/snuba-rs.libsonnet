@@ -136,7 +136,7 @@ local deploy_canary_stage(region) =
 function(region) {
   environment_variables: {
     SENTRY_REGION: region,
-    // Required for checkruns.
+    // Required for checkruns2.
     GITHUB_APP_ID: '{{SECRET:[devinfra-github][app_id]}}',
     GITHUB_APP_PRIVATE_KEY: '{{SECRET:[devinfra-github][private_key]}}',
     GOCD_ACCESS_TOKEN: '{{SECRET:[devinfra][gocd_access_token]}}',
