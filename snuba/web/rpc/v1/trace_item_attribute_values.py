@@ -93,32 +93,6 @@ def _build_conditions(request: TraceItemAttributeValuesRequest) -> Expression:
     return base_conditions_and(request.meta, *conditions)
 
 
-def _build_inner_order_by(
-    request: TraceItemAttributeValuesRequest,
-) -> list[OrderBy] | None:
-    """Order the inner query newest-first, but only when it's free.
-
-    ClickHouse reads in sort-key order when the ORDER BY is a prefix of the table's sort
-    key -- (organization_id, project_id, item_type, timestamp, ...) here -- so ordering by
-    that prefix costs nothing: the 10000-row sample is the most recent matching data
-    instead of whatever ClickHouse reads first (sort-key order, i.e. the oldest rows in the
-    range). ClickHouse infers a prefix from equality conditions, but `project_id IN (...)`
-    doesn't count even for a single project, so the columns are named explicitly.
-
-    That only holds when each leading column is pinned to one value. With several projects
-    (or an unset item type) they outrank timestamp, so the sample would be the newest rows
-    of the highest project/type rather than the newest overall -- and ordering by timestamp
-    alone would fall back to sorting the whole matching range. Neither is worth it, so
-    those requests get no ORDER BY and take whatever the sample scan returns.
-    """
-    if len(request.meta.project_ids) != 1 or not request.meta.trace_item_type:
-        return None
-    return [
-        OrderBy(direction=OrderByDirection.DESC, expression=column(col))
-        for col in ("organization_id", "project_id", "item_type", "timestamp")
-    ]
-
-
 def _build_query(
     request: TraceItemAttributeValuesRequest,
 ) -> CompositeQuery[LogicalDataSource]:
@@ -135,15 +109,13 @@ def _build_query(
         AND project_id = 1 AND organization_id=1 AND item_type=1
         AND less(timestamp, toDateTime(1741910400))
         AND greaterOrEquals(timestamp, toDateTime(1741651200))
-        -- only for a single project with a set item type; see _build_inner_order_by
         ORDER BY organization_id DESC, project_id DESC, item_type DESC, timestamp DESC
         LIMIT 10000
     ) ORDER BY attr_value LIMIT 1000
 
 
-    This query samples 10000 matching items and then deduplicates them, which gives a large
-    speedup at the cost of ordering and paginating all values. The sample is the 10000 most
-    recent items when the inner ORDER BY above applies, and an arbitrary 10000 otherwise.
+    This query samples the 10000 most recent matching items and then deduplicates them,
+    which gives a large speedup at the cost of ordering and paginating all values.
     """
     if request.limit > 10000:
         raise BadSnubaRPCRequestException("Limit can be at most 10000")
@@ -160,7 +132,12 @@ def _build_query(
         from_clause=entity,
         selected_columns=[SelectedExpression(name=attr_value.alias, expression=attr_value)],
         condition=_build_conditions(request),
-        order_by=_build_inner_order_by(request),
+        # Order newest-first. ClickHouse reads in sort-key order when the ORDER BY is a
+        # prefix of the table's sort key (optimize_read_in_order=1 is the default)
+        order_by=[
+            OrderBy(direction=OrderByDirection.DESC, expression=column(col))
+            for col in ("organization_id", "project_id", "item_type", "timestamp")
+        ],
         offset=0,
         limit=10000,
     )
