@@ -8,6 +8,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
     TraceItemAttributeNamesRequest,
 )
 
+from snuba import settings
 from snuba.state.sentry_options import get_option
 from snuba.web.rpc.common.common import prev_monday
 from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs.base import (
@@ -50,6 +51,8 @@ def _v2_covers_request_window(request: TraceItemAttributeNamesRequest) -> bool:
 
 def for_request(request: TraceItemAttributeNamesRequest) -> CoOccurringAttrsSource:
     """The source a request should read, falling back to v1 outside v2's data window."""
+    if settings.CO_OCCURRING_ATTRS_EXCLUSIVE_V2:
+        return V2
     if not get_option(CO_OCCURRING_ATTRS_V2_OPTION, False):
         return V1
     return V2 if _v2_covers_request_window(request) else V1

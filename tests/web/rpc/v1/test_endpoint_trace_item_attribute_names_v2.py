@@ -21,6 +21,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue
 
+from snuba import settings
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
@@ -154,6 +155,11 @@ def _queried_storage_key(request: TraceItemAttributeNamesRequest) -> StorageKey:
     return from_clause.key
 
 
+@pytest.fixture
+def honor_rollout_options(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "CO_OCCURRING_ATTRS_EXCLUSIVE_V2", False)
+
+
 def _names_and_types(
     attr_type: AttributeKey.Type.ValueType, *, order_by_count: bool = False
 ) -> list[tuple[str, str]]:
@@ -172,7 +178,7 @@ class TestTraceItemAttributeNamesV2(BaseApiTest):
             == CO_OCCURRING_ATTRS_V2_STORAGE_KEY
         )
 
-    def test_reads_v1_storage_when_disabled(self) -> None:
+    def test_reads_v1_storage_when_disabled(self, honor_rollout_options: None) -> None:
         """The option is a rollback switch: turning it off restores the v1 read."""
         with override_options("snuba", {CO_OCCURRING_ATTRS_V2_OPTION: False}):
             assert (
@@ -279,6 +285,7 @@ class TestTraceItemAttributeNamesV2(BaseApiTest):
 
 @pytest.mark.eap
 @pytest.mark.redis_db
+@pytest.mark.usefixtures("honor_rollout_options")
 class TestCoOccurringV2DateGate(BaseApiTest):
     """A request reaching back before v2's materialized view existed must read v1, or the
     attributes that only existed in the earlier part of its range vanish.
@@ -481,7 +488,9 @@ class TestLastSeen(BaseApiTest):
         assert all(a.HasField("last_seen") for a in by_recency)
 
     @pytest.mark.parametrize("route_index", [0, 1], ids=["flag_off", "date_gate"])
-    def test_degrade_is_recorded_as_a_metric(self, route_index: int) -> None:
+    def test_degrade_is_recorded_as_a_metric(
+        self, route_index: int, honor_rollout_options: None
+    ) -> None:
         """Invisible to the caller, so it has to be visible to us during the rollout."""
         with override_options("snuba", ROUTES_TO_V1[route_index]):
             self._run(column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN)
