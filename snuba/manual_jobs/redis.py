@@ -8,6 +8,13 @@ from snuba.utils.serializable_exception import SerializableException
 
 _redis_client = get_redis_client(RedisClientKey.MANUAL_JOBS)
 
+MANUAL_JOB_LOCK_TTL_SECONDS = 24 * 60 * 60
+
+# Past 90 days the rows a job touches have aged out anyway
+MANUAL_JOB_STATE_TTL_SECONDS = 90 * 24 * 60 * 60
+
+MANUAL_JOB_LOG_MAX_LINES = 500
+
 
 def _build_job_lock_key(job_id: str) -> str:
     return f"snuba:manual_jobs:{job_id}:lock"
@@ -31,12 +38,20 @@ def _build_job_type_key(job_id: str) -> str:
 
 def _acquire_job_lock(job_id: str) -> bool:
     return bool(
-        _redis_client.set(name=_build_job_lock_key(job_id), value=1, nx=True, ex=(24 * 60 * 60))
+        _redis_client.set(
+            name=_build_job_lock_key(job_id), value=1, nx=True, ex=MANUAL_JOB_LOCK_TTL_SECONDS
+        )
     )
 
 
 def _push_job_log_line(job_id: str, line: str) -> bool:
-    return bool(_redis_client.rpush(_build_job_log_key(job_id), line))
+    key = _build_job_log_key(job_id)
+    with _redis_client.pipeline(transaction=False) as pipeline:
+        pipeline.rpush(key, line)
+        pipeline.ltrim(key, -MANUAL_JOB_LOG_MAX_LINES, -1)
+        pipeline.expire(key, MANUAL_JOB_STATE_TTL_SECONDS)
+        results = pipeline.execute()
+    return bool(results[0])
 
 
 def _release_job_lock(job_id: str) -> None:
@@ -44,17 +59,27 @@ def _release_job_lock(job_id: str) -> None:
 
 
 def _record_start_time(job_id: str) -> None:
-    _redis_client.set(name=_build_start_time_key(job_id), value=datetime.utcnow().isoformat())
+    _redis_client.set(
+        name=_build_start_time_key(job_id),
+        value=datetime.utcnow().isoformat(),
+        ex=MANUAL_JOB_STATE_TTL_SECONDS,
+    )
 
 
 def _set_job_status(job_id: str, status: JobStatus) -> JobStatus:
-    if not _redis_client.set(name=_build_job_status_key(job_id), value=status.value):
+    if not _redis_client.set(
+        name=_build_job_status_key(job_id), value=status.value, ex=MANUAL_JOB_STATE_TTL_SECONDS
+    ):
         raise SerializableException(f"Failed to set job status {status} on {job_id}")
+    # Keep the job type alive at least as long as the status
+    _redis_client.expire(_build_job_type_key(job_id), MANUAL_JOB_STATE_TTL_SECONDS)
     return status
 
 
 def _set_job_type(job_id: str, job_type: str) -> None:
-    _redis_client.set(name=_build_job_type_key(job_id), value=job_type)
+    _redis_client.set(
+        name=_build_job_type_key(job_id), value=job_type, ex=MANUAL_JOB_STATE_TTL_SECONDS
+    )
 
 
 def _get_job_type(job_id: str) -> str:
