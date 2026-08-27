@@ -35,6 +35,8 @@ SUGGESTION = "scan less concurrent queries"
 
 
 class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
+    required_tenant_types: frozenset[str] = frozenset({"referrer"})
+
     """A case-by-case allocation policy for cross-org queries. All referrers affected by this policy have to be registered
     in this class's configuration through the `cross_org_referrer_limits` parameter. Example:
 
@@ -43,9 +45,7 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
           args:
             required_tenant_types:
               - referrer
-            default_config_overrides:
-              is_enforced: 0
-              is_active: 0
+            is_enforced: 0
             cross_org_referrer_limits:
               dynamic_sampling.counters.get_org_transaction_volumes:
                 max_threads: 4
@@ -94,14 +94,10 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
     def __init__(
         self,
         storage_key: ResourceIdentifier,
-        required_tenant_types: list[str],
-        default_config_overrides: dict[str, Any],
-        **kwargs: str,
+        **kwargs: Any,
     ) -> None:
         super().__init__(
             storage_key,
-            required_tenant_types,
-            default_config_overrides,
             **kwargs,
         )
         self._registered_cross_org_referrers = cast(

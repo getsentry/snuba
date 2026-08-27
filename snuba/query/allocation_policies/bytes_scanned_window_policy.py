@@ -83,6 +83,8 @@ SUGGESTION = "The feature, organization/project is scanning too many bytes, this
 
 
 class BytesScannedWindowAllocationPolicy(AllocationPolicy):
+    required_tenant_types: frozenset[str] = frozenset({"organization_id", "referrer"})
+
     WINDOW_SECONDS = 10 * 60
     WINDOW_GRANULARITY_SECONDS = 60
 

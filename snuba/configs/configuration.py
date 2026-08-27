@@ -1,5 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any, TypedDict, TypeVar, cast, final
 
@@ -332,7 +333,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
         pass
 
     def _get_overridden_additional_config_defaults(
-        self, default_config_overrides: dict[str, Any]
+        self, default_config_overrides: Mapping[str, Any]
     ) -> list[Configuration]:
         """overrides the defaults specified for the config in code with the default specified
         to the instance of the configurable component

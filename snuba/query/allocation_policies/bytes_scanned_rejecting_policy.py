@@ -48,6 +48,8 @@ SUGGESTION = "The feature, organization/project is scanning too many bytes, this
 
 
 class BytesScannedRejectingPolicy(AllocationPolicy):
+    required_tenant_types: frozenset[str] = frozenset({"organization_id", "project_id", "referrer"})
+
     """For every query that comes in, keep track of the amount of bytes scanned for every
         (project_id|organization_id, referrer)
     combination in the last 10 minutes (sliding window). If a specific combination scans too

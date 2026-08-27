@@ -130,6 +130,8 @@ class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
 
 
 class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
+    required_tenant_types: frozenset[str] = frozenset({"organization_id", "project_id", "referrer"})
+
     def _additional_config_definitions(self) -> list[Configuration]:
         return super()._additional_config_definitions() + [
             Configuration(

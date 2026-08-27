@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, cast
@@ -19,13 +20,13 @@ from snuba.configs.configuration import (
     logger,
 )
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.state.sentry_options import get_mapped_option
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.registered_class import import_submodules_in_directory
+from snuba.utils.registered_class import InvalidConfigKeyError, import_submodules_in_directory
 from snuba.utils.sentry import SENTRY_OP
 from snuba.utils.serializable_exception import JsonSerializable, SerializableException
 from snuba.web import QueryResult
 
-IS_ACTIVE = "is_active"
 IS_ENFORCED = "is_enforced"
 MAX_THREADS = "max_threads"
 NO_UNITS = "no_units"
@@ -172,7 +173,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
 
         >>>    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
         >>>         # Define policy specific config definitions, these will be used along
-        >>>         # with the default definitions of the base class. (is_enforced, is_active)
+        >>>         # with the default definitions of the base class. (is_enforced)
         >>>         pass
 
         >>>     # Use your configs in the following methods
@@ -197,7 +198,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
     To use it:
 
         >>> policy = MyAllocationPolicy(
-        >>>     StorageKey("mystorage"), required_tenant_types=["organization_id", "referrer"]
+        >>>     StorageKey("mystorage"),
         >>> )
         >>> allowance = policy.get_quota_allowance({"organization_id": 1234, "referrer": "myreferrer"}, query_id="deadbeef")
         >>> result = run_db_query(allowance)
@@ -222,16 +223,12 @@ class AllocationPolicy(ConfigurableComponent, ABC):
     Any configuration definition that exists in your sub class' `_additional_config_definitions()` will appear in the
     Capacity Management Snuba Admin UI for the policy. From there you can modify the live values to alter how your policy works.
 
-    The base class comes with 2 built in configs which are accessible as properties of the class itself:
-    - is_active
-        - Use this as a way to skip the policy entirely
+    The base class comes with a built in config accessible as a property of the class itself:
     - is_enforced
-        - Use this to throttle/reject queries OR just log stuff (assuming policy is active)
+        - Use this to throttle/reject queries OR just log stuff. A configured policy is always active.
 
     Eg.
 
-    >>> if not self.is_active:
-    >>>     return
     >>> metrics.increment("something")
     >>> if self.is_enforced:
     >>>     # throttle query
@@ -308,12 +305,9 @@ class AllocationPolicy(ConfigurableComponent, ABC):
 
         >>> policy = MyAllocationPolicy(
         >>>     storage_key=StorageKey("some_storage"),
-        >>>     required_tenant_types=["foo"],
-        >>>     # This dictionary overrides whatever defaults are set
-        >>>     # for this class
-        >>>     default_config_overrides={
-        >>>         "is_enforced": False, "fart_noise_level": 100
-        >>>     }
+        >>>     # kwargs override whatever defaults are set for this class
+        >>>     is_enforced=False,
+        >>>     fart_noise_level=100,
         >>> )
 
 
@@ -337,45 +331,36 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         See `_build_config_key()` for more info.
     """
 
+    required_tenant_types: frozenset[str] = frozenset()
+
     def __init__(
         self,
         storage_key: ResourceIdentifier,
-        required_tenant_types: list[str],
-        default_config_overrides: dict[str, Any],
-        **kwargs: str,
+        **kwargs: Any,
     ) -> None:
-        self._required_tenant_types = set(required_tenant_types)
         self._resource_identifier = storage_key
         self._default_config_definitions = [
-            AllocationPolicyConfig(
-                name=IS_ACTIVE,
-                description="Toggles whether or not this policy is active. If active, policy code will be excecuted. If inactive, the policy code will not run and the query will pass through.",
-                value_type=int,
-                default=default_config_overrides.get(IS_ACTIVE, 1),
-            ),
             AllocationPolicyConfig(
                 name=IS_ENFORCED,
                 description="Toggles whether or not this policy is enforced. If enforced, policy will be able to throttle/reject incoming queries. If not enforced, this policy will not throttle/reject queries if policy is triggered, but all the policy code will still run.",
                 value_type=int,
-                default=default_config_overrides.get(IS_ENFORCED, 1),
+                default=kwargs.get(IS_ENFORCED, 1),
             ),
             AllocationPolicyConfig(
                 name=MAX_THREADS,
                 description="The max threads Clickhouse can use for the query.",
                 value_type=int,
-                default=default_config_overrides.get(MAX_THREADS, 10),
+                default=kwargs.get(MAX_THREADS, 10),
             ),
         ]
         self._overridden_additional_config_definitions = (
-            self._get_overridden_additional_config_defaults(default_config_overrides)
+            self._get_overridden_additional_config_defaults(kwargs)
         )
 
     @classmethod
     def create_minimal_instance(cls, resource_identifier: str) -> ConfigurableComponent:
         return cls(
             storage_key=ResourceIdentifier(resource_identifier),
-            required_tenant_types=[],
-            default_config_overrides={},
         )
 
     @property
@@ -389,10 +374,6 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                 "policy_class": self.__class__.__name__,
             },
         )
-
-    @property
-    def is_active(self) -> bool:
-        return bool(self.get_config_value(IS_ACTIVE)) and settings.ALLOCATION_POLICY_ENABLED
 
     @property
     def is_enforced(self) -> bool:
@@ -411,27 +392,20 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         return (
             bool(self.__class__ == other.__class__)
             and self._resource_identifier == other._resource_identifier
-            and self._required_tenant_types == other._required_tenant_types
         )
 
     def is_cross_org_query(self, tenant_ids: dict[str, str | int]) -> bool:
         return bool(tenant_ids.get("cross_org_query", False))
 
     @classmethod
-    def from_kwargs(cls, **kwargs: str) -> AllocationPolicy:
-        required_tenant_types = kwargs.pop("required_tenant_types", None)
-        storage_key = kwargs.pop("storage_key", None)
-        default_config_overrides: dict[str, Any] = cast(
-            "dict[str, Any]", kwargs.pop("default_config_overrides", {})
-        )
-        assert isinstance(required_tenant_types, list), (
-            "required_tenant_types must be a list of strings"
-        )
-        assert isinstance(storage_key, str)
+    def from_kwargs(
+        cls,
+        *,
+        storage_key: str,
+        **kwargs: Any,
+    ) -> AllocationPolicy:
         return cls(
-            required_tenant_types=required_tenant_types,
             storage_key=ResourceIdentifier(StorageKey(storage_key)),
-            default_config_overrides=default_config_overrides,
             **kwargs,
         )
 
@@ -451,20 +425,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
             for t, tid in tenant_ids.items():
                 span.set_attribute(f"tenant_ids.{t}", str(tid))
             try:
-                if not self.is_active:
-                    allowance = QuotaAllowance(
-                        can_run=True,
-                        max_threads=self.max_threads,
-                        explanation={},
-                        is_throttled=False,
-                        throttle_threshold=MAX_THRESHOLD,
-                        rejection_threshold=MAX_THRESHOLD,
-                        quota_used=0,
-                        quota_unit=NO_UNITS,
-                        suggestion=NO_SUGGESTION,
-                    )
-                else:
-                    allowance = self._get_quota_allowance(tenant_ids, query_id)
+                allowance = self._get_quota_allowance(tenant_ids, query_id)
             except InvalidTenantsForAllocationPolicy as e:
                 allowance = QuotaAllowance(
                     can_run=False,
@@ -545,8 +506,6 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         result_or_error: QueryResultOrError,
     ) -> None:
         try:
-            if not self.is_active:
-                return None
             return self._update_quota_balance(tenant_ids, query_id, result_or_error)
         except InvalidTenantsForAllocationPolicy:
             # the policy did not do anything because the tenants were invalid, updating is also not necessary
@@ -586,6 +545,8 @@ class AllocationPolicy(ConfigurableComponent, ABC):
 
 
 class PassthroughPolicy(AllocationPolicy):
+    required_tenant_types: frozenset[str] = frozenset()
+
     def _additional_config_definitions(self) -> list[Configuration]:
         return []
 
@@ -613,11 +574,78 @@ class PassthroughPolicy(AllocationPolicy):
         pass
 
 
-DEFAULT_PASSTHROUGH_POLICY = PassthroughPolicy(
-    ResourceIdentifier(StorageKey("default.no_storage_key")),
-    required_tenant_types=[],
-    default_config_overrides={},
-)
+ALLOCATION_POLICY_KEY = "allocation_policies"
+
+
+def _default_passthough_policy(storage_key: str = "default.no_storage_key") -> AllocationPolicy:
+    return PassthroughPolicy(
+        ResourceIdentifier(StorageKey(storage_key)),
+    )
+
+
+DEFAULT_PASSTHROUGH_POLICY = _default_passthough_policy()
+
+
+def get_active_allocation_policies(
+    resource_identifier: ResourceIdentifier,
+) -> list[AllocationPolicy]:
+    """Build the AllocationPolicy list configured for ``resource_identifier``.
+
+    Reads the ``allocation_policies`` sentry-option (keyed by ResourceIdentifier
+    value). Each resource is a list of match blocks; this reader uses the first
+    block's ``policies`` list (``match`` is ignored). An absent or empty entry
+    falls back to a PassthroughPolicy for that resource. Tenant types live on
+    the policy class, not the option. Per-policy settings on the item
+    (is_enforced, concurrent_limit, …) are passed as constructor kwargs.
+    """
+    policies: list[AllocationPolicy] = []
+    blocks: list[Mapping[str, Any]] = get_mapped_option(
+        ALLOCATION_POLICY_KEY, resource_identifier.value, []
+    )
+    first = blocks[0] if blocks else {}
+    specs: list[Any] = first.get("policies", []) if isinstance(first, dict) else []
+    if not isinstance(specs, list):
+        logger.warning(
+            "Ignoring allocation_policy block without policies list for %s: %r",
+            resource_identifier.value,
+            first,
+        )
+        specs = []
+
+    for spec in specs:
+        if not isinstance(spec, dict):
+            logger.warning(
+                "Ignoring malformed allocation_policy entry for %s: %r",
+                resource_identifier.value,
+                spec,
+            )
+            continue
+
+        name = spec.get("name", None)
+        if not isinstance(name, str):
+            logger.warning(
+                "Ignoring allocation_policy entry without name for %s: %r",
+                resource_identifier.value,
+                spec,
+            )
+            continue
+
+        try:
+            policies.append(
+                AllocationPolicy.get_from_name(name).from_kwargs(
+                    storage_key=resource_identifier.value,
+                    **spec,
+                )
+            )
+        except InvalidConfigKeyError:
+            logger.warning(
+                "Unknown allocation policy %s for %s",
+                name,
+                resource_identifier.value,
+            )
+
+    return policies or [_default_passthough_policy(resource_identifier.value)]
+
 
 import_submodules_in_directory(
     os.path.dirname(os.path.realpath(__file__)), "snuba.query.allocation_policies"
