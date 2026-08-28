@@ -50,6 +50,6 @@ def _v2_covers_request_window(request: TraceItemAttributeNamesRequest) -> bool:
 
 def for_request(request: TraceItemAttributeNamesRequest) -> CoOccurringAttrsSource:
     """The source a request should read, falling back to v1 outside v2's data window."""
-    if not get_option(CO_OCCURRING_ATTRS_V2_OPTION, False):
-        return V1
-    return V2 if _v2_covers_request_window(request) else V1
+    if get_option(CO_OCCURRING_ATTRS_V2_OPTION, True) and _v2_covers_request_window(request):
+        return V2
+    return V1
