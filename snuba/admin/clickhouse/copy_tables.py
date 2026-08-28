@@ -72,7 +72,7 @@ def target_host_is_allowlisted(host: str, port: int) -> bool:
 
     A hostname-only entry matches any port. A host:port entry must match both.
     """
-    allowed = get_option(COPY_TABLES_ALLOWED_TARGET_HOSTS_OPTION, cast(list[str], []))
+    allowed = cast("list[str]", get_option(COPY_TABLES_ALLOWED_TARGET_HOSTS_OPTION, []))
     if not isinstance(allowed, list):
         return False
     host_key = host.lower()
