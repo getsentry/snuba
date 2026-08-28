@@ -10,7 +10,6 @@ from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
-from snuba import settings
 from snuba.web.rpc.v1.resolvers.R_eap_items import co_occurring_attrs
 from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs import V1, V2
 from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs.selection import (
@@ -33,13 +32,11 @@ def _request(
     return req
 
 
-@pytest.fixture(autouse=True)
-def honor_rollout_options(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "CO_OCCURRING_ATTRS_EXCLUSIVE_V2", False)
-
-
 @pytest.mark.redis_db
 class TestForRequest:
+    def test_default_inside_window_reads_v2(self) -> None:
+        assert co_occurring_attrs.for_request(_request(V2_START)) is V2
+
     def test_flag_off_reads_v1(self) -> None:
         with override_options("snuba", {CO_OCCURRING_ATTRS_V2_OPTION: False}):
             assert co_occurring_attrs.for_request(_request(V2_START)) is V1
@@ -90,16 +87,3 @@ class TestForRequest:
         Monday, so a mid-week cutoff would admit requests that read a v1-only bucket."""
         assert V2_START.weekday() == 0
         assert (V2_START.hour, V2_START.minute, V2_START.second) == (0, 0, 0)
-
-
-@pytest.mark.redis_db
-class TestExclusiveV2:
-    def test_flag_off_still_reads_v2(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(settings, "CO_OCCURRING_ATTRS_EXCLUSIVE_V2", True)
-        with override_options("snuba", {CO_OCCURRING_ATTRS_V2_OPTION: False}):
-            assert co_occurring_attrs.for_request(_request(V2_START)) is V2
-
-    def test_old_window_still_reads_v2(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(settings, "CO_OCCURRING_ATTRS_EXCLUSIVE_V2", True)
-        with override_options("snuba", {CO_OCCURRING_ATTRS_V2_OPTION: True}):
-            assert co_occurring_attrs.for_request(_request(V2_START - timedelta(days=365))) is V2

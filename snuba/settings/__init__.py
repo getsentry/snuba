@@ -23,12 +23,6 @@ LOG_FORMAT = "%(asctime)s %(message)s"
 TESTING = False
 DEBUG = True
 
-# Test/CI snuba has no automator option values and, after the v1 co-occurring
-# MV drop, no live v1 writes. Force TraceItemAttributeNames onto v2 so Sentry
-# tests (which talk to SNUBA_SETTINGS=docker) and Snuba tests see new attributes.
-# Production leaves this False and uses the rollout flag + date gate.
-CO_OCCURRING_ATTRS_EXCLUSIVE_V2 = False
-
 HOST = "0.0.0.0"
 PORT = 1218
 
