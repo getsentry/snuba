@@ -4,15 +4,18 @@ from unittest.mock import MagicMock, patch
 import pytest
 from sentry_options.testing import override_options
 
-from snuba.admin.clickhouse.common import _get_storage, get_clusterless_node_connection
+from snuba.admin.clickhouse.common import (
+    ADMIN_ALLOWED_HOSTS_OPTION,
+    _get_storage,
+    get_clusterless_node_connection,
+    host_is_allowlisted,
+    parse_host,
+)
 from snuba.admin.clickhouse.copy_tables import (
-    COPY_TABLES_ALLOWED_TARGET_HOSTS_OPTION,
     InvalidClusterName,
     TableStatement,
     copy_tables,
     get_create_table_statements,
-    parse_target_host,
-    target_host_is_allowlisted,
     validate_cluster_name,
     verify_tables_on_replicas,
 )
@@ -335,31 +338,31 @@ def test_validate_cluster_name_rejects_quote_breaking_names(cluster_name: str) -
         ("  host.example.com  ", ("host.example.com", 8123)),
     ],
 )
-def test_parse_target_host_accepts(raw: str, expected: tuple[str, int]) -> None:
-    assert parse_target_host(raw) == expected
+def test_parse_host_accepts(raw: str, expected: tuple[str, int]) -> None:
+    assert parse_host(raw) == expected
 
 
-def test_target_host_is_allowlisted_hostname_matches_any_port() -> None:
+def test_host_is_allowlisted_hostname_matches_any_port() -> None:
     with override_options(
         SNUBA_OPTIONS_NAMESPACE,
-        {COPY_TABLES_ALLOWED_TARGET_HOSTS_OPTION: ["snuba-outcomes-query-arm-1-1"]},
+        {ADMIN_ALLOWED_HOSTS_OPTION: ["snuba-outcomes-query-arm-1-1"]},
     ):
-        assert target_host_is_allowlisted("snuba-outcomes-query-arm-1-1", 8123)
-        assert target_host_is_allowlisted("SNUBA-outcomes-query-arm-1-1", 9000)
-        assert not target_host_is_allowlisted("other-host", 8123)
+        assert host_is_allowlisted("snuba-outcomes-query-arm-1-1", 8123)
+        assert host_is_allowlisted("SNUBA-outcomes-query-arm-1-1", 9000)
+        assert not host_is_allowlisted("other-host", 8123)
 
 
-def test_target_host_is_allowlisted_host_port_must_match() -> None:
+def test_host_is_allowlisted_host_port_must_match() -> None:
     with override_options(
         SNUBA_OPTIONS_NAMESPACE,
-        {COPY_TABLES_ALLOWED_TARGET_HOSTS_OPTION: ["snuba-outcomes-query-arm-1-1:9000"]},
+        {ADMIN_ALLOWED_HOSTS_OPTION: ["snuba-outcomes-query-arm-1-1:9000"]},
     ):
-        assert target_host_is_allowlisted("snuba-outcomes-query-arm-1-1", 9000)
-        assert not target_host_is_allowlisted("snuba-outcomes-query-arm-1-1", 8123)
+        assert host_is_allowlisted("snuba-outcomes-query-arm-1-1", 9000)
+        assert not host_is_allowlisted("snuba-outcomes-query-arm-1-1", 8123)
 
 
-def test_target_host_is_allowlisted_empty_by_default() -> None:
-    assert target_host_is_allowlisted("snuba-outcomes-query-arm-1-1", 8123) is False
+def test_host_is_allowlisted_empty_by_default() -> None:
+    assert host_is_allowlisted("snuba-outcomes-query-arm-1-1", 8123) is False
 
 
 def _copy_tables_cluster_mock() -> MagicMock:
@@ -377,7 +380,7 @@ def test_copy_tables_target_host_requires_allowlist() -> None:
     """A host outside the source cluster is rejected unless allowlisted."""
     with patch("snuba.admin.clickhouse.copy_tables._get_storage") as mock_storage:
         mock_storage.return_value.get_cluster.return_value = _copy_tables_cluster_mock()
-        with pytest.raises(ValueError, match=COPY_TABLES_ALLOWED_TARGET_HOSTS_OPTION):
+        with pytest.raises(ValueError, match=ADMIN_ALLOWED_HOSTS_OPTION):
             copy_tables(
                 source_host="snuba-outcomes-query-1-2",
                 storage_name="outcomes_raw",
@@ -395,7 +398,7 @@ def test_copy_tables_target_host_skips_cluster_membership() -> None:
     with (
         override_options(
             SNUBA_OPTIONS_NAMESPACE,
-            {COPY_TABLES_ALLOWED_TARGET_HOSTS_OPTION: ["snuba-outcomes-query-arm-1-1"]},
+            {ADMIN_ALLOWED_HOSTS_OPTION: ["snuba-outcomes-query-arm-1-1"]},
         ),
         patch("snuba.admin.clickhouse.copy_tables._get_storage") as mock_storage,
         patch(

@@ -767,7 +767,7 @@
         "type": "string"
       },
       "default": [],
-      "description": "Hostnames (or host:port) that snuba-admin Copy Tables may CREATE on even when the host is not a member of the source cluster. Used to bootstrap tables on newly provisioned nodes before they are added to Snuba cluster config. Empty (the default) allows no extra targets. Compared case-insensitively; a hostname with no port matches any port."
+      "description": "Hostnames (or host:port) that snuba-admin may connect to even when the host is not a member of the storage's cluster: Copy Tables CREATE targets and manual host entry in System Queries. Used to bootstrap and inspect newly provisioned nodes before they are added to Snuba cluster config. Empty (the default) allows no extra hosts. Compared case-insensitively; a hostname with no port matches any port."
     },
     "executor_queue_size_factor": {
       "type": "integer",

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Sequence
+from typing import cast
 
 from sql_metadata import Parser, QueryType
 
@@ -17,7 +18,16 @@ from snuba.clusters.cluster import (
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.state.sentry_options import get_option
 from snuba.utils.serializable_exception import SerializableException
+
+# Hosts an operator has provisioned but not yet added to Snuba cluster config.
+# Admin tools that let a human type a host (copy-tables CREATE targets, manual
+# host entry in system queries) accept these in place of a cluster-membership
+# check. The option is shared by those tools on purpose: it is the single list
+# of hosts an operator vouches for, and both paths send the same ClickHouse
+# credentials to whatever answers, so widening one widens the other anyway.
+ADMIN_ALLOWED_HOSTS_OPTION = "admin.copy_tables_allowed_target_hosts"
 
 
 class InvalidNodeError(SerializableException):
@@ -36,6 +46,34 @@ def _node_connect_port(node: ClickhouseNode, cluster: ClickhouseCluster) -> int:
     if node.host_name == cluster.get_query_node().host_name:
         return cluster.get_port()
     return node.port if node.port is not None else DEFAULT_CLICKHOUSE_HTTP_PORT
+
+
+def split_host_port(raw: str) -> tuple[str, int | None]:
+    value = raw.strip()
+    if ":" in value:
+        host, port_s = value.rsplit(":", 1)
+        if port_s.isdigit():
+            return host, int(port_s)
+    return value, None
+
+
+def parse_host(raw: str) -> tuple[str, int]:
+    """Split ``host`` or ``host:port``; default port is 8123."""
+    host, port = split_host_port(raw)
+    return host, port if port is not None else DEFAULT_CLICKHOUSE_HTTP_PORT
+
+
+def host_is_allowlisted(host: str, port: int) -> bool:
+    """Whether ``host``/``port`` is on ``ADMIN_ALLOWED_HOSTS_OPTION``.
+
+    Hostname-only entries match any port; host:port entries must match both.
+    """
+    host_key = host.lower()
+    for entry in cast("list[str]", get_option(ADMIN_ALLOWED_HOSTS_OPTION, [])):
+        entry_host, entry_port = split_host_port(str(entry))
+        if entry_host.lower() == host_key and (entry_port is None or entry_port == port):
+            return True
+    return False
 
 
 def is_valid_node(
@@ -148,7 +186,10 @@ def _build_validated_pool(
     # through here. The regression test
     # test_no_direct_clickhouse_pool_construction_in_admin enforces this.
     #
-    # validate_node=False is copy-tables CREATE on an allowlisted bootstrap host.
+    # validate_node=False is reserved for hosts an operator explicitly
+    # allowlisted via ADMIN_ALLOWED_HOSTS_OPTION (copy-tables CREATE targets and
+    # manual host entry in system queries). Callers must check the allowlist
+    # themselves before passing it.
     if validate_node:
         _validate_node(
             clickhouse_host, clickhouse_port, cluster, storage_name, known_nodes=known_nodes
@@ -340,6 +381,7 @@ def get_ro_clusterless_node_connection(
     clickhouse_port: int,
     storage_name: str,
     client_settings: ClickhouseClientSettings,
+    validate_node: bool = True,
 ) -> ClickhousePool:
     # Compare by name: same reload-safe rule as get_ro_node_connection.
     allowed = {
@@ -363,6 +405,7 @@ def get_ro_clusterless_node_connection(
         settings.CLICKHOUSE_READONLY_USER,
         settings.CLICKHOUSE_READONLY_PASSWORD,
         client_settings,
+        validate_node=validate_node,
     )
     return connection
 

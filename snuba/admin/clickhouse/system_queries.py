@@ -9,6 +9,7 @@ from snuba.admin.clickhouse.common import (
     get_ro_clusterless_node_connection,
     get_ro_node_connection,
     get_sudo_node_connection,
+    host_is_allowlisted,
 )
 from snuba.admin.user import AdminUser
 from snuba.clickhouse.error_codes import ErrorCodes
@@ -35,6 +36,22 @@ def _client_settings_for_storage(storage_name: str) -> ClickhouseClientSettings:
     return ClickhouseClientSettings.QUERY
 
 
+def _validate_clusterless_node(clickhouse_host: str, clickhouse_port: int) -> bool:
+    """Whether a manually entered host must be a member of the storage's cluster.
+
+    Hosts listed in ``admin.copy_tables_allowed_target_hosts`` are ones an
+    operator has provisioned but not yet added to Snuba's cluster config, so
+    topology discovery cannot see them; the allowlist is the vouching mechanism
+    in their place. Everything else still has to pass the membership check, so
+    an arbitrary host never receives ClickHouse credentials.
+
+    Skipping validation also means the port is used as typed rather than being
+    rewritten to the cluster's Envoy/HTTP port, which is what we want for a node
+    that is not behind the cluster's proxy yet.
+    """
+    return not host_is_allowlisted(clickhouse_host, clickhouse_port)
+
+
 def _run_sql_query_on_host(
     clickhouse_host: str,
     clickhouse_port: int,
@@ -53,13 +70,22 @@ def _run_sql_query_on_host(
         # cluster credentials; read-only clusterless queries use the global
         # readonly user so anonymous/low-privilege admin users cannot connect
         # to ClickHouse with admin credentials via this path.
+        validate_node = _validate_clusterless_node(clickhouse_host, clickhouse_port)
         clusterless_connection = (
             get_clusterless_node_connection(
-                clickhouse_host, clickhouse_port, storage_name, settings
+                clickhouse_host,
+                clickhouse_port,
+                storage_name,
+                settings,
+                validate_node=validate_node,
             )
             if sudo
             else get_ro_clusterless_node_connection(
-                clickhouse_host, clickhouse_port, storage_name, settings
+                clickhouse_host,
+                clickhouse_port,
+                storage_name,
+                settings,
+                validate_node=validate_node,
             )
         )
         if sudo and _is_command_statement(sql):
@@ -93,7 +119,13 @@ def _run_explain_on_host(
     """
     settings = _client_settings_for_storage(storage_name)
     connection = (
-        get_ro_clusterless_node_connection(clickhouse_host, clickhouse_port, storage_name, settings)
+        get_ro_clusterless_node_connection(
+            clickhouse_host,
+            clickhouse_port,
+            storage_name,
+            settings,
+            validate_node=_validate_clusterless_node(clickhouse_host, clickhouse_port),
+        )
         if clusterless_mode
         else get_ro_node_connection(clickhouse_host, clickhouse_port, storage_name, settings)
     )
