@@ -27,6 +27,7 @@ from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_dsl.accessors import get_time_range_estimate
 from snuba.clickhouse.query_profiler import generate_profile
 from snuba.configs.configuration import ResourceIdentifier
+from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
 from snuba.query import ProcessableQuery
@@ -76,6 +77,7 @@ from snuba.utils.serializable_exception import (
     SerializableExceptionDict,
 )
 from snuba.web import QueryException, QueryResult, constants
+from snuba.web.rpc.storage_routing.load_retriever import get_cluster_loadinfo
 
 metrics = MetricsWrapper(environment.metrics, "db_query")
 
@@ -878,15 +880,21 @@ def _apply_allocation_policies_quota(
     rejection_quota_and_policy = None
     throttle_quota_and_policy = None
     min_threads_across_policies = MAX_THRESHOLD
+    load_info = get_cluster_loadinfo(
+        get_storage(
+            StorageKey(allocation_policies[0].resource_identifier.value)
+        ).get_storage_set_key()
+    )
     with traces.start_span(
         name="_apply_allocation_policies_quota",
         attributes={SENTRY_OP: "allocation_policy"},
     ) as span:
         for allocation_policy in allocation_policies:
-            allowance = allocation_policy.get_quota_allowance(attribution_info.tenant_ids, query_id)
+            allowance = allocation_policy.get_quota_allowance(
+                attribution_info.tenant_ids, query_id, load_info
+            )
             can_run &= allowance.can_run
             quota_allowances[allocation_policy.class_name()] = allowance
-            # QuotaAllowance isn't a valid attribute value; serialize it.
             span.set_attribute(
                 "quota_allowance",
                 json.dumps(

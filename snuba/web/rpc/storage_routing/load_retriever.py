@@ -10,6 +10,7 @@ from snuba import environment
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.redis import RedisClientKey, get_redis_client
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(
@@ -38,6 +39,17 @@ class LoadInfo:
             cluster_load=load_info_dict["cluster_load"],
             concurrent_queries=int(load_info_dict["concurrent_queries"]),
         )
+
+    def is_idle(self) -> bool:
+        if self.cluster_load == -1.0 or self.concurrent_queries == -1:
+            return False
+        idle_load = self.cluster_load < get_option(
+            "storage_routing.idle_cluster_load_threshold", 0.0
+        )
+        idle_conc_queries = self.concurrent_queries < get_option(
+            "storage_routing.idle_concurrent_queries_threshold", 0
+        )
+        return idle_load and idle_conc_queries
 
 
 def cache(
@@ -78,8 +90,16 @@ def cache(
     return decorator
 
 
-@cache(ttl_secs=60)
 def get_cluster_loadinfo(
+    storage_set_key: StorageSetKey = StorageSetKey.EVENTS_ANALYTICS_PLATFORM,
+) -> LoadInfo | None:
+    if not get_option("storage_routing.enable_get_cluster_loadinfo", False):
+        return None
+    return _get_cluster_loadinfo(storage_set_key)
+
+
+@cache(ttl_secs=60)
+def _get_cluster_loadinfo(
     storage_set_key: StorageSetKey = StorageSetKey.EVENTS_ANALYTICS_PLATFORM,
 ) -> LoadInfo:
     try:
