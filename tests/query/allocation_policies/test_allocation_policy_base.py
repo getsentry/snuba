@@ -3,6 +3,7 @@ from __future__ import annotations
 from unittest import TestCase, mock
 
 import pytest
+from sentry_options.testing import override_options
 
 from snuba.configs.configuration import Configuration, InvalidConfig
 from snuba.datasets.storages.storage_key import StorageKey
@@ -446,6 +447,48 @@ def test_is_not_enforced() -> None:
     assert throttled_metrics[0].tags["policy_class"] == "ThrottleEverythingAllocationPolicy"
     assert throttled_metrics[0].tags["is_enforced"] == "True"
     assert throttled_metrics[1].tags["is_enforced"] == "False"
+
+
+@pytest.mark.redis_db
+def test_is_pardonable_overrides_can_run_when_idle() -> None:
+    from snuba.web.rpc.storage_routing.load_retriever import LoadInfo
+
+    reject_policy = RejectingEverythingAllocationPolicy(
+        StorageKey("some_storage"),
+        is_enforced=1,
+    )
+    tenant_ids: dict[str, int | str] = {
+        "organization_id": 123,
+        "referrer": "some_referrer",
+    }
+    idle = LoadInfo(cluster_load=1.0, concurrent_queries=1)
+    with override_options(
+        "snuba",
+        {
+            "storage_routing.idle_cluster_load_threshold": 10.0,
+            "storage_routing.idle_concurrent_queries_threshold": 5,
+        },
+    ):
+        assert reject_policy.get_quota_allowance(tenant_ids, "deadbeef").can_run is False
+        pardoned = reject_policy.get_quota_allowance(tenant_ids, "deadbeef", idle)
+        assert pardoned.can_run is True
+        assert pardoned.max_threads == MAX_THRESHOLD
+        assert pardoned.max_bytes_to_read == 0
+        assert pardoned.explanation["idle_pardon"] == {
+            "cluster_load": 1.0,
+            "concurrent_queries": 1,
+        }
+
+    pardoned_metrics = get_recorded_metric_calls(
+        "increment", "allocation_policy.db_request_pardoned"
+    )
+    assert pardoned_metrics is not None
+    assert len(pardoned_metrics) == 1
+    rejected_metrics = get_recorded_metric_calls(
+        "increment", "allocation_policy.db_request_rejected"
+    )
+    assert rejected_metrics is not None
+    assert len(rejected_metrics) == 1
 
 
 class TestComponentNameBackwardsCompatibility:
