@@ -4,7 +4,7 @@ import re
 from collections.abc import Callable, Sequence
 from typing import cast
 
-from sql_metadata import Parser, QueryType  # type: ignore[import-untyped]
+from sql_metadata import Parser, QueryType
 
 from snuba import settings
 from snuba.clickhouse.pool import ClickhousePool
