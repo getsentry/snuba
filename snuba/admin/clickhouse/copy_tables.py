@@ -7,6 +7,7 @@ from snuba.admin.clickhouse.common import (
     _get_storage,
     _node_connect_port,
     get_clusterless_node_connection,
+    get_unvalidated_node_connection,
 )
 from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.pool import ClickhousePool
@@ -35,6 +36,32 @@ def validate_cluster_name(cluster_name: str) -> str:
     return cluster_name
 
 
+def parse_target_host(raw: str) -> tuple[str, int]:
+    """Parse a free-form copy-tables target as ``host`` or ``host:port``.
+
+    Does not check cluster membership. Rejects URLs, whitespace, and path
+    separators so the value can be used as an HTTP host.
+    """
+    value = raw.strip()
+    if not value:
+        raise ValueError("target host must not be empty")
+    if any(ch.isspace() for ch in value) or "/" in value or "\\" in value:
+        raise ValueError("target host must be a hostname or host:port")
+    if "://" in value:
+        raise ValueError("target host must be a hostname or host:port, not a URL")
+
+    if ":" in value:
+        host, port_s = value.rsplit(":", 1)
+        if port_s.isdigit():
+            port = int(port_s)
+            if not 1 <= port <= 65535:
+                raise ValueError("target host port is out of range")
+            if not host:
+                raise ValueError("target host must not be empty")
+            return host, port
+    return value, DEFAULT_CLICKHOUSE_HTTP_PORT
+
+
 def _http_port_for_host(host: str, cluster: ClickhouseCluster) -> int:
     if host == cluster.get_query_node().host_name:
         return cluster.get_port()
@@ -53,6 +80,7 @@ class TableStatement:
 
 class CopyTablesResponse(TypedDict, total=False):
     source_host: str
+    target_host: str
     tables: str
     cluster_name: str
     dry_run: bool
@@ -172,6 +200,9 @@ def copy_tables(
     storage = _get_storage(storage_name)
     cluster = storage.get_cluster()
     database_name = cluster.get_database()
+    parsed_target: tuple[str, int] | None = None
+    if target_host:
+        parsed_target = parse_target_host(target_host)
     source_connection = get_clusterless_node_connection(
         source_host,
         _http_port_for_host(source_host, cluster),
@@ -207,14 +238,19 @@ def copy_tables(
         "cluster_name": cluster_name or "no cluster",
         "dry_run": dry_run,
     }
+    if parsed_target:
+        resp["target_host"] = parsed_target[0]
 
     if dry_run:
         return resp
 
-    if target_host:
-        target_connection = get_clusterless_node_connection(
-            target_host,
-            _http_port_for_host(target_host, cluster),
+    if parsed_target:
+        # CREATE target is not required to be in the source cluster. Source
+        # reads stay membership-checked; this connection uses source-cluster
+        # credentials against the typed-in host.
+        target_connection = get_unvalidated_node_connection(
+            parsed_target[0],
+            parsed_target[1],
             storage_name,
             client_settings=settings,
         )

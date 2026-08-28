@@ -1,12 +1,15 @@
 import os
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from snuba.admin.clickhouse.common import _get_storage, get_clusterless_node_connection
 from snuba.admin.clickhouse.copy_tables import (
     InvalidClusterName,
+    TableStatement,
     copy_tables,
     get_create_table_statements,
+    parse_target_host,
     validate_cluster_name,
     verify_tables_on_replicas,
 )
@@ -318,3 +321,76 @@ def test_validate_cluster_name_accepts_identifier_shape(cluster_name: str) -> No
 def test_validate_cluster_name_rejects_quote_breaking_names(cluster_name: str) -> None:
     with pytest.raises(InvalidClusterName):
         validate_cluster_name(cluster_name)
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("snuba-outcomes-query-arm-1-1", ("snuba-outcomes-query-arm-1-1", 8123)),
+        ("snuba-outcomes-query-arm-1-1:9000", ("snuba-outcomes-query-arm-1-1", 9000)),
+        ("  host.example.com  ", ("host.example.com", 8123)),
+    ],
+)
+def test_parse_target_host_accepts(raw: str, expected: tuple[str, int]) -> None:
+    assert parse_target_host(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ["", "   ", "http://evil.example", "host/path", "host port", "host:99999", ":8123"],
+)
+def test_parse_target_host_rejects(raw: str) -> None:
+    with pytest.raises(ValueError):
+        parse_target_host(raw)
+
+
+def test_copy_tables_target_host_skips_cluster_membership() -> None:
+    """CREATE runs on the typed-in host even when it is not in the source cluster."""
+    source_conn = MagicMock()
+    target_conn = MagicMock()
+    table_statement = TableStatement("t", "CREATE TABLE t", True)
+
+    with (
+        patch("snuba.admin.clickhouse.copy_tables._get_storage") as mock_storage,
+        patch(
+            "snuba.admin.clickhouse.copy_tables.get_clusterless_node_connection",
+            return_value=source_conn,
+        ),
+        patch(
+            "snuba.admin.clickhouse.copy_tables.get_unvalidated_node_connection",
+            return_value=target_conn,
+        ) as mock_unvalidated,
+        patch("snuba.admin.clickhouse.copy_tables.get_tables", return_value=["t"]),
+        patch(
+            "snuba.admin.clickhouse.copy_tables.get_create_table_statements",
+            return_value=[table_statement],
+        ),
+        patch(
+            "snuba.admin.clickhouse.copy_tables.verify_tables_on_replicas",
+            return_value=({}, 1),
+        ),
+    ):
+        cluster = MagicMock()
+        cluster.get_database.return_value = "default"
+        cluster.is_single_node.return_value = True
+        cluster.get_query_node.return_value.host_name = "snuba-outcomes-query-1-2"
+        cluster.get_port.return_value = 8123
+        cluster.get_local_nodes.return_value = []
+        cluster.get_distributed_nodes.return_value = []
+        mock_storage.return_value.get_cluster.return_value = cluster
+
+        result = copy_tables(
+            source_host="snuba-outcomes-query-1-2",
+            storage_name="outcomes_raw",
+            dry_run=False,
+            target_host="snuba-outcomes-query-arm-1-1",
+            skip_on_cluster=True,
+        )
+
+    mock_unvalidated.assert_called_once()
+    assert mock_unvalidated.call_args.args[0] == "snuba-outcomes-query-arm-1-1"
+    assert mock_unvalidated.call_args.args[1] == 8123
+    assert mock_unvalidated.call_args.args[2] == "outcomes_raw"
+    assert result["target_host"] == "snuba-outcomes-query-arm-1-1"
+    target_conn.command.assert_called_once_with("CREATE TABLE t")
+    source_conn.command.assert_not_called()
