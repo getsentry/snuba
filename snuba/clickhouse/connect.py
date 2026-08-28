@@ -48,6 +48,11 @@ metrics = MetricsWrapper(environment.metrics, "clickhouse.connect")
 DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS = 60 * 60  # 1h fallback when profile timeout is None
 DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
 _CLICKHOUSE_CONNECT_TRANSPORT_SETTINGS = {"X-ClickHouse-Format": "Native"}
+# Re-sent per request so they beat clickhouse-connect's 120s progress cap.
+_HTTP_PROGRESS_SETTINGS = (
+    "send_progress_in_http_headers",
+    "http_headers_progress_interval_ms",
+)
 
 clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
 clickhouse_connect_common.set_setting("use_protocol_version", True)
@@ -468,13 +473,28 @@ class ClickhouseConnectPool(ClickhousePool):
                 old.close()
         return client
 
+    def _merge_http_progress(self, settings: Mapping[str, Any] | None) -> dict[str, Any]:
+        """Re-send HTTP progress on the request so it beats the driver's 120s cap.
+
+        Constructor settings land in ``client.params``, but
+        ``HttpSyncBackend.request`` then overwrites
+        ``http_headers_progress_interval_ms`` with
+        ``min(120s, (send_receive_timeout - 5)s)``. Per-request settings win last.
+        """
+        merged: dict[str, Any] = dict(settings) if settings else {}
+        for key in _HTTP_PROGRESS_SETTINGS:
+            value = self.client_settings.get(key)
+            if value is not None and key not in merged:
+                merged[key] = value
+        return merged
+
     def _build_query_settings(
         self,
         settings: Mapping[str, Any] | None,
         query_id: str | None,
         capture_trace: bool,
     ) -> dict[str, Any] | None:
-        query_settings: dict[str, Any] = dict(settings) if settings else {}
+        query_settings = self._merge_http_progress(settings)
         if query_id is not None:
             query_settings["query_id"] = query_id
         if capture_trace:
@@ -580,7 +600,9 @@ class ClickhouseConnectPool(ClickhousePool):
         if capture_trace and not query_id:
             query_id = uuid.uuid4().hex
 
-        json_settings = _jsoncompact_settings(settings, query_id, capture_trace)
+        json_settings = _jsoncompact_settings(
+            self._merge_http_progress(settings), query_id, capture_trace
+        )
         query = _apply_client_query_limit(client, _strip_trailing_semicolons(query))
 
         with _query_span(query, query_id):
@@ -621,7 +643,9 @@ class ClickhouseConnectPool(ClickhousePool):
             client = self._new_client()
             # Same client-side id rule as _execute_jsoncompact for query_log.
             resolved_query_id = query_id or (uuid.uuid4().hex if capture_trace else None)
-            json_settings = _jsoncompact_settings(settings, resolved_query_id, capture_trace)
+            json_settings = _jsoncompact_settings(
+                self._merge_http_progress(settings), resolved_query_id, capture_trace
+            )
             sql = _strip_trailing_semicolons(query)
 
             with _query_span(sql, resolved_query_id):

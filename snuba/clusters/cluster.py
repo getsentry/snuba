@@ -62,17 +62,22 @@ class ClickhouseClientSettings(Enum):
             "mutations_sync": 2,
             "alter_sync": 2,  # Wait for ON CLUSTER DDL on all replicas
             "database_atomic_wait_for_drop_and_detach_synchronously": 1,
-            "distributed_ddl_task_timeout": 300,  # 5 minute ON CLUSTER DDL timeout
-            # Quiet ON CLUSTER DDL (DROP MV waiting on a hot-table lock) writes
-            # no bytes until it finishes. Pin a 15s header so http_send_timeout
-            # / idle do not IncompleteRead the HTTP body.
+            # Negative = wait for every host. A positive value is a wait-to-fail
+            # clock: CH throws after N seconds and continues the DDL async
+            # (INC-2103 used 300s; quiet DROP then IncompleteRead, SNUBA-C3Y).
+            "distributed_ddl_task_timeout": -1,
+            # Quiet ON CLUSTER / lock wait sends no body. Don't close HTTP
+            # before we hear the real result. Server default is 30s.
+            "http_send_timeout": 3600,
+            # Keep-alive for quiet DDL. Must also go out as per-request
+            # settings: clickhouse-connect overwrites constructor interval
+            # with min(120s, (timeout-5)s).
             "send_progress_in_http_headers": 1,
             "http_headers_progress_interval_ms": 15000,
         },
-        # 5 minute timeout to allow ON CLUSTER DDL operations to complete
-        # across all replicas. This is needed because alter_sync=2 blocks
-        # until all replicas confirm completion.
-        300000,
+        # seconds (urllib3 read). None → 1h fallback. Idle resets if progress
+        # headers arrive; http_send_timeout covers a quiet wait.
+        None,
     )
     DELETE = ClickhouseClientSettingsType({"mutations_sync": 1}, None)
     OPTIMIZE = ClickhouseClientSettingsType({}, settings.OPTIMIZE_QUERY_TIMEOUT)
