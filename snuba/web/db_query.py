@@ -31,6 +31,7 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
 from snuba.query import ProcessableQuery
 from snuba.query.allocation_policies import (
+    DEFAULT_PASSTHROUGH_POLICY,
     MAX_THRESHOLD,
     AllocationPolicy,
     AllocationPolicyViolations,
@@ -692,6 +693,11 @@ def db_query(
     """
 
     allocation_policies = _get_allocation_policies(clickhouse_query, attribution_info.tenant_ids)
+    resource_identifier = (
+        allocation_policies[0].resource_identifier
+        if allocation_policies
+        else DEFAULT_PASSTHROUGH_POLICY.resource_identifier
+    )
     query_id = uuid.uuid4().hex
     result = None
     error = None
@@ -764,7 +770,7 @@ def db_query(
             result_or_error,
             attribution_info,
             dataset_name,
-            allocation_policies[0].resource_identifier,
+            resource_identifier,
         )
         for allocation_policy in allocation_policies:
             allocation_policy.update_quota_balance(
