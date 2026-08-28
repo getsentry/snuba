@@ -62,7 +62,7 @@ class ClickhouseClientSettings(Enum):
             "mutations_sync": 2,
             "alter_sync": 2,  # Wait for ON CLUSTER DDL on all replicas
             "database_atomic_wait_for_drop_and_detach_synchronously": 1,
-            "distributed_ddl_task_timeout": 300,  # 5 minute ON CLUSTER DDL timeout
+            "distributed_ddl_task_timeout": 600,  # 10 minute ON CLUSTER DDL timeout
             # Quiet ON CLUSTER DDL (DROP MV waiting on a hot-table lock) writes
             # no bytes until it finishes. Pin a 15s header so http_send_timeout
             # / idle do not IncompleteRead the HTTP body.
