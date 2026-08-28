@@ -25,6 +25,7 @@ function QueryDisplay(props: {
   predefinedQueryOptions: Array<PredefinedQuery>;
 }) {
   const [nodeData, setNodeData] = useState<ClickhouseNodeData[]>([]);
+  const [manualHostInput, setManualHostInput] = useState<string>("");
   const [query, setQuery] = useState<QueryState>({
     storage: getParamFromStorage("storage"),
   });
@@ -75,12 +76,21 @@ function QueryDisplay(props: {
   }
 
   function selectHostIp(hostStringIP: string) {
+    // Manual entry accepts "host" or "host:port". The raw text is kept in its
+    // own state so a half-typed port ("host:9") is not clobbered by the split.
+    setManualHostInput(hostStringIP);
+
+    const trimmed = hostStringIP.trim();
+    const separator = trimmed.lastIndexOf(":");
+    const maybePort = separator === -1 ? "" : trimmed.slice(separator + 1);
+    // Without a port we default to ClickHouse HTTP, not the old native port.
+    const hasPort = /^\d+$/.test(maybePort);
+
     setQuery((prevQuery) => {
       return {
         ...prevQuery,
-        host: hostStringIP,
-        // Manual host entry defaults to ClickHouse HTTP, not the old native port.
-        port: 8123,
+        host: hasPort ? trimmed.slice(0, separator) : trimmed,
+        port: hasPort ? parseInt(maybePort, 10) : 8123,
       };
     });
   }
@@ -176,12 +186,16 @@ function QueryDisplay(props: {
               <input
                 style={inputStyle}
                 id="clusterless"
-                value={query.host || ""}
+                value={manualHostInput}
                 onChange={(evt) => selectHostIp(evt.target.value)}
                 name="host"
-                placeholder="enter host ip..."
+                placeholder="enter host or host:port..."
                 type="text"
               />
+              <p style={hostHelpTextStyle}>
+                Must be a known cluster node or listed in
+                admin.copy_tables_allowed_target_hosts. Defaults to port 8123.
+              </p>
             </div>) : (
               <div style={hostSelectStyle}>
                 <CustomSelect
@@ -260,7 +274,7 @@ const switchStyle = {
 
 const hostSelectStyle = {
   width: '20em',
-  height: '4em',
+  minHeight: '4em',
   margin: '8px 0px',
   display: 'flex',
   flexDirection: 'column' as const,
@@ -271,6 +285,12 @@ const hostSelectStyle = {
 const inputStyle = {
   fontSize: 16,
   minHeight: '2.25rem',
+}
+
+const hostHelpTextStyle = {
+  fontSize: '0.85em',
+  marginTop: 4,
+  marginBottom: 0,
 }
 
 const executeActionsStyle = {
