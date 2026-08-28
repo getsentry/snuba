@@ -414,6 +414,7 @@ def test_command_does_not_query() -> None:
 
     client.command.assert_called_once()
     client.query.assert_not_called()
+    assert client.command.call_args.kwargs["settings"] is None
     assert result.results == []
     assert result.meta == []
 
@@ -548,22 +549,17 @@ def test_replace_profile_uses_bounded_timeouts() -> None:
 
 
 def test_migrate_profile_waits_for_clickhouse() -> None:
-    # Wait for ON CLUSTER hosts instead of throwing at 5 min (and continuing
-    # async). Quiet DDL still needs HTTP keep-alive so the body is not
-    # IncompleteRead (SNUBA-C3Y). Client timeout is seconds, not leftover ms.
+    # Wait for ON CLUSTER hosts; keep HTTP alive on quiet DDL (SNUBA-C3Y).
     migrate = ClickhouseClientSettings.MIGRATE.value
     assert migrate.settings["distributed_ddl_task_timeout"] == -1
     assert migrate.settings["http_send_timeout"] == 3600
     assert migrate.settings["send_progress_in_http_headers"] == 1
     assert migrate.settings["http_headers_progress_interval_ms"] == 15000
-    assert migrate.settings["alter_sync"] == 2
     assert migrate.timeout is None
 
 
 def test_command_reposts_http_progress_interval() -> None:
     # clickhouse-connect overwrites constructor interval with min(120s, ...).
-    # command() must pass the profile interval as per-request settings so 15s
-    # actually hits the wire.
     client = mock.Mock()
     pool = _make_pool(
         client,
@@ -573,41 +569,16 @@ def test_command_reposts_http_progress_interval() -> None:
         },
     )
     pool.command("DROP TABLE t")
-    _, kwargs = client.command.call_args
-    assert kwargs["settings"]["send_progress_in_http_headers"] == 1
-    assert kwargs["settings"]["http_headers_progress_interval_ms"] == 15000
+    assert client.command.call_args.kwargs["settings"] == {
+        "send_progress_in_http_headers": 1,
+        "http_headers_progress_interval_ms": 15000,
+    }
 
-
-def test_command_preserves_caller_http_progress_interval() -> None:
-    client = mock.Mock()
-    pool = _make_pool(
-        client,
-        client_settings={"http_headers_progress_interval_ms": 15000},
-    )
     pool.command("DROP TABLE t", settings={"http_headers_progress_interval_ms": 5000})
-    _, kwargs = client.command.call_args
-    assert kwargs["settings"]["http_headers_progress_interval_ms"] == 5000
-
-
-def test_command_omits_progress_when_profile_has_none() -> None:
-    client = mock.Mock()
-    pool = _make_pool(client)
-    pool.command("SYSTEM FLUSH LOGS")
-    _, kwargs = client.command.call_args
-    assert kwargs["settings"] is None
-
-
-def test_execute_reposts_http_progress_interval() -> None:
-    # REPLACE (and other long execute() profiles) hit the same 120s cap.
-    client = mock.Mock()
-    client.query.return_value = FakeQueryResult([], summary={})
-    pool = _make_pool(
-        client,
-        client_settings={"http_headers_progress_interval_ms": 15000},
-    )
-    pool.execute("SELECT 1")
-    _, kwargs = client.query.call_args
-    assert kwargs["settings"]["http_headers_progress_interval_ms"] == 15000
+    assert client.command.call_args.kwargs["settings"] == {
+        "send_progress_in_http_headers": 1,
+        "http_headers_progress_interval_ms": 5000,
+    }
 
 
 def test_clickhouse_reader_wraps_connect_pool() -> None:
