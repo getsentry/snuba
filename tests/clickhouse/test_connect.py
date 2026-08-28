@@ -547,6 +547,15 @@ def test_replace_profile_uses_bounded_timeouts() -> None:
     assert replace.timeout == snuba_settings.REPLACER_QUERY_TIMEOUT + 60
 
 
+def test_migrate_profile_sends_http_progress() -> None:
+    # Quiet ON CLUSTER DDL can sit on a lock with no HTTP bytes until it
+    # finishes. Progress headers keep http_send_timeout / idle from cutting
+    # the chunked body (IncompleteRead).
+    migrate = ClickhouseClientSettings.MIGRATE.value
+    assert migrate.settings["send_progress_in_http_headers"] == 1
+    assert migrate.settings["http_headers_progress_interval_ms"] == 15000
+
+
 def test_clickhouse_reader_wraps_connect_pool() -> None:
     # The single driver-agnostic ClickhouseReader wraps the abstract pool, so it
     # works with the connect pool.
