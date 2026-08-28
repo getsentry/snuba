@@ -346,12 +346,8 @@ def test_clusterless_rejects_unvalidated_host(
         )
 
 
-def test_unvalidated_node_connection_skips_membership_check() -> None:
-    """
-    Copy-tables CREATE targets may not be in the source cluster yet.
-    get_unvalidated_node_connection must still acquire a pool without
-    calling _validate_node.
-    """
+def test_clusterless_validate_node_false_skips_membership_check() -> None:
+    """Allowlisted copy-tables CREATE targets skip _validate_node."""
     from snuba.admin.clickhouse import common
 
     with (
@@ -363,11 +359,12 @@ def test_unvalidated_node_connection_skips_membership_check() -> None:
         patch.object(common, "build_pool") as mock_pool,
     ):
         mock_pool.return_value = MagicMock()
-        common.get_unvalidated_node_connection(
+        common.get_clusterless_node_connection(
             "snuba-outcomes-query-arm-1-1",
             8123,
             "errors",
             ClickhouseClientSettings.INTERNAL,
+            validate_node=False,
         )
 
         mock_validate.assert_not_called()

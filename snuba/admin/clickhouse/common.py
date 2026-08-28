@@ -148,10 +148,7 @@ def _build_validated_pool(
     # through here. The regression test
     # test_no_direct_clickhouse_pool_construction_in_admin enforces this.
     #
-    # `validate_node=False` is only for copy-tables CREATE against a host on
-    # admin.copy_tables_allowed_target_hosts that is not in the source cluster
-    # topology. That path is also sudo-gated at the view layer. Every other
-    # helper must leave the default on.
+    # validate_node=False is copy-tables CREATE on an allowlisted bootstrap host.
     if validate_node:
         _validate_node(
             clickhouse_host, clickhouse_port, cluster, storage_name, known_nodes=known_nodes
@@ -318,41 +315,12 @@ def get_clusterless_node_connection(
     clickhouse_port: int,
     storage_name: str,
     client_settings: ClickhouseClientSettings,
+    validate_node: bool = True,
 ) -> ClickhousePool:
     storage = _get_storage(storage_name)
     cluster = storage.get_cluster()
     database = cluster.get_database()
 
-    (clickhouse_user, clickhouse_password) = cluster.get_credentials()
-    connection = _build_validated_pool(
-        clickhouse_host,
-        clickhouse_port,
-        storage_name,
-        cluster,
-        database,
-        clickhouse_user,
-        clickhouse_password,
-        client_settings,
-    )
-    return connection
-
-
-def get_unvalidated_node_connection(
-    clickhouse_host: str,
-    clickhouse_port: int,
-    storage_name: str,
-    client_settings: ClickhouseClientSettings,
-) -> ClickhousePool:
-    """Connect using this storage's credentials without cluster membership checks.
-
-    Copy-tables uses this for the CREATE target when the host is on
-    ``admin.copy_tables_allowed_target_hosts`` but not (yet) in the source
-    cluster topology. Credentials still come from the source storage's cluster.
-    Callers must already be sudo-gated and must have checked the allowlist.
-    """
-    storage = _get_storage(storage_name)
-    cluster = storage.get_cluster()
-    database = cluster.get_database()
     (clickhouse_user, clickhouse_password) = cluster.get_credentials()
     return _build_validated_pool(
         clickhouse_host,
@@ -363,7 +331,7 @@ def get_unvalidated_node_connection(
         clickhouse_user,
         clickhouse_password,
         client_settings,
-        validate_node=False,
+        validate_node=validate_node,
     )
 
 

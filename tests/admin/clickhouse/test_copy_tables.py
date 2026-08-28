@@ -400,12 +400,8 @@ def test_copy_tables_target_host_skips_cluster_membership() -> None:
         patch("snuba.admin.clickhouse.copy_tables._get_storage") as mock_storage,
         patch(
             "snuba.admin.clickhouse.copy_tables.get_clusterless_node_connection",
-            return_value=source_conn,
-        ),
-        patch(
-            "snuba.admin.clickhouse.copy_tables.get_unvalidated_node_connection",
-            return_value=target_conn,
-        ) as mock_unvalidated,
+            side_effect=[source_conn, target_conn],
+        ) as mock_connect,
         patch("snuba.admin.clickhouse.copy_tables.get_tables", return_value=["t"]),
         patch(
             "snuba.admin.clickhouse.copy_tables.get_create_table_statements",
@@ -426,10 +422,11 @@ def test_copy_tables_target_host_skips_cluster_membership() -> None:
             skip_on_cluster=True,
         )
 
-    mock_unvalidated.assert_called_once()
-    assert mock_unvalidated.call_args.args[0] == "snuba-outcomes-query-arm-1-1"
-    assert mock_unvalidated.call_args.args[1] == 8123
-    assert mock_unvalidated.call_args.args[2] == "outcomes_raw"
+    assert mock_connect.call_count == 2
+    target_call = mock_connect.call_args_list[1]
+    assert target_call.args[0] == "snuba-outcomes-query-arm-1-1"
+    assert target_call.args[1] == 8123
+    assert target_call.kwargs["validate_node"] is False
     assert result["target_host"] == "snuba-outcomes-query-arm-1-1"
     target_conn.command.assert_called_once_with("CREATE TABLE t")
     source_conn.command.assert_not_called()
