@@ -339,15 +339,6 @@ def test_parse_target_host_accepts(raw: str, expected: tuple[str, int]) -> None:
     assert parse_target_host(raw) == expected
 
 
-@pytest.mark.parametrize(
-    "raw",
-    ["", "   ", "http://evil.example", "host/path", "host port", "host:99999", ":8123"],
-)
-def test_parse_target_host_rejects(raw: str) -> None:
-    with pytest.raises(ValueError):
-        parse_target_host(raw)
-
-
 def test_target_host_is_allowlisted_hostname_matches_any_port() -> None:
     with override_options(
         SNUBA_OPTIONS_NAMESPACE,

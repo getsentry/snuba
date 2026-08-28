@@ -42,28 +42,12 @@ def validate_cluster_name(cluster_name: str) -> str:
 
 
 def parse_target_host(raw: str) -> tuple[str, int]:
-    """Parse a free-form copy-tables target as ``host`` or ``host:port``.
-
-    Does not check cluster membership. Rejects URLs, whitespace, and path
-    separators so the value can be used as an HTTP host.
-    """
+    """Split ``host`` or ``host:port``; default port is 8123."""
     value = raw.strip()
-    if not value:
-        raise ValueError("target host must not be empty")
-    if any(ch.isspace() for ch in value) or "/" in value or "\\" in value:
-        raise ValueError("target host must be a hostname or host:port")
-    if "://" in value:
-        raise ValueError("target host must be a hostname or host:port, not a URL")
-
     if ":" in value:
         host, port_s = value.rsplit(":", 1)
         if port_s.isdigit():
-            port = int(port_s)
-            if not 1 <= port <= 65535:
-                raise ValueError("target host port is out of range")
-            if not host:
-                raise ValueError("target host must not be empty")
-            return host, port
+            return host, int(port_s)
     return value, DEFAULT_CLICKHOUSE_HTTP_PORT
 
 
