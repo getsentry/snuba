@@ -23,8 +23,8 @@ jobs:
       id: fast-revert-bot-token
       uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
       with:
-        client-id: ${{ vars.GETSENTRY_FAST_REVERT_BOT_CLIENT_ID }}
-        private-key: ${{ secrets.GETSENTRY_FAST_REVERT_BOT_PRIVATE_KEY }}
+        client-id: ${{ secrets.FAST_REVERT_BOT_APP_ID }}
+        private-key: ${{ secrets.GH_FAST_REVERT_PRIVATE_KEY }}
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         token: ${{ steps.fast-revert-bot-token.outputs.token }}
