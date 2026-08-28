@@ -23,6 +23,7 @@ from snuba.web.rpc.v1.endpoint_trace_item_attribute_names import (
     get_co_occurring_attributes,
 )
 from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs import (
+    CO_OCCURRING_ATTRS_V2_OPTION,
     CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION,
 )
 from tests.base import BaseApiTest
@@ -79,8 +80,17 @@ def setup_teardown(eap: None, redis_db: None) -> None:
 
 @pytest.fixture(autouse=True)
 def co_occurring_storage() -> Generator[None]:
-    """Pin the v2 start timestamp so the date gate cannot send requests to v1."""
-    with override_options("snuba", {CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION: 0}):
+    """Read v2. Schema default is false and snuba tests initialize sentry-options,
+    so the flag must be set here. Timestamp is pinned so the date gate cannot
+    send requests to v1.
+    """
+    with override_options(
+        "snuba",
+        {
+            CO_OCCURRING_ATTRS_V2_OPTION: True,
+            CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION: 0,
+        },
+    ):
         yield
 
 
