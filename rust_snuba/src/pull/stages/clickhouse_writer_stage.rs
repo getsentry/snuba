@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Instant;
 
 use chrono::Utc;
@@ -14,14 +15,12 @@ use crate::pull::writer::ClickHouseWriter;
 /// commit log offsets, COGS data, and write stats for downstream
 /// handlers. Row bytes are freed after the write.
 pub struct ClickHouseWriterStage {
-    writer: Box<dyn ClickHouseWriter>,
+    writer: Arc<dyn ClickHouseWriter>,
 }
 
 impl ClickHouseWriterStage {
-    pub fn new(writer: impl ClickHouseWriter + 'static) -> Self {
-        Self {
-            writer: Box::new(writer),
-        }
+    pub fn new(writer: Arc<dyn ClickHouseWriter>) -> Self {
+        Self { writer }
     }
 }
 

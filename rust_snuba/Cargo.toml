@@ -104,3 +104,6 @@ tikv-jemallocator = "0.5"
 [[bench]]
 name = "processors"
 harness = false
+
+[patch."https://github.com/getsentry/arroyo"]
+sentry_arroyo = { path = "/Users/ryanbroughan/code/arroyo" }

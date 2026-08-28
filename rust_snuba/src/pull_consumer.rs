@@ -1,8 +1,11 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use pyo3::prelude::*;
 use sentry_arroyo::backends::kafka::config::KafkaConfig;
 use sentry_arroyo::backends::kafka::producer::KafkaProducer;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::backends::Producer;
 use sentry_arroyo::metrics;
 use sentry_arroyo::processing::stream::{
     BatchStage, DlqHandler, KafkaSource, OffsetTracker, Pipeline, PipelineExit, PipelineExt,
@@ -13,6 +16,7 @@ use sentry_arroyo::types::{Topic, TopicOrPartition};
 use crate::config::{self, BatchSizeCalculation, ProcessorConfig, TopicConfig};
 use crate::logging::{setup_logging, setup_sentry};
 use crate::metrics::statsd::create_dogstatsd_backend;
+use crate::processors::eap_items::EAPItemRow;
 use crate::processors::{get_cogs_label, get_processing_function, ProcessingFunctionType};
 use crate::pull::batch::batch_metadata::BatchMetadata;
 use crate::pull::batch::buffer::PipelineBatchBuffer;
@@ -24,7 +28,7 @@ use crate::pull::stages::clickhouse_writer_stage::ClickHouseWriterStage;
 use crate::pull::stages::cogs_stage::CogsStage;
 use crate::pull::stages::commit_log_stage::CommitLogStage;
 use crate::pull::stages::processor_stage::ProcessorStage;
-use crate::pull::writer::DryRunWriter;
+use crate::pull::writer::{ClickHouseWriter, DryRunWriter};
 use crate::strategies::clickhouse::writer_v2::{ClickhouseClient, InsertFormat};
 
 /// Allowed processors for the fire-and-forget pipeline.
@@ -41,7 +45,108 @@ const FIRE_AND_FORGET_PROCESSORS: &[&str] = &[
 /// Allowed processors for the EAP pipeline.
 const EAP_PROCESSORS: &[&str] = &["EAPItemsProcessor"];
 
-// ── Atomic factories ───────────────────────────────────────
+// ── Shared resources ──────────────────────────────────────
+
+struct SharedResources {
+    dlq_producer: Arc<dyn Producer<KafkaPayload>>,
+    commit_log_producer: Arc<dyn Producer<KafkaPayload>>,
+    cogs_producer: Arc<dyn Producer<KafkaPayload>>,
+    ch_writer: Arc<dyn ClickHouseWriter>,
+}
+
+fn make_shared_resources(
+    consumer_config: &config::ConsumerConfig,
+    storage: &config::StorageConfig,
+    processor_config: &ProcessorConfig,
+    use_row_binary: bool,
+    dry_run: bool,
+    dry_run_latency: Option<Duration>,
+) -> SharedResources {
+    SharedResources {
+        dlq_producer: Arc::from(make_dlq_producer(consumer_config, dry_run)),
+        commit_log_producer: Arc::from(make_commit_log_producer(consumer_config, dry_run)),
+        cogs_producer: Arc::from(make_cogs_producer(consumer_config, dry_run)),
+        ch_writer: Arc::from(make_ch_writer(
+            storage,
+            processor_config,
+            use_row_binary,
+            dry_run_latency,
+        )),
+    }
+}
+
+// ── Producer factories ────────────────────
+
+fn make_kafka_producer(topic_config: &TopicConfig) -> KafkaProducer {
+    KafkaProducer::new(KafkaConfig::new_producer_config(
+        vec![],
+        Some(topic_config.broker_config.clone()),
+    ))
+}
+
+fn make_dlq_producer(
+    consumer_config: &config::ConsumerConfig,
+    dry_run: bool,
+) -> Box<dyn Producer<KafkaPayload>> {
+    match consumer_config.dlq_topic.as_ref() {
+        Some(tc) if !dry_run => Box::new(make_kafka_producer(tc)),
+        _ => Box::new(DryRunProducer),
+    }
+}
+
+fn make_commit_log_producer(
+    consumer_config: &config::ConsumerConfig,
+    dry_run: bool,
+) -> Box<dyn Producer<KafkaPayload>> {
+    match consumer_config.commit_log_topic.as_ref() {
+        Some(tc) if !dry_run => Box::new(make_kafka_producer(tc)),
+        _ => Box::new(DryRunProducer),
+    }
+}
+
+fn make_cogs_producer(
+    consumer_config: &config::ConsumerConfig,
+    dry_run: bool,
+) -> Box<dyn Producer<KafkaPayload>> {
+    if !dry_run && consumer_config.env.record_cogs {
+        Box::new(make_kafka_producer(&consumer_config.accountant_topic))
+    } else {
+        Box::new(DryRunProducer)
+    }
+}
+
+fn make_ch_writer(
+    storage: &config::StorageConfig,
+    processor_config: &ProcessorConfig,
+    use_row_binary: bool,
+    dry_run_latency: Option<Duration>,
+) -> Box<dyn ClickHouseWriter> {
+    if let Some(latency) = dry_run_latency {
+        return Box::new(DryRunWriter::new(latency));
+    }
+
+    if use_row_binary {
+        Box::new(ClickhouseClient::new(
+            &storage.clickhouse_cluster,
+            &storage.clickhouse_table_name,
+            storage.name.clone(),
+            InsertFormat::RowBinary,
+            Some(EAPItemRow::column_names(
+                processor_config.eap_items_emit_received_at,
+            )),
+        ))
+    } else {
+        Box::new(ClickhouseClient::new(
+            &storage.clickhouse_cluster,
+            &storage.clickhouse_table_name,
+            storage.name.clone(),
+            InsertFormat::JsonEachRow,
+            None,
+        ))
+    }
+}
+
+// ── Stage factories ───────────────────────────────────────
 
 fn resolve_processor(
     processor_name: &str,
@@ -87,82 +192,57 @@ fn make_processor_config(
     }
 }
 
-fn make_kafka_producer(topic_config: &TopicConfig) -> KafkaProducer {
-    KafkaProducer::new(KafkaConfig::new_producer_config(
-        vec![],
-        Some(topic_config.broker_config.clone()),
-    ))
+fn make_dlq_handler(
+    producer: &Arc<dyn Producer<KafkaPayload>>,
+    topic_config: Option<&TopicConfig>,
+    dry_run: bool,
+) -> DlqHandler {
+    let topic_name = match topic_config {
+        Some(tc) if !dry_run => tc.physical_topic_name.as_str(),
+        _ => "dry-run-dlq",
+    };
+    DlqHandler::new(
+        Arc::clone(producer),
+        TopicOrPartition::Topic(Topic::new(topic_name)),
+    )
 }
 
-fn make_writer(
-    storage: &config::StorageConfig,
-    format: InsertFormat,
-    columns: Option<&'static [&'static str]>,
-    dry_run_latency: Option<Duration>,
-) -> ClickHouseWriterStage {
-    if let Some(latency) = dry_run_latency {
-        ClickHouseWriterStage::new(DryRunWriter::new(latency))
-    } else {
-        ClickHouseWriterStage::new(ClickhouseClient::new(
-            &storage.clickhouse_cluster,
-            &storage.clickhouse_table_name,
-            storage.name.clone(),
-            format,
-            columns,
-        ))
-    }
-}
-
-fn make_dlq(topic_config: Option<&TopicConfig>, dry_run: bool) -> DlqHandler {
-    match topic_config {
-        Some(tc) if !dry_run => DlqHandler::new(
-            make_kafka_producer(tc),
-            TopicOrPartition::Topic(Topic::new(&tc.physical_topic_name)),
-        ),
-        _ => DlqHandler::new(
-            DryRunProducer,
-            TopicOrPartition::Topic(Topic::new("dry-run-dlq")),
-        ),
-    }
-}
-
-fn make_commit_log(
+fn make_commit_log_stage(
+    producer: &Arc<dyn Producer<KafkaPayload>>,
     topic_config: Option<&TopicConfig>,
     source_topic: &str,
     consumer_group: &str,
     dry_run: bool,
 ) -> CommitLogStage {
-    match topic_config {
-        Some(tc) if !dry_run => CommitLogStage::new(
-            make_kafka_producer(tc),
-            Topic::new(&tc.physical_topic_name),
-            Topic::new(source_topic),
-            consumer_group.to_string(),
-        ),
-        _ => CommitLogStage::new(
-            DryRunProducer,
-            Topic::new("dry-run-commit-log"),
-            Topic::new(source_topic),
-            consumer_group.to_string(),
-        ),
-    }
+    let dest_name = match topic_config {
+        Some(tc) if !dry_run => tc.physical_topic_name.as_str(),
+        _ => "dry-run-commit-log",
+    };
+    CommitLogStage::new(
+        Arc::clone(producer),
+        Topic::new(dest_name),
+        Topic::new(source_topic),
+        consumer_group.to_string(),
+    )
 }
 
-fn make_cogs(
+fn make_cogs_stage(
+    producer: &Arc<dyn Producer<KafkaPayload>>,
     topic_config: &TopicConfig,
     resource_id: String,
     dry_run: bool,
     record_cogs: bool,
 ) -> CogsStage {
-    if !dry_run && record_cogs {
-        CogsStage::new(
-            make_kafka_producer(topic_config),
-            Topic::new(&topic_config.physical_topic_name),
-            resource_id,
-        )
+    let dest_name = if !dry_run && record_cogs {
+        topic_config.physical_topic_name.as_str()
     } else {
-        CogsStage::new(DryRunProducer, Topic::new("dry-run-cogs"), resource_id)
-    }
+        "dry-run-cogs"
+    };
+    CogsStage::new(Arc::clone(producer), Topic::new(dest_name), resource_id)
+}
+
+fn make_writer_stage(writer: &Arc<dyn ClickHouseWriter>) -> ClickHouseWriterStage {
+    ClickHouseWriterStage::new(Arc::clone(writer))
 }
 
 fn make_processor_stage(
@@ -172,7 +252,7 @@ fn make_processor_stage(
     ProcessorStage::new(processor, processor_config.clone())
 }
 
-fn make_batch(
+fn make_batch_stage(
     max_batch_size: u64,
     calculation: BatchSizeCalculation,
 ) -> BatchStage<PipelineBatch, PipelineBatchBuffer> {
@@ -183,7 +263,6 @@ fn make_batch(
     BatchStage::new(PipelineBatchBuffer::new(), max_rows, max_bytes)
 }
 
-/// Returns (cadence, idle_timeout) for apply_with_timer.
 fn make_flush_timers(
     consumer_config: &config::ConsumerConfig,
 ) -> (Option<Duration>, Option<Duration>) {
@@ -195,6 +274,7 @@ fn make_flush_timers(
 // ── Pipeline assembly ──────────────────────────────────────
 
 fn make_eap_pipeline(
+    shared: &SharedResources,
     consumer_config: &config::ConsumerConfig,
     storage: &config::StorageConfig,
     processor_config: &ProcessorConfig,
@@ -202,16 +282,12 @@ fn make_eap_pipeline(
     processing_concurrency: usize,
     clickhouse_concurrency: usize,
     dry_run: bool,
-    dry_run_latency: Option<Duration>,
 ) -> EapPipeline {
     let processor_name = &storage.message_processor.python_class_name;
     let source_topic_name = &consumer_config.raw_topic.physical_topic_name;
 
     assert_eq!(processor_name, "EAPItemsProcessor");
 
-    let insert_columns = Some(crate::processors::eap_items::EAPItemRow::column_names(
-        processor_config.eap_items_emit_received_at,
-    ));
     let resource_id =
         get_cogs_label(processor_name).unwrap_or_else(|| format!("{}_processor", storage.name));
     let (cadence, idle_timeout) = make_flush_timers(consumer_config);
@@ -222,27 +298,28 @@ fn make_eap_pipeline(
             processor_config,
         ),
         processing_concurrency,
-        make_dlq(consumer_config.dlq_topic.as_ref(), dry_run),
-        make_batch(
+        make_dlq_handler(
+            &shared.dlq_producer,
+            consumer_config.dlq_topic.as_ref(),
+            dry_run,
+        ),
+        make_batch_stage(
             consumer_config.max_batch_size as u64,
             consumer_config.max_batch_size_calculation,
         ),
         cadence,
         idle_timeout,
-        make_writer(
-            storage,
-            InsertFormat::RowBinary,
-            insert_columns,
-            dry_run_latency,
-        ),
+        make_writer_stage(&shared.ch_writer),
         clickhouse_concurrency,
-        make_commit_log(
+        make_commit_log_stage(
+            &shared.commit_log_producer,
             consumer_config.commit_log_topic.as_ref(),
             source_topic_name,
             consumer_group,
             dry_run,
         ),
-        make_cogs(
+        make_cogs_stage(
+            &shared.cogs_producer,
             &consumer_config.accountant_topic,
             resource_id,
             dry_run,
@@ -252,26 +329,25 @@ fn make_eap_pipeline(
 }
 
 fn make_faf_pipeline(
+    shared: &SharedResources,
     processor: crate::processors::ProcessingFunction,
     consumer_config: &config::ConsumerConfig,
-    storage: &config::StorageConfig,
     processor_config: &ProcessorConfig,
     processing_concurrency: usize,
     clickhouse_concurrency: usize,
-    dry_run_latency: Option<Duration>,
 ) -> FireAndForgetPipeline {
     let (cadence, idle_timeout) = make_flush_timers(consumer_config);
 
     FireAndForgetPipeline::new(
         make_processor_stage(processor, processor_config),
         processing_concurrency,
-        make_batch(
+        make_batch_stage(
             consumer_config.max_batch_size as u64,
             consumer_config.max_batch_size_calculation,
         ),
         cadence,
         idle_timeout,
-        make_writer(storage, InsertFormat::JsonEachRow, None, dry_run_latency),
+        make_writer_stage(&shared.ch_writer),
         clickhouse_concurrency,
     )
 }
@@ -285,12 +361,17 @@ async fn run_with_rebalance<P: Pipeline<Output = BatchMetadata>>(
     loop {
         let pipeline = build_pipeline();
         let mut tracker = OffsetTracker::new(Duration::from_secs(1), source.committer());
-        match pipeline.stream(source.stream()).commit(&mut tracker).await {
+        let result = pipeline.stream(source.stream()).commit(&mut tracker);
+
+        match result.await {
             Ok(PipelineExit::Rebalance) => {
-                tracing::info!("Rebalance detected, restarting pipeline");
+                tracing::info!("Rebalance detected, restarting pipeline...");
                 continue;
             }
-            Ok(PipelineExit::Shutdown | PipelineExit::Complete) => return 0,
+            Ok(PipelineExit::Shutdown | PipelineExit::Complete) => {
+                tracing::info!("Pipeline shutdown");
+                return 0;
+            }
             Err(e) => {
                 tracing::error!("Pipeline failed: {}", e);
                 return 1;
@@ -313,6 +394,7 @@ pub fn pull_consumer(
     clickhouse_concurrency: usize,
     max_poll_interval_ms: usize,
     dry_run_latency_ms: u64,
+    use_row_binary: bool,
 ) -> usize {
     py.allow_threads(|| {
         pull_consumer_impl(
@@ -324,6 +406,7 @@ pub fn pull_consumer(
             clickhouse_concurrency,
             max_poll_interval_ms,
             dry_run_latency_ms,
+            use_row_binary,
         )
     })
 }
@@ -338,6 +421,7 @@ fn pull_consumer_impl(
     clickhouse_concurrency: usize,
     max_poll_interval_ms: usize,
     dry_run_latency_ms: u64,
+    use_row_binary: bool,
 ) -> usize {
     setup_logging();
     crate::init_sentry_options().expect("failed to initialize sentry-options");
@@ -406,6 +490,7 @@ fn pull_consumer_impl(
         pipeline = if is_eap { "eap" } else { "fire_and_forget" },
         dry_run,
         dry_run_latency_ms,
+        use_row_binary,
         "Starting pull consumer",
     );
 
@@ -424,9 +509,19 @@ fn pull_consumer_impl(
         );
         let processor_config = make_processor_config(&storage, &env_config);
 
+        let shared = make_shared_resources(
+            &consumer_config,
+            &storage,
+            &processor_config,
+            use_row_binary,
+            dry_run,
+            dry_run_latency,
+        );
+
         let result = if is_eap {
             run_with_rebalance(&source, || {
                 make_eap_pipeline(
+                    &shared,
                     &consumer_config,
                     &storage,
                     &processor_config,
@@ -434,20 +529,18 @@ fn pull_consumer_impl(
                     processing_concurrency,
                     clickhouse_concurrency,
                     dry_run,
-                    dry_run_latency,
                 )
             })
             .await
         } else {
             run_with_rebalance(&source, || {
                 make_faf_pipeline(
+                    &shared,
                     processor,
                     &consumer_config,
-                    &storage,
                     &processor_config,
                     processing_concurrency,
                     clickhouse_concurrency,
-                    dry_run_latency,
                 )
             })
             .await
