@@ -52,6 +52,6 @@ def for_request(request: TraceItemAttributeNamesRequest) -> CoOccurringAttrsSour
     """The source a request should read, falling back to v1 outside v2's data window."""
     # Fallback matches the schema default so docker/test (no automator values,
     # and sometimes no initialized sentry-options client) still read v2.
-    if not get_option(CO_OCCURRING_ATTRS_V2_OPTION, True):
-        return V1
-    return V2 if _v2_covers_request_window(request) else V1
+    if get_option(CO_OCCURRING_ATTRS_V2_OPTION, True) and _v2_covers_request_window(request):
+        return V2
+    return V1

@@ -62,24 +62,14 @@ class TestForRequest:
         wednesday = V2_START + timedelta(days=2)
         with override_options(
             "snuba",
-            {
-                CO_OCCURRING_ATTRS_V2_OPTION: True,
-                CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION: int(wednesday.timestamp()),
-            },
+            {CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION: int(wednesday.timestamp())},
         ):
             assert co_occurring_attrs.for_request(_request(wednesday + timedelta(hours=1))) is V1
 
     def test_start_timestamp_option_widens_the_window(self) -> None:
         old = _request(V2_START - timedelta(days=365))
-        with override_options("snuba", {CO_OCCURRING_ATTRS_V2_OPTION: True}):
-            assert co_occurring_attrs.for_request(old) is V1
-        with override_options(
-            "snuba",
-            {
-                CO_OCCURRING_ATTRS_V2_OPTION: True,
-                CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION: 0,
-            },
-        ):
+        assert co_occurring_attrs.for_request(old) is V1
+        with override_options("snuba", {CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION: 0}):
             assert co_occurring_attrs.for_request(old) is V2
 
     def test_default_cutoff_is_a_monday(self) -> None:

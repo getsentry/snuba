@@ -24,7 +24,6 @@ from snuba.web.rpc.v1.endpoint_trace_item_attribute_names import (
     get_co_occurring_attributes,
 )
 from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs import (
-    CO_OCCURRING_ATTRS_V2_OPTION,
     CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION,
     CO_OCCURRING_ATTRS_V2_STORAGE_KEY,
 )
@@ -87,13 +86,7 @@ def co_occurring_storage() -> Generator[None]:
     The v2 start timestamp is pinned back so the date gate does not send requests to v1:
     whether ``BASE_TIME`` clears the real cutoff depends on the day the suite runs.
     """
-    with override_options(
-        "snuba",
-        {
-            CO_OCCURRING_ATTRS_V2_OPTION: True,
-            CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION: 0,
-        },
-    ):
+    with override_options("snuba", {CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION: 0}):
         yield
 
 

@@ -107,13 +107,7 @@ def setup_teardown(eap: None, redis_db: None) -> Generator[None]:
     )
     # Pin the start timestamp back so the date gate (covered separately below) stays out of
     # the way.
-    with override_options(
-        "snuba",
-        {
-            CO_OCCURRING_ATTRS_V2_OPTION: True,
-            CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION: 0,
-        },
-    ):
+    with override_options("snuba", {CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION: 0}):
         yield
 
 
@@ -292,7 +286,6 @@ class TestCoOccurringV2DateGate(BaseApiTest):
         with override_options(
             "snuba",
             {
-                CO_OCCURRING_ATTRS_V2_OPTION: True,
                 CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION: (
                     CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_DEFAULT
                 ),
