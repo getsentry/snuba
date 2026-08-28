@@ -92,10 +92,8 @@ def test_system_query(admin_api: FlaskClient) -> None:
 @pytest.mark.redis_db
 def test_run_copy_table_query_invalid_node_returns_400(admin_api: FlaskClient) -> None:
     """
-    Regression for EAP-488 follow-up: the clusterless connection helper now
-    raises InvalidNodeError for an attacker-supplied host, and the endpoint
-    must surface that as a 400 (like /run_clickhouse_system_query) rather
-    than letting it bubble into a 500.
+    If copy_tables raises InvalidNodeError, the endpoint must surface that as
+    a 400 (like /run_clickhouse_system_query) rather than a 500.
     """
     from snuba.admin.clickhouse.common import InvalidNodeError
 

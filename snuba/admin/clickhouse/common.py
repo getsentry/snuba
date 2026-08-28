@@ -130,23 +130,20 @@ def _validate_node(
         )
 
 
-def _build_validated_pool(
+def _build_pool(
     clickhouse_host: str,
     clickhouse_port: int,
-    storage_name: str | None,
     cluster: ClickhouseCluster,
     database: str,
     username: str,
     password: str,
     client_settings: ClickhouseClientSettings,
-    known_nodes: Sequence[ClickhouseNode] | None = None,
 ) -> ClickhousePool:
-    # Single chokepoint for admin ClickhousePool acquisition. A pool ships the
-    # user/password to the node (HTTP auth header), so an unvalidated host means
-    # credentials reach whatever listener answers. All admin helpers must go
-    # through here. The regression test
-    # test_no_direct_clickhouse_pool_construction_in_admin enforces this.
-    _validate_node(clickhouse_host, clickhouse_port, cluster, storage_name, known_nodes=known_nodes)
+    # Shared admin pool construction. Prefer `_build_validated_pool` for
+    # caller-supplied hosts. Clusterless helpers intentionally skip host
+    # validation so ops tools like copy-tables can target brand-new nodes that
+    # are not yet visible in cluster topology.
+    #
     # Query-endpoint traffic uses the cluster Envoy listen port. Replica
     # (by-host) traffic uses 8123 on that node.
     query_node = cluster.get_query_node()
@@ -162,6 +159,34 @@ def _build_validated_pool(
         secure=cluster.get_secure(),
         ca_certs=cluster.get_ca_certs(),
         verify=cluster.get_verify(),
+    )
+
+
+def _build_validated_pool(
+    clickhouse_host: str,
+    clickhouse_port: int,
+    storage_name: str | None,
+    cluster: ClickhouseCluster,
+    database: str,
+    username: str,
+    password: str,
+    client_settings: ClickhouseClientSettings,
+    known_nodes: Sequence[ClickhouseNode] | None = None,
+) -> ClickhousePool:
+    # Single chokepoint for validated admin ClickhousePool acquisition. A pool
+    # ships the user/password to the node (HTTP auth header), so an unvalidated
+    # host means credentials reach whatever listener answers. Validated helpers
+    # must go through here. The regression test
+    # test_no_direct_clickhouse_pool_construction_in_admin enforces this.
+    _validate_node(clickhouse_host, clickhouse_port, cluster, storage_name, known_nodes=known_nodes)
+    return _build_pool(
+        clickhouse_host,
+        clickhouse_port,
+        cluster,
+        database,
+        username,
+        password,
+        client_settings,
     )
 
 
@@ -306,15 +331,20 @@ def get_clusterless_node_connection(
     storage_name: str,
     client_settings: ClickhouseClientSettings,
 ) -> ClickhousePool:
+    """Connect to a host that may not yet be part of known cluster topology.
+
+    Used by ops tooling such as copy-tables, which must reach brand-new nodes
+    before they appear in storage-cluster membership. Unlike the validated
+    helpers, this intentionally does not call `_validate_node`.
+    """
     storage = _get_storage(storage_name)
     cluster = storage.get_cluster()
     database = cluster.get_database()
 
     (clickhouse_user, clickhouse_password) = cluster.get_credentials()
-    connection = _build_validated_pool(
+    connection = _build_pool(
         clickhouse_host,
         clickhouse_port,
-        storage_name,
         cluster,
         database,
         clickhouse_user,
@@ -330,6 +360,11 @@ def get_ro_clusterless_node_connection(
     storage_name: str,
     client_settings: ClickhouseClientSettings,
 ) -> ClickhousePool:
+    """Read-only clusterless connection without host/topology validation.
+
+    Same intentional skip as `get_clusterless_node_connection`: these helpers
+    exist for hosts outside currently discovered cluster membership.
+    """
     # Compare by name: same reload-safe rule as get_ro_node_connection.
     allowed = {
         ClickhouseClientSettings.QUERY.name,
@@ -343,10 +378,9 @@ def get_ro_clusterless_node_connection(
     cluster = storage.get_cluster()
     database = cluster.get_database()
 
-    connection = _build_validated_pool(
+    connection = _build_pool(
         clickhouse_host,
         clickhouse_port,
-        storage_name,
         cluster,
         database,
         settings.CLICKHOUSE_READONLY_USER,

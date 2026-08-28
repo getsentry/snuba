@@ -313,16 +313,13 @@ def test_clusterless_uses_readonly_for_non_sudo(sudo_mode: bool, expected_helper
         ),
     ],
 )
-def test_clusterless_rejects_unvalidated_host(
+def test_clusterless_allows_hosts_outside_cluster_topology(
     helper_name: str, client_settings: ClickhouseClientSettings
 ) -> None:
     """
-    Regression for EAP-488: the clusterless helpers used to acquire a
-    ClickhousePool against any attacker-supplied host/port, which leaked the
-    configured ClickHouse user/password to the node (the driver's
-    first hello packet, or the HTTP auth header). Both helpers must now call
-    _validate_node before acquiring the pool, so an invalid host produces
-    InvalidNodeError and no credentials ever leave the process.
+    Clusterless helpers intentionally skip host/topology validation so ops
+    tools (copy-tables) can target brand-new nodes that are not yet members of
+    the storage cluster. `_validate_node` must not gate these helpers.
     """
     from snuba.admin.clickhouse import common
 
@@ -336,14 +333,13 @@ def test_clusterless_rejects_unvalidated_host(
         ) as mock_validate,
         patch.object(common, "build_pool") as mock_pool,
     ):
-        with pytest.raises(InvalidNodeError):
-            helper("attacker.example.com", 9009, "errors", client_settings)
+        helper("new-node.example.com", 9009, "errors", client_settings)
 
-        assert mock_validate.called, "_validate_node must run before pool acquisition"
-        assert not mock_pool.called, (
-            "A pool must not be acquired for an unvalidated host — "
-            "doing so would transmit ClickHouse credentials to the attacker"
+        assert not mock_validate.called, (
+            "clusterless helpers must not call _validate_node; brand-new nodes "
+            "are expected to sit outside known cluster topology"
         )
+        assert mock_pool.called, "clusterless helpers must still acquire a pool"
 
 
 @pytest.mark.parametrize(
@@ -633,7 +629,7 @@ def test_sudo_mode_skips_experimental_analyzer(sql_query: str, sudo_mode: bool) 
 
 
 # Names that acquire a ClickhousePool (and therefore send credentials to a
-# node). Any of these in admin code must sit behind _validate_node.
+# node). Outside common.py these must go through _build_pool helpers.
 _POOL_ACQUISITION_NAMES = frozenset(
     {
         "build_pool",
@@ -688,25 +684,27 @@ def test_no_direct_clickhouse_pool_construction_in_admin() -> None:
     Defense-in-depth for EAP-488: a ClickhousePool ships the configured
     user/password to the node (the driver's first hello packet, or
     the HTTP auth header), so any admin code path that acquires one against a
-    caller-supplied host leaks credentials to whatever listener answers.
-    `_build_validated_pool` in snuba/admin/clickhouse/common.py is the single
-    chokepoint that runs `_validate_node` first — every other admin module
-    must go through it.
+    caller-supplied host can leak credentials to whatever listener answers.
+
+    `snuba/admin/clickhouse/common.py` is the only place that may acquire a
+    pool, and only from `_build_pool` / `_build_validated_pool`:
+
+    * `_build_validated_pool` runs `_validate_node` first for normal helpers.
+    * `_build_pool` is the shared constructor; clusterless helpers call it
+      directly so brand-new nodes can be targeted before cluster membership.
 
     "Acquiring" a pool means either constructing one of the pool
     implementations directly or fetching one from the shared connection cache
     via `get_node_connection`. This test enforces that structural invariant by
-    AST-walking every snuba/admin/**/*.py file:
+    AST-walking every snuba/admin/**/*.py file.
 
-    * common.py may only acquire a pool from inside `_build_validated_pool`.
-    * No other admin module may acquire a pool at all.
-
-    If this fails, a new caller has likely re-introduced the vulnerability.
+    If this fails, a new caller has likely re-introduced a direct pool path.
     """
     admin_root = Path(__file__).resolve().parents[2] / "snuba" / "admin"
     assert admin_root.is_dir(), f"expected admin root at {admin_root}"
 
     common_path = admin_root / "clickhouse" / "common.py"
+    allowed_common_scopes = {"_build_pool", "_build_validated_pool"}
     offenders: list[str] = []
 
     for py_file in sorted(admin_root.rglob("*.py")):
@@ -715,17 +713,17 @@ def test_no_direct_clickhouse_pool_construction_in_admin() -> None:
             rel = py_file.relative_to(admin_root.parent.parent)
             location = f"{rel}:{call.lineno}"
             if py_file == common_path:
-                if scope != ["_build_validated_pool"]:
+                if not scope or scope[-1] not in allowed_common_scopes:
                     offenders.append(
                         f"{location} acquires a ClickhousePool inside "
                         f"{'.'.join(scope) or '<module>'} — must be inside "
-                        "_build_validated_pool so _validate_node runs first."
+                        "_build_pool or _build_validated_pool."
                     )
             else:
                 offenders.append(
                     f"{location} acquires a ClickhousePool directly — call "
-                    "_build_validated_pool (or a helper that wraps it) so "
-                    "_validate_node guards the host before credentials are sent."
+                    "_build_validated_pool / _build_pool (or a helper that "
+                    "wraps them) instead of constructing a pool here."
                 )
 
     assert not offenders, "\n".join(offenders)
