@@ -16,7 +16,6 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.query.data_source.simple import Storage as StorageDataSource
 from snuba.query.expressions import FunctionCall, Lambda, Literal
 from snuba.web.rpc.v1.endpoint_trace_item_attribute_names import (
     UNSEARCHABLE_ATTRIBUTE_KEYS,
@@ -25,7 +24,6 @@ from snuba.web.rpc.v1.endpoint_trace_item_attribute_names import (
 )
 from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs import (
     CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION,
-    CO_OCCURRING_ATTRS_V2_STORAGE_KEY,
 )
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -81,11 +79,7 @@ def setup_teardown(eap: None, redis_db: None) -> None:
 
 @pytest.fixture(autouse=True)
 def co_occurring_storage() -> Generator[None]:
-    """Read v2. The v1 table is no longer written to, so the shared suite cannot cover it.
-
-    The v2 start timestamp is pinned back so the date gate does not send requests to v1:
-    whether ``BASE_TIME`` clears the real cutoff depends on the day the suite runs.
-    """
+    """Pin the v2 start timestamp so the date gate cannot send requests to v1."""
     with override_options("snuba", {CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION: 0}):
         yield
 
@@ -294,24 +288,6 @@ class TestTraceItemAttributeNames(BaseApiTest):
         )
         res = EndpointTraceItemAttributeNames().execute(req)
         assert res.meta.query_info != []
-
-    def test_reads_v2_storage(self) -> None:
-        req = TraceItemAttributeNamesRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                request_id=str(uuid.uuid4()),
-                start_timestamp=Timestamp(seconds=int((BASE_TIME - timedelta(days=1)).timestamp())),
-                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
-            ),
-            limit=10,
-            type=AttributeKey.Type.TYPE_STRING,
-        )
-        from_clause = get_co_occurring_attributes(req).query.get_from_clause()
-        assert isinstance(from_clause, StorageDataSource)
-        assert from_clause.key == CO_OCCURRING_ATTRS_V2_STORAGE_KEY
 
     def test_basic_co_occurring_attrs(self) -> None:
         req = TraceItemAttributeNamesRequest(

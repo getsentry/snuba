@@ -1,7 +1,6 @@
 """Behaviour only v2 can provide: per-type attribute keys, summed item counts, last_seen.
 
-Shared behaviour is covered against v2 by ``test_endpoint_trace_item_attribute_names.py``.
-The v1 table is no longer written to.
+Shared behaviour is covered by ``test_endpoint_trace_item_attribute_names.py``.
 """
 
 import uuid
@@ -11,7 +10,6 @@ from unittest import mock
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
-from sentry_options import OptionValue
 from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
     TraceItemAttributeNamesRequest,
@@ -25,40 +23,21 @@ from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.query.data_source.simple import Storage as StorageDataSource
 from snuba.query.expressions import Column, FunctionCall
-from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from snuba.web.rpc.v1.endpoint_trace_item_attribute_names import (
     EndpointTraceItemAttributeNames,
     get_co_occurring_attributes,
 )
 from snuba.web.rpc.v1.resolvers.R_eap_items import co_occurring_attrs
 from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs import (
-    CO_OCCURRING_ATTRS_STORAGE_KEY,
-    CO_OCCURRING_ATTRS_V2_OPTION,
-    CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_DEFAULT,
     CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION,
     CO_OCCURRING_ATTRS_V2_STORAGE_KEY,
-    V1,
-    V2,
 )
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import gen_item_message
 
 BASE_TIME = datetime.now(UTC).replace(minute=0, second=0, microsecond=0) - timedelta(hours=3)
-
-# The two ways a request ends up reading v1: the rollout flag is off, or the flag is on but
-# the date gate routed an older time range there. Behaviour must be identical in both.
-ROUTES_TO_V1: list[dict[str, OptionValue]] = [
-    {CO_OCCURRING_ATTRS_V2_OPTION: False},
-    {
-        CO_OCCURRING_ATTRS_V2_OPTION: True,
-        CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION: int(
-            (BASE_TIME + timedelta(days=365)).timestamp()
-        ),
-    },
-]
 
 # Number of items written, which is also the expected `count` for every attribute below
 # since each attribute is present on every item.
@@ -82,16 +61,15 @@ def _truncate_co_occurring_tables() -> None:
     """The shared teardown only truncates writable storages, and these are materialized-view
     targets, so rows otherwise accumulate across the session. Count assertions here are exact.
     """
-    for storage_key in (CO_OCCURRING_ATTRS_STORAGE_KEY, CO_OCCURRING_ATTRS_V2_STORAGE_KEY):
-        storage = get_storage(storage_key)
-        cluster = storage.get_cluster()
-        database = cluster.get_database()
-        schema = storage.get_schema()
-        assert isinstance(schema, TableSchema)
-        table = schema.get_local_table_name()
-        for node in [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]:
-            connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
-            connection.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table}")
+    storage = get_storage(CO_OCCURRING_ATTRS_V2_STORAGE_KEY)
+    cluster = storage.get_cluster()
+    database = cluster.get_database()
+    schema = storage.get_schema()
+    assert isinstance(schema, TableSchema)
+    table = schema.get_local_table_name()
+    for node in [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]:
+        connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
+        connection.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table}")
 
 
 @pytest.fixture(autouse=True)
@@ -105,8 +83,7 @@ def setup_teardown(eap: None, redis_db: None) -> Generator[None]:
             for _ in range(NUM_ITEMS)
         ],
     )
-    # Pin the start timestamp back so the date gate (covered separately below) stays out of
-    # the way.
+    # Pin the start timestamp so the date gate cannot send requests to v1.
     with override_options("snuba", {CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION: 0}):
         yield
 
@@ -142,12 +119,6 @@ def _request(
     )
 
 
-def _queried_storage_key(request: TraceItemAttributeNamesRequest) -> StorageKey:
-    from_clause = get_co_occurring_attributes(request).query.get_from_clause()
-    assert isinstance(from_clause, StorageDataSource)
-    return from_clause.key
-
-
 def _names_and_types(
     attr_type: AttributeKey.Type.ValueType, *, order_by_count: bool = False
 ) -> list[tuple[str, str]]:
@@ -160,23 +131,8 @@ def _names_and_types(
 @pytest.mark.eap
 @pytest.mark.redis_db
 class TestTraceItemAttributeNamesV2(BaseApiTest):
-    def test_reads_v2_storage_when_enabled(self) -> None:
-        assert (
-            _queried_storage_key(_request(AttributeKey.Type.TYPE_STRING))
-            == CO_OCCURRING_ATTRS_V2_STORAGE_KEY
-        )
-
-    def test_reads_v1_storage_when_disabled(self) -> None:
-        """The option is a rollback switch: turning it off restores the v1 read."""
-        with override_options("snuba", {CO_OCCURRING_ATTRS_V2_OPTION: False}):
-            assert (
-                _queried_storage_key(_request(AttributeKey.Type.TYPE_STRING))
-                == CO_OCCURRING_ATTRS_STORAGE_KEY
-            )
-
     def test_int_keys_typed_as_int(self) -> None:
-        """Dedicated attributes_int array, so int keys keep their type (v1 folds them into
-        the float array)."""
+        """Dedicated attributes_int array, so int keys keep their type."""
         assert _names_and_types(AttributeKey.Type.TYPE_INT) == [("probe_int", "TYPE_INT")]
 
     def test_double_request_still_includes_int_keys(self) -> None:
@@ -222,7 +178,7 @@ class TestTraceItemAttributeNamesV2(BaseApiTest):
 
     def test_unspecified_type_includes_array_keys_without_duplicating_ints(self) -> None:
         """Every type, with int keys appearing once (as TYPE_DOUBLE, via the float bucket)
-        rather than twice, and the array-typed keys v1 cannot see."""
+        rather than twice."""
         assert _names_and_types(AttributeKey.Type.TYPE_UNSPECIFIED) == [
             ("probe_arr_bool", "TYPE_ARRAY_BOOL"),
             ("probe_arr_float", "TYPE_ARRAY_DOUBLE"),
@@ -243,7 +199,6 @@ class TestTraceItemAttributeNamesV2(BaseApiTest):
         assert counts == {"probe_str": NUM_ITEMS}
 
     def test_count_populated_for_int_and_array_keys(self) -> None:
-        """Available for the types v1 cannot surface at all."""
         for attr_type in (
             AttributeKey.Type.TYPE_INT,
             AttributeKey.Type.TYPE_ARRAY_STRING,
@@ -273,97 +228,8 @@ class TestTraceItemAttributeNamesV2(BaseApiTest):
 
 @pytest.mark.eap
 @pytest.mark.redis_db
-class TestCoOccurringV2DateGate(BaseApiTest):
-    """A request reaching back before v2's materialized view existed must read v1, or the
-    attributes that only existed in the earlier part of its range vanish.
-    """
-
-    V2_START = datetime.fromtimestamp(CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_DEFAULT, UTC)
-
-    @pytest.fixture(autouse=True)
-    def use_real_cutoff(self) -> Generator[None]:
-        """Undo the module fixture's pinned cutoff so the gate is exercised."""
-        with override_options(
-            "snuba",
-            {
-                CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION: (
-                    CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_DEFAULT
-                ),
-            },
-        ):
-            yield
-
-    def _storage_for_start(self, start: datetime) -> StorageKey:
-        req = _request(AttributeKey.Type.TYPE_STRING)
-        req.meta.start_timestamp.FromDatetime(start)
-        req.meta.end_timestamp.FromDatetime(start + timedelta(hours=1))
-        return _queried_storage_key(req)
-
-    def test_default_cutoff_is_a_monday(self) -> None:
-        """`date` is bucketed with toMonday() and queries round down to the previous Monday, so
-        a mid-week cutoff would let a request round *below* it into a v1-only bucket."""
-        assert self.V2_START.weekday() == 0
-        assert (self.V2_START.hour, self.V2_START.minute, self.V2_START.second) == (0, 0, 0)
-
-    def test_request_starting_at_the_cutoff_reads_v2(self) -> None:
-        assert self._storage_for_start(self.V2_START) == CO_OCCURRING_ATTRS_V2_STORAGE_KEY
-
-    def test_request_starting_after_the_cutoff_reads_v2(self) -> None:
-        """Later in the same week rounds down to exactly the cutoff bucket."""
-        assert (
-            self._storage_for_start(self.V2_START + timedelta(days=3))
-            == CO_OCCURRING_ATTRS_V2_STORAGE_KEY
-        )
-
-    def test_request_starting_before_the_cutoff_falls_back_to_v1(self) -> None:
-        """One second earlier rounds to the previous Monday, which v2 never populated."""
-        assert (
-            self._storage_for_start(self.V2_START - timedelta(seconds=1))
-            == CO_OCCURRING_ATTRS_STORAGE_KEY
-        )
-
-    def test_request_reaching_far_back_falls_back_to_v1(self) -> None:
-        assert (
-            self._storage_for_start(self.V2_START - timedelta(days=30))
-            == CO_OCCURRING_ATTRS_STORAGE_KEY
-        )
-
-    def test_gate_uses_rounded_lower_bound_not_raw_timestamp(self) -> None:
-        """The gate must compare the bucket the query reads, not the raw start timestamp.
-
-        With a mid-week cutoff, a request starting just after it still reads from the Monday
-        before — a bucket only v1 has — so a raw-timestamp comparison would wrongly admit it.
-        """
-        wednesday_cutoff = self.V2_START + timedelta(days=2)
-        with override_options(
-            "snuba",
-            {
-                CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION: int(wednesday_cutoff.timestamp()),
-            },
-        ):
-            # Starts after the cutoff instant, but rounds down to the Monday before it.
-            assert (
-                self._storage_for_start(wednesday_cutoff + timedelta(hours=1))
-                == CO_OCCURRING_ATTRS_STORAGE_KEY
-            )
-
-    def test_start_timestamp_is_configurable(self) -> None:
-        """Lowering the option widens the v2 window."""
-        before_cutoff = self.V2_START - timedelta(days=30)
-        assert self._storage_for_start(before_cutoff) == CO_OCCURRING_ATTRS_STORAGE_KEY
-        with override_options("snuba", {CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION: 0}):
-            assert self._storage_for_start(before_cutoff) == CO_OCCURRING_ATTRS_V2_STORAGE_KEY
-
-    def test_flag_off_reads_v1_even_inside_the_v2_window(self) -> None:
-        """The rollout flag remains an unconditional off switch."""
-        with override_options("snuba", {CO_OCCURRING_ATTRS_V2_OPTION: False}):
-            assert self._storage_for_start(self.V2_START) == CO_OCCURRING_ATTRS_STORAGE_KEY
-
-
-@pytest.mark.eap
-@pytest.mark.redis_db
 class TestLastSeen(BaseApiTest):
-    """Reporting and ordering by `last_seen`, which only v2 records.
+    """Reporting and ordering by `last_seen`.
 
     The module fixture writes every probe attribute at one timestamp, which cannot tell a
     recency ordering from an arbitrary one, so this class writes its own at distinct times.
@@ -381,11 +247,7 @@ class TestLastSeen(BaseApiTest):
     OFFSETS = {"ls_oldest": 4, "ls_middle": 2, "ls_newest": 0}
     ITEM_COUNTS = {"ls_oldest": 3, "ls_middle": 2, "ls_newest": 1}
 
-    # Most recent first: the reverse of write order.
     BY_RECENCY_DESC = ["ls_newest", "ls_middle", "ls_oldest"]
-    # Most frequent first: the exact opposite of BY_RECENCY_DESC, which is what makes a
-    # degraded recency request distinguishable from an honoured one. Both storages agree on
-    # this order here (see the filler attribute below), though they count different things.
     BY_COUNT_DESC = ["ls_oldest", "ls_middle", "ls_newest"]
 
     @pytest.fixture(autouse=True)
@@ -393,14 +255,8 @@ class TestLastSeen(BaseApiTest):
         items_storage = get_writable_storage(StorageKey("eap_items"))
         for name, hours_ago in self.OFFSETS.items():
             # All of an attribute's items share a timestamp, so last_seen stays exact while
-            # the number of items drives its count.
-            #
-            # Each item also gets a unique filler attribute so that every item is a distinct
-            # attribute-key *set*. Without it the items for one attribute collapse into a
-            # single set, and v1 — which counts sets, not items — reports 1 for everything,
-            # making its count ordering degenerate into the name tiebreak. The filler names
-            # deliberately avoid the "ls_" substring the tests filter on, so they stay out of
-            # the results.
+            # the number of items drives its count. Filler names avoid the "ls_" substring
+            # the tests filter on.
             write_raw_unprocessed_events(
                 items_storage,
                 [
@@ -465,34 +321,9 @@ class TestLastSeen(BaseApiTest):
         for attribute in attributes:
             assert not attribute.HasField("last_seen")
 
-    def test_recency_ordering_is_honoured_on_v2(self) -> None:
-        """Guard against the degrade firing when it should not."""
-        by_recency = self._run(
-            column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN
-        )
-        assert [a.name for a in by_recency] == self.BY_RECENCY_DESC
-        assert all(a.HasField("last_seen") for a in by_recency)
-
-    @pytest.mark.parametrize("route_index", [0, 1], ids=["flag_off", "date_gate"])
-    def test_degrade_is_recorded_as_a_metric(self, route_index: int) -> None:
-        """Invisible to the caller, so it has to be visible to us during the rollout."""
-        with override_options("snuba", ROUTES_TO_V1[route_index]):
-            self._run(column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN)
-        calls = get_recorded_metric_calls("increment", "rpc.attribute_names_order_by_degraded")
-        assert calls, "expected a degrade metric"
-        tags = calls[-1].tags or {}
-        assert tags.get("requested") == "COLUMN_LAST_SEEN"
-        assert tags.get("applied") == "COLUMN_COUNT"
-        assert tags.get("storage") == CO_OCCURRING_ATTRS_STORAGE_KEY.value
-
-    def test_no_degrade_metric_when_honoured(self) -> None:
-        """Guard against the metric firing on v2."""
-        self._run(column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN)
-        assert not get_recorded_metric_calls("increment", "rpc.attribute_names_order_by_degraded")
-
-    def test_recency_and_count_orderings_differ_on_v2(self) -> None:
-        """Checks the fixture data as much as the code: the two aggregating orderings are exact
-        opposites here, so neither can be satisfied by accident by the other."""
+    def test_recency_and_count_orderings_differ(self) -> None:
+        """The two aggregating orderings are exact opposites here, so neither can be
+        satisfied by accident by the other."""
         by_recency = self._run(
             column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN
         )
@@ -500,7 +331,6 @@ class TestLastSeen(BaseApiTest):
         assert [a.name for a in by_recency] == self.BY_RECENCY_DESC
         assert [a.name for a in by_count] == self.BY_COUNT_DESC
         assert list(reversed(self.BY_COUNT_DESC)) == self.BY_RECENCY_DESC
-        # v2 counts items, so the counts are the number written rather than a flat 1.
         assert {a.name: a.count for a in by_count} == self.ITEM_COUNTS
 
     def test_source_is_resolved_once_per_request(self) -> None:
@@ -516,22 +346,3 @@ class TestLastSeen(BaseApiTest):
             f"source resolved {resolve.call_count} times; the query and the response "
             "converter must share a single resolution"
         )
-
-    def test_ordering_survives_the_source_changing_mid_request(self) -> None:
-        """Simulates an option flipping between resolutions by returning v2 then v1. With a
-        single resolution the second value is never read, so the result stays coherent.
-        """
-        sources = iter([V2, V1])
-
-        def flipping(_request: TraceItemAttributeNamesRequest) -> object:
-            return next(sources, V1)
-
-        with mock.patch.object(co_occurring_attrs, "for_request", side_effect=flipping):
-            attributes = self._run(
-                column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN
-            )
-        # v2 was resolved, so recency ordering is honoured end to end: the order is the
-        # requested one and last_seen is populated, not the misordered mix the double
-        # resolution produced.
-        assert [a.name for a in attributes] == self.BY_RECENCY_DESC
-        assert all(a.HasField("last_seen") for a in attributes)
