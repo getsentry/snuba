@@ -442,3 +442,32 @@ def test_copy_tables_target_host_skips_cluster_membership() -> None:
     assert result["target_host"] == "snuba-outcomes-query-arm-1-1"
     target_conn.command.assert_called_once_with("CREATE TABLE t")
     source_conn.command.assert_not_called()
+
+
+def test_copy_tables_query_node_target_accepted_without_typed_port() -> None:
+    """A query-node hostname with default port 8123 still matches the Envoy port."""
+    cluster = _copy_tables_cluster_mock()
+    cluster.get_port.return_value = 9000
+    cluster.get_query_node.return_value.host_name = "query.example"
+
+    with (
+        patch("snuba.admin.clickhouse.copy_tables._get_storage") as mock_storage,
+        patch(
+            "snuba.admin.clickhouse.copy_tables.get_clusterless_node_connection",
+            return_value=MagicMock(),
+        ),
+        patch("snuba.admin.clickhouse.copy_tables.get_tables", return_value=["t"]),
+        patch(
+            "snuba.admin.clickhouse.copy_tables.get_create_table_statements",
+            return_value=[TableStatement("t", "CREATE TABLE t", True)],
+        ),
+    ):
+        mock_storage.return_value.get_cluster.return_value = cluster
+        result = copy_tables(
+            source_host="query.example",
+            storage_name="outcomes_raw",
+            dry_run=True,
+            target_host="query.example",
+        )
+
+    assert result["target_host"] == "query.example"

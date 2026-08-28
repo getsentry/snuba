@@ -1,7 +1,7 @@
 import re
 from collections.abc import MutableMapping, Sequence
 from dataclasses import dataclass
-from typing import TypedDict
+from typing import TypedDict, cast
 
 from snuba.admin.clickhouse.common import (
     InvalidNodeError,
@@ -72,7 +72,7 @@ def target_host_is_allowlisted(host: str, port: int) -> bool:
 
     A hostname-only entry matches any port. A host:port entry must match both.
     """
-    allowed = get_option(COPY_TABLES_ALLOWED_TARGET_HOSTS_OPTION, [])
+    allowed = get_option(COPY_TABLES_ALLOWED_TARGET_HOSTS_OPTION, cast(list[str], []))
     if not isinstance(allowed, list):
         return False
     host_key = host.lower()
@@ -102,6 +102,11 @@ def assert_target_host_allowed(
         return
     try:
         if is_valid_node(host, port, cluster, storage_name):
+            return
+        # Typed port defaults to 8123; query nodes often listen on the cluster
+        # Envoy port instead. Match the connect path, which uses _http_port_for_host.
+        topology_port = _http_port_for_host(host, cluster)
+        if topology_port != port and is_valid_node(host, topology_port, cluster, storage_name):
             return
     except InvalidNodeError:
         pass
