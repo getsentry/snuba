@@ -346,6 +346,34 @@ def test_clusterless_rejects_unvalidated_host(
         )
 
 
+def test_clusterless_validate_node_false_skips_membership_check() -> None:
+    """Allowlisted copy-tables CREATE targets skip _validate_node."""
+    from snuba.admin.clickhouse import common
+
+    with (
+        patch.object(
+            common,
+            "_validate_node",
+            side_effect=InvalidNodeError("host not in cluster"),
+        ) as mock_validate,
+        patch.object(common, "build_pool") as mock_pool,
+    ):
+        mock_pool.return_value = MagicMock()
+        common.get_clusterless_node_connection(
+            "snuba-outcomes-query-arm-1-1",
+            8123,
+            "errors",
+            ClickhouseClientSettings.INTERNAL,
+            validate_node=False,
+        )
+
+        mock_validate.assert_not_called()
+        assert mock_pool.called
+        node = mock_pool.call_args.args[1]
+        assert node.host_name == "snuba-outcomes-query-arm-1-1"
+        assert node.port == 8123
+
+
 @pytest.mark.parametrize(
     "helper_name",
     [

@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Sequence
 
-from sql_metadata import Parser, QueryType  # type: ignore[import-untyped]
+from sql_metadata import Parser, QueryType
 
 from snuba import settings
 from snuba.clickhouse.pool import ClickhousePool
@@ -140,19 +140,29 @@ def _build_validated_pool(
     password: str,
     client_settings: ClickhouseClientSettings,
     known_nodes: Sequence[ClickhouseNode] | None = None,
+    validate_node: bool = True,
 ) -> ClickhousePool:
     # Single chokepoint for admin ClickhousePool acquisition. A pool ships the
     # user/password to the node (HTTP auth header), so an unvalidated host means
     # credentials reach whatever listener answers. All admin helpers must go
     # through here. The regression test
     # test_no_direct_clickhouse_pool_construction_in_admin enforces this.
-    _validate_node(clickhouse_host, clickhouse_port, cluster, storage_name, known_nodes=known_nodes)
-    # Query-endpoint traffic uses the cluster Envoy listen port. Replica
-    # (by-host) traffic uses 8123 on that node.
-    query_node = cluster.get_query_node()
-    envoy_port = cluster.get_port()
-    is_query_endpoint = clickhouse_host == query_node.host_name and clickhouse_port == envoy_port
-    connect_port = envoy_port if is_query_endpoint else DEFAULT_CLICKHOUSE_HTTP_PORT
+    #
+    # validate_node=False is copy-tables CREATE on an allowlisted bootstrap host.
+    if validate_node:
+        _validate_node(
+            clickhouse_host, clickhouse_port, cluster, storage_name, known_nodes=known_nodes
+        )
+        # Query-endpoint traffic uses the cluster Envoy listen port. Replica
+        # (by-host) traffic uses 8123 on that node.
+        query_node = cluster.get_query_node()
+        envoy_port = cluster.get_port()
+        is_query_endpoint = (
+            clickhouse_host == query_node.host_name and clickhouse_port == envoy_port
+        )
+        connect_port = envoy_port if is_query_endpoint else DEFAULT_CLICKHOUSE_HTTP_PORT
+    else:
+        connect_port = clickhouse_port
     return build_pool(
         client_settings,
         ClickhouseNode(clickhouse_host, connect_port),
@@ -305,13 +315,14 @@ def get_clusterless_node_connection(
     clickhouse_port: int,
     storage_name: str,
     client_settings: ClickhouseClientSettings,
+    validate_node: bool = True,
 ) -> ClickhousePool:
     storage = _get_storage(storage_name)
     cluster = storage.get_cluster()
     database = cluster.get_database()
 
     (clickhouse_user, clickhouse_password) = cluster.get_credentials()
-    connection = _build_validated_pool(
+    return _build_validated_pool(
         clickhouse_host,
         clickhouse_port,
         storage_name,
@@ -320,8 +331,8 @@ def get_clusterless_node_connection(
         clickhouse_user,
         clickhouse_password,
         client_settings,
+        validate_node=validate_node,
     )
-    return connection
 
 
 def get_ro_clusterless_node_connection(

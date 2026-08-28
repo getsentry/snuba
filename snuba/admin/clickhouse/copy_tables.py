@@ -1,12 +1,14 @@
 import re
 from collections.abc import MutableMapping, Sequence
 from dataclasses import dataclass
-from typing import TypedDict
+from typing import TypedDict, cast
 
 from snuba.admin.clickhouse.common import (
+    InvalidNodeError,
     _get_storage,
     _node_connect_port,
     get_clusterless_node_connection,
+    is_valid_node,
 )
 from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.pool import ClickhousePool
@@ -15,6 +17,7 @@ from snuba.clusters.cluster import (
     ClickhouseClientSettings,
     ClickhouseCluster,
 )
+from snuba.state.sentry_options import get_option
 from snuba.utils.serializable_exception import SerializableException
 
 
@@ -26,6 +29,8 @@ class InvalidClusterName(SerializableException):
 # clusterAllReplicas() on connections holding full cluster credentials.
 CLUSTER_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]{1,128}$")
 
+COPY_TABLES_ALLOWED_TARGET_HOSTS_OPTION = "admin.copy_tables_allowed_target_hosts"
+
 
 def validate_cluster_name(cluster_name: str) -> str:
     if not CLUSTER_NAME_RE.match(cluster_name):
@@ -33,6 +38,57 @@ def validate_cluster_name(cluster_name: str) -> str:
             "cluster name must be 1-128 characters of letters, digits, underscores or dashes"
         )
     return cluster_name
+
+
+def _split_host_port(raw: str) -> tuple[str, int | None]:
+    value = raw.strip()
+    if ":" in value:
+        host, port_s = value.rsplit(":", 1)
+        if port_s.isdigit():
+            return host, int(port_s)
+    return value, None
+
+
+def parse_target_host(raw: str) -> tuple[str, int]:
+    """Split ``host`` or ``host:port``; default port is 8123."""
+    host, port = _split_host_port(raw)
+    return host, port if port is not None else DEFAULT_CLICKHOUSE_HTTP_PORT
+
+
+def target_host_is_allowlisted(host: str, port: int) -> bool:
+    """Hostname-only entries match any port; host:port must match both."""
+    host_key = host.lower()
+    for entry in cast("list[str]", get_option(COPY_TABLES_ALLOWED_TARGET_HOSTS_OPTION, [])):
+        entry_host, entry_port = _split_host_port(str(entry))
+        if entry_host.lower() == host_key and (entry_port is None or entry_port == port):
+            return True
+    return False
+
+
+def _is_cluster_node(host: str, port: int, cluster: ClickhouseCluster, storage_name: str) -> bool:
+    try:
+        if is_valid_node(host, port, cluster, storage_name):
+            return True
+        topology_port = _http_port_for_host(host, cluster)
+        return topology_port != port and is_valid_node(host, topology_port, cluster, storage_name)
+    except InvalidNodeError:
+        return False
+
+
+def assert_target_host_allowed(
+    host: str,
+    port: int,
+    cluster: ClickhouseCluster,
+    storage_name: str,
+) -> None:
+    if target_host_is_allowlisted(host, port) or _is_cluster_node(
+        host, port, cluster, storage_name
+    ):
+        return
+    raise ValueError(
+        f"{host}:{port} is not a known cluster node and is not in "
+        f"{COPY_TABLES_ALLOWED_TARGET_HOSTS_OPTION}"
+    )
 
 
 def _http_port_for_host(host: str, cluster: ClickhouseCluster) -> int:
@@ -53,6 +109,7 @@ class TableStatement:
 
 class CopyTablesResponse(TypedDict, total=False):
     source_host: str
+    target_host: str
     tables: str
     cluster_name: str
     dry_run: bool
@@ -172,6 +229,10 @@ def copy_tables(
     storage = _get_storage(storage_name)
     cluster = storage.get_cluster()
     database_name = cluster.get_database()
+    parsed_target: tuple[str, int] | None = None
+    if target_host:
+        parsed_target = parse_target_host(target_host)
+        assert_target_host_allowed(parsed_target[0], parsed_target[1], cluster, storage_name)
     source_connection = get_clusterless_node_connection(
         source_host,
         _http_port_for_host(source_host, cluster),
@@ -207,17 +268,29 @@ def copy_tables(
         "cluster_name": cluster_name or "no cluster",
         "dry_run": dry_run,
     }
+    if parsed_target:
+        resp["target_host"] = parsed_target[0]
 
     if dry_run:
         return resp
 
-    if target_host:
-        target_connection = get_clusterless_node_connection(
-            target_host,
-            _http_port_for_host(target_host, cluster),
-            storage_name,
-            client_settings=settings,
-        )
+    if parsed_target:
+        host, port = parsed_target
+        if target_host_is_allowlisted(host, port):
+            target_connection = get_clusterless_node_connection(
+                host,
+                port,
+                storage_name,
+                client_settings=settings,
+                validate_node=False,
+            )
+        else:
+            target_connection = get_clusterless_node_connection(
+                host,
+                _http_port_for_host(host, cluster),
+                storage_name,
+                client_settings=settings,
+            )
     else:
         target_connection = source_connection
 
