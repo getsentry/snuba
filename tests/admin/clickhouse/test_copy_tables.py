@@ -2,20 +2,24 @@ import os
 from unittest.mock import MagicMock, patch
 
 import pytest
+from sentry_options.testing import override_options
 
 from snuba.admin.clickhouse.common import _get_storage, get_clusterless_node_connection
 from snuba.admin.clickhouse.copy_tables import (
+    COPY_TABLES_ALLOWED_TARGET_HOSTS_OPTION,
     InvalidClusterName,
     TableStatement,
     copy_tables,
     get_create_table_statements,
     parse_target_host,
+    target_host_is_allowlisted,
     validate_cluster_name,
     verify_tables_on_replicas,
 )
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.migrations import table_engines
 from snuba.migrations.groups import MigrationGroup
+from snuba.state.sentry_options import SNUBA_OPTIONS_NAMESPACE
 
 OUTCOMES_DAILY_TABLE_NO_CLUSTER = """
 CREATE TABLE IF NOT EXISTS {db}.outcomes_daily_local_v2
@@ -344,13 +348,64 @@ def test_parse_target_host_rejects(raw: str) -> None:
         parse_target_host(raw)
 
 
+def test_target_host_is_allowlisted_hostname_matches_any_port() -> None:
+    with override_options(
+        SNUBA_OPTIONS_NAMESPACE,
+        {COPY_TABLES_ALLOWED_TARGET_HOSTS_OPTION: ["snuba-outcomes-query-arm-1-1"]},
+    ):
+        assert target_host_is_allowlisted("snuba-outcomes-query-arm-1-1", 8123)
+        assert target_host_is_allowlisted("SNUBA-outcomes-query-arm-1-1", 9000)
+        assert not target_host_is_allowlisted("other-host", 8123)
+
+
+def test_target_host_is_allowlisted_host_port_must_match() -> None:
+    with override_options(
+        SNUBA_OPTIONS_NAMESPACE,
+        {COPY_TABLES_ALLOWED_TARGET_HOSTS_OPTION: ["snuba-outcomes-query-arm-1-1:9000"]},
+    ):
+        assert target_host_is_allowlisted("snuba-outcomes-query-arm-1-1", 9000)
+        assert not target_host_is_allowlisted("snuba-outcomes-query-arm-1-1", 8123)
+
+
+def test_target_host_is_allowlisted_empty_by_default() -> None:
+    assert target_host_is_allowlisted("snuba-outcomes-query-arm-1-1", 8123) is False
+
+
+def _copy_tables_cluster_mock() -> MagicMock:
+    cluster = MagicMock()
+    cluster.get_database.return_value = "default"
+    cluster.is_single_node.return_value = True
+    cluster.get_query_node.return_value.host_name = "snuba-outcomes-query-1-2"
+    cluster.get_port.return_value = 8123
+    cluster.get_local_nodes.return_value = []
+    cluster.get_distributed_nodes.return_value = []
+    return cluster
+
+
+def test_copy_tables_target_host_requires_allowlist() -> None:
+    """A host outside the source cluster is rejected unless allowlisted."""
+    with patch("snuba.admin.clickhouse.copy_tables._get_storage") as mock_storage:
+        mock_storage.return_value.get_cluster.return_value = _copy_tables_cluster_mock()
+        with pytest.raises(ValueError, match=COPY_TABLES_ALLOWED_TARGET_HOSTS_OPTION):
+            copy_tables(
+                source_host="snuba-outcomes-query-1-2",
+                storage_name="outcomes_raw",
+                dry_run=True,
+                target_host="snuba-outcomes-query-arm-1-1",
+            )
+
+
 def test_copy_tables_target_host_skips_cluster_membership() -> None:
-    """CREATE runs on the typed-in host even when it is not in the source cluster."""
+    """CREATE runs on an allowlisted host even when it is not in the source cluster."""
     source_conn = MagicMock()
     target_conn = MagicMock()
     table_statement = TableStatement("t", "CREATE TABLE t", True)
 
     with (
+        override_options(
+            SNUBA_OPTIONS_NAMESPACE,
+            {COPY_TABLES_ALLOWED_TARGET_HOSTS_OPTION: ["snuba-outcomes-query-arm-1-1"]},
+        ),
         patch("snuba.admin.clickhouse.copy_tables._get_storage") as mock_storage,
         patch(
             "snuba.admin.clickhouse.copy_tables.get_clusterless_node_connection",
@@ -370,14 +425,7 @@ def test_copy_tables_target_host_skips_cluster_membership() -> None:
             return_value=({}, 1),
         ),
     ):
-        cluster = MagicMock()
-        cluster.get_database.return_value = "default"
-        cluster.is_single_node.return_value = True
-        cluster.get_query_node.return_value.host_name = "snuba-outcomes-query-1-2"
-        cluster.get_port.return_value = 8123
-        cluster.get_local_nodes.return_value = []
-        cluster.get_distributed_nodes.return_value = []
-        mock_storage.return_value.get_cluster.return_value = cluster
+        mock_storage.return_value.get_cluster.return_value = _copy_tables_cluster_mock()
 
         result = copy_tables(
             source_host="snuba-outcomes-query-1-2",

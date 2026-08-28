@@ -148,9 +148,10 @@ def _build_validated_pool(
     # through here. The regression test
     # test_no_direct_clickhouse_pool_construction_in_admin enforces this.
     #
-    # `validate_node=False` is only for copy-tables CREATE against a host that
-    # is not (yet) in the source cluster topology. That path is sudo-gated at
-    # the view layer. Every other helper must leave the default on.
+    # `validate_node=False` is only for copy-tables CREATE against a host on
+    # admin.copy_tables_allowed_target_hosts that is not in the source cluster
+    # topology. That path is also sudo-gated at the view layer. Every other
+    # helper must leave the default on.
     if validate_node:
         _validate_node(
             clickhouse_host, clickhouse_port, cluster, storage_name, known_nodes=known_nodes
@@ -344,10 +345,10 @@ def get_unvalidated_node_connection(
 ) -> ClickhousePool:
     """Connect using this storage's credentials without cluster membership checks.
 
-    Copy-tables uses this for the CREATE target so schemas can be applied on a
-    host that is not a member of the source cluster (for example a new ARM
-    cluster). The host is not checked against topology; credentials still come
-    from the source storage's cluster. Callers must already be sudo-gated.
+    Copy-tables uses this for the CREATE target when the host is on
+    ``admin.copy_tables_allowed_target_hosts`` but not (yet) in the source
+    cluster topology. Credentials still come from the source storage's cluster.
+    Callers must already be sudo-gated and must have checked the allowlist.
     """
     storage = _get_storage(storage_name)
     cluster = storage.get_cluster()

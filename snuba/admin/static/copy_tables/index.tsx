@@ -120,7 +120,8 @@ function CopyTables(props: {
             <h3>Target host (optional):</h3>
             <p style={targetHelpTextStyle}>
               If specified, CREATE statements run on this host instead of the source host.
-              It does not need to belong to the source cluster. Defaults to port 8123; you can pass host:port.
+              The host must be a known cluster node or listed in admin.copy_tables_allowed_target_hosts.
+              Defaults to port 8123; you can pass host:port.
             </p>
             <div style={{ marginTop: 10 }}>
               <input
