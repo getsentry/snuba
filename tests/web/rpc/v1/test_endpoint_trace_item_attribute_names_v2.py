@@ -30,7 +30,6 @@ from snuba.web.rpc.v1.endpoint_trace_item_attribute_names import (
 )
 from snuba.web.rpc.v1.resolvers.R_eap_items import co_occurring_attrs
 from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs import (
-    CO_OCCURRING_ATTRS_V2_OPTION,
     CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION,
     CO_OCCURRING_ATTRS_V2_STORAGE_KEY,
 )
@@ -84,15 +83,7 @@ def setup_teardown(eap: None, redis_db: None) -> Generator[None]:
             for _ in range(NUM_ITEMS)
         ],
     )
-    # Schema default is false under an initialized client. Pin the flag and the
-    # start timestamp so these tests read v2.
-    with override_options(
-        "snuba",
-        {
-            CO_OCCURRING_ATTRS_V2_OPTION: True,
-            CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION: 0,
-        },
-    ):
+    with override_options("snuba", {CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION: 0}):
         yield
 
 

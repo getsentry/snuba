@@ -23,12 +23,6 @@ LOG_FORMAT = "%(asctime)s %(message)s"
 TESTING = False
 DEBUG = True
 
-# Test/docker have no automator values. sentry-options forbids changing the
-# schema default of use_co_occurring_attrs_v2, so without this flag those
-# environments read v1, which we no longer write. Production stays False and
-# uses the rollout option + date gate.
-CO_OCCURRING_ATTRS_EXCLUSIVE_V2 = False
-
 HOST = "0.0.0.0"
 PORT = 1218
 
