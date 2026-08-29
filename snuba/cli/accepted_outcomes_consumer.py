@@ -129,8 +129,15 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
 @click.option(
     "--health-check",
     default="arroyo",
-    type=click.Choice(["snuba", "arroyo"]),
-    help="Specify which health check to use for the consumer. If not specified, the default Arroyo health check is used.",
+    type=click.Choice(["arroyo", "commit-progress", "partition-stall", "snuba"]),
+    help=(
+        "Which strategy owns the Kubernetes health file. "
+        "arroyo: touch on every poll. "
+        "commit-progress: touch on commit or idle. "
+        "partition-stall: touch unless a partition has in-flight work with no commit "
+        "past consumer.partition_stall_timeout_secs. "
+        "snuba is a deprecated alias for commit-progress."
+    ),
 )
 def accepted_outcomes_consumer(
     *,

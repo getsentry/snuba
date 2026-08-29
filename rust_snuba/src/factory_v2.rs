@@ -28,7 +28,7 @@ use crate::strategies::accountant::RecordCogs;
 use crate::strategies::clickhouse::writer_v2::{JsonWriterStep, RowBinaryWriterStep};
 use crate::strategies::commit_log::ProduceCommitLog;
 use crate::strategies::dlq_by_age::DlqByAge;
-use crate::strategies::healthcheck::HealthCheck as SnubaHealthCheck;
+use crate::strategies::healthcheck::{CommitProgressHealthCheck, PartitionStallHealthCheck};
 use crate::strategies::join_timeout::SetJoinTimeout;
 use crate::strategies::processor::{
     get_schema, make_rust_processor, make_rust_processor_with_replacements, validate_schema,
@@ -333,25 +333,20 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
         };
 
         if let Some(path) = &self.health_check_file {
-            // Prefer the Snuba healthcheck when explicitly requested, or when the
-            // per-partition stall watchdog is enabled (it only lives in SnubaHealthCheck).
-            let stall_watchdog_enabled = sentry_options::options("snuba")
-                .ok()
-                .and_then(|o| o.get("consumer.partition_stall_timeout_secs").ok())
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0)
-                > 0;
-            let use_snuba_healthcheck = self.health_check == "snuba" || stall_watchdog_enabled;
-            if use_snuba_healthcheck {
-                tracing::info!(
-                    health_check = %self.health_check,
-                    stall_watchdog_enabled,
-                    "Using Snuba HealthCheck for consumer group: {}",
-                    self.physical_consumer_group
-                );
-                Box::new(SnubaHealthCheck::new(next_step, path))
-            } else {
-                Box::new(HealthCheck::new(next_step, path))
+            tracing::info!(
+                health_check = %self.health_check,
+                "Using {} healthcheck for consumer group: {}",
+                self.health_check,
+                self.physical_consumer_group
+            );
+            match self.health_check.as_str() {
+                "commit-progress" => Box::new(CommitProgressHealthCheck::new(next_step, path)),
+                "snuba" => {
+                    tracing::warn!("--health-check snuba is deprecated; use commit-progress");
+                    Box::new(CommitProgressHealthCheck::new(next_step, path))
+                }
+                "partition-stall" => Box::new(PartitionStallHealthCheck::new(next_step, path)),
+                _ => Box::new(HealthCheck::new(next_step, path)),
             }
         } else {
             Box::new(next_step)
