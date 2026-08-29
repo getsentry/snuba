@@ -334,7 +334,6 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
 
         if let Some(path) = &self.health_check_file {
             tracing::info!(
-                health_check = %self.health_check,
                 "Using {} healthcheck for consumer group: {}",
                 self.health_check,
                 self.physical_consumer_group

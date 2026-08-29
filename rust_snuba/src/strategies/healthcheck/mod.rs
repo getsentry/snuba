@@ -27,17 +27,16 @@ const TOUCH_INTERVAL: Duration = Duration::from_secs(1);
 /// Touches the Kubernetes health file at most once per [`TOUCH_INTERVAL`].
 struct HealthFile {
     path: PathBuf,
-    interval: Duration,
     deadline: SystemTime,
 }
 
 impl HealthFile {
     fn new(path: impl Into<PathBuf>) -> Self {
-        let interval = TOUCH_INTERVAL;
         Self {
             path: path.into(),
-            interval,
-            deadline: SystemTime::now() + interval,
+            deadline: SystemTime::now()
+                .checked_add(TOUCH_INTERVAL)
+                .unwrap_or(SystemTime::now()),
         }
     }
 
@@ -54,7 +53,7 @@ impl HealthFile {
         }
 
         counter!("arroyo.processing.strategies.healthcheck.touch");
-        self.deadline = now + self.interval;
+        self.deadline = now.checked_add(TOUCH_INTERVAL).unwrap_or(now);
     }
 }
 
@@ -70,8 +69,8 @@ mod testutil {
     use sentry_arroyo::types::{Message, Partition, Topic};
 
     pub struct MockStrategy {
-        pub return_commit_request: bool,
-        pub commit_positions: HashMap<Partition, u64>,
+        return_commit_request: bool,
+        commit_positions: HashMap<Partition, u64>,
     }
 
     impl MockStrategy {

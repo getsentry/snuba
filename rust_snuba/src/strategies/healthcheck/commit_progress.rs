@@ -34,16 +34,11 @@ where
 {
     fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         let poll_result = self.next_step.poll();
-
-        if let Ok(Some(_commit_request)) = poll_result.as_ref() {
+        let has_commit = matches!(poll_result, Ok(Some(_)));
+        if has_commit || self.iterations_since_last_submit > 0 {
             self.file.maybe_touch();
         }
-
-        if self.iterations_since_last_submit > 0 {
-            self.file.maybe_touch();
-        }
-
-        self.iterations_since_last_submit += 1;
+        self.iterations_since_last_submit = self.iterations_since_last_submit.saturating_add(1);
         poll_result
     }
 

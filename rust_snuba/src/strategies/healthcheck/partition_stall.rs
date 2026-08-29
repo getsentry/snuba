@@ -11,7 +11,6 @@ use sentry_options::options;
 
 use super::HealthFile;
 
-/// Default timeout when the option is missing. Used only by this strategy.
 const DEFAULT_PARTITION_STALL_TIMEOUT_SECS: u64 = 300;
 
 struct PartitionState {
@@ -20,63 +19,58 @@ struct PartitionState {
     last_committed_offset: Option<u64>,
 }
 
+impl PartitionState {
+    fn inflight(&self) -> bool {
+        self.last_committed_offset.is_none() || self.last_submit_at > self.last_progress_at
+    }
+}
+
 /// Per-partition submit/commit times. `healthy()` is a pure read of that state.
+#[derive(Default)]
 struct PartitionTracker {
     partitions: HashMap<Partition, PartitionState>,
 }
 
 impl PartitionTracker {
-    fn new() -> Self {
-        Self {
-            partitions: HashMap::new(),
-        }
-    }
-
     fn record_submit<TPayload>(&mut self, message: &Message<TPayload>) {
         let now = Instant::now();
-        for (partition, _offset) in message.committable() {
-            let entry = self
-                .partitions
+        for (partition, _) in message.committable() {
+            self.partitions
                 .entry(partition)
+                .and_modify(|state| state.last_submit_at = now)
                 .or_insert_with(|| PartitionState {
                     last_submit_at: now,
                     last_progress_at: now,
                     last_committed_offset: None,
                 });
-            entry.last_submit_at = now;
         }
     }
 
     fn record_commit(&mut self, commit_request: &CommitRequest) {
         let now = Instant::now();
         for (partition, offset) in &commit_request.positions {
-            if let Some(entry) = self.partitions.get_mut(partition) {
-                let advanced = entry
-                    .last_committed_offset
-                    .map(|prev| *offset > prev)
-                    .unwrap_or(true);
-                if advanced {
-                    entry.last_progress_at = now;
-                    entry.last_committed_offset = Some(*offset);
-                }
-            } else {
-                self.partitions.insert(
-                    *partition,
-                    PartitionState {
-                        last_submit_at: now,
-                        last_progress_at: now,
-                        last_committed_offset: Some(*offset),
-                    },
-                );
-            }
+            self.partitions
+                .entry(*partition)
+                .and_modify(|state| {
+                    if state
+                        .last_committed_offset
+                        .is_none_or(|prev| *offset > prev)
+                    {
+                        state.last_progress_at = now;
+                        state.last_committed_offset = Some(*offset);
+                    }
+                })
+                .or_insert_with(|| PartitionState {
+                    last_submit_at: now,
+                    last_progress_at: now,
+                    last_committed_offset: Some(*offset),
+                });
         }
     }
 
     fn healthy(&self, now: Instant, timeout: Duration) -> bool {
         for (partition, state) in &self.partitions {
-            let inflight = state.last_committed_offset.is_none()
-                || state.last_submit_at > state.last_progress_at;
-            if !inflight {
+            if !state.inflight() {
                 continue;
             }
             let stalled_for = now.saturating_duration_since(state.last_progress_at);
@@ -109,7 +103,7 @@ impl<Next> PartitionStallHealthCheck<Next> {
         Self {
             next_step,
             file: HealthFile::new(path),
-            tracker: PartitionTracker::new(),
+            tracker: PartitionTracker::default(),
         }
     }
 
@@ -217,10 +211,11 @@ mod tests {
         let file_path = format!("/tmp/healthcheck_recover_{}", uuid::Uuid::new_v4());
         let partition = test_partition(7);
 
-        let mut positions = HashMap::new();
-        positions.insert(partition, 10);
         let mut health_check: PartitionStallHealthCheck<MockStrategy> =
-            PartitionStallHealthCheck::new(MockStrategy::with_positions(positions), &file_path);
+            PartitionStallHealthCheck::new(
+                MockStrategy::with_positions(HashMap::from([(partition, 10)])),
+                &file_path,
+            );
 
         health_check.submit(broker_message(partition, 9)).unwrap();
         thread::sleep(Duration::from_millis(1100));
@@ -242,10 +237,11 @@ mod tests {
         let file_path = format!("/tmp/healthcheck_idle_{}", uuid::Uuid::new_v4());
         let partition = test_partition(3);
 
-        let mut positions = HashMap::new();
-        positions.insert(partition, 5);
         let mut health_check: PartitionStallHealthCheck<MockStrategy> =
-            PartitionStallHealthCheck::new(MockStrategy::with_positions(positions), &file_path);
+            PartitionStallHealthCheck::new(
+                MockStrategy::with_positions(HashMap::from([(partition, 5)])),
+                &file_path,
+            );
 
         health_check.submit(broker_message(partition, 4)).unwrap();
         let _ = health_check.poll();
