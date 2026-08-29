@@ -14,16 +14,28 @@ function OutcomesAnalyzer(props: { api: Client }) {
   >([]);
   const [categoryOptions, setCategoryOptions] = useState<EnumOption[]>([]);
   const [outcomeOptions, setOutcomeOptions] = useState<EnumOption[]>([]);
+  const [enumOptionsError, setEnumOptionsError] = useState<string | null>(null);
 
   useEffect(() => {
     // Backend already strips class-body indentation from predefined SQL.
     props.api.getPredefinedOutcomesQueryOptions().then((res) => {
       setPredefinedQueryOptions(res);
     });
-    props.api.getOutcomesEnumOptions().then((res) => {
-      setCategoryOptions(res.categories ?? []);
-      setOutcomeOptions(res.outcomes ?? []);
-    });
+    props.api
+      .getOutcomesEnumOptions()
+      .then((res) => {
+        setEnumOptionsError(null);
+        setCategoryOptions(res.categories ?? []);
+        setOutcomeOptions(res.outcomes ?? []);
+      })
+      .catch((err) => {
+        setCategoryOptions([]);
+        setOutcomeOptions([]);
+        setEnumOptionsError(
+          err?.message ||
+            "Could not load category/outcome dropdown options; falling back to free-text fields."
+        );
+      });
   }, []);
 
   function tablePopulator(queryResult: OutcomesQueryResult) {
@@ -44,6 +56,7 @@ function OutcomesAnalyzer(props: { api: Client }) {
       predefinedQueryOptions={predefinedQueryOptions}
       categoryOptions={categoryOptions}
       outcomeOptions={outcomeOptions}
+      enumOptionsError={enumOptionsError}
     />
   );
 }

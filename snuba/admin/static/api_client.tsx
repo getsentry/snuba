@@ -332,7 +332,25 @@ function Client(): Client {
     },
     getOutcomesEnumOptions: () => {
       const url = baseUrl + "outcomes_enum_options";
-      return fetch(url).then((resp) => resp.json());
+      return fetch(url).then((resp) => {
+        if (resp.ok) {
+          return resp.json();
+        }
+        return resp.json().then(
+          (err) => {
+            throw new Error(
+              err?.error?.message ||
+                err?.error ||
+                "Could not load outcomes enum options"
+            );
+          },
+          () => {
+            throw new Error(
+              `Could not load outcomes enum options (${resp.status})`
+            );
+          }
+        );
+      });
     },
     executeOutcomesQuery: (query: OutcomesQueryRequest) => {
       const url = baseUrl + "outcomes_query";

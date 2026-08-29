@@ -21,6 +21,7 @@ function QueryDisplay(props: {
   predefinedQueryOptions: Array<PredefinedQuery>;
   categoryOptions: Array<EnumOption>;
   outcomeOptions: Array<EnumOption>;
+  enumOptionsError?: string | null;
 }) {
   const [sql, setSql] = useState("");
   const [queryResultHistory, setQueryResultHistory] = useState<
@@ -77,6 +78,11 @@ function QueryDisplay(props: {
         enum. Time range supports relative lookback or absolute date-time
         pickers.
       </p>
+      {props.enumOptionsError ? (
+        <p style={errorStyle} role="alert">
+          {props.enumOptionsError}
+        </p>
+      ) : null}
       <QueryEditor
         onQueryUpdate={setSql}
         predefinedQueryOptions={props.predefinedQueryOptions}
@@ -108,6 +114,11 @@ const helpStyle = {
   fontSize: 14,
   maxWidth: 900,
   lineHeight: 1.4,
+};
+
+const errorStyle = {
+  ...helpStyle,
+  color: "#c92a2a",
 };
 
 export default QueryDisplay;
