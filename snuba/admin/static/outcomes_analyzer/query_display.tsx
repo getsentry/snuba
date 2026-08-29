@@ -69,13 +69,10 @@ function QueryDisplay(props: {
       <p style={helpStyle}>
         Query <code>outcomes_hourly_dist</code> to investigate volume spikes by
         category, org, project, outcome, and reason. Prefer hourly over raw —
-        it is orders of magnitude cheaper. Common categories:{" "}
-        <code>4</code> attachment bytes, <code>7</code> replay,{" "}
-        <code>22</code> attachment count, <code>1</code> error,{" "}
-        <code>2</code> transaction, <code>10</code> span. Outcomes:{" "}
-        <code>0</code> accepted, <code>1</code> filtered, <code>2</code> rate
-        limited, <code>3</code> invalid, <code>4</code> abuse,{" "}
-        <code>5</code> client discard.
+        it is orders of magnitude cheaper. Use the category dropdown for common
+        DataCategory IDs (for example attachment bytes = 4, replay = 7, span =
+        12). Time range supports relative lookback or absolute date-time
+        pickers.
       </p>
       <QueryEditor
         onQueryUpdate={setSql}

@@ -167,6 +167,38 @@ describe("Query editor", () => {
           expect.stringContaining("{{")
         );
       });
+
+      it("renders category and outcome dropdowns for known params", async () => {
+        const outcomesQuery = {
+          name: "category_outcome_query",
+          sql: "category = {{category}} AND outcome = {{outcome}}",
+          description: "Filter by category and outcome",
+        };
+        const mockOnQueryUpdate = jest.fn<(query: string) => {}>();
+        const { getByLabelText, getByTestId, getByText } = render(
+          <QueryEditor
+            onQueryUpdate={mockOnQueryUpdate}
+            predefinedQueryOptions={[outcomesQuery]}
+          />
+        );
+
+        await act(async () => userEvent.click(getByTestId("select")));
+        await act(async () => userEvent.click(getByText(outcomesQuery.name)));
+
+        expect(getByLabelText("Category")).toBeTruthy();
+        expect(getByLabelText("Outcome")).toBeTruthy();
+
+        await act(async () => userEvent.click(getByLabelText("Category")));
+        await act(async () => userEvent.click(getByText("7 \u2014 replay")));
+        await act(async () => userEvent.click(getByLabelText("Outcome")));
+        await act(async () =>
+          userEvent.click(getByText("2 \u2014 rate_limited"))
+        );
+
+        expect(mockOnQueryUpdate).toHaveBeenLastCalledWith(
+          "category = 7 AND outcome = 2"
+        );
+      });
     });
     describe("with text area input", () => {
       it("should invoke call back with text area value when no labels are present", async () => {

@@ -5,13 +5,13 @@ from snuba.utils.registered_class import RegisteredClass
 
 
 # Common DataCategory values (from Relay):
-#   1 = error, 2 = transaction, 3 = security, 4 = attachment,
-#   5 = default, 6 = session, 7 = replay, 8 = profile,
-#   9 = profile_chunk, 10 = span, 11 = monitor, 21 = log_item,
-#   22 = attachment_item (attachment count), 23 = uptime
+#   1 = error, 2 = transaction, 3 = security, 4 = attachment (bytes),
+#   5 = session, 6 = profile, 7 = replay, 10 = monitor, 12 = span,
+#   18 = profile_chunk, 21 = uptime, 22 = attachment_item (count),
+#   23 = log_item, 24 = log_byte
 # Outcome values:
 #   0 = accepted, 1 = filtered, 2 = rate_limited, 3 = invalid,
-#   4 = abuse, 5 = client_discard
+#   4 = abuse, 5 = client_discard, 6 = cardinality_limited
 class OutcomesQuery(PreDefinedQuery, metaclass=RegisteredClass):
     @classmethod
     def config_key(cls) -> str:
