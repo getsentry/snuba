@@ -9,8 +9,7 @@
 //! - **partition-stall**: [`PartitionStallHealthCheck`] — touch unless a partition
 //!   has in-flight work with no commit past `consumer.partition_stall_timeout_secs`.
 //!
-//! `snuba` is a deprecated alias for `commit-progress`. All of these require
-//! `--health-check-file`.
+//! All of these require `--health-check-file`.
 
 mod commit_progress;
 mod partition_stall;

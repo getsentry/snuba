@@ -341,10 +341,6 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             );
             match self.health_check.as_str() {
                 "commit-progress" => Box::new(CommitProgressHealthCheck::new(next_step, path)),
-                "snuba" => {
-                    tracing::warn!("--health-check snuba is deprecated; use commit-progress");
-                    Box::new(CommitProgressHealthCheck::new(next_step, path))
-                }
                 "partition-stall" => Box::new(PartitionStallHealthCheck::new(next_step, path)),
                 _ => Box::new(HealthCheck::new(next_step, path)),
             }

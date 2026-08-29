@@ -188,7 +188,6 @@ Value                 Default    Touches the file when
                                  committed within ``consumer.partition_stall_timeout_secs``
                                  (default 300; ``0`` disables detection and touches on
                                  every poll). Ignored by the other strategies.
-``snuba``             no         Deprecated alias for ``commit-progress``.
 ====================  =========  ========================================================
 
 Kubernetes startup and liveness probes remove the health file and expect the
