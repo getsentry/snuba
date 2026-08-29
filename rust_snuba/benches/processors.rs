@@ -57,6 +57,7 @@ fn create_factory(
             user: "test".into(),
             password: "test".into(),
             database: "test".into(),
+            verify: None,
         },
         message_processor: MessageProcessorConfig {
             python_class_name: python_class_name.into(),

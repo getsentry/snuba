@@ -291,12 +291,22 @@ impl ClickhouseClient {
         );
 
         let timeouts = get_clickhouse_write_client_timeouts(&storage_name);
-        let client = Client::builder()
+        let mut builder = Client::builder()
             .connect_timeout(timeouts.connect)
             .pool_idle_timeout(timeouts.pool_idle)
             .tcp_keepalive(timeouts.tcp_keepalive)
             .tcp_keepalive_interval(timeouts.tcp_keepalive_interval)
-            .tcp_keepalive_retries(timeouts.tcp_keepalive_retries)
+            .tcp_keepalive_retries(timeouts.tcp_keepalive_retries);
+
+        // Match the Python clients, which skip certificate verification when
+        // the cluster sets `verify=False` (self-signed / private-CA HTTPS).
+        if config.secure && config.verify == Some(false) {
+            builder = builder
+                .tls_danger_accept_invalid_certs(true)
+                .tls_danger_accept_invalid_hostnames(true);
+        }
+
+        let client = builder
             .build()
             .expect("failed to build ClickHouse HTTP client");
 
@@ -503,6 +513,7 @@ mod tests {
             user: std::env::var("CLICKHOUSE_USER").unwrap_or("default".to_string()),
             password: std::env::var("CLICKHOUSE_PASSWORD").unwrap_or("".to_string()),
             database: std::env::var("CLICKHOUSE_DATABASE").unwrap_or("default".to_string()),
+            verify: None,
         }
     }
 
@@ -729,6 +740,7 @@ mod tests {
             user: "default".to_string(),
             password: "".to_string(),
             database: "default".to_string(),
+            verify: None,
         };
 
         let client = ClickhouseClient::new(
@@ -781,6 +793,7 @@ mod tests {
             user: "default".to_string(),
             password: "".to_string(),
             database: "default".to_string(),
+            verify: None,
         };
         let client = ClickhouseClient::new(
             &config,

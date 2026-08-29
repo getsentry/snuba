@@ -1,6 +1,27 @@
 import pytest
 
-from snuba.consumers.consumer_config import resolve_consumer_config
+from snuba.consumers.consumer_config import _coerce_verify, resolve_consumer_config
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        (None, None),
+        (True, True),
+        (False, False),
+        ("true", True),
+        ("1", True),
+        ("false", False),
+        ("FALSE", False),
+        ("0", False),
+        (" false ", False),
+        ("", True),
+        ("yes", True),
+        ("garbage", True),
+    ],
+)
+def test_coerce_verify(raw: bool | str | None, expected: bool | None) -> None:
+    assert _coerce_verify(raw) == expected
 
 
 def test_consumer_config() -> None:
@@ -19,6 +40,7 @@ def test_consumer_config() -> None:
 
     assert len(resolved.storages) == 1
     assert resolved.storages[0].clickhouse_table_name in ("errors_local", "errors_dist")
+    assert resolved.storages[0].clickhouse_cluster.verify is None
     assert resolved.raw_topic.broker_config["bootstrap.servers"] == "some_server:9092"
     assert resolved.raw_topic.physical_topic_name == "new-events"
     assert resolved.raw_topic.logical_topic_name == "events"
