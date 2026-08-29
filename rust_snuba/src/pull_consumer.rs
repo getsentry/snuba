@@ -8,8 +8,7 @@ use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::backends::Producer;
 use sentry_arroyo::metrics;
 use sentry_arroyo::processing::stream::{
-    BatchStage, DlqHandler, KafkaSource, OffsetTracker, Pipeline, PipelineExit, PipelineExt,
-    PullSource,
+    BatchStage, DlqHandler, KafkaSource, PipelineRunner, PullSource,
 };
 use sentry_arroyo::types::{Topic, TopicOrPartition};
 
@@ -18,7 +17,6 @@ use crate::logging::{setup_logging, setup_sentry};
 use crate::metrics::statsd::create_dogstatsd_backend;
 use crate::processors::eap_items::EAPItemRow;
 use crate::processors::{get_cogs_label, get_processing_function, ProcessingFunctionType};
-use crate::pull::batch::batch_metadata::BatchMetadata;
 use crate::pull::batch::buffer::PipelineBatchBuffer;
 use crate::pull::batch::pipeline_batch::PipelineBatch;
 use crate::pull::pipelines::eap::EapPipeline;
@@ -352,34 +350,6 @@ fn make_faf_pipeline(
     )
 }
 
-// ── Rebalance loop ─────────────────────────────────────────
-
-async fn run_with_rebalance<P: Pipeline<Output = BatchMetadata>>(
-    source: &KafkaSource,
-    build_pipeline: impl Fn() -> P,
-) -> usize {
-    loop {
-        let pipeline = build_pipeline();
-        let mut tracker = OffsetTracker::new(Duration::from_secs(1), source.committer());
-        let result = pipeline.stream(source.stream()).commit(&mut tracker);
-
-        match result.await {
-            Ok(PipelineExit::Rebalance) => {
-                tracing::info!("Rebalance detected, restarting pipeline...");
-                continue;
-            }
-            Ok(PipelineExit::Shutdown | PipelineExit::Complete) => {
-                tracing::info!("Pipeline shutdown");
-                return 0;
-            }
-            Err(e) => {
-                tracing::error!("Pipeline failed: {}", e);
-                return 1;
-            }
-        }
-    }
-}
-
 // ── Entry point ────────────────────────────────────────────
 
 #[pyfunction]
@@ -519,7 +489,7 @@ fn pull_consumer_impl(
         );
 
         let result = if is_eap {
-            run_with_rebalance(&source, || {
+            PipelineRunner::run(&source, Duration::from_secs(1), || {
                 make_eap_pipeline(
                     &shared,
                     &consumer_config,
@@ -533,7 +503,7 @@ fn pull_consumer_impl(
             })
             .await
         } else {
-            run_with_rebalance(&source, || {
+            PipelineRunner::run(&source, Duration::from_secs(1), || {
                 make_faf_pipeline(
                     &shared,
                     processor,
@@ -547,7 +517,14 @@ fn pull_consumer_impl(
         };
 
         source.shutdown();
-        result
+
+        match result {
+            Ok(()) => 0,
+            Err(e) => {
+                tracing::error!("Pipeline failed: {e}");
+                1
+            }
+        }
     });
 
     exit_code
