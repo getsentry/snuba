@@ -168,7 +168,7 @@ describe("Query editor", () => {
         );
       });
 
-      it("renders category and outcome dropdowns for known params", async () => {
+      it("renders category and outcome dropdowns from backend options", async () => {
         const outcomesQuery = {
           name: "category_outcome_query",
           sql: "category = {{category}} AND outcome = {{outcome}}",
@@ -179,6 +179,11 @@ describe("Query editor", () => {
           <QueryEditor
             onQueryUpdate={mockOnQueryUpdate}
             predefinedQueryOptions={[outcomesQuery]}
+            categoryOptions={[{ value: "7", label: "7 — replay" }]}
+            outcomeOptions={[{
+              value: "2",
+              label: "2 — rate_limited",
+            }]}
           />
         );
 
@@ -189,10 +194,10 @@ describe("Query editor", () => {
         expect(getByLabelText("Outcome")).toBeTruthy();
 
         await act(async () => userEvent.click(getByLabelText("Category")));
-        await act(async () => userEvent.click(getByText("7 \u2014 replay")));
+        await act(async () => userEvent.click(getByText("7 — replay")));
         await act(async () => userEvent.click(getByLabelText("Outcome")));
         await act(async () =>
-          userEvent.click(getByText("2 \u2014 rate_limited"))
+          userEvent.click(getByText("2 — rate_limited"))
         );
 
         expect(mockOnQueryUpdate).toHaveBeenLastCalledWith(

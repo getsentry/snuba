@@ -3,6 +3,7 @@ import Client from "SnubaAdmin/api_client";
 import { Table } from "SnubaAdmin/table";
 import QueryDisplay from "SnubaAdmin/outcomes_analyzer/query_display";
 import {
+  EnumOption,
   OutcomesQueryResult,
   PredefinedQuery,
 } from "SnubaAdmin/outcomes_analyzer/types";
@@ -11,11 +12,17 @@ function OutcomesAnalyzer(props: { api: Client }) {
   const [predefinedQueryOptions, setPredefinedQueryOptions] = useState<
     PredefinedQuery[]
   >([]);
+  const [categoryOptions, setCategoryOptions] = useState<EnumOption[]>([]);
+  const [outcomeOptions, setOutcomeOptions] = useState<EnumOption[]>([]);
 
   useEffect(() => {
     // Backend already strips class-body indentation from predefined SQL.
     props.api.getPredefinedOutcomesQueryOptions().then((res) => {
       setPredefinedQueryOptions(res);
+    });
+    props.api.getOutcomesEnumOptions().then((res) => {
+      setCategoryOptions(res.categories ?? []);
+      setOutcomeOptions(res.outcomes ?? []);
     });
   }, []);
 
@@ -35,6 +42,8 @@ function OutcomesAnalyzer(props: { api: Client }) {
       api={props.api}
       resultDataPopulator={tablePopulator}
       predefinedQueryOptions={predefinedQueryOptions}
+      categoryOptions={categoryOptions}
+      outcomeOptions={outcomeOptions}
     />
   );
 }

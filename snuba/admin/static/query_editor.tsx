@@ -20,6 +20,11 @@ type PredefinedQuery = {
   description: string;
 };
 
+type EnumOption = {
+  value: string;
+  label: string;
+};
+
 type QueryParamValues = {
   [key: string]: string;
 };
@@ -31,44 +36,6 @@ const START_TIME_PARAM = "{{start_time}}";
 const END_TIME_PARAM = "{{end_time}}";
 const CATEGORY_PARAM = "{{category}}";
 const OUTCOME_PARAM = "{{outcome}}";
-
-// Relay DataCategory values commonly used in outcomes investigation.
-// Keep labels human-readable; values are the numeric IDs written into SQL.
-const CATEGORY_OPTIONS = [
-  { value: "1", label: "1 — error" },
-  { value: "2", label: "2 — transaction" },
-  { value: "3", label: "3 — security" },
-  { value: "4", label: "4 — attachment (bytes)" },
-  { value: "5", label: "5 — session" },
-  { value: "6", label: "6 — profile" },
-  { value: "7", label: "7 — replay" },
-  { value: "9", label: "9 — transaction_indexed" },
-  { value: "10", label: "10 — monitor" },
-  { value: "11", label: "11 — profile_indexed" },
-  { value: "12", label: "12 — span" },
-  { value: "14", label: "14 — feedback" },
-  { value: "16", label: "16 — span_indexed" },
-  { value: "17", label: "17 — profile_duration" },
-  { value: "18", label: "18 — profile_chunk" },
-  { value: "21", label: "21 — uptime" },
-  { value: "22", label: "22 — attachment_item (count)" },
-  { value: "23", label: "23 — log_item" },
-  { value: "24", label: "24 — log_byte" },
-  { value: "25", label: "25 — profile_duration_ui" },
-  { value: "26", label: "26 — profile_chunk_ui" },
-  { value: "33", label: "33 — trace_metric" },
-  { value: "37", label: "37 — trace_metric_byte" },
-];
-
-const OUTCOME_OPTIONS = [
-  { value: "0", label: "0 — accepted" },
-  { value: "1", label: "1 — filtered" },
-  { value: "2", label: "2 — rate_limited" },
-  { value: "3", label: "3 — invalid" },
-  { value: "4", label: "4 — abuse" },
-  { value: "5", label: "5 — client_discard" },
-  { value: "6", label: "6 — cardinality_limited" },
-];
 
 /** @private */
 export function formatAbsoluteDateTime(value: Date | null): string {
@@ -124,6 +91,8 @@ export function mergeQueryParamValues(
 function QueryEditor(props: {
   onQueryUpdate: (query: string) => void;
   predefinedQueryOptions?: Array<PredefinedQuery>;
+  categoryOptions?: Array<EnumOption>;
+  outcomeOptions?: Array<EnumOption>;
 }) {
   const [query, setQuery] = useState<string>("");
   const hash = window.location.hash;
@@ -373,15 +342,23 @@ function QueryEditor(props: {
           paramName !== START_TIME_PARAM && paramName !== END_TIME_PARAM
       )
       .forEach((paramName) => {
-        if (paramName === CATEGORY_PARAM) {
+        if (paramName === CATEGORY_PARAM && (props.categoryOptions?.length ?? 0) > 0) {
           setters.push(
-            renderEnumParameter(paramName, "Category", CATEGORY_OPTIONS)
+            renderEnumParameter(
+              paramName,
+              "Category",
+              props.categoryOptions ?? []
+            )
           );
           return;
         }
-        if (paramName === OUTCOME_PARAM) {
+        if (paramName === OUTCOME_PARAM && (props.outcomeOptions?.length ?? 0) > 0) {
           setters.push(
-            renderEnumParameter(paramName, "Outcome", OUTCOME_OPTIONS)
+            renderEnumParameter(
+              paramName,
+              "Outcome",
+              props.outcomeOptions ?? []
+            )
           );
           return;
         }

@@ -29,6 +29,7 @@ import {
   CardinalityQueryResult,
 } from "SnubaAdmin/cardinality_analyzer/types";
 import {
+  OutcomesEnumOptions,
   OutcomesQueryRequest,
   OutcomesQueryResult,
 } from "SnubaAdmin/outcomes_analyzer/types";
@@ -63,6 +64,7 @@ interface Client {
     req: CardinalityQueryRequest,
   ) => Promise<CardinalityQueryResult>;
   getPredefinedOutcomesQueryOptions: () => Promise<[PredefinedQuery]>;
+  getOutcomesEnumOptions: () => Promise<OutcomesEnumOptions>;
   executeOutcomesQuery: (
     req: OutcomesQueryRequest,
   ) => Promise<OutcomesQueryResult>;
@@ -326,6 +328,10 @@ function Client(): Client {
     },
     getPredefinedOutcomesQueryOptions: () => {
       const url = baseUrl + "outcomes_queries";
+      return fetch(url).then((resp) => resp.json());
+    },
+    getOutcomesEnumOptions: () => {
+      const url = baseUrl + "outcomes_enum_options";
       return fetch(url).then((resp) => resp.json());
     },
     executeOutcomesQuery: (query: OutcomesQueryRequest) => {

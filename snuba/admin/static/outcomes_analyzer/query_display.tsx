@@ -7,6 +7,7 @@ import ExecuteButton from "SnubaAdmin/utils/execute_button";
 import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";
 import QueryResultCopier from "SnubaAdmin/utils/query_result_copier";
 import {
+  EnumOption,
   OutcomesQueryRequest,
   OutcomesQueryResult,
   PredefinedQuery,
@@ -18,6 +19,8 @@ function QueryDisplay(props: {
   api: Client;
   resultDataPopulator: (queryResult: OutcomesQueryResult) => JSX.Element;
   predefinedQueryOptions: Array<PredefinedQuery>;
+  categoryOptions: Array<EnumOption>;
+  outcomeOptions: Array<EnumOption>;
 }) {
   const [sql, setSql] = useState("");
   const [queryResultHistory, setQueryResultHistory] = useState<
@@ -69,14 +72,16 @@ function QueryDisplay(props: {
       <p style={helpStyle}>
         Query <code>outcomes_hourly_dist</code> to investigate volume spikes by
         category, org, project, outcome, and reason. Prefer hourly over raw —
-        it is orders of magnitude cheaper. Use the category dropdown for common
-        DataCategory IDs (for example attachment bytes = 4, replay = 7, span =
-        12). Time range supports relative lookback or absolute date-time
+        it is orders of magnitude cheaper. Category and outcome dropdowns are
+        loaded from Relay <code>DataCategory</code> and the snuba-admin Outcome
+        enum. Time range supports relative lookback or absolute date-time
         pickers.
       </p>
       <QueryEditor
         onQueryUpdate={setSql}
         predefinedQueryOptions={props.predefinedQueryOptions}
+        categoryOptions={props.categoryOptions}
+        outcomeOptions={props.outcomeOptions}
       />
       <div style={executeActionsStyle}>
         <ExecuteButton onClick={executeQuery} disabled={!sql} />
