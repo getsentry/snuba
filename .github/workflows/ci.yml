@@ -139,11 +139,6 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install Rust Toolchain
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup component add clippy rustfmt --toolchain stable
-
       - name: Run linter
         run: |
           make lint-rust format-rust-ci

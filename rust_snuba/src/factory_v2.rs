@@ -446,6 +446,7 @@ mod tests {
         max_batch_size: usize,
         calculation: config::BatchSizeCalculation,
     ) -> Reduce<BytesInsertBatch<RowData>, BytesInsertBatch<RowData>> {
+        #[allow(clippy::result_large_err)]
         let accumulator = Arc::new(
             |batch: BytesInsertBatch<RowData>, small_batch: Message<BytesInsertBatch<RowData>>| {
                 Ok(batch.merge(small_batch.into_payload()))
