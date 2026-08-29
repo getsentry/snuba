@@ -73,10 +73,9 @@ function QueryDisplay(props: {
       <p style={helpStyle}>
         Query <code>outcomes_hourly_dist</code> to investigate volume spikes by
         category, org, project, outcome, and reason. Prefer hourly over raw —
-        it is orders of magnitude cheaper. Category and outcome dropdowns are
-        loaded from Relay <code>DataCategory</code> and the snuba-admin Outcome
-        enum. Time range supports relative lookback or absolute date-time
-        pickers.
+        it is orders of magnitude cheaper. Fill params from the controls below
+        (category/outcome dropdowns, time range, numeric fields). The execute
+        button shows when a query is running.
       </p>
       {props.enumOptionsError ? (
         <p style={errorStyle} role="alert">

@@ -67,6 +67,15 @@ describe("Query editor", () => {
         c: "c_val",
       });
     });
+
+    it("should seed default values for known params", () => {
+      expect(
+        mergeQueryParamValues(new Set(["{{limit}}", "{{org_id}}"]), {})
+      ).toStrictEqual({
+        "{{limit}}": "100",
+        "{{org_id}}": "",
+      });
+    });
   });
   describe("when rendered", () => {
     beforeEach(() => {
@@ -202,6 +211,36 @@ describe("Query editor", () => {
 
         expect(mockOnQueryUpdate).toHaveBeenLastCalledWith(
           "category = 7 AND outcome = 2"
+        );
+      });
+
+      it("uses number inputs for org_id and limit", async () => {
+        const numericQuery = {
+          name: "numeric_query",
+          sql: "org_id = {{org_id}} LIMIT {{limit}}",
+          description: "Numeric params",
+        };
+        const mockOnQueryUpdate = jest.fn<(query: string) => {}>();
+        const { getByLabelText, getByTestId, getByText } = render(
+          <QueryEditor
+            onQueryUpdate={mockOnQueryUpdate}
+            predefinedQueryOptions={[numericQuery]}
+          />
+        );
+
+        await act(async () => userEvent.click(getByTestId("select")));
+        await act(async () => userEvent.click(getByText(numericQuery.name)));
+
+        expect(mockOnQueryUpdate).toHaveBeenLastCalledWith(
+          "org_id = {{org_id}} LIMIT 100"
+        );
+
+        const orgInput = getByLabelText("org id");
+        await act(async () => userEvent.clear(orgInput));
+        await act(async () => userEvent.type(orgInput, "42"));
+
+        expect(mockOnQueryUpdate).toHaveBeenLastCalledWith(
+          "org_id = 42 LIMIT 100"
         );
       });
     });
