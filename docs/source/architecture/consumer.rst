@@ -215,7 +215,6 @@ These only apply when the **snuba** strategy is active.
      - Every successful ``poll`` (same as arroyo). Catches main thread not polling.
    * - Commit progress
      - ``consumer.commit_progress_healthcheck``
-       (legacy alias: ``experimental_healthcheck``)
      - A commit request is observed, or the consumer is idle (no recent submits).
        Unhealthy while work is in flight without commits. **Consumer-level**, not
        per-partition: one stuck partition can stay healthy if siblings still commit.

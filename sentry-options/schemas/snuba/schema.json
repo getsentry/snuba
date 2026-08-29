@@ -28,12 +28,7 @@
     "consumer.commit_progress_healthcheck": {
       "type": "boolean",
       "default": false,
-      "description": "When true (and using the Snuba healthcheck with --health-check-file), only touch the health file on commit progress or when the consumer is idle (no recent submits). Unhealthy while work is in flight without commits. This is consumer-level, not per-partition. Prefer this over the legacy experimental_healthcheck alias."
-    },
-    "experimental_healthcheck": {
-      "type": "boolean",
-      "default": false,
-      "description": "Legacy alias for consumer.commit_progress_healthcheck. Prefer consumer.commit_progress_healthcheck. When either option is true, the Snuba healthcheck uses commit-progress mode."
+      "description": "When true (and using the Snuba healthcheck with --health-check-file), only touch the health file on commit progress or when the consumer is idle (no recent submits). Unhealthy while work is in flight without commits. This is consumer-level, not per-partition."
     },
     "consumer.partition_stall_timeout_secs": {
       "type": "integer",

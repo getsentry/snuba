@@ -19,7 +19,7 @@
 //! - `consumer.commit_progress_healthcheck` (bool, default false): consumer-level
 //!   progress. Touch only when a commit request is observed, or when the
 //!   consumer is idle (no recent submits). Unhealthy while work is in flight
-//!   without commits. Legacy alias: `experimental_healthcheck`.
+//!   without commits.
 //! - `consumer.partition_stall_timeout_secs` (integer, default 0 = off): enable
 //!   the per-partition watchdog. Two failure modes:
 //!   1. **Hard stall**: a partition has in-flight work (submit after last
@@ -152,25 +152,11 @@ impl<Next> HealthCheck<Next> {
         }
     }
 
-    /// Consumer-level commit-progress mode. Prefer
-    /// `consumer.commit_progress_healthcheck`; still honor the legacy
-    /// `experimental_healthcheck` alias.
+    /// Consumer-level commit-progress mode.
     fn commit_progress_healthcheck_enabled(&self) -> bool {
-        let snuba = match options("snuba") {
-            Ok(o) => o,
-            Err(_) => return false,
-        };
-        if snuba
-            .get("consumer.commit_progress_healthcheck")
+        options("snuba")
             .ok()
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false)
-        {
-            return true;
-        }
-        snuba
-            .get("experimental_healthcheck")
-            .ok()
+            .and_then(|o| o.get("consumer.commit_progress_healthcheck").ok())
             .and_then(|v| v.as_bool())
             .unwrap_or(false)
     }
@@ -568,23 +554,6 @@ mod tests {
         );
 
         // Cleanup
-        let _ = fs::remove_file(&file_path);
-    }
-
-    #[test]
-    fn test_legacy_experimental_healthcheck_alias() {
-        init_config();
-        let _guard =
-            override_options(&[("snuba", "experimental_healthcheck", json!(true))]).unwrap();
-        let file_path = format!("/tmp/healthcheck_legacy_{}", uuid::Uuid::new_v4());
-        let mock_strategy = MockStrategy::new(true);
-        let mut health_check: HealthCheck<MockStrategy> =
-            HealthCheck::new(mock_strategy, &file_path);
-        let _ = health_check.poll();
-        assert!(
-            Path::new(&file_path).exists(),
-            "legacy experimental_healthcheck alias should enable commit-progress mode"
-        );
         let _ = fs::remove_file(&file_path);
     }
 
