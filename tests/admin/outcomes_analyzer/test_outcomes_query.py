@@ -1,7 +1,6 @@
 from unittest import mock
 
 import pytest
-
 from sentry_relay.consts import DataCategory
 
 from snuba.admin.clickhouse.common import InvalidCustomQuery, format_predefined_sql
@@ -46,9 +45,7 @@ def test_outcomes_enum_options_from_python_modules() -> None:
     assert {"0 — accepted", "2 — rate_limited", "6 — cardinality_limited"}.issubset(
         {option["label"] for option in outcomes}
     )
-    assert [option["value"] for option in outcomes] == [
-        str(int(member)) for member in Outcome
-    ]
+    assert [option["value"] for option in outcomes] == [str(int(member)) for member in Outcome]
 
 
 def test_predefined_query_json_shape() -> None:
