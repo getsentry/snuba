@@ -18,11 +18,30 @@ use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
 use sentry_arroyo::counter;
+use sentry_arroyo::processing::strategies::healthcheck::HealthCheck;
+use sentry_arroyo::processing::strategies::ProcessingStrategy;
 
 pub use commit_progress::CommitProgressHealthCheck;
 pub use partition_stall::PartitionStallHealthCheck;
 
 const TOUCH_INTERVAL: Duration = Duration::from_secs(1);
+
+/// Wrap `next` with the strategy selected by `--health-check`.
+/// Unknown values (including `arroyo`) use arroyo's poll-only file touch.
+pub fn wrap_health_check<TPayload>(
+    next: Box<dyn ProcessingStrategy<TPayload>>,
+    kind: &str,
+    path: impl Into<PathBuf>,
+) -> Box<dyn ProcessingStrategy<TPayload>>
+where
+    TPayload: Send + Sync + 'static,
+{
+    match kind {
+        "commit-progress" => Box::new(CommitProgressHealthCheck::new(next, path)),
+        "partition-stall" => Box::new(PartitionStallHealthCheck::new(next, path)),
+        _ => Box::new(HealthCheck::new(next, path)),
+    }
+}
 
 /// Touches the Kubernetes health file at most once per [`TOUCH_INTERVAL`].
 struct HealthFile {

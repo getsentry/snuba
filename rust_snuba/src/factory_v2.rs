@@ -7,7 +7,6 @@ use sentry_arroyo::backends::kafka::config::KafkaConfig;
 use sentry_arroyo::backends::kafka::producer::KafkaProducer;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::processing::strategies::commit_offsets::CommitOffsets;
-use sentry_arroyo::processing::strategies::healthcheck::HealthCheck;
 use sentry_arroyo::processing::strategies::reduce::Reduce;
 use sentry_arroyo::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskInThreads,
@@ -28,7 +27,7 @@ use crate::strategies::accountant::RecordCogs;
 use crate::strategies::clickhouse::writer_v2::{JsonWriterStep, RowBinaryWriterStep};
 use crate::strategies::commit_log::ProduceCommitLog;
 use crate::strategies::dlq_by_age::DlqByAge;
-use crate::strategies::healthcheck::{CommitProgressHealthCheck, PartitionStallHealthCheck};
+use crate::strategies::healthcheck;
 use crate::strategies::join_timeout::SetJoinTimeout;
 use crate::strategies::processor::{
     get_schema, make_rust_processor, make_rust_processor_with_replacements, validate_schema,
@@ -338,11 +337,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                 self.health_check,
                 self.physical_consumer_group
             );
-            match self.health_check.as_str() {
-                "commit-progress" => Box::new(CommitProgressHealthCheck::new(next_step, path)),
-                "partition-stall" => Box::new(PartitionStallHealthCheck::new(next_step, path)),
-                _ => Box::new(HealthCheck::new(next_step, path)),
-            }
+            healthcheck::wrap_health_check(next_step, &self.health_check, path)
         } else {
             Box::new(next_step)
         }
