@@ -4,14 +4,8 @@ from snuba.admin.clickhouse.common import PreDefinedQuery, format_predefined_sql
 from snuba.utils.registered_class import RegisteredClass
 
 
-# Common DataCategory values (from Relay):
-#   1 = error, 2 = transaction, 3 = security, 4 = attachment,
-#   5 = default, 6 = session, 7 = replay, 8 = profile,
-#   9 = profile_chunk, 10 = span, 11 = monitor, 21 = log_item,
-#   22 = attachment_item (attachment count), 23 = uptime
-# Outcome values:
-#   0 = accepted, 1 = filtered, 2 = rate_limited, 3 = invalid,
-#   4 = abuse, 5 = client_discard
+# {{category}} / {{outcome}} dropdowns are filled from
+# snuba.admin.outcomes_analyzer.enums (Relay DataCategory + Outcome).
 class OutcomesQuery(PreDefinedQuery, metaclass=RegisteredClass):
     @classmethod
     def config_key(cls) -> str:

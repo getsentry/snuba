@@ -1,9 +1,16 @@
 from unittest import mock
 
 import pytest
+from sentry_relay.consts import DataCategory
 
 from snuba.admin.clickhouse.common import InvalidCustomQuery, format_predefined_sql
 from snuba.admin.clickhouse.predefined_outcomes_queries import OutcomesQuery
+from snuba.admin.outcomes_analyzer.enums import (
+    Outcome,
+    data_category_options,
+    outcome_options,
+    outcomes_enum_options,
+)
 from snuba.admin.outcomes_analyzer.outcomes_analyzer import (
     _allowed_tables,
     _stringify_result,
@@ -19,6 +26,26 @@ def test_predefined_outcomes_queries_registered() -> None:
         "TopOrgsByCategory",
         "OrgVolumeByReason",
     }.issubset(names)
+
+
+def test_outcomes_enum_options_from_python_modules() -> None:
+    categories = data_category_options()
+    outcomes = outcome_options()
+    payload = outcomes_enum_options()
+
+    assert payload["categories"] == categories
+    assert payload["outcomes"] == outcomes
+
+    category_values = {option["value"] for option in categories}
+    assert str(int(DataCategory.ERROR)) in category_values
+    assert str(int(DataCategory.REPLAY)) in category_values
+    assert str(int(DataCategory.SPAN)) in category_values
+    assert str(int(DataCategory.UNKNOWN)) not in category_values
+
+    assert {"0 — accepted", "2 — rate_limited", "6 — cardinality_limited"}.issubset(
+        {option["label"] for option in outcomes}
+    )
+    assert [option["value"] for option in outcomes] == [str(int(member)) for member in Outcome]
 
 
 def test_predefined_query_json_shape() -> None:

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Button } from "@mantine/core";
+import { Button, Group, Text } from "@mantine/core";
 
 function ExecuteButton(props: {
   disabled: boolean;
@@ -31,6 +31,7 @@ function ExecuteButton(props: {
   function executeQuery() {
     if (isExecuting) {
       window.alert("A query is already running");
+      return;
     }
     setIsExecuting(true);
     props
@@ -46,7 +47,7 @@ function ExecuteButton(props: {
   }
 
   return (
-    <div>
+    <Group spacing="sm" align="center">
       <Button
         onClick={(evt: any) => {
           evt.preventDefault();
@@ -54,10 +55,16 @@ function ExecuteButton(props: {
         }}
         loading={isExecuting}
         disabled={isExecuting || props.disabled}
+        aria-busy={isExecuting}
       >
-        {label}
+        {isExecuting ? "Running…" : label}
       </Button>
-    </div>
+      {isExecuting ? (
+        <Text size="sm" color="dimmed" role="status" aria-live="polite">
+          Query running…
+        </Text>
+      ) : null}
+    </Group>
   );
 }
 

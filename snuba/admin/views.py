@@ -51,6 +51,7 @@ from snuba.admin.migrations_policies import (
     check_migration_perms,
     get_migration_group_policies,
 )
+from snuba.admin.outcomes_analyzer.enums import outcomes_enum_options
 from snuba.admin.outcomes_analyzer.outcomes_analyzer import run_outcomes_query
 from snuba.admin.production_queries.prod_queries import run_snql_query
 from snuba.admin.rpc.rpc_queries import validate_request_meta
@@ -361,6 +362,12 @@ def cardinality_queries() -> Response:
 def outcomes_queries() -> Response:
     res = [q.to_json() for q in OutcomesQuery.all_classes()]
     return make_response(jsonify(res), 200)
+
+
+@application.route("/outcomes_enum_options")
+@check_tool_perms(tools=[AdminTools.OUTCOMES_ANALYZER])
+def outcomes_enum_options_view() -> Response:
+    return make_response(jsonify(outcomes_enum_options()), 200)
 
 
 @application.route("/auto-replacements-bypass-projects")

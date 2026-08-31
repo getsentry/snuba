@@ -20,6 +20,11 @@ type PredefinedQuery = {
   description: string;
 };
 
+type EnumOption = {
+  value: string;
+  label: string;
+};
+
 type QueryParamValues = {
   [key: string]: string;
 };
@@ -29,6 +34,21 @@ type RelativeTimeUnit = "MINUTE" | "HOUR" | "DAY";
 
 const START_TIME_PARAM = "{{start_time}}";
 const END_TIME_PARAM = "{{end_time}}";
+const CATEGORY_PARAM = "{{category}}";
+const OUTCOME_PARAM = "{{outcome}}";
+const ORG_ID_PARAM = "{{org_id}}";
+const PROJECT_ID_PARAM = "{{project_id}}";
+const LIMIT_PARAM = "{{limit}}";
+
+const DEFAULT_PARAM_VALUES: QueryParamValues = {
+  [LIMIT_PARAM]: "100",
+};
+
+const NUMERIC_PARAMS = new Set([
+  ORG_ID_PARAM,
+  PROJECT_ID_PARAM,
+  LIMIT_PARAM,
+]);
 
 /** @private */
 export function formatAbsoluteDateTime(value: Date | null): string {
@@ -71,19 +91,22 @@ export function mergeQueryParamValues(
   newQueryParams: Set<string>,
   oldQueryParamValues: QueryParamValues
 ) {
-  return Array.from(newQueryParams).reduce(
-    (o, paramName) => ({
-      ...o,
-      [paramName]:
-        paramName in oldQueryParamValues ? oldQueryParamValues[paramName] : "",
-    }),
-    {}
-  );
+  return Array.from(newQueryParams).reduce((o, paramName) => {
+    if (paramName in oldQueryParamValues) {
+      return { ...o, [paramName]: oldQueryParamValues[paramName] };
+    }
+    if (paramName in DEFAULT_PARAM_VALUES) {
+      return { ...o, [paramName]: DEFAULT_PARAM_VALUES[paramName] };
+    }
+    return { ...o, [paramName]: "" };
+  }, {});
 }
 
 function QueryEditor(props: {
   onQueryUpdate: (query: string) => void;
   predefinedQueryOptions?: Array<PredefinedQuery>;
+  categoryOptions?: Array<EnumOption>;
+  outcomeOptions?: Array<EnumOption>;
 }) {
   const [query, setQuery] = useState<string>("");
   const hash = window.location.hash;
@@ -303,6 +326,60 @@ function QueryEditor(props: {
     );
   }
 
+  function renderEnumParameter(
+    paramName: string,
+    label: string,
+    options: Array<{ value: string; label: string }>
+  ) {
+    return (
+      <Box key={paramName} mb="md" style={{ maxWidth: 420 }}>
+        <Select
+          label={label}
+          aria-label={label}
+          placeholder={`Select ${label.toLowerCase()}`}
+          searchable
+          clearable
+          data={options}
+          value={queryParamValues[paramName] || null}
+          onChange={(value) => updateQueryParameter(paramName, value ?? "")}
+          data-testid={`${label.toLowerCase()}-select`}
+        />
+      </Box>
+    );
+  }
+
+  function renderNumericParameter(paramName: string, label: string) {
+    const rawValue = queryParamValues[paramName];
+    const numericValue =
+      rawValue && Number.isFinite(Number(rawValue)) ? Number(rawValue) : "";
+
+    return (
+      <Box key={paramName} mb="md" style={{ maxWidth: 420 }}>
+        <NumberInput
+          label={label}
+          aria-label={label}
+          min={paramName === LIMIT_PARAM ? 1 : 0}
+          step={1}
+          precision={0}
+          hideControls={false}
+          value={numericValue}
+          placeholder={
+            paramName === LIMIT_PARAM ? "e.g. 100" : "e.g. 1"
+          }
+          onChange={(value) =>
+            updateQueryParameter(
+              paramName,
+              typeof value === "number" && Number.isInteger(value)
+                ? String(value)
+                : ""
+            )
+          }
+          data-testid="parameter-value"
+        />
+      </Box>
+    );
+  }
+
   function renderParameterSetters() {
     let setters: Array<ReactElement> = [];
     Object.keys(queryParamValues)
@@ -311,6 +388,34 @@ function QueryEditor(props: {
           paramName !== START_TIME_PARAM && paramName !== END_TIME_PARAM
       )
       .forEach((paramName) => {
+        if (paramName === CATEGORY_PARAM && (props.categoryOptions?.length ?? 0) > 0) {
+          setters.push(
+            renderEnumParameter(
+              paramName,
+              "Category",
+              props.categoryOptions ?? []
+            )
+          );
+          return;
+        }
+        if (paramName === OUTCOME_PARAM && (props.outcomeOptions?.length ?? 0) > 0) {
+          setters.push(
+            renderEnumParameter(
+              paramName,
+              "Outcome",
+              props.outcomeOptions ?? []
+            )
+          );
+          return;
+        }
+        if (NUMERIC_PARAMS.has(paramName)) {
+          const label =
+            paramName.match(variableRegex)?.[1]?.replace(/_/g, " ") ??
+            paramName;
+          setters.push(renderNumericParameter(paramName, label));
+          return;
+        }
+
         setters.push(
           <div key={paramName}>
             <div>
