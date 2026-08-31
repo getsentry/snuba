@@ -582,14 +582,16 @@ def _raw_query(
 
 def _get_allocation_policies(
     query: Query | CompositeQuery[Table],
-    tenant_ids: Mapping[str, str | int] | None = None,
+    attribution_info: AttributionInfo,
 ) -> list[AllocationPolicy]:
     collector = _PolicyCollector()
     collector.visit(query)
     return [
         policy
         for storage_key in collector.storage_keys
-        for policy in get_active_allocation_policies(ResourceIdentifier(storage_key), tenant_ids)
+        for policy in get_active_allocation_policies(
+            ResourceIdentifier(storage_key), attribution_info.tenant_ids
+        )
     ]
 
 
@@ -692,7 +694,7 @@ def db_query(
         allocation policy be applied at the top level of the db_query process
     """
 
-    allocation_policies = _get_allocation_policies(clickhouse_query, attribution_info.tenant_ids)
+    allocation_policies = _get_allocation_policies(clickhouse_query, attribution_info)
     resource_identifier = (
         allocation_policies[0].resource_identifier
         if allocation_policies

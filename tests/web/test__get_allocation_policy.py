@@ -4,6 +4,8 @@ from datetime import datetime
 
 import pytest
 
+from snuba.attribution import AppID
+from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.configs.configuration import ResourceIdentifier
@@ -23,6 +25,15 @@ from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.web.db_query import _get_allocation_policies
 from tests.query.allocation_policies.attachment import override_allocation_policy
+
+_ATTRIBUTION_INFO = AttributionInfo(
+    app_id=AppID(key="key"),
+    tenant_ids={"referrer": "something"},
+    referrer="something",
+    team=None,
+    feature=None,
+    parent_api=None,
+)
 
 
 class PermissiveJoinClause(JoinClause[Table]):
@@ -142,7 +153,7 @@ def test__get_allocation_policies(
     query: ClickhouseQuery | CompositeQuery[Table],
     expected_allocation_policies: list[AllocationPolicy],
 ) -> None:
-    assert _get_allocation_policies(query) == expected_allocation_policies
+    assert _get_allocation_policies(query, _ATTRIBUTION_INFO) == expected_allocation_policies
 
 
 def test_get_allocation_policies_uses_tenant_ids() -> None:
@@ -174,8 +185,28 @@ def test_get_allocation_policies_uses_tenant_ids() -> None:
             ]
         }
     ):
-        for_org_1 = _get_allocation_policies(query, {"organization_id": 1})
-        for_org_2 = _get_allocation_policies(query, {"organization_id": 2})
+        for_org_1 = _get_allocation_policies(
+            query,
+            AttributionInfo(
+                app_id=AppID(key="key"),
+                tenant_ids={"organization_id": 1},
+                referrer="something",
+                team=None,
+                feature=None,
+                parent_api=None,
+            ),
+        )
+        for_org_2 = _get_allocation_policies(
+            query,
+            AttributionInfo(
+                app_id=AppID(key="key"),
+                tenant_ids={"organization_id": 2},
+                referrer="something",
+                team=None,
+                feature=None,
+                parent_api=None,
+            ),
+        )
 
     assert [p.class_name() for p in for_org_1] == [
         "ConcurrentRateLimitAllocationPolicy",
