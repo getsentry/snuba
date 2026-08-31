@@ -96,20 +96,19 @@ test-rust:
 lint-rust:
 	. scripts/rust-envvars && \
 		cd rust_snuba && \
-		rustup component add clippy && \
 		cargo clippy --workspace --all-targets --no-deps -- -D warnings
 .PHONY: lint-rust
 
 format-rust:
 	. scripts/rust-envvars && \
 		cd rust_snuba && \
-		cargo +stable fmt --all
+		cargo fmt --all
 .PHONY: format-rust
 
 format-rust-ci:
 	. scripts/rust-envvars && \
 		cd rust_snuba && \
-		cargo +stable fmt --all --check
+		cargo fmt --all --check
 .PHONY: format-rust-ci
 
 gocd:

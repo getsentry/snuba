@@ -25,10 +25,10 @@
       "default": 600,
       "description": "Age threshold in seconds for consumer.dlq_by_age_sample_rate_by_storage. Messages whose Kafka broker timestamp is older than this are candidates for being routed to the DLQ."
     },
-    "experimental_healthcheck": {
-      "type": "boolean",
-      "default": false,
-      "description": "When true, the consumer healthcheck strategy treats commit requests (progress) as healthy and touches the healthcheck file accordingly."
+    "consumer.partition_stall_timeout_secs": {
+      "type": "integer",
+      "default": 300,
+      "description": "Timeout in seconds for --health-check partition-stall. A partition with in-flight work and no commit progress for this long is unhealthy (the health file is not touched). 0 disables stall detection (file is touched on every poll). Ignored for other --health-check values."
     },
     "generic_metrics_use_case_killswitch": {
       "type": "string",
