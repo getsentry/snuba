@@ -1,10 +1,8 @@
 import pytest
 
 from snuba.configs.configuration import ResourceIdentifier
-from snuba.query.allocation_policies import (
-    PassthroughPolicy,
-    get_active_allocation_policies,
-)
+from snuba.query.allocation_policies import PassthroughPolicy
+from snuba.query.allocation_policies.resolver import get_active_allocation_policies
 from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
     OutcomesBasedRoutingStrategy,
 )

@@ -39,8 +39,8 @@ from snuba.query.allocation_policies import (
     PolicyData,
     QueryResultOrError,
     QuotaAllowance,
-    get_active_allocation_policies,
 )
+from snuba.query.allocation_policies.resolver import get_active_allocation_policies
 from snuba.query.allocation_policies.utils import get_max_bytes_to_read
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import record_query
