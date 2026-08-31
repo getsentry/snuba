@@ -1,4 +1,4 @@
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from typing import Any
 
 from snuba.configs.configuration import ResourceIdentifier, logger
@@ -78,19 +78,15 @@ def _resolve_policy_specs(
 def _construct_policies(
     specs_by_name: Mapping[str, Mapping[str, Any]],
     resource: str,
-) -> list[AllocationPolicy]:
-    policies: list[AllocationPolicy] = []
+) -> Iterator[AllocationPolicy]:
     for name, spec in specs_by_name.items():
         try:
-            policies.append(
-                AllocationPolicy.get_from_name(name).from_kwargs(
-                    storage_key=resource,
-                    **spec,
-                )
+            yield AllocationPolicy.get_from_name(name).from_kwargs(
+                storage_key=resource,
+                **spec,
             )
         except InvalidConfigKeyError:
             logger.warning("Unknown allocation policy %s for %s", name, resource)
-    return policies
 
 
 def get_active_allocation_policies(
@@ -113,6 +109,7 @@ def get_active_allocation_policies(
         tenant_ids or {},
         resource,
     )
-    return _construct_policies(specs_by_name, resource) or [
-        PassthroughPolicy(ResourceIdentifier(StorageKey(resource)))
-    ]
+    policies = list(_construct_policies(specs_by_name, resource))
+    if not policies:
+        policies = [PassthroughPolicy(ResourceIdentifier(StorageKey(resource)))]
+    return policies
