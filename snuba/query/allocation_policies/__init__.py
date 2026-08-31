@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, cast
@@ -20,9 +19,8 @@ from snuba.configs.configuration import (
     logger,
 )
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.state.sentry_options import get_mapped_option
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.registered_class import InvalidConfigKeyError, import_submodules_in_directory
+from snuba.utils.registered_class import import_submodules_in_directory
 from snuba.utils.sentry import SENTRY_OP
 from snuba.utils.serializable_exception import JsonSerializable, SerializableException
 from snuba.web import QueryResult
@@ -331,8 +329,6 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         See `_build_config_key()` for more info.
     """
 
-    required_tenant_types: frozenset[str] = frozenset()
-
     def __init__(
         self,
         storage_key: ResourceIdentifier,
@@ -545,8 +541,6 @@ class AllocationPolicy(ConfigurableComponent, ABC):
 
 
 class PassthroughPolicy(AllocationPolicy):
-    required_tenant_types: frozenset[str] = frozenset()
-
     def _additional_config_definitions(self) -> list[Configuration]:
         return []
 
@@ -584,67 +578,6 @@ def _default_passthough_policy(storage_key: str = "default.no_storage_key") -> A
 
 
 DEFAULT_PASSTHROUGH_POLICY = _default_passthough_policy()
-
-
-def get_active_allocation_policies(
-    resource_identifier: ResourceIdentifier,
-) -> list[AllocationPolicy]:
-    """Build the AllocationPolicy list configured for ``resource_identifier``.
-
-    Reads the ``allocation_policies`` sentry-option (keyed by ResourceIdentifier
-    value). Each resource is a list of match blocks; this reader uses the first
-    block's ``policies`` list (``match`` is ignored). An absent or empty entry
-    falls back to a PassthroughPolicy for that resource. Tenant types live on
-    the policy class, not the option. Per-policy settings on the item
-    (is_enforced, concurrent_limit, …) are passed as constructor kwargs.
-    """
-    policies: list[AllocationPolicy] = []
-    blocks: list[Mapping[str, Any]] = get_mapped_option(
-        ALLOCATION_POLICY_KEY, resource_identifier.value, []
-    )
-    first = blocks[0] if blocks else {}
-    specs: list[Any] = first.get("policies", []) if isinstance(first, dict) else []
-    if not isinstance(specs, list):
-        logger.warning(
-            "Ignoring allocation_policy block without policies list for %s: %r",
-            resource_identifier.value,
-            first,
-        )
-        specs = []
-
-    for spec in specs:
-        if not isinstance(spec, dict):
-            logger.warning(
-                "Ignoring malformed allocation_policy entry for %s: %r",
-                resource_identifier.value,
-                spec,
-            )
-            continue
-
-        name = spec.get("name", None)
-        if not isinstance(name, str):
-            logger.warning(
-                "Ignoring allocation_policy entry without name for %s: %r",
-                resource_identifier.value,
-                spec,
-            )
-            continue
-
-        try:
-            policies.append(
-                AllocationPolicy.get_from_name(name).from_kwargs(
-                    storage_key=resource_identifier.value,
-                    **spec,
-                )
-            )
-        except InvalidConfigKeyError:
-            logger.warning(
-                "Unknown allocation policy %s for %s",
-                name,
-                resource_identifier.value,
-            )
-
-    return policies or [_default_passthough_policy(resource_identifier.value)]
 
 
 import_submodules_in_directory(

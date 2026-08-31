@@ -35,21 +35,16 @@ SUGGESTION = "scan less concurrent queries"
 
 
 class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
-    required_tenant_types: frozenset[str] = frozenset({"referrer"})
-
     """A case-by-case allocation policy for cross-org queries. All referrers affected by this policy have to be registered
     in this class's configuration through the `cross_org_referrer_limits` parameter. Example:
 
     ```yaml
         - name: CrossOrgQueryAllocationPolicy
-          args:
-            required_tenant_types:
-              - referrer
-            is_enforced: 0
-            cross_org_referrer_limits:
-              dynamic_sampling.counters.get_org_transaction_volumes:
-                max_threads: 4
-                concurrent_limit: 10
+          is_enforced: 0
+          cross_org_referrer_limits:
+            dynamic_sampling.counters.get_org_transaction_volumes:
+              max_threads: 4
+              concurrent_limit: 10
     ```
 
     Each referrer gets a concurrent limit (applied per referrer) and a max_threads limit (applied to every query made by that referrer).

@@ -31,8 +31,6 @@ SUGGESTION = "This feature is doing too many concurrent queries. Customers are b
 
 
 class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
-    required_tenant_types: frozenset[str] = frozenset({"referrer"})
-
     """
     A policy to prevent runaway referrers from consuming too many queries.
 

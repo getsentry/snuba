@@ -172,7 +172,9 @@ class TestRoutingStrategyWithCustomPolicies(OutcomesBasedRoutingStrategy):
         super().__init__()
         self._test_policies = policies
 
-    def get_allocation_policies(self) -> list[AllocationPolicy]:
+    def get_allocation_policies(
+        self, tenant_ids: dict[str, str | int] | None = None
+    ) -> list[AllocationPolicy]:
         return self._test_policies
 
 

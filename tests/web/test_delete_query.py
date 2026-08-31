@@ -34,7 +34,6 @@ def test_delete_query_clickhouse_error() -> None:
         "eap_items_1_local",
         ColumnSet([]),
         storage_key=StorageKey.EAP_ITEMS,
-        allocation_policies=[],
     )
 
     query = Query(
@@ -121,7 +120,6 @@ def test_delete_query_with_rejecting_allocation_policy() -> None:
                 "search_issues_local_v2",
                 ColumnSet([]),
                 storage_key=StorageKey.SEARCH_ISSUES,
-                allocation_policies=[],
             ),
             condition=and_cond(
                 equals(column("group_id"), literal(10)),

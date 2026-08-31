@@ -39,8 +39,8 @@ from snuba.query.allocation_policies import (
     PolicyData,
     QueryResultOrError,
     QuotaAllowance,
-    get_active_allocation_policies,
 )
+from snuba.query.allocation_policies.resolver import get_active_allocation_policies
 from snuba.query.allocation_policies.utils import get_max_bytes_to_read
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import record_query
@@ -364,10 +364,12 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             )
         return False
 
-    def get_allocation_policies(self) -> list[AllocationPolicy]:
+    def get_allocation_policies(
+        self, tenant_ids: dict[str, str | int] | None = None
+    ) -> list[AllocationPolicy]:
         # All routing strategies share allocation policies: they protect the same
         # resource (EAP). The list is configured via allocation_policies.
-        return get_active_allocation_policies(ResourceIdentifier("EAP"))
+        return get_active_allocation_policies(ResourceIdentifier("EAP"), tenant_ids)
 
     def get_delete_allocation_policies(self) -> list[AllocationPolicy]:
         return []
@@ -451,7 +453,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         routing_context: RoutingContext,
     ) -> dict[str, QuotaAllowance]:
         recommendations: dict[str, QuotaAllowance] = {}
-        for allocation_policy in self.get_allocation_policies():
+        for allocation_policy in self.get_allocation_policies(routing_context.tenant_ids):
             allocation_policy_name = allocation_policy.class_name()
             with traces.start_span(
                 name=allocation_policy_name,
@@ -615,7 +617,9 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             query_result_or_error = QueryResultOrError(
                 query_result=routing_decision.routing_context.query_result, error=error
             )
-            for allocation_policy in self.get_allocation_policies():
+            for allocation_policy in self.get_allocation_policies(
+                routing_decision.routing_context.tenant_ids
+            ):
                 allocation_policy.update_quota_balance(
                     tenant_ids=routing_decision.routing_context.tenant_ids,
                     query_id=routing_decision.routing_context.query_id,

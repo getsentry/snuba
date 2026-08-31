@@ -253,7 +253,6 @@ def construct_query(storage: WritableTableStorage, table: str, condition: Expres
             table,
             ColumnSet([]),
             storage_key=storage.get_storage_key(),
-            allocation_policies=storage.get_delete_allocation_policies(),
         ),
         condition=condition,
         on_cluster=on_cluster,

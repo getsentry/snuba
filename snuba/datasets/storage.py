@@ -19,10 +19,8 @@ from snuba.datasets.schemas import Schema
 from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
-from snuba.query.allocation_policies import (
-    AllocationPolicy,
-    get_active_allocation_policies,
-)
+from snuba.query.allocation_policies import AllocationPolicy
+from snuba.query.allocation_policies.resolver import get_active_allocation_policies
 from snuba.query.exceptions import QueryPlanException
 from snuba.query.processors.condition_checkers import ConditionChecker
 from snuba.query.processors.physical import ClickhouseQueryProcessor
