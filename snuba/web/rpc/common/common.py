@@ -228,6 +228,17 @@ def _check_non_string_values_cannot_ignore_case(
         raise BadSnubaRPCRequestException("Cannot ignore case on non-string values")
 
 
+def as_datetime(value: Any) -> datetime:
+    """Coerce a ClickHouse DateTime result into a datetime.
+
+    Which the reader returns depends on the driver (native gives a datetime, HTTP can give an
+    ISO string), so accept both.
+    """
+    if isinstance(value, datetime):
+        return value
+    return datetime.fromisoformat(str(value))
+
+
 def next_monday(dt: datetime) -> datetime:
     return dt + timedelta(days=(7 - dt.weekday()) or 7)
 

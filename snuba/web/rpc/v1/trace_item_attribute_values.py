@@ -6,14 +6,18 @@ from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
     TraceItemAttributeValuesResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import PageToken
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
-from snuba.protos.common import ATTRIBUTES_TO_COALESCE
+from snuba.protos.common import (
+    ATTRIBUTES_TO_COALESCE,
+    PROTO_ARRAY_TYPE_TO_COLUMN,
+    PROTO_TYPE_TO_ATTRIBUTE_COLUMN,
+)
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import combine_or_conditions
@@ -28,6 +32,7 @@ from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     add_existence_check_to_map_attribute_reads,
+    as_datetime,
     attribute_key_to_expression,
     base_conditions_and,
     semver_sort_key,
@@ -37,6 +42,7 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingDecision,
 )
+from snuba.web.rpc.v1.resolvers.common.trace_item_table import get_converter_for_type
 
 
 def _map_key_names_for_existence_check(request_key: AttributeKey) -> list[str]:
@@ -48,25 +54,22 @@ def _map_key_names_for_existence_check(request_key: AttributeKey) -> list[str]:
     return names
 
 
-# Attribute value types this endpoint can enumerate, mapped to the ClickHouse
-# attribute map they live in. The response proto only carries strings, so every
-# supported type must also have a well-defined string form (see _execute).
-_ATTRIBUTE_TYPE_TO_COLUMN: dict["AttributeKey.Type.ValueType", str] = {
-    AttributeKey.TYPE_STRING: "attributes_string",
-    AttributeKey.TYPE_BOOLEAN: "attributes_bool",
-}
-
-
 def _build_conditions(request: TraceItemAttributeValuesRequest) -> Expression:
     attribute_key = attribute_key_to_expression(request.key)
 
-    try:
-        attributes_column = _ATTRIBUTE_TYPE_TO_COLUMN[request.key.type]
-    except KeyError as e:
-        raise BadSnubaRPCRequestException("Only string and boolean attributes can be used") from e
+    # Allows for all scalar/typed array types (doesn't include TYPE_ARRAY)
+    attributes_column = PROTO_TYPE_TO_ATTRIBUTE_COLUMN.get(
+        request.key.type
+    ) or PROTO_ARRAY_TYPE_TO_COLUMN.get(request.key.type)
+    if attributes_column is None:
+        raise BadSnubaRPCRequestException(
+            f"{AttributeKey.Type.Name(request.key.type)} attributes cannot be used; "
+            "use a typed array type (e.g. TYPE_ARRAY_STRING)"
+        )
 
     # Key existence via map_key_exists (has(mapKeys(col), key)); routed to the
-    # right bucket for the bucketed string/float maps and the un-bucketed bool map.
+    # right bucket for the bucketed string/float maps and left as-is for the
+    # un-bucketed bool and array maps.
     key_existence = combine_or_conditions(
         [
             map_key_exists(column(attributes_column), name)
@@ -99,9 +102,9 @@ def _build_query(
     """Example query:
 
 
-    SELECT distinct(attr_value) FROM
+    SELECT attr_value, count(), max(timestamp) AS last_seen FROM
     (
-        SELECT attributes_string_38['sentry.description'] as attr_value
+        SELECT attributes_string_38['sentry.description'] as attr_value, timestamp
         FROM eap_items_1_dist
         WHERE
         has(attributes_string_38, cityHash64('sentry.description'))
@@ -111,11 +114,13 @@ def _build_query(
         AND greaterOrEquals(timestamp, toDateTime(1741651200))
         ORDER BY organization_id DESC, project_id DESC, item_type DESC, timestamp DESC
         LIMIT 10000
-    ) ORDER BY attr_value LIMIT 1000
+    ) GROUP BY attr_value ORDER BY count() DESC, attr_value ASC LIMIT 1000
 
 
-    This query samples the 10000 most recent matching items and then deduplicates them,
-    which gives a large speedup at the cost of ordering and paginating all values.
+    This query will match the 10000 most recent occurrences of an attribute value and then
+    deduplicate them, this gives a large speedup to the query at the cost of ordering and
+    paginating all values. `count()` and `last_seen` are therefore aggregates over that
+    sample, not over every matching item.
     """
     if request.limit > 10000:
         raise BadSnubaRPCRequestException("Limit can be at most 10000")
@@ -130,7 +135,11 @@ def _build_query(
     assert attr_value.alias
     inner_query = Query(
         from_clause=entity,
-        selected_columns=[SelectedExpression(name=attr_value.alias, expression=attr_value)],
+        selected_columns=[
+            SelectedExpression(name=attr_value.alias, expression=attr_value),
+            # Projected so the outer query can aggregate it into `last_seen`.
+            SelectedExpression(name="timestamp", expression=column("timestamp")),
+        ],
         condition=_build_conditions(request),
         # Order newest-first. ClickHouse reads in sort-key order when the ORDER BY is a
         # prefix of the table's sort key (optimize_read_in_order=1 is the default)
@@ -145,8 +154,8 @@ def _build_query(
     add_existence_check_to_map_attribute_reads(inner_query)
     # Under SORT_SEMVER, tiebreak equally-frequent values by the semver key
     # instead of lexicographically (count() stays the primary ordering). Only
-    # string values: semver_sort_key uses string functions, so boolean keys
-    # (also enumerable here) keep plain ordering, like the table resolver's guard.
+    # string values: semver_sort_key uses string functions, so every other type
+    # enumerable here keeps plain ordering, like the table resolver's guard.
     if (
         request.order_by.sort == TraceItemAttributeValuesRequest.OrderBy.SORT_SEMVER
         and request.key.type == AttributeKey.TYPE_STRING
@@ -169,6 +178,10 @@ def _build_query(
                     function_name="count",
                     parameters=(),
                 ),
+            ),
+            SelectedExpression(
+                name="last_seen",
+                expression=f.max(column("timestamp"), alias="last_seen"),
             ),
         ],
         order_by=[
@@ -229,6 +242,12 @@ class AttributeValuesRequest(
             return TraceItemAttributeValuesResponse(
                 values=[in_msg.value_substring_match],
                 counts=[1],
+                value_data=[
+                    TraceItemAttributeValuesResponse.ValueData(
+                        value=AttributeValue(val_str=in_msg.value_substring_match),
+                        count=1,
+                    )
+                ],
                 page_token=None,
             )
         in_msg.limit = in_msg.limit or 1000
@@ -238,28 +257,53 @@ class AttributeValuesRequest(
             request=snuba_request,
             timer=self._timer,
         )
-        # The response proto only carries strings. Boolean values are serialized
-        # to the lowercase "true"/"false" form used across the EAP filter API so
-        # that returned values round-trip as filter inputs.
+        # `value_data` carries every value as a typed AttributeValue, so it is populated
+        # for all supported types. The deprecated `values`/`counts` fields only carry
+        # strings and stay exactly as they were: booleans are serialized to the lowercase
+        # "true"/"false" form.
         is_boolean = in_msg.key.type == AttributeKey.TYPE_BOOLEAN
-        values, counts = [], []
+        has_string_form = in_msg.key.type in (
+            AttributeKey.TYPE_STRING,
+            AttributeKey.TYPE_BOOLEAN,
+        )
+        to_attribute_value = get_converter_for_type(in_msg.key.type)
+
+        values: list[str] = []
+        counts: list[int] = []
+        value_data: list[TraceItemAttributeValuesResponse.ValueData] = []
         for row in res.result.get("data", []):
             value = row["attr_value"]
-            values.append(str(bool(value)).lower() if is_boolean else value)
-            counts.append(row.get("count()", 0))
-        if len(values) == 0:
+            count = row.get("count()", 0)
+            data_point = TraceItemAttributeValuesResponse.ValueData(
+                value=to_attribute_value(value),
+                count=count,
+            )
+
+            last_seen = row.get("last_seen")
+            if last_seen is not None:
+                data_point.last_seen.FromDatetime(as_datetime(last_seen))
+            value_data.append(data_point)
+
+            if has_string_form:
+                # deprecated values/counts for backwards compatibility for strings/bools
+                values.append(str(bool(value)).lower() if is_boolean else value)
+                counts.append(count)
+
+        if len(value_data) == 0:
             return TraceItemAttributeValuesResponse(
                 values=values,
                 counts=counts,
+                value_data=value_data,
                 page_token=None,
             )
         return TraceItemAttributeValuesResponse(
             values=values,
             counts=counts,
+            value_data=value_data,
             page_token=(
                 PageToken(
                     offset=(in_msg.page_token.offset if in_msg.page_token.HasField("offset") else 0)
-                    + len(values)
+                    + len(value_data)
                 )
             ),
         )
