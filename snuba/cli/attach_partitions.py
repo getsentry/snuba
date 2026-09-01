@@ -2,7 +2,19 @@ from collections.abc import Sequence
 
 import click
 
-from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.clickhouse.partition_management import (
+    PartitionBoundaryError,
+    attach_partition_from_table,
+    attach_partitions_from_table,
+    build_health_check,
+    get_partition_boundaries,
+)
+from snuba.clickhouse.pool import ClickhousePool
+from snuba.clusters.cluster import (
+    ClickhouseClientSettings,
+    ClickhouseNode,
+    build_pool,
+)
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_logging, setup_sentry
@@ -74,16 +86,6 @@ def attach_partitions(
     In discovery mode, existing destination partitions are skipped. A specific
     partition ID is attached directly. The source data is not removed.
     """
-    from snuba.clickhouse.partition_management import (
-        PartitionBoundaryError,
-        attach_partition_from_table,
-        attach_partitions_from_table,
-        build_health_check,
-        get_partition_boundaries,
-    )
-    from snuba.clickhouse.pool import ClickhousePool
-    from snuba.clusters.cluster import ClickhouseNode, build_pool
-
     setup_logging(log_level)
     setup_sentry()
 
