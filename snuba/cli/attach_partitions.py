@@ -39,6 +39,19 @@ from snuba.environment import setup_logging, setup_sentry
     "--partition-id",
     help="Attach only this ClickHouse partition ID instead of discovering partitions.",
 )
+@click.option(
+    "--health-check-query",
+    help=(
+        "Health check run before each attach, replacing the default SELECT 1. "
+        "May reference %(partition_start)s, bound to the start of the boundary "
+        "of the partition about to be attached, and %(retention_days)s when the "
+        "partition key carries one. Scope on both to identify a single partition "
+        "of a table partitioned by (retention_days, toMonday(timestamp)). The "
+        "destination is unhealthy if the query fails or returns no rows or a "
+        "falsy first value. The partition key must include a date or datetime "
+        "component."
+    ),
+)
 @click.option("--log-level", help="Logging level to use.")
 def attach_partitions(
     source_table: str,
@@ -52,6 +65,7 @@ def attach_partitions(
     clickhouse_verify: bool,
     execute: bool,
     partition_id: str | None,
+    health_check_query: str | None,
     log_level: str | None,
 ) -> None:
     """Attach SOURCE_TABLE partitions to DESTINATION_TABLE one at a time.
@@ -61,9 +75,11 @@ def attach_partitions(
     partition ID is attached directly. The source data is not removed.
     """
     from snuba.clickhouse.partition_management import (
+        PartitionBoundaryError,
         attach_partition_from_table,
         attach_partitions_from_table,
-        check_clickhouse_health,
+        build_health_check,
+        get_partition_boundaries,
     )
     from snuba.clickhouse.pool import ClickhousePool
     from snuba.clusters.cluster import ClickhouseNode, build_pool
@@ -105,29 +121,38 @@ def attach_partitions(
         connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
 
     partition_ids: Sequence[str]
-    if partition_id is not None:
-        partition_ids = [partition_id]
-        if execute:
-            check_clickhouse_health(connection)
-            attach_partition_from_table(
+    try:
+        if partition_id is not None:
+            partition_ids = [partition_id]
+            if execute:
+                boundaries = (
+                    get_partition_boundaries(connection, database, source_table)
+                    if health_check_query is not None
+                    else None
+                )
+                build_health_check(connection, health_check_query, boundaries)(partition_id)
+                attach_partition_from_table(
+                    connection,
+                    database,
+                    source_table,
+                    destination_table,
+                    partition_id,
+                )
+                click.echo(f"Attached partition {partition_id}")
+        else:
+            partition_ids = attach_partitions_from_table(
                 connection,
                 database,
                 source_table,
                 destination_table,
-                partition_id,
+                health_check_query=health_check_query,
+                dry_run=not execute,
+                on_partition_attached=lambda attached_partition_id: click.echo(
+                    f"Attached partition {attached_partition_id}"
+                ),
             )
-            click.echo(f"Attached partition {partition_id}")
-    else:
-        partition_ids = attach_partitions_from_table(
-            connection,
-            database,
-            source_table,
-            destination_table,
-            dry_run=not execute,
-            on_partition_attached=lambda attached_partition_id: click.echo(
-                f"Attached partition {attached_partition_id}"
-            ),
-        )
+    except PartitionBoundaryError as error:
+        raise click.UsageError(str(error)) from error
 
     if not execute:
         for partition_id in partition_ids:
