@@ -21,6 +21,8 @@ const CLIENT_DISCARD_REASONS: &[&str] = &[
     "buffer_overflow",
     // a SDK internal cache (eg: offline event cache) overflowed
     "cache_overflow",
+    // an event was dropped because a user-provided callback (eg: `before_send`, `traces_sampler`) threw an error
+    "callback_error",
     // an event was dropped by an event processor; may also be used for ignored exceptions / errors
     "event_processor",
     // an event was dropped by an SDK ignore config (e.g. an `ignore_spans` deny list)
