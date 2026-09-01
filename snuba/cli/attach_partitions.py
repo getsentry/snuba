@@ -92,7 +92,9 @@ def attach_partitions(
 
     try:
         storage = get_storage(StorageKey(storage_name))
-    except ValueError as error:
+    except (KeyError, ValueError) as error:
+        # StorageKey accepts any string, so an unknown storage only surfaces as
+        # a KeyError from the registry lookup.
         raise click.BadParameter(
             f"Unknown storage: {storage_name}", param_hint="--storage"
         ) from error
