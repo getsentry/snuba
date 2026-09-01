@@ -124,6 +124,13 @@ def attach_partitions(
     else:
         connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
 
+    source = f"{database}.{source_table}"
+    destination = f"{database}.{destination_table}"
+    mode = "EXECUTE" if execute else "DRY RUN"
+    click.echo(f"[{mode}] Attaching partitions from {source} to {destination}")
+    if not execute:
+        click.echo("[DRY RUN] No partitions will be attached. Pass --execute to attach.")
+
     partition_ids: Sequence[str]
     try:
         if partition_id is not None:
@@ -142,7 +149,7 @@ def attach_partitions(
                     destination_table,
                     partition_id,
                 )
-                click.echo(f"Attached partition {partition_id}")
+                click.echo(f"Attached partition {partition_id} from {source} to {destination}")
         else:
             partition_ids = attach_partitions_from_table(
                 connection,
@@ -152,7 +159,7 @@ def attach_partitions(
                 health_check_query=health_check_query,
                 dry_run=not execute,
                 on_partition_attached=lambda attached_partition_id: click.echo(
-                    f"Attached partition {attached_partition_id}"
+                    f"Attached partition {attached_partition_id} from {source} to {destination}"
                 ),
             )
     except PartitionBoundaryError as error:
@@ -160,7 +167,9 @@ def attach_partitions(
 
     if not execute:
         for partition_id in partition_ids:
-            click.echo(f"Would attach partition {partition_id}")
+            click.echo(f"Would attach partition {partition_id} from {source} to {destination}")
 
     action = "Attached" if execute else "Would attach"
-    click.echo(f"{action} {len(partition_ids)} partition(s)")
+    click.echo(
+        f"[{mode}] {action} {len(partition_ids)} partition(s) from {source} to {destination}"
+    )
