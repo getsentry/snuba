@@ -455,7 +455,7 @@ fn ch_compression_checksum(data: &[u8]) -> [u8; 16] {
 ///
 /// The 9-byte (method + sizes) header is hashed together with the compressed
 /// bytes so the checksum guards both.
-fn lz4_compress(input: &[u8]) -> Vec<u8> {
+pub(crate) fn lz4_compress(input: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(input.len() / 2 + 32);
     for chunk in input.chunks(LZ4_BLOCK_SIZE) {
         let compressed = lz4_flex::block::compress(chunk);

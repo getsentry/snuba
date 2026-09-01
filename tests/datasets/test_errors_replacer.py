@@ -554,12 +554,6 @@ class TestReplacerProcess(BaseTest):
         }
 
         assert (
-            _normalize_query(replacement.get_count_query("foo"))
-            == "SELECT count() FROM {table_name} FINAL WHERE project_id = {project_id} AND received <= CAST('{timestamp}' AS DateTime) AND NOT deleted AND has(`tags.key`, {tag_str})".format(
-                **query_args
-            )
-        )
-        assert (
             _normalize_query(replacement.get_insert_query("foo"))
             == "INSERT INTO {table_name} ({all_columns}) SELECT {select_columns} FROM {table_name} FINAL WHERE project_id = {project_id} AND received <= CAST('{timestamp}' AS DateTime) AND NOT deleted AND has(`tags.key`, {tag_str})".format(
                 **query_args
@@ -593,12 +587,6 @@ class TestReplacerProcess(BaseTest):
             "table_name": "foo",
         }
 
-        assert (
-            _normalize_query(replacement.get_count_query("foo"))
-            == "SELECT count() FROM {table_name} FINAL WHERE project_id = {project_id} AND received <= CAST('{timestamp}' AS DateTime) AND NOT deleted AND has(`tags.key`, {tag_str})".format(
-                **query_args
-            )
-        )
         assert (
             _normalize_query(replacement.get_insert_query("foo"))
             == "INSERT INTO {table_name} ({all_columns}) SELECT {select_columns} FROM {table_name} FINAL WHERE project_id = {project_id} AND received <= CAST('{timestamp}' AS DateTime) AND NOT deleted AND has(`tags.key`, {tag_str})".format(
@@ -640,13 +628,8 @@ class TestReplacerProcess(BaseTest):
         }
 
         assert (
-            _normalize_query(replacement.get_count_query("foo"))
-            == f"SELECT count() FROM %(table_name)s FINAL PREWHERE event_id IN (%(event_ids)s){old_primary_condition} WHERE project_id = %(project_id)s AND NOT deleted"
-            % query_args
-        )
-        assert (
             _normalize_query(replacement.get_insert_query("foo"))
-            == f"INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE event_id IN (%(event_ids)s){old_primary_condition} WHERE project_id = %(project_id)s AND NOT deleted"
+            == f"INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL WHERE event_id IN (%(event_ids)s) AND project_id = %(project_id)s AND NOT deleted{old_primary_condition}"
             % query_args
         )
 
@@ -679,15 +662,8 @@ class TestReplacerProcess(BaseTest):
         }
 
         assert (
-            _normalize_query(replacement.get_count_query("foo"))
-            == "SELECT count() FROM {table_name} FINAL PREWHERE event_id IN ({event_ids}) WHERE project_id = {project_id} AND NOT deleted".format(
-                **query_args
-            )
-        )
-
-        assert (
             _normalize_query(replacement.get_insert_query("foo"))
-            == "INSERT INTO {table_name} ({all_columns}) SELECT {select_columns} FROM {table_name} FINAL PREWHERE event_id IN ({event_ids}) WHERE project_id = {project_id} AND NOT deleted".format(
+            == "INSERT INTO {table_name} ({all_columns}) SELECT {select_columns} FROM {table_name} FINAL WHERE event_id IN ({event_ids}) AND project_id = {project_id} AND NOT deleted".format(
                 **query_args
             )
         )
@@ -720,15 +696,8 @@ class TestReplacerProcess(BaseTest):
         }
 
         assert (
-            _normalize_query(replacement.get_count_query("foo"))
-            == "SELECT count() FROM {table_name} FINAL PREWHERE event_id IN ({event_ids}) WHERE project_id = {project_id} AND NOT deleted".format(
-                **query_args
-            )
-        )
-
-        assert (
             _normalize_query(replacement.get_insert_query("foo"))
-            == "INSERT INTO {table_name} ({all_columns}) SELECT {select_columns} FROM {table_name} FINAL PREWHERE event_id IN ({event_ids}) WHERE project_id = {project_id} AND NOT deleted".format(
+            == "INSERT INTO {table_name} ({all_columns}) SELECT {select_columns} FROM {table_name} FINAL WHERE event_id IN ({event_ids}) AND project_id = {project_id} AND NOT deleted".format(
                 **query_args
             )
         )
@@ -762,14 +731,8 @@ class TestReplacerProcess(BaseTest):
         }
 
         assert (
-            _normalize_query(replacement.get_count_query("foo"))
-            == "SELECT count() FROM {table_name} FINAL PREWHERE group_id IN ({previous_group_ids}) WHERE project_id = {project_id} AND received <= CAST('{timestamp}' AS DateTime) AND NOT deleted".format(
-                **query_args
-            )
-        )
-        assert (
             _normalize_query(replacement.get_insert_query("foo"))
-            == "INSERT INTO {table_name} ({all_columns}) SELECT {select_columns} FROM {table_name} FINAL PREWHERE group_id IN ({previous_group_ids}) WHERE project_id = {project_id} AND received <= CAST('{timestamp}' AS DateTime) AND NOT deleted".format(
+            == "INSERT INTO {table_name} ({all_columns}) SELECT {select_columns} FROM {table_name} FINAL WHERE project_id = {project_id} AND group_id IN ({previous_group_ids}) AND timestamp <= CAST('{timestamp}' AS DateTime) + INTERVAL 1 DAY AND received <= CAST('{timestamp}' AS DateTime) AND NOT deleted".format(
                 **query_args
             )
         )
@@ -806,14 +769,8 @@ class TestReplacerProcess(BaseTest):
         }
 
         assert (
-            _normalize_query(replacement.get_count_query("foo"))
-            == "SELECT count() FROM {table_name} FINAL PREWHERE primary_hash IN ({hashes}) WHERE group_id = {previous_group_id} AND project_id = {project_id} AND received <= CAST('{timestamp}' AS DateTime) AND NOT deleted".format(
-                **query_args
-            )
-        )
-        assert (
             _normalize_query(replacement.get_insert_query("foo"))
-            == "INSERT INTO {table_name} ({all_columns}) SELECT {select_columns} FROM {table_name} FINAL PREWHERE primary_hash IN ({hashes}) WHERE group_id = {previous_group_id} AND project_id = {project_id} AND received <= CAST('{timestamp}' AS DateTime) AND NOT deleted".format(
+            == "INSERT INTO {table_name} ({all_columns}) SELECT {select_columns} FROM {table_name} FINAL WHERE project_id = {project_id} AND primary_hash IN ({hashes}) AND group_id = {previous_group_id} AND timestamp <= CAST('{timestamp}' AS DateTime) + INTERVAL 1 DAY AND received <= CAST('{timestamp}' AS DateTime) AND NOT deleted".format(
                 **query_args
             )
         )
@@ -848,13 +805,8 @@ class TestReplacerProcess(BaseTest):
         }
 
         assert (
-            _normalize_query(replacement.get_count_query("foo"))
-            == f"SELECT count() FROM %(table_name)s FINAL PREWHERE event_id IN (%(event_ids)s) WHERE project_id = %(project_id)s AND NOT deleted AND timestamp >= toDateTime('{from_ts.strftime(DATETIME_FORMAT)}') AND timestamp <= toDateTime('{to_ts.strftime(DATETIME_FORMAT)}')"
-            % query_args
-        )
-        assert (
             _normalize_query(replacement.get_insert_query("foo"))
-            == f"INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE event_id IN (%(event_ids)s) WHERE project_id = %(project_id)s AND NOT deleted AND timestamp >= toDateTime('{from_ts.strftime(DATETIME_FORMAT)}') AND timestamp <= toDateTime('{to_ts.strftime(DATETIME_FORMAT)}')"
+            == f"INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL WHERE event_id IN (%(event_ids)s) AND project_id = %(project_id)s AND NOT deleted AND timestamp >= toDateTime('{from_ts.strftime(DATETIME_FORMAT)}') AND timestamp <= toDateTime('{to_ts.strftime(DATETIME_FORMAT)}')"
             % query_args
         )
         assert replacement.get_query_time_flags() is None
@@ -884,14 +836,8 @@ class TestReplacerProcess(BaseTest):
             "table_name": "foo",
         }
         assert (
-            _normalize_query(replacement.get_count_query("foo"))
-            == "SELECT count() FROM {table_name} FINAL PREWHERE group_id IN ({group_ids}) WHERE project_id = {project_id} AND received <= CAST('{timestamp}' AS DateTime) AND NOT deleted".format(
-                **query_args
-            )
-        )
-        assert (
             _normalize_query(replacement.get_insert_query("foo"))
-            == "INSERT INTO {table_name} ({required_columns}) SELECT {select_columns} FROM {table_name} FINAL PREWHERE group_id IN ({group_ids}) WHERE project_id = {project_id} AND received <= CAST('{timestamp}' AS DateTime) AND NOT deleted".format(
+            == "INSERT INTO {table_name} ({required_columns}) SELECT {select_columns} FROM {table_name} FINAL WHERE project_id = {project_id} AND group_id IN ({group_ids}) AND timestamp <= CAST('{timestamp}' AS DateTime) + INTERVAL 1 DAY AND received <= CAST('{timestamp}' AS DateTime) AND NOT deleted".format(
                 **query_args
             )
         )
@@ -899,6 +845,51 @@ class TestReplacerProcess(BaseTest):
         assert replacement.get_query_time_flags() == errors_replacer.ExcludeGroups(
             group_ids=[1, 2, 3]
         )
+
+    @pytest.mark.parametrize(
+        "replacement_type, extra",
+        [
+            (ReplacementType.END_DELETE_GROUPS, {"group_ids": [1, 2, 3]}),
+            (
+                ReplacementType.TOMBSTONE_EVENTS,
+                {"event_ids": ["00e24a150d7f4ee4b142b61b4d893b6d"]},
+            ),
+            (
+                ReplacementType.REPLACE_GROUP,
+                {"event_ids": ["00e24a150d7f4ee4b142b61b4d893b6d"], "new_group_id": 2},
+            ),
+            (ReplacementType.END_MERGE, {"new_group_id": 2, "previous_group_ids": [1, 2]}),
+            (
+                ReplacementType.END_UNMERGE,
+                {"previous_group_id": 1, "new_group_id": 2, "hashes": ["a" * 32]},
+            ),
+            (ReplacementType.END_DELETE_TAG, {"tag": "sentry:user"}),
+        ],
+    )
+    def test_disable_query_final_omits_final(
+        self, replacement_type: ReplacementType, extra: dict[str, Any]
+    ) -> None:
+        timestamp = datetime.now()
+        message = (
+            2,
+            replacement_type,
+            {
+                "project_id": self.project_id,
+                "datetime": timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                **extra,
+            },
+        )
+        meta_and_replacement = self.replacer.process_message(self._wrap(message))
+        assert meta_and_replacement is not None
+        _, replacement = meta_and_replacement
+        assert isinstance(replacement, errors_replacer.Replacement)
+
+        with override_options("snuba", {"disable_query_final": True}):
+            query = replacement.get_insert_query("foo")
+
+        assert query is not None
+        assert " FINAL" not in query
+        assert re.search(r"FROM foo\s+WHERE", query) is not None
 
     def test_project_bypass(self) -> None:
         timestamp = datetime.now()

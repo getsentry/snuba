@@ -7,6 +7,7 @@ import ExecuteButton from "SnubaAdmin/utils/execute_button";
 import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";
 import QueryResultCopier from "SnubaAdmin/utils/query_result_copier";
 import {
+  EnumOption,
   OutcomesQueryRequest,
   OutcomesQueryResult,
   PredefinedQuery,
@@ -18,6 +19,9 @@ function QueryDisplay(props: {
   api: Client;
   resultDataPopulator: (queryResult: OutcomesQueryResult) => JSX.Element;
   predefinedQueryOptions: Array<PredefinedQuery>;
+  categoryOptions: Array<EnumOption>;
+  outcomeOptions: Array<EnumOption>;
+  enumOptionsError?: string | null;
 }) {
   const [sql, setSql] = useState("");
   const [queryResultHistory, setQueryResultHistory] = useState<
@@ -69,17 +73,20 @@ function QueryDisplay(props: {
       <p style={helpStyle}>
         Query <code>outcomes_hourly_dist</code> to investigate volume spikes by
         category, org, project, outcome, and reason. Prefer hourly over raw —
-        it is orders of magnitude cheaper. Common categories:{" "}
-        <code>4</code> attachment bytes, <code>7</code> replay,{" "}
-        <code>22</code> attachment count, <code>1</code> error,{" "}
-        <code>2</code> transaction, <code>10</code> span. Outcomes:{" "}
-        <code>0</code> accepted, <code>1</code> filtered, <code>2</code> rate
-        limited, <code>3</code> invalid, <code>4</code> abuse,{" "}
-        <code>5</code> client discard.
+        it is orders of magnitude cheaper. Fill params from the controls below
+        (category/outcome dropdowns, time range, numeric fields). The execute
+        button shows when a query is running.
       </p>
+      {props.enumOptionsError ? (
+        <p style={errorStyle} role="alert">
+          {props.enumOptionsError}
+        </p>
+      ) : null}
       <QueryEditor
         onQueryUpdate={setSql}
         predefinedQueryOptions={props.predefinedQueryOptions}
+        categoryOptions={props.categoryOptions}
+        outcomeOptions={props.outcomeOptions}
       />
       <div style={executeActionsStyle}>
         <ExecuteButton onClick={executeQuery} disabled={!sql} />
@@ -106,6 +113,11 @@ const helpStyle = {
   fontSize: 14,
   maxWidth: 900,
   lineHeight: 1.4,
+};
+
+const errorStyle = {
+  ...helpStyle,
+  color: "#c92a2a",
 };
 
 export default QueryDisplay;

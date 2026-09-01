@@ -14,7 +14,7 @@ expression: snapshot_payload
     "org_id": 1,
     "partition": 0,
     "project_id": 2,
-    "retention_days": 30,
+    "retention_days": 22,
     "set_values": [
       324234,
       345345,

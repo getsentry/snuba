@@ -25,6 +25,8 @@ mod logging;
 mod metrics;
 mod options;
 mod processors;
+mod pull;
+mod pull_consumer;
 mod rebalancing;
 mod strategies;
 mod types;
@@ -33,8 +35,12 @@ use pyo3::prelude::*;
 
 #[pymodule]
 fn rust_snuba(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // Best-effort: the Python consumer / HTTP insert path calls process_message
+    // without going through the Rust consumer, which is what normally inits this.
+    let _ = init_sentry_options();
     m.add_function(wrap_pyfunction!(consumer::consumer, m)?)?;
     m.add_function(wrap_pyfunction!(consumer::process_message, m)?)?;
+    m.add_function(wrap_pyfunction!(pull_consumer::pull_consumer, m)?)?;
     m.add_function(wrap_pyfunction!(
         accepted_outcomes_consumer::accepted_outcomes_consumer,
         m

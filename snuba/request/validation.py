@@ -93,7 +93,10 @@ def update_attribution_info(
 
     attribution_info["app_id"] = get_app_id(request_parts.attribution_info["app_id"])
     attribution_info["referrer"] = referrer
-    attribution_info["tenant_ids"] = request_parts.attribution_info["tenant_ids"]
+    attribution_info["tenant_ids"] = dict(request_parts.attribution_info["tenant_ids"])
+    # cross_org_query is an internal exemption for system-initiated queries.
+    # Clients must not set it on SNQL requests to skip allocation quotas.
+    attribution_info["tenant_ids"].pop("cross_org_query", None)
 
     if "project_id" not in attribution_info["tenant_ids"] and query_project_id is not None:
         attribution_info["tenant_ids"]["project_id"] = query_project_id
@@ -197,8 +200,12 @@ def _get_settings_object(
     request_parts: RequestParts,
     referrer: str,
 ) -> HTTPQuerySettings | SubscriptionQuerySettings:
+    organization_id = request_parts.attribution_info["tenant_ids"].get("organization_id")
+    if not isinstance(organization_id, int):
+        organization_id = None
+
     if settings_class == HTTPQuerySettings:
-        query_settings: MutableMapping[str, bool | str] = {
+        query_settings: MutableMapping[str, bool | int | str | None] = {
             **request_parts.query_settings,
             "consistent": _consistent_override(
                 request_parts.query_settings.get("consistent", False), referrer
@@ -206,11 +213,13 @@ def _get_settings_object(
         }
         # TODO: referrer probably doesn't need to be passed in, it should be from the body
         query_settings["referrer"] = referrer
-        # the parameters accept either `str` or `bool` but we pass in `str | bool`
+        query_settings["organization_id"] = organization_id
+        # The schema validates these values before they are unpacked into the constructor.
         return settings_class(**query_settings)  # type: ignore[arg-type]
     if settings_class == SubscriptionQuerySettings:
         return settings_class(
             consistent=_consistent_override(True, referrer),
+            organization_id=organization_id,
         )
     return None  # type: ignore[return-value]
 

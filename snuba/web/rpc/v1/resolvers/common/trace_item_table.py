@@ -34,7 +34,7 @@ def _array_raw_to_attribute_value(raw: Any) -> AttributeValue:
     return convert_to_attribute_value(raw)
 
 
-def _get_converter_for_type(
+def get_converter_for_type(
     key_type: AttributeKey.Type.ValueType,
 ) -> Callable[[Any], AttributeValue]:
     """Returns a converter function for the given attribute type."""
@@ -69,14 +69,14 @@ def _get_aggregate_converter(
         case Function.FUNCTION_COLLECT_UNIQUE:
             return _array_raw_to_attribute_value
         case Function.FUNCTION_ANY | Function.FUNCTION_FIRST | Function.FUNCTION_LAST:
-            return _get_converter_for_type(key_type)
+            return get_converter_for_type(key_type)
 
     return _get_double_converter()
 
 
 def _add_converter(column: Column, converters: dict[str, Callable[[Any], AttributeValue]]) -> None:
     if column.HasField("key"):
-        converters[column.label] = _get_converter_for_type(column.key.type)
+        converters[column.label] = get_converter_for_type(column.key.type)
     elif column.HasField("aggregation"):
         converters[column.label] = _get_aggregate_converter(
             column.aggregation.aggregate, column.aggregation.key.type

@@ -1,8 +1,6 @@
-import logging
 import uuid
-from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
-from typing import Any, cast
+from typing import cast
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_get_traces_pb2 import GetTracesRequest
@@ -16,6 +14,10 @@ from snuba.clickhouse.query import Expression
 from snuba.configs.configuration import Configuration
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.entities.storage_selectors.outcomes import (
+    HOURLY_RETENTION_DAYS,
+    hourly_retention_cutoff,
+)
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.downsampled_storage_tiers import Tier
 from snuba.query import SelectedExpression
@@ -25,7 +27,8 @@ from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array
 from snuba.query.logical import Query
 from snuba.query.query_settings import OutcomesQuerySettings
 from snuba.request import Request as SnubaRequest
-from snuba.state.sentry_options import get_mapped_option, get_option
+from snuba.state.retention import get_retention_days_config
+from snuba.state.sentry_options import get_mapped_option
 from snuba.utils.metrics.util import set_current_span_attributes
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
@@ -44,44 +47,6 @@ from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingContext,
     RoutingDecision,
 )
-
-logger = logging.getLogger(__name__)
-
-# Mirrors the retention_days sentry-option default.
-# standard: fallback when RequestMeta.standard_retention_days is unset/non-positive.
-# downsampled: 13 months (≈30.46d * 13).
-DEFAULT_RETENTION_DAYS: dict[str, dict[str, int]] = {
-    "standard": {"default": 30, "max": 90},
-    "downsampled": {"default": 396, "max": 396},
-}
-
-
-def _positive_int(value: object, fallback: int) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-        return fallback
-    return value
-
-
-def _retention_bucket(config: Mapping[str, object], name: str) -> dict[str, int]:
-    fallback = DEFAULT_RETENTION_DAYS[name]
-    raw = config.get(name, fallback)
-    if not isinstance(raw, Mapping):
-        return dict(fallback)
-    return {
-        "default": _positive_int(raw.get("default"), fallback["default"]),
-        "max": _positive_int(raw.get("max"), fallback["max"]),
-    }
-
-
-def get_retention_days_config() -> dict[str, dict[str, int]]:
-    """Load the nested retention_days option, falling back to code defaults."""
-    # Nested object option; cast because OptionValue's static type is only one level deep.
-    raw: object = get_option("retention_days", cast(Any, DEFAULT_RETENTION_DAYS))
-    if not isinstance(raw, Mapping):
-        logger.warning("Invalid retention_days option %r; using defaults", raw)
-        return {name: dict(bucket) for name, bucket in DEFAULT_RETENTION_DAYS.items()}
-
-    return {name: _retention_bucket(raw, name) for name in DEFAULT_RETENTION_DAYS}
 
 
 def project_id_and_org_conditions(meta: RequestMeta) -> Expression:
@@ -115,11 +80,16 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         ]
 
     def _use_daily(self, in_msg_meta: RequestMeta) -> bool:
-        if in_msg_meta.end_timestamp.seconds < in_msg_meta.start_timestamp.seconds:
+        """Route the outcomes estimate to the daily table when needed.
+
+        The hourly outcomes table retains 90 days. Use daily when the
+        requested window is longer than that *or* starts before now - 90d.
+        """
+        start = datetime.fromtimestamp(in_msg_meta.start_timestamp.seconds, tz=UTC)
+        end = datetime.fromtimestamp(in_msg_meta.end_timestamp.seconds, tz=UTC)
+        if end < start:
             return False
-        seconds_delta = in_msg_meta.end_timestamp.seconds - in_msg_meta.start_timestamp.seconds
-        duration = timedelta(seconds=seconds_delta)
-        return duration.days > 90
+        return (end - start).days > HOURLY_RETENTION_DAYS or start < hourly_retention_cutoff()
 
     def get_item_types_in_query(
         self, routing_context: RoutingContext

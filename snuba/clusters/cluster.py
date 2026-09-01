@@ -63,6 +63,11 @@ class ClickhouseClientSettings(Enum):
             "alter_sync": 2,  # Wait for ON CLUSTER DDL on all replicas
             "database_atomic_wait_for_drop_and_detach_synchronously": 1,
             "distributed_ddl_task_timeout": 300,  # 5 minute ON CLUSTER DDL timeout
+            # Quiet ON CLUSTER DDL (DROP MV waiting on a hot-table lock) writes
+            # no bytes until it finishes. Pin a 15s header so http_send_timeout
+            # / idle do not IncompleteRead the HTTP body.
+            "send_progress_in_http_headers": 1,
+            "http_headers_progress_interval_ms": 15000,
         },
         # 5 minute timeout to allow ON CLUSTER DDL operations to complete
         # across all replicas. This is needed because alter_sync=2 blocks
@@ -91,13 +96,35 @@ class ClickhouseClientSettings(Enum):
             # ClickHouse to go over the default max_memory_usage of 10GB per
             # query. Lowering the max_block_size reduces memory usage, and
             # increasing the max_memory_usage gives the query more breathing
-            # room.
+            # room. The `replacer` sentry-option can raise these per query.
+            "max_threads": settings.REPLACER_MAX_THREADS,
             "max_block_size": settings.REPLACER_MAX_BLOCK_SIZE,
             "max_memory_usage": settings.REPLACER_MAX_MEMORY_USAGE,
-            # Don't use up production cache for the count() queries.
+            # Don't use up production cache for replacement SELECT ... FINAL.
             "use_uncompressed_cache": 0,
+            # Same FINAL setting user reads already apply. errors partitions are
+            # (retention_days, toMonday(timestamp)), so cross-partition merges
+            # are unnecessary and expensive under FINAL.
+            "do_not_merge_across_partitions_select_final": 1,
+            # Skip indexes (e.g. minmax_group_id) used to be ignored under FINAL.
+            # Keep them on so group_id filters can still prune granules.
+            "use_skip_indexes_if_final": 1,
+            # Delete/merge/unmerge leave predicates in WHERE. FINAL ignores
+            # optimize_move_to_prewhere unless this is also on (default off).
+            "optimize_move_to_prewhere": 1,
+            "optimize_move_to_prewhere_if_final": 1,
+            # clickhouse-connect caps its own progress interval at 120s when the
+            # client timeout is large. Pin a 15s header so a quiet FINAL still
+            # writes bytes before http_send_timeout / Envoy idle (30s default).
+            "send_progress_in_http_headers": 1,
+            "http_headers_progress_interval_ms": 15000,
+            # Server-side kill switch. Client timeout is intentionally a bit
+            # higher (REPLACER_CLIENT_TIMEOUT) so CH can surface this error
+            # before the HTTP read times out.
+            "max_execution_time": settings.REPLACER_QUERY_TIMEOUT,
         },
-        None,
+        # seconds; clickhouse-connect maps this to urllib3 Timeout(read=...)
+        settings.REPLACER_CLIENT_TIMEOUT,
     )
     CARDINALITY_ANALYZER = ClickhouseClientSettingsType(
         {

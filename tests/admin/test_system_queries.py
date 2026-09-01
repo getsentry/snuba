@@ -2,13 +2,18 @@ import ast
 import contextlib
 from collections.abc import Sequence
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
+from sentry_options.testing import override_options
 
 from snuba import settings
 from snuba.admin.auth_roles import ROLES, Role
-from snuba.admin.clickhouse.common import InvalidCustomQuery, InvalidNodeError
+from snuba.admin.clickhouse.common import (
+    ADMIN_ALLOWED_HOSTS_OPTION,
+    InvalidCustomQuery,
+    InvalidNodeError,
+)
 from snuba.admin.clickhouse.system_queries import (
     UnauthorizedForSudo,
     is_valid_system_query,
@@ -18,6 +23,7 @@ from snuba.admin.clickhouse.system_queries import (
 from snuba.admin.user import AdminUser
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.state.sentry_options import SNUBA_OPTIONS_NAMESPACE
 
 
 @pytest.mark.parametrize(
@@ -347,6 +353,182 @@ def test_clusterless_rejects_unvalidated_host(
 
 
 @pytest.mark.parametrize(
+    "helper_name, client_settings",
+    [
+        pytest.param(
+            "get_clusterless_node_connection",
+            ClickhouseClientSettings.INTERNAL,
+            id="sudo clusterless helper",
+        ),
+        pytest.param(
+            "get_ro_clusterless_node_connection",
+            ClickhouseClientSettings.QUERY,
+            id="readonly clusterless helper",
+        ),
+    ],
+)
+def test_clusterless_validate_node_false_skips_membership_check(
+    helper_name: str, client_settings: ClickhouseClientSettings
+) -> None:
+    """Allowlisted hosts skip _validate_node and keep the port they were given."""
+    from snuba.admin.clickhouse import common
+
+    with (
+        patch.object(
+            common,
+            "_validate_node",
+            side_effect=InvalidNodeError("host not in cluster"),
+        ) as mock_validate,
+        patch.object(common, "build_pool") as mock_pool,
+    ):
+        mock_pool.return_value = MagicMock()
+        getattr(common, helper_name)(
+            "snuba-outcomes-query-arm-1-1",
+            8123,
+            "errors",
+            client_settings,
+            validate_node=False,
+        )
+
+        mock_validate.assert_not_called()
+        assert mock_pool.called
+        node = mock_pool.call_args.args[1]
+        assert node.host_name == "snuba-outcomes-query-arm-1-1"
+        assert node.port == 8123
+
+
+@pytest.mark.parametrize(
+    "sudo_mode, helper_name",
+    [
+        pytest.param(False, "get_ro_clusterless_node_connection", id="readonly"),
+        pytest.param(True, "get_clusterless_node_connection", id="sudo"),
+    ],
+)
+def test_clusterless_query_skips_validation_for_allowlisted_host(
+    sudo_mode: bool, helper_name: str
+) -> None:
+    """
+    Manual host entry against a host on ADMIN_ALLOWED_HOSTS_OPTION connects
+    without a cluster-membership check, so a node that has been provisioned but
+    not yet added to Snuba cluster config can be queried. The typed port is used
+    as-is rather than being rewritten to the cluster's port.
+    """
+    from snuba.admin.clickhouse import system_queries
+
+    with (
+        override_options(
+            SNUBA_OPTIONS_NAMESPACE,
+            {ADMIN_ALLOWED_HOSTS_OPTION: ["snuba-outcomes-query-arm-1-1"]},
+        ),
+        patch.object(system_queries, helper_name) as mock_helper,
+    ):
+        mock_helper.return_value.execute.return_value = MagicMock(results=[])
+
+        system_queries._run_sql_query_on_host(
+            "snuba-outcomes-query-arm-1-1",
+            8123,
+            "errors",
+            "SELECT * FROM system.clusters",
+            sudo_mode,
+            True,
+        )
+
+    assert mock_helper.call_args.kwargs["validate_node"] is False
+    assert mock_helper.call_args.args[:2] == ("snuba-outcomes-query-arm-1-1", 8123)
+
+
+@pytest.mark.parametrize(
+    "sudo_mode, helper_name",
+    [
+        pytest.param(False, "get_ro_clusterless_node_connection", id="readonly"),
+        pytest.param(True, "get_clusterless_node_connection", id="sudo"),
+    ],
+)
+def test_clusterless_query_validates_non_allowlisted_host(
+    sudo_mode: bool, helper_name: str
+) -> None:
+    """A host that is not allowlisted still has to be a member of the cluster."""
+    from snuba.admin.clickhouse import system_queries
+
+    with (
+        override_options(
+            SNUBA_OPTIONS_NAMESPACE,
+            {ADMIN_ALLOWED_HOSTS_OPTION: ["snuba-outcomes-query-arm-1-1"]},
+        ),
+        patch.object(system_queries, helper_name) as mock_helper,
+    ):
+        mock_helper.return_value.execute.return_value = MagicMock(results=[])
+
+        system_queries._run_sql_query_on_host(
+            "attacker.example.com",
+            9009,
+            "errors",
+            "SELECT * FROM system.clusters",
+            sudo_mode,
+            True,
+        )
+
+    assert mock_helper.call_args.kwargs["validate_node"] is True
+
+
+def test_clusterless_explain_skips_validation_for_allowlisted_host() -> None:
+    """
+    Query validation runs EXPLAIN on the target host, so it has to accept the
+    allowlisted host too — otherwise validation rejects the query before the
+    read ever reaches the node.
+    """
+    from snuba.admin.clickhouse import system_queries
+
+    with (
+        override_options(
+            SNUBA_OPTIONS_NAMESPACE,
+            {ADMIN_ALLOWED_HOSTS_OPTION: ["snuba-outcomes-query-arm-1-1:9000"]},
+        ),
+        patch.object(system_queries, "get_ro_clusterless_node_connection") as mock_helper,
+    ):
+        system_queries._run_explain_on_host(
+            "snuba-outcomes-query-arm-1-1",
+            9000,
+            "errors",
+            "EXPLAIN AST SELECT * FROM system.clusters",
+            True,
+        )
+
+    assert mock_helper.call_args.kwargs["validate_node"] is False
+
+
+def test_non_clusterless_ignores_allowlist() -> None:
+    """
+    The allowlist only relaxes manual host entry. Node-picker queries stay on
+    the membership-checked helpers.
+    """
+    from snuba.admin.clickhouse import system_queries
+
+    with (
+        override_options(
+            SNUBA_OPTIONS_NAMESPACE,
+            {ADMIN_ALLOWED_HOSTS_OPTION: ["snuba-outcomes-query-arm-1-1"]},
+        ),
+        patch.object(system_queries, "get_ro_node_connection") as mock_ro,
+        patch.object(system_queries, "get_ro_clusterless_node_connection") as mock_clusterless,
+    ):
+        mock_ro.return_value.execute.return_value = MagicMock(results=[])
+
+        system_queries._run_sql_query_on_host(
+            "snuba-outcomes-query-arm-1-1",
+            8123,
+            "errors",
+            "SELECT * FROM system.clusters",
+            False,
+            False,
+        )
+
+    assert mock_ro.called
+    assert not mock_clusterless.called
+    assert "validate_node" not in mock_ro.call_args.kwargs
+
+
+@pytest.mark.parametrize(
     "helper_name",
     [
         "get_ro_node_connection",
@@ -395,6 +577,110 @@ def test_by_host_connection_uses_default_http_port(helper_name: str) -> None:
     assert node.port != sentinel_cluster_http_port, (
         "by-host connections must not use the cluster's configured port"
     )
+
+
+def test_is_valid_node_accepts_query_endpoint_when_topology_fails() -> None:
+    """Configured query endpoint must stay valid if topology discovery fails."""
+    from snuba.admin.clickhouse import common
+    from snuba.clusters.cluster import ClickhouseCluster, ClickhouseNode
+
+    cluster = MagicMock(spec=ClickhouseCluster)
+    query_node = ClickhouseNode("query", 9000)
+    cluster.get_query_node.return_value = query_node
+    cluster.get_port.return_value = 8123
+    cluster.get_local_nodes.side_effect = Exception("topology down")
+    cluster.get_distributed_nodes.side_effect = Exception("topology down")
+
+    assert common.is_valid_node("query", 8123, cluster) is True
+
+
+def test_is_valid_node_rejects_unknown_host_when_topology_fails() -> None:
+    from snuba.admin.clickhouse import common
+    from snuba.admin.clickhouse.common import InvalidNodeError
+    from snuba.clusters.cluster import ClickhouseCluster, ClickhouseNode
+
+    cluster = MagicMock(spec=ClickhouseCluster)
+    cluster.get_query_node.return_value = ClickhouseNode("query", 9000)
+    cluster.get_port.return_value = 8123
+    cluster.get_local_nodes.side_effect = Exception("topology down")
+    cluster.get_distributed_nodes.side_effect = Exception("topology down")
+
+    with pytest.raises(InvalidNodeError):
+        common.is_valid_node("attacker.example.com", 8123, cluster)
+
+
+def test_is_valid_node_accepts_discovered_storage_node() -> None:
+    from snuba.admin.clickhouse import common
+    from snuba.clusters.cluster import ClickhouseCluster, ClickhouseNode
+
+    cluster = MagicMock(spec=ClickhouseCluster)
+    query_node = ClickhouseNode("query", 9000)
+    storage_node = ClickhouseNode("storage", 8123)
+    cluster.get_query_node.return_value = query_node
+    cluster.get_port.return_value = 8123
+    cluster.get_local_nodes.return_value = [storage_node]
+    cluster.get_distributed_nodes.return_value = []
+
+    assert common.is_valid_node("storage", 8123, cluster) is True
+
+
+def test_is_valid_node_uses_known_nodes_without_rediscovery() -> None:
+    """Callers with a topology snapshot must not re-query discovery."""
+    from snuba.admin.clickhouse import common
+    from snuba.clusters.cluster import ClickhouseCluster, ClickhouseNode
+
+    cluster = MagicMock(spec=ClickhouseCluster)
+    query_node = ClickhouseNode("query", 9000)
+    storage_node = ClickhouseNode("storage", 8123)
+    cluster.get_query_node.return_value = query_node
+    cluster.get_port.return_value = 8123
+    cluster.get_local_nodes.side_effect = Exception("should not rediscover")
+    cluster.get_distributed_nodes.side_effect = Exception("should not rediscover")
+
+    assert (
+        common.is_valid_node(
+            "storage",
+            8123,
+            cluster,
+            known_nodes=[query_node, storage_node],
+        )
+        is True
+    )
+    cluster.get_local_nodes.assert_not_called()
+    cluster.get_distributed_nodes.assert_not_called()
+
+
+def test_ro_cluster_node_connection_uses_validated_readonly_pool() -> None:
+    """Cluster-scoped admin lookups must stay on the validated readonly path."""
+    from unittest.mock import MagicMock
+
+    from snuba.admin.clickhouse import common
+    from snuba.clusters.cluster import ClickhouseCluster, ClickhouseNode
+
+    cluster = MagicMock(spec=ClickhouseCluster)
+    cluster.get_database.return_value = "default"
+    cluster.get_secure.return_value = False
+    cluster.get_ca_certs.return_value = None
+    cluster.get_verify.return_value = False
+    cluster.get_port.return_value = 8123
+    cluster.get_query_node.return_value = ClickhouseNode("query", 8123)
+    node = ClickhouseNode("storage", 8123)
+    known_nodes = [cluster.get_query_node.return_value, node]
+
+    with (
+        patch.object(common, "_validate_node") as mock_validate,
+        patch.object(settings, "CLICKHOUSE_READONLY_USER", "ro_user"),
+        patch.object(settings, "CLICKHOUSE_READONLY_PASSWORD", "ro_pass"),
+        patch.object(common, "build_pool") as mock_pool,
+    ):
+        common.get_ro_cluster_node_connection(
+            cluster, node, ClickhouseClientSettings.QUERY, known_nodes=known_nodes
+        )
+
+    mock_validate.assert_called_once_with("storage", 8123, cluster, None, known_nodes=known_nodes)
+    assert mock_pool.called
+    assert mock_pool.call_args.args[2] == "ro_user"
+    assert mock_pool.call_args.args[3] == "ro_pass"
 
 
 def test_query_node_connection_uses_cluster_http_port() -> None:

@@ -4,9 +4,14 @@ from dataclasses import dataclass
 from typing import TypedDict
 
 from snuba.admin.clickhouse.common import (
+    ADMIN_ALLOWED_HOSTS_OPTION,
+    InvalidNodeError,
     _get_storage,
     _node_connect_port,
     get_clusterless_node_connection,
+    host_is_allowlisted,
+    is_valid_node,
+    parse_host,
 )
 from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.pool import ClickhousePool
@@ -35,6 +40,29 @@ def validate_cluster_name(cluster_name: str) -> str:
     return cluster_name
 
 
+def _is_cluster_node(host: str, port: int, cluster: ClickhouseCluster, storage_name: str) -> bool:
+    try:
+        if is_valid_node(host, port, cluster, storage_name):
+            return True
+        topology_port = _http_port_for_host(host, cluster)
+        return topology_port != port and is_valid_node(host, topology_port, cluster, storage_name)
+    except InvalidNodeError:
+        return False
+
+
+def assert_target_host_allowed(
+    host: str,
+    port: int,
+    cluster: ClickhouseCluster,
+    storage_name: str,
+) -> None:
+    if host_is_allowlisted(host, port) or _is_cluster_node(host, port, cluster, storage_name):
+        return
+    raise ValueError(
+        f"{host}:{port} is not a known cluster node and is not in {ADMIN_ALLOWED_HOSTS_OPTION}"
+    )
+
+
 def _http_port_for_host(host: str, cluster: ClickhouseCluster) -> int:
     if host == cluster.get_query_node().host_name:
         return cluster.get_port()
@@ -53,6 +81,7 @@ class TableStatement:
 
 class CopyTablesResponse(TypedDict, total=False):
     source_host: str
+    target_host: str
     tables: str
     cluster_name: str
     dry_run: bool
@@ -172,6 +201,10 @@ def copy_tables(
     storage = _get_storage(storage_name)
     cluster = storage.get_cluster()
     database_name = cluster.get_database()
+    parsed_target: tuple[str, int] | None = None
+    if target_host:
+        parsed_target = parse_host(target_host)
+        assert_target_host_allowed(parsed_target[0], parsed_target[1], cluster, storage_name)
     source_connection = get_clusterless_node_connection(
         source_host,
         _http_port_for_host(source_host, cluster),
@@ -207,17 +240,29 @@ def copy_tables(
         "cluster_name": cluster_name or "no cluster",
         "dry_run": dry_run,
     }
+    if parsed_target:
+        resp["target_host"] = parsed_target[0]
 
     if dry_run:
         return resp
 
-    if target_host:
-        target_connection = get_clusterless_node_connection(
-            target_host,
-            _http_port_for_host(target_host, cluster),
-            storage_name,
-            client_settings=settings,
-        )
+    if parsed_target:
+        host, port = parsed_target
+        if host_is_allowlisted(host, port):
+            target_connection = get_clusterless_node_connection(
+                host,
+                port,
+                storage_name,
+                client_settings=settings,
+                validate_node=False,
+            )
+        else:
+            target_connection = get_clusterless_node_connection(
+                host,
+                _http_port_for_host(host, cluster),
+                storage_name,
+                client_settings=settings,
+            )
     else:
         target_connection = source_connection
 

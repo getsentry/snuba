@@ -12,13 +12,15 @@ from snuba.clusters.cluster import (
     get_cluster,
 )
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.configs.configuration import ResourceIdentifier
 from snuba.datasets.deletion_settings import DeletionSettings
 from snuba.datasets.readiness_state import ReadinessState
 from snuba.datasets.schemas import Schema
 from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
-from snuba.query.allocation_policies import DEFAULT_PASSTHROUGH_POLICY, AllocationPolicy
+from snuba.query.allocation_policies import AllocationPolicy
+from snuba.query.allocation_policies.resolver import get_active_allocation_policies
 from snuba.query.exceptions import QueryPlanException
 from snuba.query.processors.condition_checkers import ConditionChecker
 from snuba.query.processors.physical import ClickhouseQueryProcessor
@@ -102,7 +104,7 @@ class ReadableStorage(Storage):
         raise NotImplementedError
 
     def get_allocation_policies(self) -> list[AllocationPolicy]:
-        return [DEFAULT_PASSTHROUGH_POLICY]
+        return get_active_allocation_policies(ResourceIdentifier(self.get_storage_key()))
 
 
 class WritableStorage(Storage):

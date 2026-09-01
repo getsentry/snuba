@@ -1,15 +1,10 @@
 type ClusterData = {
-  host: string;
-  port: number;
-  database: string;
-  secure: boolean;
-  single_node: boolean;
-  cluster_name: string | null;
-  distributed_cluster_name: string | null;
+  cluster_name: string;
+  versions: string[];
   storage_sets: string[];
-  version: string | null;
   tables: string[];
-  error: string | null;
+  versions_error: string | null;
+  tables_error: string | null;
 };
 
 export { ClusterData };

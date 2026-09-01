@@ -168,7 +168,6 @@ wheels = [
     { url = "https://pypi.devinfra.sentry.io/wheels/clickhouse_connect-1.6.0-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:163eb12e7aaeefe9e51a483d3ad40502e15ac2ef94cf1f5b7fe8e9f5303d161b" },
 ]
 
-
 [[package]]
 name = "colorama"
 version = "0.4.6"
@@ -230,7 +229,7 @@ wheels = [
 
 [[package]]
 name = "devservices"
-version = "1.2.1"
+version = "1.5.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 dependencies = [
     { name = "packaging" },
@@ -240,7 +239,7 @@ dependencies = [
     { name = "supervisor" },
 ]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/devservices-1.2.1-py3-none-any.whl", hash = "sha256:7c76ab711550cd1f42bd99b12edfcbdb1792fb7df0b7fec51eb13a2e2ff5df1b" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/devservices-1.5.0-py3-none-any.whl", hash = "sha256:9675af4c9274fa472a2aefae60a2deff6630c7364e443d6a3d29c48c9953d6a5" },
 ]
 
 [[package]]
@@ -955,25 +954,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pytz"
-version = "2023.3.post1"
-source = { registry = "https://pypi.devinfra.sentry.io/simple" }
-wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/pytz-2023.3.post1-py2.py3-none-any.whl", hash = "sha256:ce42d816b81b68506614c11e8937d3aa9e41007ceb50bfdcb0749b921bf646c7" },
-]
-
-[[package]]
-name = "pytz-deprecation-shim"
-version = "0.1.0.post0"
-source = { registry = "https://pypi.devinfra.sentry.io/simple" }
-dependencies = [
-    { name = "tzdata" },
-]
-wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/pytz_deprecation_shim-0.1.0.post0-py2.py3-none-any.whl", hash = "sha256:8314c9692a636c8eb3bda879b9f119e350e93223ae83e70e80c31675a0fdc1a6" },
-]
-
-[[package]]
 name = "pyyaml"
 version = "6.0.3"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
@@ -1082,21 +1062,21 @@ source = { editable = "rust_snuba" }
 
 [[package]]
 name = "sentry-arroyo"
-version = "2.39.2"
+version = "2.43.1"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 dependencies = [
     { name = "confluent-kafka" },
 ]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_arroyo-2.39.2-py3-none-any.whl", hash = "sha256:a751392036aaab9d293fe5fa789f5a546f6673f5a1ff822090b428657653b7e5" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_arroyo-2.43.1-py3-none-any.whl", hash = "sha256:6195bbdca5a2149e2af524821549305c51988f5c3c6e3d69237a62c431b5bda0" },
 ]
 
 [[package]]
 name = "sentry-conventions"
-version = "0.19.0"
+version = "0.21.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_conventions-0.19.0-py3-none-any.whl", hash = "sha256:02ec6c2c201bd29e59b7ff18e700608e772dfc4fdbfac540e9a87123c1062559" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_conventions-0.21.0-py3-none-any.whl", hash = "sha256:bdaa3143bdbe0a9bf061ccc859f239cb7089a06452f8f6ef130b1408fb44ebc2" },
 ]
 
 [[package]]
@@ -1141,7 +1121,7 @@ wheels = [
 
 [[package]]
 name = "sentry-protos"
-version = "0.62.0"
+version = "0.64.1"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 dependencies = [
     { name = "grpc-stubs" },
@@ -1149,7 +1129,7 @@ dependencies = [
     { name = "protobuf" },
 ]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_protos-0.62.0-py3-none-any.whl", hash = "sha256:5cdb7c6bc288be7ccbeab6d03ad486fd84528fcda1468bcad215e8d34556b7ce" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_protos-0.64.1-py3-none-any.whl", hash = "sha256:971d08a227ae54e1473bded436779904041bbbed1789a7f9763fd5d7ca5b80b3" },
 ]
 
 [[package]]
@@ -1211,14 +1191,6 @@ wheels = [
     { url = "https://pypi.devinfra.sentry.io/wheels/setproctitle-1.3.7-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:b53602371a52b91c80aaf578b5ada29d311d12b8a69c0c17fbc35b76a1fd4f2e" },
     { url = "https://pypi.devinfra.sentry.io/wheels/setproctitle-1.3.7-cp314-cp314-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:fcb966a6c57cf07cc9448321a08f3be6b11b7635be502669bc1d8745115d7e7f" },
     { url = "https://pypi.devinfra.sentry.io/wheels/setproctitle-1.3.7-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:46178672599b940368d769474fe13ecef1b587d58bb438ea72b9987f74c56ea5" },
-]
-
-[[package]]
-name = "setuptools"
-version = "83.0.0"
-source = { registry = "https://pypi.devinfra.sentry.io/simple" }
-wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/setuptools-83.0.0-py3-none-any.whl", hash = "sha256:29b23c360f22f414dc7336bb39178cc7bcbf6021ed2733cde173f09dba19abb3" },
 ]
 
 [[package]]
@@ -1338,7 +1310,7 @@ requires-dist = [
     { name = "clickhouse-connect", specifier = ">=1.6.0" },
     { name = "confluent-kafka", specifier = ">=2.7.0" },
     { name = "datadog", specifier = ">=0.49.1" },
-    { name = "devservices", specifier = ">=1.2.1" },
+    { name = "devservices", specifier = ">=1.5.0" },
     { name = "fastjsonschema", specifier = ">=2.16.2" },
     { name = "flask", specifier = ">=3.1.0" },
     { name = "flask-compress", specifier = ">=1.15" },
@@ -1362,18 +1334,18 @@ requires-dist = [
     { name = "redis", specifier = ">=4.5.4" },
     { name = "rust-snuba", editable = "rust_snuba" },
     { name = "sentry-arroyo", specifier = ">=2.39.2" },
-    { name = "sentry-conventions", specifier = ">=0.19.0" },
+    { name = "sentry-conventions", specifier = ">=0.21.0" },
     { name = "sentry-kafka-schemas", specifier = ">=2.1.39" },
     { name = "sentry-options", specifier = ">=1.2.1" },
-    { name = "sentry-protos", specifier = ">=0.62.0" },
+    { name = "sentry-protos", specifier = ">=0.64.1" },
     { name = "sentry-redis-tools", specifier = ">=0.5.1" },
     { name = "sentry-relay", specifier = ">=0.9.25" },
     { name = "sentry-sdk", specifier = ">=2.66.1" },
     { name = "sentry-usage-accountant", specifier = ">=0.0.11" },
     { name = "simplejson", specifier = ">=3.17.6" },
     { name = "snuba-sdk", specifier = ">=3.0.39" },
-    { name = "sql-metadata", specifier = ">=2.11.0" },
-    { name = "sqlparse", specifier = ">=0.5.0" },
+    { name = "sql-metadata", specifier = ">=3.0.1" },
+    { name = "sqlparse", specifier = ">=0.6.0" },
     { name = "structlog", specifier = ">=22.3.0" },
     { name = "structlog-sentry", specifier = ">=2.0.0" },
     { name = "urllib3", specifier = ">=2.7.0" },
@@ -1382,7 +1354,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "devservices", specifier = ">=1.2.1" },
+    { name = "devservices", specifier = ">=1.5.0" },
     { name = "freezegun", specifier = ">=1.5.5" },
     { name = "mypy", specifier = ">=1.18.2" },
     { name = "pre-commit", specifier = ">=4.2.0" },
@@ -1494,21 +1466,29 @@ wheels = [
 
 [[package]]
 name = "sql-metadata"
-version = "2.11.0"
+version = "3.0.1"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 dependencies = [
-    { name = "sqlparse" },
+    { name = "sqlglot" },
 ]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/sql_metadata-2.11.0-py3-none-any.whl", hash = "sha256:2ce9d4519565a972edf786712d3f6fbebf8ddd8e0d7bdb4bf51d64f5ec2e5c88" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/sql_metadata-3.0.1-py3-none-any.whl", hash = "sha256:33b17891a149bfd851f5927d38fe6f133c63fca5955c016925dbc67113a07f7d" },
+]
+
+[[package]]
+name = "sqlglot"
+version = "30.16.0"
+source = { registry = "https://pypi.devinfra.sentry.io/simple" }
+wheels = [
+    { url = "https://pypi.devinfra.sentry.io/wheels/sqlglot-30.16.0-py3-none-any.whl", hash = "sha256:f14f119e87bb1397316ab2b3c1f12dddd3b098921185dc69935952111be91788" },
 ]
 
 [[package]]
 name = "sqlparse"
-version = "0.5.4"
+version = "0.6.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/sqlparse-0.5.4-py3-none-any.whl", hash = "sha256:99a9f0314977b76d776a0fcb8554de91b9bb8a18560631d6bc48721d07023dcb" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/sqlparse-0.6.0-py3-none-any.whl", hash = "sha256:b861c0288ce2fa56209a9a6412d2e066ac664b3873b89c26c9d8415e8e32996f" },
 ]
 
 [[package]]
@@ -1533,13 +1513,10 @@ wheels = [
 
 [[package]]
 name = "supervisor"
-version = "4.2.5"
+version = "4.3.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
-dependencies = [
-    { name = "setuptools" },
-]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/supervisor-4.2.5-py2.py3-none-any.whl", hash = "sha256:2ecaede32fc25af814696374b79e42644ecaba5c09494c51016ffda9602d0f08" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/supervisor-4.3.0-py2.py3-none-any.whl", hash = "sha256:0bcb763fddafba410f35cbde226aa7f8514b9fb82eb05a0c85f6588d1c13f8db" },
 ]
 
 [[package]]
@@ -1642,25 +1619,6 @@ resolution-markers = [
 ]
 wheels = [
     { url = "https://pypi.devinfra.sentry.io/wheels/typing_extensions-4.15.0-py3-none-any.whl", hash = "sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548" },
-]
-
-[[package]]
-name = "tzdata"
-version = "2025.2"
-source = { registry = "https://pypi.devinfra.sentry.io/simple" }
-wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/tzdata-2025.2-py2.py3-none-any.whl", hash = "sha256:1a403fada01ff9221ca8044d701868fa132215d84beb92242d9acd2147f667a8" },
-]
-
-[[package]]
-name = "tzlocal"
-version = "4.2"
-source = { registry = "https://pypi.devinfra.sentry.io/simple" }
-dependencies = [
-    { name = "pytz-deprecation-shim" },
-]
-wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/tzlocal-4.2-py3-none-any.whl", hash = "sha256:89885494684c929d9191c57aa27502afc87a579be5cdd3225c77c463ea043745" },
 ]
 
 [[package]]

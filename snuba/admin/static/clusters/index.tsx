@@ -1,38 +1,66 @@
 import React, { useEffect, useState } from "react";
-import { Badge, Button, Code, Group, Loader, Space, Text } from "@mantine/core";
+import { Code, Loader, Space, Text } from "@mantine/core";
 
 import Client from "SnubaAdmin/api_client";
 import { Table } from "SnubaAdmin/table";
 import { Collapse } from "SnubaAdmin/collapse";
 import { ClusterData } from "SnubaAdmin/clusters/types";
 
-function versionCell(cluster: ClusterData) {
-  if (cluster.version) {
-    return <Code>{cluster.version}</Code>;
+function versionsCell(cluster: ClusterData) {
+  if (cluster.versions.length === 0 && !cluster.versions_error) {
+    return <Text color="dimmed">not reported</Text>;
+  }
+
+  return (
+    <div>
+      {cluster.versions.map((version) => (
+        <div key={version}>
+          <Code>{version}</Code>
+        </div>
+      ))}
+      {cluster.versions_error && (
+        <Text color="red" size="sm">
+          {cluster.versions_error}
+        </Text>
+      )}
+    </div>
+  );
+}
+
+function listCell(values: string[]) {
+  if (values.length === 0) {
+    return <Text color="dimmed">—</Text>;
   }
   return (
-    <Text color="red" size="sm">
-      {cluster.error || "unknown"}
-    </Text>
+    <div>
+      {values.map((value) => (
+        <div key={value}>{value}</div>
+      ))}
+    </div>
   );
 }
 
 function tablesCell(cluster: ClusterData) {
-  if (cluster.tables.length === 0) {
+  if (cluster.tables.length === 0 && !cluster.tables_error) {
     return <Text color="dimmed">—</Text>;
   }
   return (
-    <Collapse
-      text={`${cluster.tables.length} table${
-        cluster.tables.length === 1 ? "" : "s"
-      }`}
-    >
-      <div style={tableListStyle}>
-        {cluster.tables.map((table) => (
-          <div key={table}>{table}</div>
-        ))}
-      </div>
-    </Collapse>
+    <div>
+      {cluster.tables.length > 0 && (
+        <Collapse
+          text={`${cluster.tables.length} table${
+            cluster.tables.length === 1 ? "" : "s"
+          }`}
+        >
+          <div style={tableListStyle}>
+            {cluster.tables.map((table) => (
+              <div key={table}>{table}</div>
+            ))}
+          </div>
+        </Collapse>
+      )}
+      {cluster.tables_error && <Text color="red">{cluster.tables_error}</Text>}
+    </div>
   );
 }
 
@@ -41,31 +69,6 @@ const tableListStyle = {
   overflowY: "auto" as const,
   fontSize: 14,
 };
-
-function VersionSummary(props: { clusters: ClusterData[] }) {
-  const counts: { [version: string]: number } = {};
-  props.clusters.forEach((cluster) => {
-    const version = cluster.version || "unknown";
-    counts[version] = (counts[version] || 0) + 1;
-  });
-
-  return (
-    <Group spacing="xs">
-      <Text size="sm">ClickHouse versions in use:</Text>
-      {Object.keys(counts)
-        .sort()
-        .map((version) => (
-          <Badge
-            key={version}
-            color={version === "unknown" ? "red" : "blue"}
-            variant="light"
-          >
-            {version} ({counts[version]})
-          </Badge>
-        ))}
-    </Group>
-  );
-}
 
 function Clusters(props: { api: Client }) {
   const [clusters, setClusters] = useState<ClusterData[] | null>(null);
@@ -87,54 +90,33 @@ function Clusters(props: { api: Client }) {
   }, []);
 
   const rowData = (clusters || []).map((cluster) => [
-    <Code>
-      {cluster.host}:{cluster.port}
-    </Code>,
-    versionCell(cluster),
-    cluster.single_node ? (
-      <Text color="dimmed">single node</Text>
-    ) : (
-      cluster.cluster_name || <Text color="dimmed">not set</Text>
-    ),
-    cluster.distributed_cluster_name || <Text color="dimmed">—</Text>,
-    cluster.database,
-    <Text size="sm">{cluster.storage_sets.join(", ")}</Text>,
+    cluster.cluster_name,
+    versionsCell(cluster),
+    listCell(cluster.storage_sets),
     tablesCell(cluster),
   ]);
 
-  // Refresh stays reachable in every state, so a failed load can be retried
-  // without leaving and re-entering the tab.
   return (
     <div>
-      <Group>
-        <Button onClick={fetchClusters} loading={isLoading}>
-          Refresh
-        </Button>
-        {clusters !== null && <VersionSummary clusters={clusters} />}
-        {fetchError !== null && <Text color="red">{fetchError}</Text>}
-      </Group>
+      {fetchError !== null && <Text color="red">{fetchError}</Text>}
       <Space h="md" />
       {clusters === null ? (
         isLoading && <Loader />
       ) : (
         <Table
           headerData={[
-            "Query Node",
-            "ClickHouse Version",
             "Cluster Name",
-            "Distributed Cluster Name",
-            "Database",
+            "Distinct Versions",
             "Storage Sets",
-            "Tables in default",
+            "Tables",
           ]}
-          columnWidths={[3, 3, 3, 3, 2, 5, 3]}
+          columnWidths={[4, 3, 4, 3]}
           rowData={rowData}
         />
       )}
       <Text size="sm" color="dimmed">
-        Every cluster this Snuba deployment is configured with. The version and
-        the tables are read from each cluster's query node, and only tables in
-        the <Code>default</Code> database are listed.
+        Every ClickHouse cluster this Snuba deployment uses. Versions and tables
+        in the <Code>default</Code> database are read across all replicas.
       </Text>
     </div>
   );

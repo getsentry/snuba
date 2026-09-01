@@ -20,7 +20,6 @@ class TestPerReferrerPolicy:
         policy = ReferrerGuardRailPolicy.from_kwargs(
             **{
                 "storage_key": "generic_metrics_counters",
-                "required_tenant_types": ["referrer"],
             }
         )
 
@@ -54,7 +53,6 @@ class TestPerReferrerPolicy:
         policy = ReferrerGuardRailPolicy.from_kwargs(
             **{
                 "storage_key": "generic_metrics_counters",
-                "required_tenant_types": ["referrer"],
             }
         )
 
@@ -82,7 +80,6 @@ class TestPerReferrerPolicy:
         policy = ReferrerGuardRailPolicy.from_kwargs(
             **{
                 "storage_key": "generic_metrics_counters",
-                "required_tenant_types": ["referrer"],
             }
         )
         set_component_config(

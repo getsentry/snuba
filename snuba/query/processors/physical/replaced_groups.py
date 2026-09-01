@@ -1,6 +1,7 @@
 from collections.abc import MutableMapping
 from dataclasses import replace
 from datetime import datetime
+from typing import cast
 
 from snuba import environment, settings
 from snuba.clickhouse.query import Query
@@ -10,6 +11,7 @@ from snuba.clickhouse.query_dsl.accessors import (
 )
 from snuba.query.conditions import not_in_condition
 from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba.query.final import query_final_disabled
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings, SubscriptionQuerySettings
 from snuba.replacers.projects_query_flags import ProjectsQueryFlags
@@ -20,6 +22,8 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 metrics = MetricsWrapper(environment.metrics, "processors.replaced_groups")
 FINAL_METRIC = "final"
 CONSISTENCY_DENYLIST_METRIC = "post_replacement_consistency_projects_denied"
+MAX_GROUPS_FINAL_DISABLED_METRIC = "max_groups_final_disabled"
+MAX_GROUPS_FINAL_BYPASS_ORG_IDS_OPTION = "max_groups_final_bypass_org_ids"
 
 
 class PostReplacementConsistencyEnforcer(ClickhouseQueryProcessor):
@@ -104,12 +108,20 @@ class PostReplacementConsistencyEnforcer(ClickhouseQueryProcessor):
                 len(flags.group_ids_to_exclude) > 2 * max_group_ids_exclude
                 or len(groups_to_exclude) > max_group_ids_exclude
             ):
-                tags["cause"] = "max_groups"
-                metrics.increment(
-                    name=FINAL_METRIC,
-                    tags=tags,
+                disabled_organization_ids = cast(
+                    "list[int]",
+                    get_option(MAX_GROUPS_FINAL_BYPASS_ORG_IDS_OPTION, []),
                 )
-                set_final = True
+                if query_settings.organization_id in disabled_organization_ids:
+                    tags["organization_id"] = str(query_settings.organization_id)
+                    metrics.increment(name=MAX_GROUPS_FINAL_DISABLED_METRIC, tags=tags)
+                else:
+                    tags["cause"] = "max_groups"
+                    metrics.increment(
+                        name=FINAL_METRIC,
+                        tags=tags,
+                    )
+                    set_final = True
             elif groups_to_exclude:
                 query.add_condition_to_ast(
                     not_in_condition(
@@ -121,6 +133,10 @@ class PostReplacementConsistencyEnforcer(ClickhouseQueryProcessor):
                         [Literal(None, p) for p in groups_to_exclude],
                     )
                 )
+
+        if set_final and query_final_disabled():
+            metrics.increment(name="query_final_disabled")
+            set_final = False
 
         if (
             set_final
@@ -148,6 +164,9 @@ class PostReplacementConsistencyEnforcer(ClickhouseQueryProcessor):
         on the results of the query. This is very performance heavy and
         should be avoided whenever possible.
         """
+        if final and query_final_disabled():
+            metrics.increment(name="query_final_disabled")
+            final = False
         query.set_from_clause(replace(query.get_from_clause(), final=final))
 
     def _query_overlaps_replacements(

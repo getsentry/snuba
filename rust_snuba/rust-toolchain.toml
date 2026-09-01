@@ -1,2 +1,4 @@
+# Single source of truth for the Rust toolchain (CI, Docker, and local cargo/clippy/rustfmt).
 [toolchain]
-channel = "1.88.0"
+channel = "stable"
+components = ["rustfmt", "clippy"]

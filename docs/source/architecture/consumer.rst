@@ -162,6 +162,42 @@ Since the consumer is launched from the Python CLI, it will find the Python
 interpreter already initialized, and does not have to re-import Snuba again
 (except in subprocesses)
 
+
+
+Healthchecks
+------------
+
+Kafka consumers can look alive to the broker while making no useful progress.
+Snuba uses a health *file* plus Kubernetes probes so those pods get restarted.
+``--health-check`` selects **one** strategy that owns the file. Options never
+switch implementations; they only tune the selected strategy.
+
+Requires ``--health-check-file``. Without the file path there is no pod-level
+check. Python consumers only support the arroyo-style file touch (no
+``--health-check`` switch).
+
+====================  =========  ========================================================
+Value                 Default    Touches the file when
+====================  =========  ========================================================
+``arroyo``            yes        Every successful ``poll``. Catches a blocked main loop.
+``commit-progress``   no         A commit request is observed, or the consumer is idle
+                                 (no recent submits). Unhealthy while work is in flight
+                                 without commits. Consumer-level: one stuck partition can
+                                 stay healthy if siblings still commit.
+``partition-stall``   no         Every assigned partition with in-flight work has
+                                 committed within ``consumer.partition_stall_timeout_secs``
+                                 (default 300; ``0`` disables detection and touches on
+                                 every poll). Ignored by the other strategies.
+====================  =========  ========================================================
+
+Kubernetes startup and liveness probes remove the health file and expect the
+consumer to recreate it. If the strategy stops touching the file, the pod is
+killed. With static membership (``--group-instance-id``), a restart keeps the
+same partitions if the member rejoins within ``session.timeout.ms`` — see below.
+
+``snuba health`` (API / ClickHouse readiness) is unrelated to this Kafka
+consumer file healthcheck.
+
 Static membership (KIP-345)
 ---------------------------
 

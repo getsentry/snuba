@@ -21,6 +21,7 @@ use crate::metrics::statsd::create_dogstatsd_backend;
 use crate::strategies::accepted_outcomes::aggregator::OutcomesAggregator;
 use crate::strategies::accepted_outcomes::commit_outcomes::CommitOutcomes;
 use crate::strategies::accepted_outcomes::produce_outcome::ProduceAcceptedOutcome;
+use crate::strategies::healthcheck;
 use crate::strategies::noop::Noop;
 
 pub struct AcceptedOutcomesStrategyFactory {
@@ -31,6 +32,8 @@ pub struct AcceptedOutcomesStrategyFactory {
     produce_topic: Topic,
     producer: Arc<KafkaProducer>,
     concurrency: ConcurrencyConfig,
+    health_check: String,
+    health_check_file: Option<String>,
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for AcceptedOutcomesStrategyFactory {
@@ -49,12 +52,23 @@ impl ProcessingStrategyFactory<KafkaPayload> for AcceptedOutcomesStrategyFactory
             &self.concurrency,
         );
         let commit = CommitOutcomes::new(produce, Some(self.commit_frequency));
-        Box::new(OutcomesAggregator::new(
-            commit,
-            self.max_batch_size,
-            self.max_batch_time_ms,
-            self.bucket_interval,
-        ))
+        let next_step: Box<dyn ProcessingStrategy<KafkaPayload>> =
+            Box::new(OutcomesAggregator::new(
+                commit,
+                self.max_batch_size,
+                self.max_batch_time_ms,
+                self.bucket_interval,
+            ));
+
+        if let Some(path) = &self.health_check_file {
+            tracing::info!(
+                "Using {} healthcheck for accepted outcomes consumer",
+                self.health_check
+            );
+            healthcheck::wrap_health_check(next_step, &self.health_check, path)
+        } else {
+            next_step
+        }
     }
 }
 
@@ -108,8 +122,8 @@ pub fn accepted_outcomes_consumer_impl(
     concurrency: usize,
     _enforce_schema: bool,
     max_poll_interval_ms: usize,
-    _health_check: &str,
-    _health_check_file: Option<&str>,
+    health_check: &str,
+    health_check_file: Option<&str>,
     max_dlq_buffer_length: Option<usize>,
     _join_timeout_ms: Option<u64>,
     max_batch_size: usize,
@@ -216,6 +230,8 @@ pub fn accepted_outcomes_consumer_impl(
         produce_topic,
         producer,
         concurrency: ConcurrencyConfig::new(concurrency),
+        health_check: health_check.to_string(),
+        health_check_file: health_check_file.map(ToOwned::to_owned),
     };
     let processor = StreamProcessor::with_kafka(config, factory, topic, dlq_policy);
 

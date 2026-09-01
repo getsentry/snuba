@@ -10,6 +10,7 @@ from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.expressions import Column as ColumnExpr
 from snuba.query.expressions import Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
+from snuba.query.final import query_final_disabled
 
 
 def _get_date_range(query: ProcessableQuery[Table]) -> int | None:
@@ -76,7 +77,7 @@ class TablesCollector(DataSourceVisitor[None, Table], JoinVisitor[None, Table]):
     def _visit_simple_source(self, data_source: Table) -> None:
         self.__tables.add(data_source.table_name)
         self.__sample_rate = data_source.sampling_rate
-        if data_source.final:
+        if data_source.final and not query_final_disabled():
             self.__final = True
 
     def _visit_join(self, data_source: JoinClause[Table]) -> None:

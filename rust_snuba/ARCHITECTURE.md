@@ -19,8 +19,9 @@ sources of truth for config.
 
 `rust_snuba` then uses the Rust port of Arroyo to define its own consumer. The following steps (processing strategies) exist (see `factory.rs`):
 
-1. `HealthCheck` step, touches a file as part of the main event loop to signal
-   to k8s that the consumer is still alive.
+1. Healthcheck step (`--health-check arroyo|commit-progress|partition-stall`),
+   touches a file as part of the main event loop to signal to k8s that the
+   consumer is still alive.
 2. `SetJoinTimeout` step, resets the join timeout to 0 for the next steps. This
    marks a section where it's ok to drop in-flight progress during rebalancing.
 

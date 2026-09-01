@@ -151,6 +151,28 @@ def test_without_turbo_with_projects_needing_final(query: ClickhouseQuery) -> No
 
 
 @pytest.mark.redis_db
+@override_options("snuba", {"disable_query_final": True})
+def test_disable_query_final_killswitch(query: ClickhouseQuery) -> None:
+    ProjectsQueryFlags.set_project_needs_final(
+        2,
+        ReplacerState.ERRORS,
+        ReplacementType.EXCLUDE_GROUPS,
+    )
+
+    query_settings = HTTPQuerySettings()
+    PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS.value).process_query(
+        query, query_settings
+    )
+
+    assert query.get_condition() == build_in("project_id", [2])
+    assert not query.get_from_clause().final
+    assert (
+        "do_not_merge_across_partitions_select_final"
+        not in query_settings.get_clickhouse_settings()
+    )
+
+
+@pytest.mark.redis_db
 def test_without_turbo_without_projects_needing_final(query: ClickhouseQuery) -> None:
     PostReplacementConsistencyEnforcer("project_id", None).process_query(query, HTTPQuerySettings())
 
@@ -230,6 +252,74 @@ def test_too_many_groups_to_exclude(query: ClickhouseQuery) -> None:
     )
 
     assert query.get_condition() == build_in("project_id", [2])
+    assert query.get_from_clause().final
+
+
+@pytest.mark.redis_db
+@override_options(
+    "snuba",
+    {
+        "max_group_ids_exclude": 2,
+        "max_groups_final_bypass_org_ids": [1],
+    },
+)
+def test_too_many_groups_final_disabled_for_organization(query: ClickhouseQuery) -> None:
+    ProjectsQueryFlags.set_project_exclude_groups(
+        2,
+        [100, 101, 102],
+        ReplacerState.ERRORS,
+        ReplacementType.EXCLUDE_GROUPS,
+    )
+
+    PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS.value).process_query(
+        query, HTTPQuerySettings(organization_id=1)
+    )
+
+    assert query.get_condition() == build_in("project_id", [2])
+    assert not query.get_from_clause().final
+
+
+@pytest.mark.redis_db
+@override_options(
+    "snuba",
+    {
+        "max_group_ids_exclude": 2,
+        "max_groups_final_bypass_org_ids": [1],
+    },
+)
+def test_too_many_groups_final_not_disabled_for_other_organization(
+    query: ClickhouseQuery,
+) -> None:
+    ProjectsQueryFlags.set_project_exclude_groups(
+        2,
+        [100, 101, 102],
+        ReplacerState.ERRORS,
+        ReplacementType.EXCLUDE_GROUPS,
+    )
+
+    PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS.value).process_query(
+        query, HTTPQuerySettings(organization_id=2)
+    )
+
+    assert query.get_from_clause().final
+
+
+@pytest.mark.redis_db
+@override_options(
+    "snuba",
+    {"max_groups_final_bypass_org_ids": [1]},
+)
+def test_final_flag_not_disabled_for_organization(query: ClickhouseQuery) -> None:
+    ProjectsQueryFlags.set_project_needs_final(
+        2,
+        ReplacerState.ERRORS,
+        ReplacementType.EXCLUDE_GROUPS,
+    )
+
+    PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS.value).process_query(
+        query, HTTPQuerySettings(organization_id=1)
+    )
+
     assert query.get_from_clause().final
 
 

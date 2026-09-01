@@ -51,6 +51,7 @@ from snuba.admin.migrations_policies import (
     check_migration_perms,
     get_migration_group_policies,
 )
+from snuba.admin.outcomes_analyzer.enums import outcomes_enum_options
 from snuba.admin.outcomes_analyzer.outcomes_analyzer import run_outcomes_query
 from snuba.admin.production_queries.prod_queries import run_snql_query
 from snuba.admin.rpc.rpc_queries import validate_request_meta
@@ -72,7 +73,6 @@ from snuba.manual_jobs.runner import (
 from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
 from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner
-from snuba.migrations.status import Status
 from snuba.query.exceptions import InvalidQueryException
 from snuba.replacers.replacements_and_expiry import (
     get_config_auto_replacements_bypass_projects,
@@ -244,32 +244,6 @@ def reverse_migration(group: str, migration_id: str) -> Response:
     return run_or_reverse_migration(group=group, action="reverse", migration_id=migration_id)
 
 
-@application.route(
-    "/migrations/<group>/overwrite/<migration_id>/status/<new_status>",
-    methods=["POST"],
-)
-@check_tool_perms(tools=[AdminTools.MIGRATIONS])
-def force_overwrite_migration_status(group: str, migration_id: str, new_status: str) -> Response:
-    try:
-        migration_group = MigrationGroup(group)
-    except ValueError as err:
-        logger.error(err, exc_info=True)
-        return make_response(jsonify({"error": "Group not found"}), 400)
-
-    runner.force_overwrite_status(migration_group, migration_id, Status(new_status))
-    user = request.headers.get(USER_HEADER_KEY)
-
-    audit_log.record(
-        user or "",
-        AuditLogAction.FORCE_MIGRATION_OVERWRITE,
-        {"group": group, "migration": migration_id, "new_status": new_status},
-        notify=True,
-    )
-
-    res = {"status": "OK"}
-    return make_response(jsonify(res), 200)
-
-
 @check_migration_perms
 def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Response:
     try:
@@ -388,6 +362,12 @@ def cardinality_queries() -> Response:
 def outcomes_queries() -> Response:
     res = [q.to_json() for q in OutcomesQuery.all_classes()]
     return make_response(jsonify(res), 200)
+
+
+@application.route("/outcomes_enum_options")
+@check_tool_perms(tools=[AdminTools.OUTCOMES_ANALYZER])
+def outcomes_enum_options_view() -> Response:
+    return make_response(jsonify(outcomes_enum_options()), 200)
 
 
 @application.route("/auto-replacements-bypass-projects")

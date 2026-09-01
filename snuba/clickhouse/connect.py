@@ -500,6 +500,7 @@ class ClickhouseConnectPool(ClickhousePool):
             elapsed=elapsed,
             progress_bytes=read_bytes,
             rows=_as_int(summary.get("read_rows")),
+            written_rows=_as_int(summary.get("written_rows")),
         )
         results: Sequence[Any] = query_result.result_set
         query_id_out = str(query_result.query_id or query_id or "")

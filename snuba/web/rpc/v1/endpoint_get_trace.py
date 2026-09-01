@@ -39,6 +39,7 @@ from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, column, equals, literal, or_cond
 from snuba.query.expressions import FunctionCall
+from snuba.query.final import query_final_disabled
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
@@ -346,7 +347,7 @@ def _build_query(
         order_by=order_by,
         limit=limit,
     )
-    if random.random() < _get_apply_final_rollout_percentage():
+    if not query_final_disabled() and random.random() < _get_apply_final_rollout_percentage():
         query.set_final(True)
 
     span = traces.get_current_span()

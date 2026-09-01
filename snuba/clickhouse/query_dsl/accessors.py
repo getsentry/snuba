@@ -27,11 +27,21 @@ from snuba.query.matchers import (
 )
 
 
-def get_object_ids_in_condition(condition: Expression, object_column: str) -> set[int]:
+def get_object_ids_in_condition(
+    condition: Expression,
+    object_column: str,
+    *,
+    intersect_and: bool = True,
+) -> set[int]:
     """
-    Extract project ids from an expression. Returns None if no project
-    if condition is found. It returns an empty set of conflicting project_id
-    conditions are found.
+    Extract object ids (e.g. project ids) from an expression.
+
+    Returns an empty set if no matching condition is found, or if AND clauses
+    contradict each other when ``intersect_and`` is True (the default).
+
+    ``intersect_and=False`` collects every id mentioned in EQ/IN conditions
+    instead of intersecting AND clauses. Use that when a missing id is a
+    security problem (e.g. admin production-query allowlists).
     """
     match = FunctionCall(
         String(ConditionFunctions.EQ),
@@ -61,22 +71,29 @@ def get_object_ids_in_condition(condition: Expression, object_column: str) -> se
         (Param("lhs", AnyExpression()), Param("rhs", AnyExpression())),
     ).match(condition)
     if match is not None:
-        lhs_objects = get_object_ids_in_condition(match.expression("lhs"), object_column)
-        rhs_objects = get_object_ids_in_condition(match.expression("rhs"), object_column)
+        lhs_objects = get_object_ids_in_condition(
+            match.expression("lhs"), object_column, intersect_and=intersect_and
+        )
+        rhs_objects = get_object_ids_in_condition(
+            match.expression("rhs"), object_column, intersect_and=intersect_and
+        )
         if not lhs_objects:
             return rhs_objects
         if not rhs_objects:
             return lhs_objects
-        return (
-            lhs_objects & rhs_objects
-            if match.string("operator") == BooleanFunctions.AND
-            else lhs_objects | rhs_objects
-        )
+        if match.string("operator") == BooleanFunctions.OR or not intersect_and:
+            return lhs_objects | rhs_objects
+        return lhs_objects & rhs_objects
 
     return set()
 
 
-def get_object_ids_in_query_ast(query: AbstractQuery, object_column: str) -> set[int]:
+def get_object_ids_in_query_ast(
+    query: AbstractQuery,
+    object_column: str,
+    *,
+    intersect_and: bool = True,
+) -> set[int]:
     """
     Finds the object ids (e.g. project ids) this query is filtering according to the AST
     query representation.
@@ -87,7 +104,9 @@ def get_object_ids_in_query_ast(query: AbstractQuery, object_column: str) -> set
     condition = query.get_condition()
     if not condition:
         return set()
-    this_query_object_ids = get_object_ids_in_condition(condition, object_column)
+    this_query_object_ids = get_object_ids_in_condition(
+        condition, object_column, intersect_and=intersect_and
+    )
 
     try:
         from_clause = query.get_from_clause()
@@ -96,7 +115,9 @@ def get_object_ids_in_query_ast(query: AbstractQuery, object_column: str) -> set
     if isinstance(from_clause, SimpleDataSource):
         return this_query_object_ids
     if isinstance(from_clause, AbstractQuery):
-        subquery_project_ids = get_object_ids_in_query_ast(from_clause, object_column)
+        subquery_project_ids = get_object_ids_in_query_ast(
+            from_clause, object_column, intersect_and=intersect_and
+        )
         return subquery_project_ids.union(this_query_object_ids)
     return set()
 

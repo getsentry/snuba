@@ -16,6 +16,7 @@ class QuerySettings(ABC):
     """
 
     referrer: str
+    organization_id: int | None
 
     @abstractmethod
     def get_turbo(self) -> bool:
@@ -91,6 +92,7 @@ class HTTPQuerySettings(QuerySettings):
         asynchronous: bool = False,
         apply_default_subscriptable_mapping: bool = True,
         skip_transform_order_by: bool = False,
+        organization_id: int | None = None,
     ) -> None:
         super().__init__()
         self.__tier = Tier.TIER_NO_TIER
@@ -103,6 +105,7 @@ class HTTPQuerySettings(QuerySettings):
         self.__resource_quota: ResourceQuota | None = None
         self.__clickhouse_settings: MutableMapping[str, Any] = {}
         self.referrer = referrer
+        self.organization_id = organization_id
         self.__asynchronous = asynchronous
         self.__apply_default_subscriptable_mapping = apply_default_subscriptable_mapping
         self.__skip_transform_order_by = skip_transform_order_by
@@ -183,12 +186,14 @@ class SubscriptionQuerySettings(QuerySettings):
         feature: str = "subscription",
         app_id: str = "default",
         referrer: str = "subscription",
+        organization_id: int | None = None,
     ) -> None:
         self.__consistent = consistent
         self.__team = team
         self.__feature = feature
         self.__app_id = app_id
         self.referrer = referrer
+        self.organization_id = organization_id
         self.__clickhouse_settings: MutableMapping[str, Any] = {}
 
     def get_turbo(self) -> bool:

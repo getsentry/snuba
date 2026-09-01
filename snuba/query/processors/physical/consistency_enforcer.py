@@ -1,6 +1,7 @@
 from dataclasses import replace
 
 from snuba.clickhouse.query import Query
+from snuba.query.final import query_final_disabled
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 
@@ -15,4 +16,6 @@ class ConsistencyEnforcerProcessor(ClickhouseQueryProcessor):
     """
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
+        if query_final_disabled():
+            return
         query.set_from_clause(replace(query.get_from_clause(), final=True))

@@ -172,7 +172,9 @@ class TestRoutingStrategyWithCustomPolicies(OutcomesBasedRoutingStrategy):
         super().__init__()
         self._test_policies = policies
 
-    def get_allocation_policies(self) -> list[AllocationPolicy]:
+    def get_allocation_policies(
+        self, tenant_ids: dict[str, str | int] | None = None
+    ) -> list[AllocationPolicy]:
         return self._test_policies
 
 
@@ -313,7 +315,7 @@ def test_metrics_output() -> None:
 
         # query_id is a uuid, so we don't need to assert it
         recorded_payload["query_list"][0]["stats"].pop("query_id")
-        assert recorded_payload["query_list"][0]["stats"] == {
+        expected_stats = {
             "extra_info": {
                 "sampling_in_storage_estimation_time_overhead": {
                     "type": "timing",
@@ -352,34 +354,10 @@ def test_metrics_output() -> None:
                     "max_threads": 10,
                     "explanation": {"storage_key": "EAP"},
                     "is_throttled": False,
-                    "throttle_threshold": AnyInt(22),
-                    "rejection_threshold": AnyInt(22),
+                    "throttle_threshold": AnyInt(66),
+                    "rejection_threshold": AnyInt(66),
                     "quota_used": 1,
                     "quota_unit": "concurrent_queries",
-                    "suggestion": "no_suggestion",
-                    "max_bytes_to_read": 0,
-                },
-                "ReferrerGuardRailPolicy": {
-                    "can_run": True,
-                    "max_threads": 10,
-                    "explanation": {"storage_key": "EAP"},
-                    "is_throttled": False,
-                    "throttle_threshold": AnyInt(1000000000000),
-                    "rejection_threshold": AnyInt(1000000000000),
-                    "quota_used": 0,
-                    "quota_unit": "no_units",
-                    "suggestion": "no_suggestion",
-                    "max_bytes_to_read": 0,
-                },
-                "BytesScannedRejectingPolicy": {
-                    "can_run": True,
-                    "max_threads": 10,
-                    "explanation": {"storage_key": "EAP"},
-                    "is_throttled": False,
-                    "throttle_threshold": AnyInt(1000000000000),
-                    "rejection_threshold": AnyInt(1000000000000),
-                    "quota_used": 0,
-                    "quota_unit": "no_units",
                     "suggestion": "no_suggestion",
                     "max_bytes_to_read": 0,
                 },
@@ -424,6 +402,8 @@ def test_metrics_output() -> None:
                 "trace_item_type": "span",
             },
         }
+
+        assert recorded_payload["query_list"][0]["stats"] == expected_stats
         schema = get_codec("snuba-queries")
         payload_bytes = json.dumps(recorded_payload).encode("utf-8")
         schema.decode(payload_bytes)
@@ -556,9 +536,7 @@ def test_routing_strategy_with_rejecting_allocation_policy() -> None:
     with mock.patch.object(
         BaseRoutingStrategy,
         "get_allocation_policies",
-        return_value=[
-            RejectionPolicy(ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {})
-        ],
+        return_value=[RejectionPolicy(ResourceIdentifier(StorageKey("doesntmatter")))],
     ):
         with pytest.raises(RPCAllocationPolicyException) as excinfo:
             EndpointTimeSeries().execute(_get_in_msg())
@@ -616,12 +594,8 @@ def test_routing_strategy_with_throttling_allocation_policy() -> None:
 
     test_strategy = TestRoutingStrategyWithCustomPolicies(
         policies=[
-            ThrottleAllocationPolicy(
-                ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
-            ),
-            ThrottleAllocationPolicyDuplicate(
-                ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
-            ),
+            ThrottleAllocationPolicy(ResourceIdentifier(StorageKey("doesntmatter"))),
+            ThrottleAllocationPolicyDuplicate(ResourceIdentifier(StorageKey("doesntmatter"))),
         ]
     )
     routing_decision = test_strategy.get_routing_decision(deepcopy(ROUTING_CONTEXT))
@@ -710,10 +684,8 @@ def test_allocation_policy_updates_quota() -> None:
         BaseRoutingStrategy,
         "get_allocation_policies",
         return_value=[
-            QueryCountPolicy(ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}),
-            QueryCountPolicyDuplicate(
-                ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}
-            ),
+            QueryCountPolicy(ResourceIdentifier(StorageKey("doesntmatter"))),
+            QueryCountPolicyDuplicate(ResourceIdentifier(StorageKey("doesntmatter"))),
         ],
     ):
         for _ in range(MAX_QUERIES_TO_RUN):
@@ -760,7 +732,7 @@ def test_policy_sets_max_bytes_to_read() -> None:
 
     test_strategy = TestRoutingStrategyWithCustomPolicies(
         policies=[
-            MaximumBytesPolicy(ResourceIdentifier(StorageKey("doesntmatter")), ["a", "b", "c"], {}),
+            MaximumBytesPolicy(ResourceIdentifier(StorageKey("doesntmatter"))),
         ]
     )
 

@@ -144,7 +144,6 @@ def _delete_from_table(
             table,
             ColumnSet([]),
             storage_key=storage.get_storage_key(),
-            allocation_policies=storage.get_delete_allocation_policies(),
         ),
         condition=where_clause,
         on_cluster=on_cluster,
@@ -282,7 +281,6 @@ def _enforce_max_rows(delete_query: Query, count_storage_key: StorageKey | None 
             table_name=count_table_name,
             schema=from_clause.schema,
             storage_key=from_clause.storage_key,
-            allocation_policies=from_clause.allocation_policies,
         )
 
     select_query_to_count_rows = Query(
@@ -316,7 +314,10 @@ def _get_attribution_info(attribution_info: Mapping[str, Any]) -> AttributionInf
     info = dict(attribution_info)
     info["app_id"] = get_app_id(attribution_info["app_id"])
     info["referrer"] = attribution_info["referrer"]
-    info["tenant_ids"] = attribution_info["tenant_ids"]
+    info["tenant_ids"] = dict(attribution_info["tenant_ids"])
+    # cross_org_query is an internal exemption for system-initiated queries.
+    # Clients must not set it on HTTP requests to skip allocation quotas.
+    info["tenant_ids"].pop("cross_org_query", None)
     return AttributionInfo(**info)
 
 

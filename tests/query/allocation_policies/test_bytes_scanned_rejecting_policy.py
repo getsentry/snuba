@@ -25,14 +25,11 @@ QUERY_ID = "deadbeef"
 def policy() -> AllocationPolicy:
     policy = BytesScannedRejectingPolicy(
         storage_key=ResourceIdentifier(StorageKey("errors")),
-        required_tenant_types=["referrer", "organization_id", "project_id"],
-        default_config_overrides={},
     )
     return policy
 
 
 def _configure_policy(policy: AllocationPolicy) -> None:
-    set_component_config(policy, "is_active", 1)
     set_component_config(policy, "is_enforced", 1)
     set_component_config(policy, "max_threads", MAX_THREAD_NUMBER)
     set_component_config(policy, "project_referrer_scan_limit", PROJECT_REFERRER_SCAN_LIMIT)

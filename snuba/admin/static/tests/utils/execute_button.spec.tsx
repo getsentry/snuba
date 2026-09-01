@@ -48,4 +48,6 @@ it("should not call if loading", async () => {
   fireEvent.click(button);
 
   await waitFor(() => expect(mockCall).toBeCalledTimes(1));
+  expect(screen.getByRole("status").textContent).toBe("Query running…");
+  expect(button.textContent).toContain("Running");
 });

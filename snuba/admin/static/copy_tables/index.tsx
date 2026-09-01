@@ -119,13 +119,15 @@ function CopyTables(props: {
           <div style={sectionContainerStyle}>
             <h3>Target host (optional):</h3>
             <p style={targetHelpTextStyle}>
-              If specified, CREATE statements will be run on this host instead of the source host.
+              If specified, CREATE statements run on this host instead of the source host.
+              The host must be a known cluster node or listed in admin.copy_tables_allowed_target_hosts.
+              Defaults to port 8123; you can pass host:port.
             </p>
             <div style={{ marginTop: 10 }}>
               <input
                 type="text"
                 style={textInputStyle}
-                placeholder="e.g. my-clickhouse-node.example.com"
+                placeholder="e.g. snuba-outcomes-query-arm-1-1"
                 value={targetHostInput}
                 onChange={(e) => setTargetHostInput(e.target.value)}
               />
@@ -181,6 +183,9 @@ function CopyTables(props: {
           <h4>
             {copyTableResult.dry_run ? "DRY RUN" : <>Executed <code>CREATE TABLE</code></>}
             {" "}with <strong>Source Host:</strong> <code>{copyTableResult.source_host}</code>
+            {copyTableResult.target_host && (
+              <> and <strong>Target Host:</strong> <code>{copyTableResult.target_host}</code></>
+            )}
             {copyTableResult.cluster_name && (
               <> and <strong>Cluster Name:</strong> <code>{copyTableResult.cluster_name}</code></>
             )}

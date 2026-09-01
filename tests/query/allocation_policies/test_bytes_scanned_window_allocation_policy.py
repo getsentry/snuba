@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from unittest import mock
+
 import pytest
 
 from snuba.datasets.storages.storage_key import StorageKey
@@ -23,14 +25,11 @@ QUERY_ID = "deadbeef"
 def policy() -> AllocationPolicy:
     policy = BytesScannedWindowAllocationPolicy(
         storage_key=StorageKey("errors"),
-        required_tenant_types=["referrer", "organization_id"],
-        default_config_overrides={},
     )
     return policy
 
 
 def _configure_policy(policy: AllocationPolicy) -> None:
-    set_component_config(policy, "is_active", 1)
     set_component_config(policy, "is_enforced", 1)
     set_component_config(policy, "max_threads", MAX_THREAD_NUMBER)
     set_component_config(policy, "org_limit_bytes_scanned", ORG_SCAN_LIMIT)
@@ -99,30 +98,6 @@ def test_org_isolation(policy: AllocationPolicy) -> None:
 
 
 @pytest.mark.redis_db
-def test_killswitch(policy: AllocationPolicy) -> None:
-    _configure_policy(policy)
-    set_component_config(policy, "is_active", 0)
-    tenant_ids: dict[str, int | str] = {
-        "organization_id": 123,
-        "referrer": "some_referrer",
-    }
-    policy.update_quota_balance(
-        tenant_ids,
-        QUERY_ID,
-        QueryResultOrError(
-            query_result=QueryResult(
-                result={"profile": {"bytes": 20 * ORG_SCAN_LIMIT}},
-                extra={"stats": {}, "sql": "", "experiments": {}},
-            ),
-            error=None,
-        ),
-    )
-    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
-    # policy is not active so no change
-    assert allowance.max_threads == MAX_THREAD_NUMBER
-
-
-@pytest.mark.redis_db
 def test_enforcement_switch(policy: AllocationPolicy) -> None:
     _configure_policy(policy)
     tenant_ids: dict[str, int | str] = {
@@ -183,7 +158,6 @@ def test_simple_config_values(policy: AllocationPolicy) -> None:
         "org_limit_bytes_scanned",
         "org_limit_bytes_scanned_override",
         "throttled_thread_number",
-        "is_active",
         "is_enforced",
         "max_threads",
     }
@@ -251,15 +225,23 @@ def test_no_bytes_scanned(policy: AllocationPolicy) -> None:
     no_bytes_scanned_info_result = QueryResultOrError(
         query_result=QueryResult(
             result={
+                "data": [{"user_email": "should-not-be-logged@example.com"}],
                 "profile": {
                     # bytes scanned info is missing
-                }
+                },
             },
             extra={"stats": {}, "sql": "", "experiments": {}},
         ),
         error=None,
     )
-    policy.update_quota_balance(tenant_ids, QUERY_ID, no_bytes_scanned_info_result)
+    with mock.patch(
+        "snuba.query.allocation_policies.bytes_scanned_window_policy.logging.error"
+    ) as log_error:
+        policy.update_quota_balance(tenant_ids, QUERY_ID, no_bytes_scanned_info_result)
+    log_error.assert_called_once()
+    logged = " ".join(str(arg) for arg in log_error.call_args[0])
+    assert "should-not-be-logged@example.com" not in logged
+    assert QUERY_ID in logged
 
 
 @pytest.mark.redis_db

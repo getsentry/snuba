@@ -12,6 +12,7 @@ from snuba.processor import (
     _ensure_valid_ip,
     _unicodify,
 )
+from snuba.state.retention import clamp_retention_days
 from snuba.utils.serializable_exception import SerializableException
 
 
@@ -101,15 +102,7 @@ def extract_extra_contexts(
 
 
 def enforce_retention(retention_days: int | None, timestamp: datetime | None) -> int:
-    if not isinstance(retention_days, int):
-        retention_days = settings.DEFAULT_RETENTION_DAYS
-
-    if settings.ENFORCE_RETENTION and retention_days not in settings.VALID_RETENTION_DAYS:
-        retention_days = (
-            settings.LOWER_RETENTION_DAYS
-            if retention_days <= settings.LOWER_RETENTION_DAYS
-            else settings.DEFAULT_RETENTION_DAYS
-        )
+    retention_days = clamp_retention_days(retention_days)
 
     # This is not ideal but it should never happen anyways
     timestamp = _ensure_valid_date(timestamp)

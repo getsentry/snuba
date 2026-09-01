@@ -4,7 +4,7 @@ from snuba.clickhouse.columns import UUID, ColumnSet, UInt
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
-from snuba.query.conditions import ConditionFunctions, binary_condition
+from snuba.query.conditions import BooleanFunctions, ConditionFunctions, binary_condition
 from snuba.query.data_source.projects_finder import ProjectsFinder
 from snuba.query.data_source.simple import Entity, LogicalDataSource
 from snuba.query.expressions import Column, FunctionCall, Literal
@@ -36,6 +36,46 @@ SIMPLE_QUERY = Query(
     ),
 )
 
+AND_OF_OR_QUERY = Query(
+    Entity(EntityKey.EVENTS, EVENTS_SCHEMA),
+    selected_columns=[
+        SelectedExpression(
+            "alias",
+            Column("_snuba_project", None, "project_id"),
+        )
+    ],
+    array_join=None,
+    condition=binary_condition(
+        BooleanFunctions.AND,
+        binary_condition(
+            BooleanFunctions.OR,
+            binary_condition(
+                ConditionFunctions.EQ,
+                Column("_snuba_project", None, "project_id"),
+                Literal(None, 1),
+            ),
+            binary_condition(
+                ConditionFunctions.EQ,
+                Column("_snuba_project", None, "project_id"),
+                Literal(None, 42069),
+            ),
+        ),
+        binary_condition(
+            BooleanFunctions.OR,
+            binary_condition(
+                ConditionFunctions.EQ,
+                Column("_snuba_project", None, "project_id"),
+                Literal(None, 1),
+            ),
+            binary_condition(
+                ConditionFunctions.EQ,
+                Column(None, None, "platform"),
+                Literal(None, "x"),
+            ),
+        ),
+    ),
+)
+
 TEST_CASES = [
     pytest.param(
         SIMPLE_QUERY,
@@ -54,6 +94,11 @@ TEST_CASES = [
         ),
         {1, 2},
         id="Nested query. Project from the inner query",
+    ),
+    pytest.param(
+        AND_OF_OR_QUERY,
+        {1, 42069},
+        id="AND of ORs unions mentioned project ids",
     ),
 ]
 

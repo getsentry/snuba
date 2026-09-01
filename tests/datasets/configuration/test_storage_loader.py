@@ -64,12 +64,8 @@ query_processors:
 allocation_policies:
   -
     name: PassthroughPolicy
-    args:
-      required_tenant_types: ["some_tenant"]
   -
     name: BytesScannedWindowAllocationPolicy
-    args:
-      required_tenant_types: ["some_other_tenant"]
 
 deletion_settings:
   is_enabled: 0
@@ -84,8 +80,6 @@ deletion_processors:
 delete_allocation_policies:
   -
     name: DeleteConcurrentRateLimitAllocationPolicy
-    args:
-      required_tenant_types: ["some_tenant"]
 """
         with tempfile.TemporaryDirectory() as tmpdirname:
             filename = os.path.join(tmpdirname, "file.yaml")
@@ -120,7 +114,6 @@ delete_allocation_policies:
             }
             passthru = next(p for p in policies if p.class_name() == "PassthroughPolicy")
             assert passthru.component_name() == "test-storage.PassthroughPolicy"
-            assert passthru._required_tenant_types == {"some_tenant"}
 
             assert storage.get_deletion_settings().is_enabled == 0
             assert storage.get_deletion_settings().tables == [

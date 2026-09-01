@@ -12,11 +12,9 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     TimeSeriesResponse,
 )
 
-from snuba import settings
 from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.auth import USER_HEADER_KEY
 from snuba.admin.auth_roles import DEFAULT_ROLES, ROLES
-from snuba.admin.clickhouse.clusters import TABLES_DATABASE
 from snuba.admin.user import AdminUser
 from snuba.datasets.factory import get_enabled_dataset_names
 from snuba.web.rpc import RPCEndpoint
@@ -323,37 +321,49 @@ def test_clickhouse_clusters(admin_api: FlaskClient) -> None:
     assert response.status_code == 200
     data = json.loads(response.data)
 
-    assert len(data) == len(settings.CLUSTERS)
-    for cluster, configured in zip(data, settings.CLUSTERS, strict=True):
-        assert cluster["error"] is None, cluster["error"]
-        # The version of the ClickHouse the tests run against, e.g. 23.8.11.29
-        assert cluster["version"]
-        assert cluster["host"] == configured["host"]
-        assert cluster["port"] == configured["port"]
-        assert set(cluster["storage_sets"]) == set(configured["storage_sets"])
-        # Deduplicated and sorted by the aggregate the endpoint runs.
+    assert data
+    assert len({cluster["cluster_name"] for cluster in data}) == len(data)
+    for cluster in data:
+        assert set(cluster) == {
+            "cluster_name",
+            "versions",
+            "storage_sets",
+            "tables",
+            "versions_error",
+            "tables_error",
+        }
+        assert cluster["versions_error"] is None, cluster["versions_error"]
+        assert cluster["tables_error"] is None, cluster["tables_error"]
+        # The version of the ClickHouse the tests run against, e.g. 25.8.16.10001
+        assert cluster["versions"]
+        assert cluster["versions"] == sorted(set(cluster["versions"]))
         assert cluster["tables"] == sorted(set(cluster["tables"]))
-        # Tables are only ever listed for TABLES_DATABASE, so the migrated
-        # tables of the test cluster are only expected there.
-        if configured.get("database", TABLES_DATABASE) == TABLES_DATABASE:
-            assert "errors_local" in cluster["tables"]
 
 
 @pytest.mark.redis_db
 def test_clickhouse_clusters_reports_unreachable_cluster(admin_api: FlaskClient) -> None:
     with mock.patch(
-        "snuba.admin.clickhouse.clusters.get_ro_query_node_connection",
+        "snuba.admin.clickhouse.clusters.get_ro_cluster_node_connection",
         side_effect=Exception("Connection refused"),
     ):
         response = admin_api.get("/clickhouse_clusters")
 
     assert response.status_code == 200
     data = json.loads(response.data)
-    assert len(data) == len(settings.CLUSTERS)
+    assert data
     for cluster in data:
-        assert cluster["version"] is None
+        assert set(cluster) == {
+            "cluster_name",
+            "versions",
+            "storage_sets",
+            "tables",
+            "versions_error",
+            "tables_error",
+        }
+        assert cluster["versions"] == []
         assert cluster["tables"] == []
-        assert cluster["error"] == "Connection refused"
+        assert cluster["versions_error"] == "Connection refused"
+        assert cluster["tables_error"] == "Connection refused"
 
 
 @pytest.mark.redis_db
@@ -455,24 +465,6 @@ def test_prod_snql_query_invalid_query(admin_api: FlaskClient) -> None:
     assert response.status_code == 400
     data = json.loads(response.data)
     assert data["error"]["message"] == "Rule 'query_exp' didn't match at '' (line 1, column 1)."
-
-
-@pytest.mark.redis_db
-@pytest.mark.events_db
-def test_force_overwrite(admin_api: FlaskClient) -> None:
-    migration_id = "0012_add_group_id_bloom_filter_index"
-    migrations = json.loads(admin_api.get("/migrations/search_issues/list").data)
-    downgraded_migration = [m for m in migrations if m.get("migration_id") == migration_id][0]
-    assert downgraded_migration["status"] == "completed"
-
-    response = admin_api.post(
-        f"/migrations/search_issues/overwrite/{migration_id}/status/not_started",
-        headers={"Referer": "https://snuba-admin.getsentry.net/"},
-    )
-    assert response.status_code == 200
-    migrations = json.loads(admin_api.get("/migrations/search_issues/list").data)
-    downgraded_migration = [m for m in migrations if m.get("migration_id") == migration_id][0]
-    assert downgraded_migration["status"] == "not_started"
 
 
 @pytest.mark.redis_db

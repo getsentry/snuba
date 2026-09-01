@@ -37,6 +37,7 @@ from snuba.processor import (
     ReplacementType,
     _hashify,
 )
+from snuba.query.final import query_final_disabled
 from snuba.replacers.projects_query_flags import ProjectsQueryFlags
 from snuba.replacers.replacements_and_expiry import (
     get_config_auto_replacements_bypass_projects,
@@ -58,6 +59,14 @@ In theory this will be needed only during the events to errors migration.
 
 logger = logging.getLogger(__name__)
 metrics = MetricsWrapper(environment.metrics, "errors.replacer")
+
+
+def _final_clause() -> str:
+    """ClickHouse FINAL on replacement SELECTs, omitted when the killswitch is on."""
+    if query_final_disabled():
+        metrics.increment("query_final_disabled")
+        return ""
+    return " FINAL"
 
 
 @dataclass(frozen=True)
@@ -217,7 +226,7 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
     def get_state(self) -> ReplacerState:
         return self.__state_name
 
-    def pre_replacement(self, replacement: Replacement, matching_records: int) -> bool:
+    def pre_replacement(self, replacement: Replacement) -> bool:
         project_id = replacement.get_project_id()
         query_time_flags = replacement.get_query_time_flags()
 
@@ -246,7 +255,7 @@ def _build_event_set_filter(
     event_ids: Sequence[str],
     from_timestamp: str | None,
     to_timestamp: str | None,
-) -> tuple[list[str], list[str], MutableMapping[str, str]]:
+) -> tuple[list[str], MutableMapping[str, str]]:
     def get_timestamp_condition(msg_value: str | None, operator: str) -> str:
         if not msg_value:
             return ""
@@ -264,8 +273,14 @@ def _build_event_set_filter(
     event_id_lhs = "event_id"
     event_id_list = ", ".join(f"'{uuid.UUID(eid)}'" for eid in event_ids)
 
-    prewhere = [f"{event_id_lhs} IN (%(event_ids)s)"]
-    where = ["project_id = %(project_id)s", "NOT deleted"]
+    # Leave everything in WHERE. event_id is highly selective, so
+    # optimize_move_to_prewhere_if_final can promote it; an explicit PREWHERE
+    # would block that choice. project_id still prunes via the PK.
+    where = [
+        f"{event_id_lhs} IN (%(event_ids)s)",
+        "project_id = %(project_id)s",
+        "NOT deleted",
+    ]
     if from_condition:
         where.append(from_condition)
     if to_condition:
@@ -276,7 +291,7 @@ def _build_event_set_filter(
         "project_id": str(project_id),
     }
 
-    return prewhere, where, query_args
+    return where, query_args
 
 
 @dataclass
@@ -331,21 +346,14 @@ class ReplaceGroupReplacement(Replacement):
 
     @cached_property
     def _where_clause(self) -> str:
-        prewhere, where, query_args = _build_event_set_filter(
+        where, query_args = _build_event_set_filter(
             project_id=self.project_id,
             event_ids=self.event_ids,
             from_timestamp=self.from_timestamp,
             to_timestamp=self.to_timestamp,
         )
 
-        return f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}" % query_args
-
-    def get_count_query(self, table_name: str) -> str | None:
-        return f"""\
-            SELECT count()
-            FROM {table_name} FINAL
-            {self._where_clause}
-        """
+        return f"WHERE {' AND '.join(where)}" % query_args
 
     def get_insert_query(self, table_name: str) -> str | None:
         all_column_names = [c.escaped for c in self.all_columns]
@@ -358,7 +366,7 @@ class ReplaceGroupReplacement(Replacement):
         return f"""\
             INSERT INTO {table_name} ({all_columns})
             SELECT {select_columns}
-            FROM {table_name} FINAL
+            FROM {table_name}{_final_clause()}
             {self._where_clause}
         """
 
@@ -406,18 +414,18 @@ class DeleteGroupsReplacement(Replacement):
         group_ids = ", ".join(str(gid) for gid in self.group_ids)
         timestamp = self.timestamp.strftime(DATETIME_FORMAT)
 
+        # project_id in WHERE is enough to prune other projects (first PK
+        # column). An explicit PREWHERE would block
+        # optimize_move_to_prewhere_if_final from promoting group_id.
+        # timestamp is PK-aligned (toStartOfDay /
+        # toMonday) and padded by a day so Relay's 60s future allowance still
+        # matches. received is the ingest-time delete cutoff.
         return f"""\
-            PREWHERE group_id IN ({group_ids})
             WHERE project_id = {self.project_id}
+            AND group_id IN ({group_ids})
+            AND timestamp <= CAST('{timestamp}' AS DateTime) + INTERVAL 1 DAY
             AND received <= CAST('{timestamp}' AS DateTime)
             AND NOT deleted
-        """
-
-    def get_count_query(self, table_name: str) -> str | None:
-        return f"""\
-            SELECT count()
-            FROM {table_name} FINAL
-            {self._where_clause}
         """
 
     def get_insert_query(self, table_name: str) -> str | None:
@@ -426,7 +434,7 @@ class DeleteGroupsReplacement(Replacement):
         return f"""\
             INSERT INTO {table_name} ({required_columns})
             SELECT {select_columns}
-            FROM {table_name} FINAL
+            FROM {table_name}{_final_clause()}
             {self._where_clause}
         """
 
@@ -462,7 +470,7 @@ class TombstoneEventsReplacement(Replacement):
 
     @cached_property
     def _where_clause(self) -> str:
-        prewhere, where, query_args = _build_event_set_filter(
+        where, query_args = _build_event_set_filter(
             project_id=self.project_id,
             event_ids=self.event_ids,
             from_timestamp=self.from_timestamp,
@@ -471,17 +479,9 @@ class TombstoneEventsReplacement(Replacement):
 
         if self.old_primary_hash:
             query_args["old_primary_hash"] = f"'{str(uuid.UUID(self.old_primary_hash))}'"
+            where.append("primary_hash = %(old_primary_hash)s")
 
-            prewhere.append("primary_hash = %(old_primary_hash)s")
-
-        return f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}" % query_args
-
-    def get_count_query(self, table_name: str) -> str | None:
-        return f"""\
-            SELECT count()
-            FROM {table_name} FINAL
-            {self._where_clause}
-        """
+        return f"WHERE {' AND '.join(where)}" % query_args
 
     def get_insert_query(self, table_name: str) -> str | None:
         required_columns = ", ".join(self.required_columns)
@@ -490,7 +490,7 @@ class TombstoneEventsReplacement(Replacement):
         return f"""\
             INSERT INTO {table_name} ({required_columns})
             SELECT {select_columns}
-            FROM {table_name} FINAL
+            FROM {table_name}{_final_clause()}
             {self._where_clause}
         """
 
@@ -551,9 +551,6 @@ class ExcludeGroupsReplacement(Replacement):
         return ReplacementType.EXCLUDE_GROUPS
 
     def get_insert_query(self, table_name: str) -> str | None:
-        return None
-
-    def get_count_query(self, table_name: str) -> str | None:
         return None
 
 
@@ -633,18 +630,14 @@ class MergeReplacement(Replacement):
         previous_group_ids = ", ".join(str(gid) for gid in self.previous_group_ids)
         timestamp = self.timestamp.strftime(DATETIME_FORMAT)
 
+        # See DeleteGroupsReplacement: leave predicates in WHERE so FINAL can
+        # use the errors PK and optimize_move_to_prewhere_if_final can pick group_id.
         return f"""\
-            PREWHERE group_id IN ({previous_group_ids})
             WHERE project_id = {self.project_id}
+            AND group_id IN ({previous_group_ids})
+            AND timestamp <= CAST('{timestamp}' AS DateTime) + INTERVAL 1 DAY
             AND received <= CAST('{timestamp}' AS DateTime)
             AND NOT deleted
-        """
-
-    def get_count_query(self, table_name: str) -> str | None:
-        return f"""\
-            SELECT count()
-            FROM {table_name} FINAL
-            {self._where_clause}
         """
 
     def get_insert_query(self, table_name: str) -> str | None:
@@ -660,7 +653,7 @@ class MergeReplacement(Replacement):
         return f"""\
             INSERT INTO {table_name} ({all_columns})
             SELECT {select_columns}
-            FROM {table_name} FINAL
+            FROM {table_name}{_final_clause()}
             {self._where_clause}
         """
 
@@ -728,19 +721,17 @@ class UnmergeGroupsReplacement(Replacement):
 
         timestamp = self.timestamp.strftime(DATETIME_FORMAT)
 
+        # Leave predicates in WHERE. project_id still prunes via the PK;
+        # optimize_move_to_prewhere_if_final can promote primary_hash / group_id.
+        # timestamp is padded by a day so Relay's 60s future allowance still
+        # matches; received is the ingest-time delete cutoff.
         return f"""\
-            PREWHERE primary_hash IN ({hashes})
-            WHERE group_id = {self.previous_group_id}
-            AND project_id = {self.project_id}
+            WHERE project_id = {self.project_id}
+            AND primary_hash IN ({hashes})
+            AND group_id = {self.previous_group_id}
+            AND timestamp <= CAST('{timestamp}' AS DateTime) + INTERVAL 1 DAY
             AND received <= CAST('{timestamp}' AS DateTime)
             AND NOT deleted
-        """
-
-    def get_count_query(self, table_name: str) -> str | None:
-        return f"""\
-            SELECT count()
-            FROM {table_name} FINAL
-            {self._where_clause}
         """
 
     def get_insert_query(self, table_name: str) -> str | None:
@@ -754,7 +745,7 @@ class UnmergeGroupsReplacement(Replacement):
         return f"""\
             INSERT INTO {table_name} ({all_columns})
             SELECT {select_columns}
-            FROM {table_name} FINAL
+            FROM {table_name}{_final_clause()}
             {self._where_clause}
         """
 
@@ -850,14 +841,7 @@ class DeleteTagReplacement(Replacement):
         return f"""\
             INSERT INTO {table_name} ({all_columns})
             SELECT {select_columns}
-            FROM {table_name} FINAL
-            {self._where_clause}
-        """
-
-    def get_count_query(self, table_name: str) -> str | None:
-        return f"""\
-            SELECT count()
-            FROM {table_name} FINAL
+            FROM {table_name}{_final_clause()}
             {self._where_clause}
         """
 
