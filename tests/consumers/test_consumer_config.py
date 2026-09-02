@@ -1,27 +1,10 @@
+import dataclasses
+
 import pytest
 
-from snuba.consumers.consumer_config import _coerce_verify, resolve_consumer_config
-
-
-@pytest.mark.parametrize(
-    "raw,expected",
-    [
-        (None, None),
-        (True, True),
-        (False, False),
-        ("true", True),
-        ("1", True),
-        ("false", False),
-        ("FALSE", False),
-        ("0", False),
-        (" false ", False),
-        ("", True),
-        ("yes", True),
-        ("garbage", True),
-    ],
-)
-def test_coerce_verify(raw: bool | str | None, expected: bool | None) -> None:
-    assert _coerce_verify(raw) == expected
+from snuba.consumers.consumer_config import resolve_consumer_config, resolve_storage_config
+from snuba.datasets.storages.factory import get_writable_storage
+from snuba.datasets.storages.storage_key import StorageKey
 
 
 def test_consumer_config() -> None:
@@ -68,6 +51,18 @@ def test_consumer_config() -> None:
             max_batch_size=1,
             max_batch_time_ms=1000,
         )
+
+
+def test_resolve_storage_config_propagates_verify_false(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage = get_writable_storage(StorageKey.ERRORS)
+    monkeypatch.setattr(storage.get_cluster(), "get_verify", lambda: False)
+
+    resolved = resolve_storage_config("errors", storage)
+
+    assert resolved.clickhouse_cluster.verify is False
+    assert dataclasses.asdict(resolved)["clickhouse_cluster"]["verify"] is False
 
 
 def test_group_instance_id_in_broker_config() -> None:

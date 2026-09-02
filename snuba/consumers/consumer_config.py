@@ -23,14 +23,6 @@ class ClickhouseClusterConfig:
     verify: bool | None
 
 
-def _coerce_verify(verify: bool | str | None) -> bool | None:
-    # CLICKHOUSE_VERIFY arrives as a raw env string in the default settings;
-    # only an explicit false disables verification.
-    if isinstance(verify, str):
-        return verify.strip().lower() not in ("false", "0")
-    return verify
-
-
 @dataclass(frozen=True)
 class MessageProcessorConfig:
     python_class_name: str
@@ -292,7 +284,7 @@ def resolve_storage_config(storage_name: str, storage: WritableTableStorage) -> 
         password=password,
         secure=cluster.get_secure(),
         database=cluster.get_database(),
-        verify=_coerce_verify(cluster.get_verify()),
+        verify=cluster.get_verify(),
     )
 
     processor = storage.get_table_writer().get_stream_loader().get_processor()

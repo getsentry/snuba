@@ -247,6 +247,13 @@ pub struct ClickhouseClient {
     query: String,
 }
 
+/// Matches the Python clients, which skip certificate and hostname
+/// verification when the cluster sets `verify=False` (self-signed /
+/// private-CA HTTPS endpoints).
+fn tls_verification_disabled(config: &ClickhouseConfig) -> bool {
+    config.secure && config.verify == Some(false)
+}
+
 impl ClickhouseClient {
     pub fn new(
         config: &ClickhouseConfig,
@@ -298,9 +305,10 @@ impl ClickhouseClient {
             .tcp_keepalive_interval(timeouts.tcp_keepalive_interval)
             .tcp_keepalive_retries(timeouts.tcp_keepalive_retries);
 
-        // Match the Python clients, which skip certificate verification when
-        // the cluster sets `verify=False` (self-signed / private-CA HTTPS).
-        if config.secure && config.verify == Some(false) {
+        if tls_verification_disabled(config) {
+            tracing::warn!(
+                "ClickHouse TLS certificate and hostname verification disabled (verify=false)"
+            );
             builder = builder
                 .tls_danger_accept_invalid_certs(true)
                 .tls_danger_accept_invalid_hostnames(true);
@@ -515,6 +523,25 @@ mod tests {
             database: std::env::var("CLICKHOUSE_DATABASE").unwrap_or("default".to_string()),
             verify: None,
         }
+    }
+
+    #[test]
+    fn test_tls_verification_disabled() {
+        let mut config = make_test_config();
+
+        config.secure = true;
+        config.verify = Some(false);
+        assert!(tls_verification_disabled(&config));
+
+        config.verify = Some(true);
+        assert!(!tls_verification_disabled(&config));
+
+        config.verify = None;
+        assert!(!tls_verification_disabled(&config));
+
+        config.secure = false;
+        config.verify = Some(false);
+        assert!(!tls_verification_disabled(&config));
     }
 
     #[tokio::test]
