@@ -1,10 +1,6 @@
 local getsentry = import 'github.com/getsentry/gocd-jsonnet/libs/getsentry.libsonnet';
 local gocdtasks = import 'github.com/getsentry/gocd-jsonnet/libs/gocd-tasks.libsonnet';
 
-local deploy_py_script = importstr '../bash/deploy-py.sh';
-local deploy_py_task(api_container_id='api') =
-  gocdtasks.script('set -- ' + api_container_id + '\n' + deploy_py_script);
-
 // The return value of this function is the body of a GoCD pipeline.
 // More information on gocd-flavor YAML this is producing can be found here:
 // - https://github.com/tomzo/gocd-yaml-config-plugin#pipeline
@@ -223,12 +219,11 @@ function(region) {
             elastic_profile_id: 'snuba',
             environment_variables: {
               LABEL_SELECTOR: 'service=snuba',
+              // ST still names the API container "snuba"; SaaS renamed it to "api".
+              [if getsentry.is_st(region) then 'API_CONTAINER_ID']: 'snuba',
             },
             tasks: [
-              if getsentry.is_st(region) then
-                deploy_py_task('snuba')
-              else
-                deploy_py_task(),
+              gocdtasks.script(importstr '../bash/deploy-py.sh'),
             ],
           },
         },
