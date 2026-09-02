@@ -221,10 +221,7 @@ function(region) {
               LABEL_SELECTOR: 'service=snuba',
             },
             tasks: [
-              if getsentry.is_st(region) then
-                gocdtasks.script(importstr '../bash/deploy-st-py.sh')
-              else
-                gocdtasks.script(importstr '../bash/deploy-py.sh'),
+              gocdtasks.script(importstr '../bash/deploy-py.sh'),
             ],
           },
         },
