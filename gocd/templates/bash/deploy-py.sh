@@ -3,13 +3,14 @@
 eval $(regions-project-env-vars --region="${SENTRY_REGION}")
 
 IMAGE_TAG="${GO_REVISION_SNUBA_REPO}"
-API_CONTAINER_ID="${API_CONTAINER_ID:-api}"
 
 /devinfra/scripts/get-cluster-credentials \
 && k8s-deploy \
   --label-selector="${LABEL_SELECTOR}" \
   --image="us-docker.pkg.dev/sentryio/snuba-mr/image:${IMAGE_TAG}" \
-  --container-name="${API_CONTAINER_ID}" \
+  # some st still name the api container snuba.
+  --container-name="snuba" \
+  --container-name="api" \
   --container-name="dlq-consumer" \
   --container-name="eap-items-subscriptions-executor" \
   --container-name="eap-items-subscriptions-scheduler" \

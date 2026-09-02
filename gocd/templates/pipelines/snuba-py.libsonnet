@@ -219,8 +219,6 @@ function(region) {
             elastic_profile_id: 'snuba',
             environment_variables: {
               LABEL_SELECTOR: 'service=snuba',
-              // ST still names the API container "snuba"; SaaS renamed it to "api".
-              [if getsentry.is_st(region) then 'API_CONTAINER_ID']: 'snuba',
             },
             tasks: [
               gocdtasks.script(importstr '../bash/deploy-py.sh'),
