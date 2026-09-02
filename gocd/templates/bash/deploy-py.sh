@@ -8,6 +8,7 @@ IMAGE_TAG="${GO_REVISION_SNUBA_REPO}"
 && k8s-deploy \
   --label-selector="${LABEL_SELECTOR}" \
   --image="us-docker.pkg.dev/sentryio/snuba-mr/image:${IMAGE_TAG}" \
+  --container-name="snuba" \
   --container-name="api" \
   --container-name="dlq-consumer" \
   --container-name="eap-items-subscriptions-executor" \

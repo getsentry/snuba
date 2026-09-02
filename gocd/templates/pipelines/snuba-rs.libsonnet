@@ -1,4 +1,3 @@
-local getsentry = import 'github.com/getsentry/gocd-jsonnet/libs/getsentry.libsonnet';
 local gocdtasks = import 'github.com/getsentry/gocd-jsonnet/libs/gocd-tasks.libsonnet';
 
 // The return value of this function is the body of a GoCD pipeline.
@@ -202,10 +201,7 @@ function(region) {
               LABEL_SELECTOR: 'service=snuba',
             },
             tasks: [
-              if getsentry.is_st(region) then
-                gocdtasks.script(importstr '../bash/deploy-st-rs.sh')
-              else
-                gocdtasks.script(importstr '../bash/deploy-rs.sh'),
+              gocdtasks.script(importstr '../bash/deploy-rs.sh'),
             ],
           },
         },
