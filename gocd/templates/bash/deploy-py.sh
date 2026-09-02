@@ -8,7 +8,6 @@ IMAGE_TAG="${GO_REVISION_SNUBA_REPO}"
 && k8s-deploy \
   --label-selector="${LABEL_SELECTOR}" \
   --image="us-docker.pkg.dev/sentryio/snuba-mr/image:${IMAGE_TAG}" \
-  # some st still name the api container snuba.
   --container-name="snuba" \
   --container-name="api" \
   --container-name="dlq-consumer" \
