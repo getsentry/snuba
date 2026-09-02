@@ -4,11 +4,18 @@ eval $(regions-project-env-vars --region="${SENTRY_REGION}")
 
 IMAGE_TAG="${GO_REVISION_SNUBA_REPO}"
 
+# ST still names the API container "snuba"; SaaS renamed it to "api".
+if [[ "${SENTRY_REGION}" == customer-* ]]; then
+  API_CONTAINER_NAME="snuba"
+else
+  API_CONTAINER_NAME="api"
+fi
+
 /devinfra/scripts/get-cluster-credentials \
 && k8s-deploy \
   --label-selector="${LABEL_SELECTOR}" \
   --image="us-docker.pkg.dev/sentryio/snuba-mr/image:${IMAGE_TAG}" \
-  --container-name="api" \
+  --container-name="${API_CONTAINER_NAME}" \
   --container-name="dlq-consumer" \
   --container-name="eap-items-subscriptions-executor" \
   --container-name="eap-items-subscriptions-scheduler" \
