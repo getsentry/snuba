@@ -21,7 +21,7 @@ def enable_get_cluster_loadinfo() -> Generator[None]:
 def test_get_cluster_loadinfo_disabled() -> None:
     with override_options("snuba", {"storage_routing.enable_get_cluster_loadinfo": False}):
         assert get_cluster_loadinfo() is None
-    with override_options("snuba", ENABLE_LOADINFO):
+    with override_options("snuba", {"storage_routing.enable_get_cluster_loadinfo": True}):
         assert get_cluster_loadinfo() is not None
 
 

@@ -601,7 +601,7 @@ def test_routing_strategy_idle_pardon_allows_rejected_query() -> None:
             )
         )
         assert decision.can_run is True
-        assert decision.clickhouse_settings["max_threads"] == MAX_THRESHOLD
+        assert decision.clickhouse_settings["max_threads"] == 10
         pardoned = decision.routing_context.allocation_policies_recommendations[
             "IdlePardonRejectionPolicy"
         ]

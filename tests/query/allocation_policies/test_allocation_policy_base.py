@@ -464,7 +464,7 @@ def test_is_pardonable_overrides_can_run_when_idle() -> None:
         assert reject_policy.get_quota_allowance(tenant_ids, "deadbeef").can_run is False
         pardoned = reject_policy.get_quota_allowance(tenant_ids, "deadbeef", idle)
     assert pardoned.can_run is True
-    assert pardoned.max_threads == MAX_THRESHOLD
+    assert pardoned.max_threads == reject_policy.max_threads
     assert pardoned.max_bytes_to_read == 0
     assert pardoned.explanation["idle_pardon"] == {
         "cluster_load": 1.0,
