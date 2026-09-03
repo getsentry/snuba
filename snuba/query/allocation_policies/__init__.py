@@ -96,7 +96,8 @@ class QuotaAllowance:
         load_info: LoadInfo | None,
     ) -> QuotaAllowanceDecision:
         if not self.can_run:
-            idle_pardon = policy.is_pardonable and load_info is not None and load_info.is_idle()
+            is_idle_load = getattr(load_info, "is_idle", lambda: False)
+            idle_pardon = policy.is_pardonable and is_idle_load()
             return (
                 QuotaAllowanceDecision.PARDONED if idle_pardon else QuotaAllowanceDecision.REJECTED
             )
@@ -455,6 +456,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         ) as span:
             for t, tid in tenant_ids.items():
                 span.set_attribute(f"tenant_ids.{t}", str(tid))
+
             try:
                 allowance = self._get_quota_allowance(tenant_ids, query_id)
             except InvalidTenantsForAllocationPolicy as e:
@@ -490,6 +492,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                 return _default_passthough_policy(
                     self._resource_identifier.value
                 ).get_quota_allowance(tenant_ids, query_id, load_info)
+
             decision = allowance.decision(self, load_info)
             referrer = str(tenant_ids.get("referrer", "no_referrer"))
             if decision == QuotaAllowanceDecision.PARDONED:
@@ -502,6 +505,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                     tags={"referrer": referrer, "max_threads": str(allowance.max_threads)},
                 )
                 span.set_attribute("db_request_throttled", True)
+
             if not self.is_enforced:
                 allowance = QuotaAllowance(
                     can_run=True,
@@ -530,6 +534,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                     suggestion=allowance.suggestion,
                     max_bytes_to_read=0,
                 )
+
             # make sure we always know which storage key we rejected a query from
             allowance.explanation["storage_key"] = self._resource_identifier.value
             for k, v in allowance.to_dict().items():
