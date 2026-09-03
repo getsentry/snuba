@@ -1419,14 +1419,14 @@ def test_idle_pardon_allows_rejected_query() -> None:
     assert stats["quota_allowance"]["summary"]["is_rejected"] is False
     details = stats["quota_allowance"]["details"]["_RejectAllPolicy"]
     assert details["can_run"] is True
-    assert details["max_threads"] == MAX_THRESHOLD
+    assert details["max_threads"] == 10
     assert details["explanation"]["idle_pardon"] == {
         "cluster_load": 1.0,
         "concurrent_queries": 1,
     }
     quota = query_settings.get_resource_quota()
     assert quota is not None
-    assert quota.max_threads == MAX_THRESHOLD
+    assert quota.max_threads == 10
 
 
 def test_idle_pardon_still_rejects_when_not_idle() -> None:
