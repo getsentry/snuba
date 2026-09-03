@@ -38,6 +38,28 @@ pub fn get_load_balancing_config(storage_name: &str) -> LoadBalancingConfig {
     }
 }
 
+/// Whether the consumer writing to `storage_name` should validate each message
+/// against its kafka schema.
+///
+/// `validate_schema` is a dict in the `snuba` sentry-options namespace mapping
+/// storage name to a boolean; storages with no entry default to true
+/// (validation on). It is read *once*, when the consumer's strategies are
+/// built, and then carried as a plain bool through the processing strategies —
+/// schema validation sits on the per-message hot path, so it must not pay an
+/// options lookup per message. Flipping it therefore requires a consumer
+/// restart (or a rebalance, which rebuilds the strategies).
+///
+/// This only ever turns validation *off*, and never for a consumer running
+/// with --enforce-schema: that flag implies validation, and the strategies
+/// (see `make_rust_processor`) OR it back in.
+pub fn validate_schema_enabled(storage_name: &str) -> bool {
+    options("snuba")
+        .ok()
+        .and_then(|o| o.get("validate_schema").ok())
+        .and_then(|v| v.get(storage_name).and_then(|b| b.as_bool()))
+        .unwrap_or(true)
+}
+
 /// ClickHouse's compiled-in default for `max_insert_block_size`. We refuse to
 /// apply any override below this to avoid silently shrinking blocks below what
 /// the server would already produce on its own.
@@ -218,6 +240,27 @@ mod tests {
         let config = get_load_balancing_config("lb_overrides_test");
         assert_eq!(config.load_balancing, "first_or_random");
         assert_eq!(config.first_offset, Some("1".to_string()));
+    }
+
+    #[test]
+    fn test_validate_schema_defaults_to_enabled() {
+        init_options();
+        assert!(validate_schema_enabled("validate_schema_unset_test"));
+    }
+
+    #[test]
+    fn test_validate_schema_can_be_disabled_per_storage() {
+        init_options();
+        let _guard = override_options(&[(
+            "snuba",
+            "validate_schema",
+            json!({ "validate_schema_off_test": false }),
+        )])
+        .unwrap();
+
+        assert!(!validate_schema_enabled("validate_schema_off_test"));
+        // Storages with no entry keep validating.
+        assert!(validate_schema_enabled("validate_schema_other_storage"));
     }
 
     #[test]
