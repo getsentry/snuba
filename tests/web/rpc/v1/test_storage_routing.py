@@ -27,6 +27,7 @@ from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryResult
 from snuba.web.rpc.common.exceptions import RPCAllocationPolicyException
 from snuba.web.rpc.storage_routing.common import extract_message_meta
+from snuba.web.rpc.storage_routing.load_retriever import LoadInfo
 from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
     OutcomesBasedRoutingStrategy,
 )
@@ -547,8 +548,6 @@ def test_routing_strategy_with_rejecting_allocation_policy() -> None:
 
 @pytest.mark.redis_db
 def test_routing_strategy_idle_pardon_allows_rejected_query() -> None:
-    from snuba.web.rpc.storage_routing.load_retriever import LoadInfo
-
     class IdlePardonRejectionPolicy(AllocationPolicy):
         def _additional_config_definitions(self) -> list[Configuration]:
             return []
@@ -586,16 +585,13 @@ def test_routing_strategy_idle_pardon_allows_rejected_query() -> None:
         ),
         override_options(
             "snuba",
-            {
-                "storage_routing.enable_get_cluster_loadinfo": True,
-                "storage_routing.idle_cluster_load_threshold": 10.0,
-                "storage_routing.idle_concurrent_queries_threshold": 5,
-            },
+            {"storage_routing.enable_get_cluster_loadinfo": True},
         ),
         mock.patch(
             "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.get_cluster_loadinfo",
             return_value=LoadInfo(cluster_load=1.0, concurrent_queries=1),
         ),
+        mock.patch.object(LoadInfo, "is_idle", return_value=True),
     ):
         decision = OutcomesBasedRoutingStrategy().get_routing_decision(
             RoutingContext(

@@ -41,6 +41,7 @@ from snuba.web.db_query import (
     db_query,
     execute_query,
 )
+from snuba.web.rpc.storage_routing.load_retriever import LoadInfo
 from tests.query.allocation_policies.attachment import (
     match_block,
     override_allocation_policy,
@@ -1391,24 +1392,20 @@ class _RejectAllPolicy(AllocationPolicy):
 
 
 def test_idle_pardon_allows_rejected_query() -> None:
-    from snuba.web.rpc.storage_routing.load_retriever import LoadInfo
-
     attribution_info = mock.Mock()
     attribution_info.tenant_ids = {"referrer": "test_referrer", "organization_id": 1}
     stats: MutableMapping[str, Any] = {}
+    idle = LoadInfo(cluster_load=1.0, concurrent_queries=1)
     with (
         override_options(
             "snuba",
-            {
-                "storage_routing.enable_get_cluster_loadinfo": True,
-                "storage_routing.idle_cluster_load_threshold": 10.0,
-                "storage_routing.idle_concurrent_queries_threshold": 5,
-            },
+            {"storage_routing.enable_get_cluster_loadinfo": True},
         ),
         mock.patch(
-            "snuba.web.rpc.storage_routing.load_retriever.get_cluster_loadinfo",
-            return_value=LoadInfo(cluster_load=1.0, concurrent_queries=1),
+            "snuba.web.db_query.get_cluster_loadinfo",
+            return_value=idle,
         ),
+        mock.patch.object(LoadInfo, "is_idle", return_value=True),
     ):
         query_settings = HTTPQuerySettings()
         _apply_allocation_policies_quota(
@@ -1433,24 +1430,20 @@ def test_idle_pardon_allows_rejected_query() -> None:
 
 
 def test_idle_pardon_still_rejects_when_not_idle() -> None:
-    from snuba.web.rpc.storage_routing.load_retriever import LoadInfo
-
     attribution_info = mock.Mock()
     attribution_info.tenant_ids = {"referrer": "test_referrer", "organization_id": 1}
     stats: MutableMapping[str, Any] = {}
+    busy = LoadInfo(cluster_load=50.0, concurrent_queries=1)
     with (
         override_options(
             "snuba",
-            {
-                "storage_routing.enable_get_cluster_loadinfo": True,
-                "storage_routing.idle_cluster_load_threshold": 10.0,
-                "storage_routing.idle_concurrent_queries_threshold": 5,
-            },
+            {"storage_routing.enable_get_cluster_loadinfo": True},
         ),
         mock.patch(
-            "snuba.web.rpc.storage_routing.load_retriever.get_cluster_loadinfo",
-            return_value=LoadInfo(cluster_load=50.0, concurrent_queries=1),
+            "snuba.web.db_query.get_cluster_loadinfo",
+            return_value=busy,
         ),
+        mock.patch.object(LoadInfo, "is_idle", return_value=False),
         pytest.raises(AllocationPolicyViolations),
     ):
         _apply_allocation_policies_quota(

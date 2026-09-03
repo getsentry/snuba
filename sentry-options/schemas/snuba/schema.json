@@ -258,16 +258,6 @@
       "default": false,
       "description": "When true, the storage routing strategy fetches ClickHouse cluster load info to inform routing decisions. Also the kill switch for idle allocation-policy pardons."
     },
-    "storage_routing.idle_cluster_load_threshold": {
-      "type": "number",
-      "default": 0,
-      "description": "Pardon allocation-policy rejections when cluster_load is strictly below this value (and concurrent queries are below storage_routing.idle_concurrent_queries_threshold). 0 means never idle."
-    },
-    "storage_routing.idle_concurrent_queries_threshold": {
-      "type": "integer",
-      "default": 0,
-      "description": "Pardon allocation-policy rejections when concurrent_queries is strictly below this value (and cluster load is below storage_routing.idle_cluster_load_threshold). 0 means never idle."
-    },
     "retention_days": {
       "type": "object",
       "properties": {
