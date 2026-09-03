@@ -92,17 +92,18 @@ class QuotaAllowance:
 
     def decision(
         self,
-        *,
-        policy_max_threads: int,
-        idle_pardon: bool,
+        policy: AllocationPolicy,
+        load_info: LoadInfo | None,
     ) -> QuotaAllowanceDecision:
         if not self.can_run:
-            if idle_pardon:
-                return QuotaAllowanceDecision.PARDONED
-            return QuotaAllowanceDecision.REJECTED
-        max_threads = min(self.max_threads, policy_max_threads)
-        if max_threads < policy_max_threads:
+            idle_pardon = policy.is_pardonable and load_info is not None and load_info.is_idle()
+            return (
+                QuotaAllowanceDecision.PARDONED if idle_pardon else QuotaAllowanceDecision.REJECTED
+            )
+
+        if self.max_threads < policy.max_threads:
             return QuotaAllowanceDecision.THROTTLED
+
         return QuotaAllowanceDecision.ALLOWED
 
     def __eq__(self, other: Any) -> bool:
@@ -489,10 +490,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                 return _default_passthough_policy(
                     self._resource_identifier.value
                 ).get_quota_allowance(tenant_ids, query_id, load_info)
-            idle_pardon = self.is_pardonable and load_info is not None and load_info.is_idle()
-            decision = allowance.decision(
-                policy_max_threads=self.max_threads, idle_pardon=idle_pardon
-            )
+            decision = allowance.decision(self, load_info)
             referrer = str(tenant_ids.get("referrer", "no_referrer"))
             if decision == QuotaAllowanceDecision.PARDONED:
                 self.metrics.increment("db_request_pardoned", tags={"referrer": referrer})
@@ -517,13 +515,12 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                     suggestion=allowance.suggestion,
                 )
             elif decision == QuotaAllowanceDecision.PARDONED:
-                assert load_info is not None
                 allowance = QuotaAllowance(
                     can_run=True,
-                    max_threads=MAX_THRESHOLD,
+                    max_threads=self.max_threads,
                     explanation={
                         **allowance.explanation,
-                        "idle_pardon": load_info.to_dict(),
+                        "idle_pardon": load_info.to_dict() if load_info is not None else {},
                     },
                     is_throttled=allowance.is_throttled,
                     throttle_threshold=allowance.throttle_threshold,
