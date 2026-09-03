@@ -1,6 +1,8 @@
+from collections.abc import Generator
 from unittest.mock import Mock, patch
 
 import pytest
+from sentry_options import OptionValue
 from sentry_options.testing import override_options
 
 from snuba.web.rpc.storage_routing.load_retriever import LoadInfo, get_cluster_loadinfo
@@ -46,24 +48,34 @@ def test_from_dict_ignores_unknown_keys() -> None:
     assert load_info.cluster_load == 2.0
     assert load_info.concurrent_queries == -1
 
-ENABLE_LOADINFO = {"storage_routing.enable_get_cluster_loadinfo": True}
+ENABLE_LOADINFO: dict[str, OptionValue] = {"storage_routing.enable_get_cluster_loadinfo": True}
 
 
+@pytest.fixture(autouse=True)
+def enable_get_cluster_loadinfo() -> Generator[None]:
+    with override_options("snuba", ENABLE_LOADINFO):
+        yield
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_get_cluster_loadinfo_disabled() -> None:
-    assert get_cluster_loadinfo() is None
+    with override_options("snuba", {"storage_routing.enable_get_cluster_loadinfo": False}):
+        assert get_cluster_loadinfo() is None
+    with override_options("snuba", ENABLE_LOADINFO):
+        assert get_cluster_loadinfo() is not None
 
 
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
 def test_get_cluster_load() -> None:
-    with override_options("snuba", ENABLE_LOADINFO):
-        _assert_probe_ok(get_cluster_loadinfo())
+    _assert_probe_ok(get_cluster_loadinfo())
 
 
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
 def test_get_cluster_load_from_cache() -> None:
-    with override_options("snuba", ENABLE_LOADINFO), patch("time.time") as mock_time:
+    with patch("time.time") as mock_time:
         mock_time.return_value = 0
         load_info = get_cluster_loadinfo()
         assert load_info is not None
@@ -79,10 +91,7 @@ def test_get_cluster_load_from_cache() -> None:
 def test_get_cluster_loadinfo_if_cache_fails() -> None:
     mock_redis = Mock()
     mock_redis.side_effect = Exception("Test error")
-    with (
-        override_options("snuba", ENABLE_LOADINFO),
-        patch("snuba.redis.get_redis_client") as mock_redis_client,
-    ):
+    with patch("snuba.redis.get_redis_client") as mock_redis_client:
         mock_redis_client.return_value = mock_redis
         _assert_probe_ok(get_cluster_loadinfo())
 
@@ -90,9 +99,6 @@ def test_get_cluster_loadinfo_if_cache_fails() -> None:
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
 def test_get_cluster_load_error_handling() -> None:
-    with (
-        override_options("snuba", ENABLE_LOADINFO),
-        patch("snuba.clickhouse.connect.ClickhouseConnectPool.execute") as mock_execute,
-    ):
+    with patch("snuba.clickhouse.connect.ClickhouseConnectPool.execute") as mock_execute:
         mock_execute.side_effect = Exception("Test error")
         _assert_probe_failed(get_cluster_loadinfo())

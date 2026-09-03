@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 import os
 from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass, field, replace
-from enum import Enum
+from dataclasses import asdict, dataclass, field
+from enum import Enum, IntEnum
 from typing import TYPE_CHECKING, Any, cast
 
 from redis.exceptions import TimeoutError as RedisTimeoutError
@@ -26,6 +26,8 @@ from snuba.utils.serializable_exception import JsonSerializable, SerializableExc
 from snuba.web import QueryResult
 
 if TYPE_CHECKING:
+    # Importing load_retriever at runtime pulls in snuba.web.rpc, which
+    # eventually imports db_query → AllocationPolicy (cycle).
     from snuba.web.rpc.storage_routing.load_retriever import LoadInfo
 
 IS_ENFORCED = "is_enforced"
@@ -57,6 +59,13 @@ class AllocationPolicyConfig(Configuration):
     pass
 
 
+class QuotaAllowanceDecision(IntEnum):
+    REJECTED = 0
+    PARDONED = 1
+    ALLOWED = 2
+    THROTTLED = 3
+
+
 @dataclass(frozen=True)
 class QuotaAllowance:
     can_run: bool
@@ -80,6 +89,21 @@ class QuotaAllowance:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+    def decision(
+        self,
+        *,
+        policy_max_threads: int,
+        idle_pardon: bool,
+    ) -> QuotaAllowanceDecision:
+        if not self.can_run:
+            if idle_pardon:
+                return QuotaAllowanceDecision.PARDONED
+            return QuotaAllowanceDecision.REJECTED
+        max_threads = min(self.max_threads, policy_max_threads)
+        if max_threads < policy_max_threads:
+            return QuotaAllowanceDecision.THROTTLED
+        return QuotaAllowanceDecision.ALLOWED
 
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, QuotaAllowance):
@@ -452,9 +476,9 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                     1,
                     tags={"method": "get_quota_allowance", "reason": type(e).__name__},
                 )
-                return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(
-                    tenant_ids, query_id, load_info
-                )
+                return _default_passthough_policy(
+                    self._resource_identifier.value
+                ).get_quota_allowance(tenant_ids, query_id, load_info)
             except Exception:
                 self.metrics.increment("fail_open", 1, tags={"method": "get_quota_allowance"})
                 logger.exception(
@@ -462,35 +486,22 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                 )
                 if settings.RAISE_ON_ALLOCATION_POLICY_FAILURES:
                     raise
-                return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(
-                    tenant_ids, query_id, load_info
-                )
-            idle_pardon = (
-                not allowance.can_run
-                and self.is_pardonable
-                and load_info is not None
-                and load_info.is_idle()
+                return _default_passthough_policy(
+                    self._resource_identifier.value
+                ).get_quota_allowance(tenant_ids, query_id, load_info)
+            idle_pardon = self.is_pardonable and load_info is not None and load_info.is_idle()
+            decision = allowance.decision(
+                policy_max_threads=self.max_threads, idle_pardon=idle_pardon
             )
-            if not allowance.can_run:
-                if idle_pardon:
-                    self.metrics.increment(
-                        "db_request_pardoned",
-                        tags={"referrer": str(tenant_ids.get("referrer", "no_referrer"))},
-                    )
-                else:
-                    self.metrics.increment(
-                        "db_request_rejected",
-                        tags={"referrer": str(tenant_ids.get("referrer", "no_referrer"))},
-                    )
-            elif allowance.max_threads < self.max_threads:
-                # NOTE: The elif is very intentional here. Don't count the throttling
-                # if the request was rejected.
+            referrer = str(tenant_ids.get("referrer", "no_referrer"))
+            if decision == QuotaAllowanceDecision.PARDONED:
+                self.metrics.increment("db_request_pardoned", tags={"referrer": referrer})
+            elif decision == QuotaAllowanceDecision.REJECTED:
+                self.metrics.increment("db_request_rejected", tags={"referrer": referrer})
+            elif decision == QuotaAllowanceDecision.THROTTLED:
                 self.metrics.increment(
                     "db_request_throttled",
-                    tags={
-                        "referrer": str(tenant_ids.get("referrer", "no_referrer")),
-                        "max_threads": str(allowance.max_threads),
-                    },
+                    tags={"referrer": referrer, "max_threads": str(allowance.max_threads)},
                 )
                 span.set_attribute("db_request_throttled", True)
             if not self.is_enforced:
@@ -505,15 +516,23 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                     quota_unit=allowance.quota_unit,
                     suggestion=allowance.suggestion,
                 )
-            elif idle_pardon:
+            elif decision == QuotaAllowanceDecision.PARDONED:
                 assert load_info is not None
-                allowance = replace(
-                    allowance,
+                allowance = QuotaAllowance(
                     can_run=True,
                     max_threads=MAX_THRESHOLD,
+                    explanation={
+                        **allowance.explanation,
+                        "idle_pardon": load_info.to_dict(),
+                    },
+                    is_throttled=allowance.is_throttled,
+                    throttle_threshold=allowance.throttle_threshold,
+                    rejection_threshold=allowance.rejection_threshold,
+                    quota_used=allowance.quota_used,
+                    quota_unit=allowance.quota_unit,
+                    suggestion=allowance.suggestion,
                     max_bytes_to_read=0,
                 )
-                allowance.explanation["idle_pardon"] = load_info.to_dict()
             # make sure we always know which storage key we rejected a query from
             allowance.explanation["storage_key"] = self._resource_identifier.value
             for k, v in allowance.to_dict().items():
