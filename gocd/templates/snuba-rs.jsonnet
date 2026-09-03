@@ -15,6 +15,7 @@ local rs_pipedream_config = {
         'snuba/settings/**/*',
         'Dockerfile',
         'snuba/cli/**/*',
+        'sentry-options/**/*',
       ],
     },
   },

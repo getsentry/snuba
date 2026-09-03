@@ -152,6 +152,7 @@ function(region) {
         'snuba/settings/**/*',
         'Dockerfile',
         'snuba/cli/**/*',
+        'sentry-options/**/*',
       ],
     },
   },
