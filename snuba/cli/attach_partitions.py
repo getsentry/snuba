@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Sequence
 
 import click
@@ -18,6 +19,8 @@ from snuba.clusters.cluster import (
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_logging, setup_sentry
+
+logger = logging.getLogger("snuba.attach_partitions")
 
 
 @click.command()
@@ -127,9 +130,9 @@ def attach_partitions(
     source = f"{database}.{source_table}"
     destination = f"{database}.{destination_table}"
     mode = "EXECUTE" if execute else "DRY RUN"
-    click.echo(f"[{mode}] Attaching partitions from {source} to {destination}")
+    logger.info("[%s] Attaching partitions from %s to %s", mode, source, destination)
     if not execute:
-        click.echo("[DRY RUN] No partitions will be attached. Pass --execute to attach.")
+        logger.info("[DRY RUN] No partitions will be attached. Pass --execute to attach.")
 
     partition_ids: Sequence[str]
     try:
@@ -149,7 +152,9 @@ def attach_partitions(
                     destination_table,
                     partition_id,
                 )
-                click.echo(f"Attached partition {partition_id} from {source} to {destination}")
+                logger.info(
+                    "Attached partition %s from %s to %s", partition_id, source, destination
+                )
         else:
             partition_ids = attach_partitions_from_table(
                 connection,
@@ -158,8 +163,11 @@ def attach_partitions(
                 destination_table,
                 health_check_query=health_check_query,
                 dry_run=not execute,
-                on_partition_attached=lambda attached_partition_id: click.echo(
-                    f"Attached partition {attached_partition_id} from {source} to {destination}"
+                on_partition_attached=lambda attached_partition_id: logger.info(
+                    "Attached partition %s from %s to %s",
+                    attached_partition_id,
+                    source,
+                    destination,
                 ),
             )
     except PartitionBoundaryError as error:
@@ -167,9 +175,16 @@ def attach_partitions(
 
     if not execute:
         for partition_id in partition_ids:
-            click.echo(f"Would attach partition {partition_id} from {source} to {destination}")
+            logger.info(
+                "Would attach partition %s from %s to %s", partition_id, source, destination
+            )
 
     action = "Attached" if execute else "Would attach"
-    click.echo(
-        f"[{mode}] {action} {len(partition_ids)} partition(s) from {source} to {destination}"
+    logger.info(
+        "[%s] %s %d partition(s) from %s to %s",
+        mode,
+        action,
+        len(partition_ids),
+        source,
+        destination,
     )
