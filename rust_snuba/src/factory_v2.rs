@@ -364,9 +364,6 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
 struct SchemaValidator {
     schema: Option<Arc<Schema>>,
     enforce_schema: bool,
-    /// Whether to validate at all. Resolved once from the `validate_schema`
-    /// option when the strategies are built (see
-    /// [`crate::options::validate_schema_enabled`]), never per message.
     validate_schema: bool,
 }
 

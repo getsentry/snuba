@@ -35,10 +35,7 @@ pub fn make_rust_processor(
     processor_config: ProcessorConfig,
     stop_at_timestamp: Option<i64>,
 ) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
-    // `enforce_schema` implies validation: a consumer running with
-    // --enforce-schema always validates, so the `validate_schema` option can
-    // only turn validation off where the schema is not being enforced.
-    // Resolved here, once, and carried as a bool — never per message.
+    // `enforce_schema` implies validation, so the option can only turn it off.
     let validate_schema = validate_schema || enforce_schema;
 
     // Skip loading the schema when we won't validate against it.
@@ -123,10 +120,7 @@ pub fn make_rust_processor_with_replacements(
     processor_config: ProcessorConfig,
     stop_at_timestamp: Option<i64>,
 ) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
-    // `enforce_schema` implies validation: a consumer running with
-    // --enforce-schema always validates, so the `validate_schema` option can
-    // only turn validation off where the schema is not being enforced.
-    // Resolved here, once, and carried as a bool — never per message.
+    // `enforce_schema` implies validation, so the option can only turn it off.
     let validate_schema = validate_schema || enforce_schema;
 
     // Skip loading the schema when we won't validate against it.
@@ -230,9 +224,6 @@ pub fn get_schema(schema_name: &str, enforce_schema: bool) -> Option<Arc<Schema>
 struct MessageProcessor<TResult: Clone, TNext: Clone> {
     schema: Option<Arc<Schema>>,
     enforce_schema: bool,
-    /// Whether to validate each payload against `schema`. Resolved once from
-    /// the `validate_schema` option when the strategy is built (see
-    /// [`crate::options::validate_schema_enabled`]), never per message.
     validate_schema: bool,
     // Convert payload to either InsertBatch (or either insert or replacement for the errors dataset)
     func:
