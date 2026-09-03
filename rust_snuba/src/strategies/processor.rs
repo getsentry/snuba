@@ -24,16 +24,26 @@ use crate::types::{
 };
 use tokio::time::Instant;
 
+#[allow(clippy::too_many_arguments)]
 pub fn make_rust_processor(
     next_step: impl ProcessingStrategy<BytesInsertBatch<RowData>> + 'static,
     func: ProcessingFunction,
     schema_name: &str,
     enforce_schema: bool,
+    validate_schema: bool,
     concurrency: &ConcurrencyConfig,
     processor_config: ProcessorConfig,
     stop_at_timestamp: Option<i64>,
 ) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
-    let schema = get_schema(schema_name, enforce_schema);
+    // `enforce_schema` implies validation, so the option can only turn it off.
+    let validate_schema = validate_schema || enforce_schema;
+
+    // Skip loading the schema when we won't validate against it.
+    let schema = if validate_schema {
+        get_schema(schema_name, enforce_schema)
+    } else {
+        None
+    };
 
     fn result_to_next_msg(
         transformed: InsertBatch,
@@ -84,6 +94,7 @@ pub fn make_rust_processor(
     let task_runner = MessageProcessor {
         schema,
         enforce_schema,
+        validate_schema,
         func,
         result_to_next_msg,
         processor_config,
@@ -98,16 +109,26 @@ pub fn make_rust_processor(
     ))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn make_rust_processor_with_replacements(
     next_step: impl ProcessingStrategy<InsertOrReplacement<BytesInsertBatch<RowData>>> + 'static,
     func: ProcessingFunctionWithReplacements,
     schema_name: &str,
     enforce_schema: bool,
+    validate_schema: bool,
     concurrency: &ConcurrencyConfig,
     processor_config: ProcessorConfig,
     stop_at_timestamp: Option<i64>,
 ) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
-    let schema = get_schema(schema_name, enforce_schema);
+    // `enforce_schema` implies validation, so the option can only turn it off.
+    let validate_schema = validate_schema || enforce_schema;
+
+    // Skip loading the schema when we won't validate against it.
+    let schema = if validate_schema {
+        get_schema(schema_name, enforce_schema)
+    } else {
+        None
+    };
 
     fn result_to_next_msg(
         transformed: InsertOrReplacement<InsertBatch>,
@@ -168,6 +189,7 @@ pub fn make_rust_processor_with_replacements(
     let task_runner = MessageProcessor {
         schema,
         enforce_schema,
+        validate_schema,
         func,
         result_to_next_msg,
         processor_config,
@@ -202,6 +224,7 @@ pub fn get_schema(schema_name: &str, enforce_schema: bool) -> Option<Arc<Schema>
 struct MessageProcessor<TResult: Clone, TNext: Clone> {
     schema: Option<Arc<Schema>>,
     enforce_schema: bool,
+    validate_schema: bool,
     // Convert payload to either InsertBatch (or either insert or replacement for the errors dataset)
     func:
         fn(KafkaPayload, KafkaMessageMetadata, config: &ProcessorConfig) -> anyhow::Result<TResult>,
@@ -220,7 +243,9 @@ impl<TResult: Clone, TNext: Clone> MessageProcessor<TResult, TNext> {
         message: Message<KafkaPayload>,
     ) -> Result<Message<TNext>, RunTaskError<anyhow::Error>> {
         let start_time = Instant::now();
-        validate_schema(&message, &self.schema, self.enforce_schema)?;
+        if self.validate_schema {
+            validate_schema(&message, &self.schema, self.enforce_schema)?;
+        }
 
         let msg = match message.inner_message {
             InnerMessage::BrokerMessage(msg) => msg,
@@ -456,6 +481,7 @@ mod tests {
             noop_processor,
             "outcomes",
             true,
+            true,
             &concurrency,
             ProcessorConfig::default(),
             None,
@@ -497,6 +523,7 @@ mod tests {
             failing_processor,
             "outcomes",
             false,
+            true,
             &concurrency,
             ProcessorConfig::default(),
             None,
@@ -538,6 +565,7 @@ mod tests {
             noop_processor,
             "outcomes",
             true,
+            true,
             &concurrency,
             ProcessorConfig::default(),
             None,
@@ -550,6 +578,51 @@ mod tests {
         let err = strategy
             .join(None)
             .expect_err("schema validation failure should surface as InvalidMessage");
+
+        match err {
+            StrategyError::InvalidMessage(invalid) => {
+                assert_eq!(invalid.partition, partition);
+                assert_eq!(invalid.offset, offset);
+                assert_eq!(invalid.reason, InvalidMessageReason::Invalid);
+            }
+            other => panic!("unexpected strategy error: {other:?}"),
+        }
+    }
+
+    /// `enforce_schema` wins over the `validate_schema` option: a consumer
+    /// running with --enforce-schema keeps validating (and DLQing) even when
+    /// the option asks to skip validation.
+    #[test]
+    fn enforce_schema_validates_even_when_option_disables_validation() {
+        fn noop_processor(
+            _payload: KafkaPayload,
+            _metadata: KafkaMessageMetadata,
+            _config: &ProcessorConfig,
+        ) -> anyhow::Result<InsertBatch> {
+            Ok(InsertBatch::default())
+        }
+
+        let partition = Partition::new(Topic::new("test"), 0);
+        let offset = 29;
+        let concurrency = ConcurrencyConfig::new(1);
+        let mut strategy = make_rust_processor(
+            Noop,
+            noop_processor,
+            "outcomes",
+            true,
+            false,
+            &concurrency,
+            ProcessorConfig::default(),
+            None,
+        );
+
+        let payload = KafkaPayload::new(None, None, Some(b"{}".to_vec()));
+        let message = Message::new_broker_message(payload, partition, offset, Utc::now());
+
+        strategy.submit(message).unwrap();
+        let err = strategy
+            .join(None)
+            .expect_err("enforce_schema must validate regardless of the option");
 
         match err {
             StrategyError::InvalidMessage(invalid) => {
@@ -607,6 +680,7 @@ mod tests {
             noop_processor,
             "outcomes",
             false,
+            true,
             &concurrency,
             ProcessorConfig::default(),
             None,
