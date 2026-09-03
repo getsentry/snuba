@@ -13,6 +13,7 @@ IMAGE_TAG="${GO_REVISION_SNUBA_REPO}"
   --container-name="eap-items-consumer" \
   --container-name="eap-items-md-consumer" \
   --container-name="errors-replacer" \
+  --container-name="generic-metrics-counters-consumer" \
   --container-name="llm-proxy-cost-consumer" \
   --container-name="loadbalancer-outcomes-consumer" \
   --container-name="metrics-consumer" \
