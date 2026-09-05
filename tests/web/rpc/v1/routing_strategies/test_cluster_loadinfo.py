@@ -1,8 +1,28 @@
+from collections.abc import Generator
 from unittest.mock import Mock, patch
 
 import pytest
+from sentry_options import OptionValue
+from sentry_options.testing import override_options
 
 from snuba.web.rpc.storage_routing.load_retriever import get_cluster_loadinfo
+
+ENABLE_LOADINFO: dict[str, OptionValue] = {"storage_routing.enable_get_cluster_loadinfo": True}
+
+
+@pytest.fixture(autouse=True)
+def enable_get_cluster_loadinfo() -> Generator[None]:
+    with override_options("snuba", ENABLE_LOADINFO):
+        yield
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_get_cluster_loadinfo_disabled() -> None:
+    with override_options("snuba", {"storage_routing.enable_get_cluster_loadinfo": False}):
+        assert get_cluster_loadinfo() is None
+    with override_options("snuba", {"storage_routing.enable_get_cluster_loadinfo": True}):
+        assert get_cluster_loadinfo() is not None
 
 
 @pytest.mark.redis_db
@@ -20,9 +40,11 @@ def test_get_cluster_load_from_cache() -> None:
     with patch("time.time") as mock_time:
         mock_time.return_value = 0
         load_info = get_cluster_loadinfo()
+        assert load_info is not None
 
         mock_time.return_value = 59
         second_load_info = get_cluster_loadinfo()
+        assert second_load_info is not None
         assert load_info.to_dict() == second_load_info.to_dict()
 
 

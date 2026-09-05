@@ -30,6 +30,7 @@ from snuba.query.allocation_policies.concurrent_rate_limit import (
 from snuba.query.allocation_policies.cross_org import CrossOrgQueryAllocationPolicy
 from snuba.query.allocation_policies.per_referrer import ReferrerGuardRailPolicy
 from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
+from snuba.web.rpc.storage_routing.load_retriever import LoadInfo
 from tests.configs.component_config import (
     delete_component_config,
     set_component_config,
@@ -446,6 +447,40 @@ def test_is_not_enforced() -> None:
     assert throttled_metrics[0].tags["policy_class"] == "ThrottleEverythingAllocationPolicy"
     assert throttled_metrics[0].tags["is_enforced"] == "True"
     assert throttled_metrics[1].tags["is_enforced"] == "False"
+
+
+@pytest.mark.redis_db
+def test_is_pardonable_overrides_can_run_when_idle() -> None:
+    reject_policy = RejectingEverythingAllocationPolicy(
+        StorageKey("some_storage"),
+        is_enforced=1,
+    )
+    tenant_ids: dict[str, int | str] = {
+        "organization_id": 123,
+        "referrer": "some_referrer",
+    }
+    idle = LoadInfo(cluster_load=1.0, concurrent_queries=1)
+    with mock.patch.object(LoadInfo, "is_idle", return_value=True):
+        assert reject_policy.get_quota_allowance(tenant_ids, "deadbeef").can_run is False
+        pardoned = reject_policy.get_quota_allowance(tenant_ids, "deadbeef", idle)
+    assert pardoned.can_run is True
+    assert pardoned.max_threads == reject_policy.max_threads
+    assert pardoned.max_bytes_to_read == 0
+    assert pardoned.explanation["idle_pardon"] == {
+        "cluster_load": 1.0,
+        "concurrent_queries": 1,
+    }
+
+    pardoned_metrics = get_recorded_metric_calls(
+        "increment", "allocation_policy.db_request_pardoned"
+    )
+    assert pardoned_metrics is not None
+    assert len(pardoned_metrics) == 1
+    rejected_metrics = get_recorded_metric_calls(
+        "increment", "allocation_policy.db_request_rejected"
+    )
+    assert rejected_metrics is not None
+    assert len(rejected_metrics) == 1
 
 
 class TestComponentNameBackwardsCompatibility:

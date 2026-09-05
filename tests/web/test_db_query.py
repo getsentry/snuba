@@ -41,6 +41,7 @@ from snuba.web.db_query import (
     db_query,
     execute_query,
 )
+from snuba.web.rpc.storage_routing.load_retriever import LoadInfo
 from tests.query.allocation_policies.attachment import (
     match_block,
     override_allocation_policy,
@@ -1360,3 +1361,97 @@ def test_policy_sets_max_bytes_to_read() -> None:
             },
         },
     }
+
+
+class _RejectAllPolicy(AllocationPolicy):
+    def _additional_config_definitions(self) -> list[Configuration]:
+        return []
+
+    def _get_quota_allowance(
+        self, tenant_ids: dict[str, str | int], query_id: str
+    ) -> QuotaAllowance:
+        return QuotaAllowance(
+            can_run=False,
+            max_threads=0,
+            explanation={"reason": "reject"},
+            is_throttled=False,
+            throttle_threshold=MAX_THRESHOLD,
+            rejection_threshold=MAX_THRESHOLD,
+            quota_used=0,
+            quota_unit=NO_UNITS,
+            suggestion=NO_SUGGESTION,
+        )
+
+    def _update_quota_balance(
+        self,
+        tenant_ids: dict[str, str | int],
+        query_id: str,
+        result_or_error: QueryResultOrError,
+    ) -> None:
+        return
+
+
+def test_idle_pardon_allows_rejected_query() -> None:
+    attribution_info = mock.Mock()
+    attribution_info.tenant_ids = {"referrer": "test_referrer", "organization_id": 1}
+    stats: MutableMapping[str, Any] = {}
+    idle = LoadInfo(cluster_load=1.0, concurrent_queries=1)
+    with (
+        override_options(
+            "snuba",
+            {"storage_routing.enable_get_cluster_loadinfo": True},
+        ),
+        mock.patch(
+            "snuba.web.db_query.get_cluster_loadinfo",
+            return_value=idle,
+        ),
+        mock.patch.object(LoadInfo, "is_idle", return_value=True),
+    ):
+        query_settings = HTTPQuerySettings()
+        _apply_allocation_policies_quota(
+            query_settings=query_settings,
+            attribution_info=attribution_info,
+            formatted_query=mock.Mock(),
+            stats=stats,
+            allocation_policies=[_RejectAllPolicy(ResourceIdentifier(StorageKey("errors_ro")))],
+            query_id="pardon_query",
+        )
+    assert stats["quota_allowance"]["summary"]["is_rejected"] is False
+    details = stats["quota_allowance"]["details"]["_RejectAllPolicy"]
+    assert details["can_run"] is True
+    assert details["max_threads"] == 10
+    assert details["explanation"]["idle_pardon"] == {
+        "cluster_load": 1.0,
+        "concurrent_queries": 1,
+    }
+    quota = query_settings.get_resource_quota()
+    assert quota is not None
+    assert quota.max_threads == 10
+
+
+def test_idle_pardon_still_rejects_when_not_idle() -> None:
+    attribution_info = mock.Mock()
+    attribution_info.tenant_ids = {"referrer": "test_referrer", "organization_id": 1}
+    stats: MutableMapping[str, Any] = {}
+    busy = LoadInfo(cluster_load=50.0, concurrent_queries=1)
+    with (
+        override_options(
+            "snuba",
+            {"storage_routing.enable_get_cluster_loadinfo": True},
+        ),
+        mock.patch(
+            "snuba.web.db_query.get_cluster_loadinfo",
+            return_value=busy,
+        ),
+        mock.patch.object(LoadInfo, "is_idle", return_value=False),
+        pytest.raises(AllocationPolicyViolations),
+    ):
+        _apply_allocation_policies_quota(
+            query_settings=HTTPQuerySettings(),
+            attribution_info=attribution_info,
+            formatted_query=mock.Mock(),
+            stats=stats,
+            allocation_policies=[_RejectAllPolicy(ResourceIdentifier(StorageKey("errors_ro")))],
+            query_id="no_pardon_query",
+        )
+    assert stats["quota_allowance"]["summary"]["is_rejected"] is True

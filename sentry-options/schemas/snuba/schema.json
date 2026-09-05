@@ -264,7 +264,7 @@
     "storage_routing.enable_get_cluster_loadinfo": {
       "type": "boolean",
       "default": false,
-      "description": "When true, the storage routing strategy fetches ClickHouse cluster load info to inform routing decisions."
+      "description": "When true, the storage routing strategy fetches ClickHouse cluster load info to inform routing decisions. Also the kill switch for idle allocation-policy pardons."
     },
     "retention_days": {
       "type": "object",
