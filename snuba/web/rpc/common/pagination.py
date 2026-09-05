@@ -2,6 +2,9 @@
 This file contains functionality to encode and decode custom page tokens
 """
 
+from collections.abc import Mapping
+from typing import Final
+
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemColumnValues,
@@ -15,14 +18,56 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     TraceItemFilter,
 )
 
+from snuba.protos.common import NORMALIZED_COLUMNS_EAP_ITEMS
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal
-from snuba.query.expressions import Expression
+from snuba.query.expressions import Expression, OptionalScalarType
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     semver_sort_key,
 )
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import TimeWindow
+
+# Value an absent map-backed attribute sorts as, per attribute type. The page boundary
+# compares the ORDER BY values as a tuple, and a NULL element makes the whole comparison
+# NULL, which drops the row instead of paginating past it. A stored value equal to the
+# sentinel ties with an absent one, which is harmless: the trailing `sentry.item_id`
+# element breaks the tie.
+_NULL_ORDERING_SENTINELS: Final[Mapping[AttributeKey.Type.ValueType, OptionalScalarType]] = {
+    AttributeKey.Type.TYPE_BOOLEAN: False,
+    AttributeKey.Type.TYPE_DOUBLE: 0.0,
+    AttributeKey.Type.TYPE_FLOAT: 0.0,
+    AttributeKey.Type.TYPE_INT: 0,
+    AttributeKey.Type.TYPE_STRING: "",
+}
+
+
+def null_safe_ordering_expression(
+    expression: Expression, attr_type: AttributeKey.Type.ValueType
+) -> Expression:
+    """Make an absent map-backed attribute sort as its type's zero value.
+
+    Apply this to the ORDER BY and to the page boundary of the same column, or the two
+    disagree on where absent keys sort and pagination skips or repeats rows. A type with no
+    sentinel is returned unchanged, which covers the columns that need none: normalized
+    columns and `timestamp` (never NULL, and their page token carries no type), and arrays
+    (rejected from ORDER BY upstream).
+    """
+    if attr_type not in _NULL_ORDERING_SENTINELS:
+        return expression
+    return f.ifNull(expression, literal(_NULL_ORDERING_SENTINELS[attr_type]))
+
+
+def _comparison_value_expression(comparison_filter: ComparisonFilter) -> Expression:
+    value = comparison_filter.value
+    if value.is_null or value.WhichOneof("value") == "val_null":
+        if comparison_filter.key.type not in _NULL_ORDERING_SENTINELS:
+            raise BadSnubaRPCRequestException(
+                f"page token column {comparison_filter.key.name} is null and has no type to sort it by"
+            )
+        return literal(_NULL_ORDERING_SENTINELS[comparison_filter.key.type])
+    return literal(getattr(value, str(value.WhichOneof("value"))))
 
 
 class FlexibleTimeWindowPageWithFilters:
@@ -79,6 +124,9 @@ class FlexibleTimeWindowPageWithFilters:
         # Parallel to column_names: True when that column's ORDER BY used
         # SORT_SEMVER, so the boundary comparison must use the semver key too.
         column_is_semver: list[bool] = []
+        # Parallel to column_names: the attribute type, which tells the boundary
+        # comparison how a map-backed column with an absent key was sorted.
+        column_types: list[AttributeKey.Type.ValueType] = []
 
         for filter in self.page_token.filter_offset.and_filter.filters:
             if not filter.HasField("comparison_filter"):
@@ -107,33 +155,30 @@ class FlexibleTimeWindowPageWithFilters:
                     )
                 column_names.append("timestamp")
                 column_is_semver.append(False)
+                column_types.append(AttributeKey.Type.TYPE_UNSPECIFIED)
             else:
                 # strip the matching prefix (and the dot) to recover the alias
                 prefix = self._SEMVER_FILTER_PREFIX if is_semver else self._FILTER_PREFIX
                 column_names.append(key_name[len(prefix) + 1 :])
                 column_is_semver.append(is_semver)
-                column_values.append(
-                    literal(
-                        getattr(
-                            filter.comparison_filter.value,
-                            str(filter.comparison_filter.value.WhichOneof("value")),
-                        )
-                    )
-                )
+                column_types.append(filter.comparison_filter.key.type)
+                column_values.append(_comparison_value_expression(filter.comparison_filter))
         # Assumes everything in the ORDER BY is ordered by DESC
         if column_names:
             col_exprs = []
             val_exprs = []
-            for c_name, c_value, is_semver in zip(
-                column_names, column_values, column_is_semver, strict=True
+            for c_name, c_value, is_semver, c_type in zip(
+                column_names, column_values, column_is_semver, column_types, strict=True
             ):
+                # An absent map-backed key sorts as its type's zero value, as in ORDER BY.
+                col_expr = null_safe_ordering_expression(column(c_name), c_type)
                 # For SORT_SEMVER columns, apply the same semver key on both sides
                 # so the page-boundary comparison uses the same ordering as ORDER BY.
                 if is_semver:
-                    col_exprs.append(semver_sort_key(column(c_name)))
+                    col_exprs.append(semver_sort_key(col_expr))
                     val_exprs.append(semver_sort_key(c_value))
                 else:
-                    col_exprs.append(column(c_name))
+                    col_exprs.append(col_expr)
                     val_exprs.append(c_value)
             res = f.less(f.tuple(*col_exprs), f.tuple(*val_exprs))
             return res
@@ -234,11 +279,24 @@ class FlexibleTimeWindowPageWithFilters:
                         )
                         prefix = cls._SEMVER_FILTER_PREFIX if is_semver else cls._FILTER_PREFIX
 
+                        # Only a map-backed attribute reads as NULL when its key is absent,
+                        # and `last_result_value` is then null; get_filters uses this type to
+                        # sort it the way ORDER BY did. A normalized column is never NULL and
+                        # its ORDER BY compares the raw column, so leaving the type unset is
+                        # what keeps the two sides in step.
+                        null_sort_type = (
+                            selected_key.type
+                            if selected_key is not None
+                            and selected_key.name not in NORMALIZED_COLUMNS_EAP_ITEMS
+                            else AttributeKey.Type.TYPE_UNSPECIFIED
+                        )
+
                         filters.append(
                             TraceItemFilter(
                                 comparison_filter=ComparisonFilter(
                                     key=AttributeKey(
                                         name=f"{prefix}.{attribute_expression.alias}",
+                                        type=null_sort_type,
                                     ),
                                     op=ComparisonFilter.OP_LESS_THAN,
                                     value=last_result_value,
