@@ -20,6 +20,7 @@ class ClickhouseClusterConfig:
     password: str
     database: str
     secure: bool
+    verify: bool | None
 
 
 @dataclass(frozen=True)
@@ -283,6 +284,7 @@ def resolve_storage_config(storage_name: str, storage: WritableTableStorage) -> 
         password=password,
         secure=cluster.get_secure(),
         database=cluster.get_database(),
+        verify=cluster.get_verify(),
     )
 
     processor = storage.get_table_writer().get_stream_loader().get_processor()

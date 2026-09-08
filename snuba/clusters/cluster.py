@@ -305,7 +305,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         database: str,
         secure: bool,
         ca_certs: str | None,
-        verify: bool | None,
+        verify: bool | str | None,
         storage_sets: set[str],
         single_node: bool,
         # The cluster name and distributed cluster name only apply if single_node is set to False
@@ -371,7 +371,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
             self.__database,
             self.__secure,
             self.__ca_certs,
-            self.__verify,
+            self.get_verify(),
         )
 
     def get_deleter(self) -> Reader:
@@ -418,7 +418,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
             password=self.__password,
             secure=self.__secure,
             ca_certs=self.__ca_certs,
-            verify=self.__verify,
+            verify=self.get_verify(),
             metrics=metrics,
             statement=insert_statement.with_database(self.__database),
             encoding=encoding,
@@ -504,7 +504,12 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         return self.__ca_certs
 
     def get_verify(self) -> bool | None:
-        return self.__verify
+        # CLICKHOUSE_VERIFY arrives as a raw env string; coerce once here so
+        # every client sees the same value. Unset (None) stays None.
+        verify = self.__verify
+        if isinstance(verify, str):
+            return verify.strip().lower() not in ("false", "0")
+        return verify
 
 
 CLUSTERS = [
@@ -517,7 +522,7 @@ CLUSTERS = [
         database=cluster.get("database", "default"),
         secure=cluster.get("secure", False),
         ca_certs=cluster.get("ca_certs", None),
-        verify=cluster.get("verify", False),
+        verify=cluster.get("verify"),
         storage_sets=cluster["storage_sets"],
         single_node=cluster["single_node"],
         cluster_name=cluster.get("cluster_name", None),
@@ -558,7 +563,7 @@ def _build_sliced_cluster(cluster: Mapping[str, Any]) -> ClickhouseCluster:
         database=cluster.get("database", "default"),
         secure=cluster.get("secure", False),
         ca_certs=cluster.get("ca_certs", None),
-        verify=cluster.get("verify", False),
+        verify=cluster.get("verify"),
         storage_sets={storage_tuple[0] for storage_tuple in cluster["storage_set_slices"]},
         single_node=cluster["single_node"],
         cluster_name=cluster.get("cluster_name", None),
