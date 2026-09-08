@@ -32,6 +32,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba import settings
+from snuba.clickhouse.error_codes import ErrorCodes
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.protos.common import (
@@ -53,6 +54,7 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.logical import Query
+from snuba.web import QueryException
 from snuba.web.rpc.common.common import (
     USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION,
     _any_attribute_filter_to_expression,
@@ -238,6 +240,108 @@ class TestTraceItemFiltersArrayLike:
         with pytest.raises(
             BadSnubaRPCRequestException,
             match="NOT LIKE comparison is only supported on string and array keys",
+        ):
+            _span_expression(item_filter)
+
+
+class TestTraceItemFiltersRegexp:
+    """REGEXP mirrors LIKE: string and string-array keys, search-anywhere CH match(),
+    ignore_case on the existing ComparisonFilter field (not a new proto flag).
+    """
+
+    def _make_regexp_filter(
+        self,
+        attr_name: str,
+        attr_type: AttributeKey.Type.ValueType,
+        pattern: str,
+        ignore_case: bool = False,
+        value: AttributeValue | None = None,
+    ) -> TraceItemFilter:
+        return TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(type=attr_type, name=attr_name),
+                op=ComparisonFilter.OP_REGEXP,
+                value=value if value is not None else AttributeValue(val_str=pattern),
+                ignore_case=ignore_case,
+            )
+        )
+
+    def test_regexp_on_string_key(self) -> None:
+        item_filter = self._make_regexp_filter(
+            "sentry.span.op", AttributeKey.Type.TYPE_STRING, "db\\..*"
+        )
+        result = _span_expression(item_filter)
+        assert "match" in _collect_function_names(result)
+        assert "like" not in _collect_function_names(result)
+
+    def test_regexp_on_string_key_ignore_case(self) -> None:
+        case_sensitive = _span_expression(
+            self._make_regexp_filter("sentry.span.op", AttributeKey.Type.TYPE_STRING, "DB\\..*")
+        )
+        ignore_case = _span_expression(
+            self._make_regexp_filter(
+                "sentry.span.op",
+                AttributeKey.Type.TYPE_STRING,
+                "DB\\..*",
+                ignore_case=True,
+            )
+        )
+        assert "match" in _collect_function_names(ignore_case)
+        assert ignore_case != case_sensitive
+
+    def test_regexp_on_array_key(self) -> None:
+        item_filter = self._make_regexp_filter("my_tags", AttributeKey.Type.TYPE_ARRAY, "err.*")
+        result = _span_expression(item_filter)
+        assert isinstance(result, FunctionCall)
+        assert result.function_name == "arrayExists"
+        lam = result.parameters[0]
+        assert isinstance(lam, Lambda)
+        assert lam.parameters == ("x",)
+        assert isinstance(lam.transformation, FunctionCall)
+        assert lam.transformation.function_name == "match"
+
+    def test_regexp_on_array_key_ignore_case(self) -> None:
+        item_filter = self._make_regexp_filter(
+            "my_tags", AttributeKey.Type.TYPE_ARRAY, "err.*", ignore_case=True
+        )
+        result = _span_expression(item_filter)
+        assert isinstance(result, FunctionCall)
+        assert result.function_name == "arrayExists"
+        lam = result.parameters[0]
+        assert isinstance(lam, Lambda)
+        assert isinstance(lam.transformation, FunctionCall)
+        assert lam.transformation.function_name == "match"
+        case_sensitive = _span_expression(
+            self._make_regexp_filter("my_tags", AttributeKey.Type.TYPE_ARRAY, "err.*")
+        )
+        assert result != case_sensitive
+
+    def test_regexp_on_array_key_non_string_value_raises(self) -> None:
+        item_filter = self._make_regexp_filter(
+            "my_tags",
+            AttributeKey.Type.TYPE_ARRAY,
+            "",
+            value=AttributeValue(val_int=42),
+        )
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="REGEXP on array keys requires a string pattern",
+        ):
+            _span_expression(item_filter)
+
+    def test_regexp_on_int_key_raises(self) -> None:
+        item_filter = self._make_regexp_filter("my_int", AttributeKey.Type.TYPE_INT, ".*")
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="REGEXP comparison is only supported on string and array keys",
+        ):
+            _span_expression(item_filter)
+
+    def test_regexp_empty_pattern_raises(self) -> None:
+        item_filter = self._make_regexp_filter("sentry.span.op", AttributeKey.Type.TYPE_STRING, "")
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="REGEXP pattern must be a non-empty string",
         ):
             _span_expression(item_filter)
 
@@ -979,6 +1083,18 @@ class TestAnalyzerSafeFilters:
         ilike = self._build(ComparisonFilter.OP_NOT_LIKE, value="%ok%", ignore_case=True)
         assert "ilike" in self._fn_names(ilike) and "notILike" not in self._fn_names(ilike)
 
+    def test_regexp_keeps_guard(self) -> None:
+        expr = self._build(ComparisonFilter.OP_REGEXP, value="ok.*")
+        self._assert_clean(expr)
+        assert isinstance(expr, FunctionCall) and expr.function_name == "and"
+        assert {"and", "has", "mapKeys", "match", "arrayElement"} <= self._fn_names(expr)
+
+    def test_regexp_ignore_case_differs_from_case_sensitive(self) -> None:
+        sensitive = self._build(ComparisonFilter.OP_REGEXP, value="OK.*")
+        ignore_case = self._build(ComparisonFilter.OP_REGEXP, value="OK.*", ignore_case=True)
+        assert "match" in self._fn_names(ignore_case)
+        assert ignore_case != sensitive
+
 
 class TestBooleanAttributeFilters:
     """Booleans are map-backed, so they need an existence guard — otherwise a missing key
@@ -1198,7 +1314,29 @@ def test_convert_rpc_exception_to_proto_packs_details() -> None:
     assert unpacked == routing_decision_log_dict
 
 
+def test_convert_rpc_exception_cannot_compile_regexp_is_400() -> None:
+    exc = QueryException.from_args(
+        "ClickhouseError",
+        "Code: 36. Cannot compile regexp",
+        extra={
+            "stats": {"error_code": ErrorCodes.CANNOT_COMPILE_REGEXP},
+            "sql": "SELECT 1",
+            "experiments": {},
+        },
+    )
+    proto = convert_rpc_exception_to_proto(exc)
+    assert proto.code == 400
+
+
 class TestAnyAttributeFilter:
+    def test_regexp_on_non_string_value_raises(self) -> None:
+        filt = AnyAttributeFilter(
+            op=AnyAttributeFilter.OP_REGEXP,
+            value=AttributeValue(val_int=42),
+        )
+        with pytest.raises(BadSnubaRPCRequestException, match="REGEXP"):
+            _any_attribute_filter_to_expression(filt)
+
     def test_like_on_non_string_value_raises(self) -> None:
         filt = AnyAttributeFilter(
             op=AnyAttributeFilter.OP_LIKE,
