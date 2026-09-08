@@ -855,6 +855,7 @@ def _typed_array_like_expression(
 
 
 def _regexp_match(value: Expression, pattern: Expression, ignore_case: bool) -> FunctionCall:
+    # Needs ClickHouse > 26.8 for matchCaseInsensitive; lower() is a stand-in until then.
     if ignore_case:
         return f.match(f.lower(value), f.lower(pattern))
     return f.match(value, pattern)

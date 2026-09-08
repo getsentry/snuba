@@ -29,7 +29,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ExistsFilter,
     TraceItemFilter,
 )
-from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
+from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue
 
 from snuba import settings
 from snuba.clickhouse.error_codes import ErrorCodes
@@ -240,108 +240,6 @@ class TestTraceItemFiltersArrayLike:
         with pytest.raises(
             BadSnubaRPCRequestException,
             match="NOT LIKE comparison is only supported on string and array keys",
-        ):
-            _span_expression(item_filter)
-
-
-class TestTraceItemFiltersRegexp:
-    """REGEXP mirrors LIKE: string and string-array keys, search-anywhere CH match(),
-    ignore_case on the existing ComparisonFilter field (not a new proto flag).
-    """
-
-    def _make_regexp_filter(
-        self,
-        attr_name: str,
-        attr_type: AttributeKey.Type.ValueType,
-        pattern: str,
-        ignore_case: bool = False,
-        value: AttributeValue | None = None,
-    ) -> TraceItemFilter:
-        return TraceItemFilter(
-            comparison_filter=ComparisonFilter(
-                key=AttributeKey(type=attr_type, name=attr_name),
-                op=ComparisonFilter.OP_REGEXP,
-                value=value if value is not None else AttributeValue(val_str=pattern),
-                ignore_case=ignore_case,
-            )
-        )
-
-    def test_regexp_on_string_key(self) -> None:
-        item_filter = self._make_regexp_filter(
-            "sentry.span.op", AttributeKey.Type.TYPE_STRING, "db\\..*"
-        )
-        result = _span_expression(item_filter)
-        assert "match" in _collect_function_names(result)
-        assert "like" not in _collect_function_names(result)
-
-    def test_regexp_on_string_key_ignore_case(self) -> None:
-        case_sensitive = _span_expression(
-            self._make_regexp_filter("sentry.span.op", AttributeKey.Type.TYPE_STRING, "DB\\..*")
-        )
-        ignore_case = _span_expression(
-            self._make_regexp_filter(
-                "sentry.span.op",
-                AttributeKey.Type.TYPE_STRING,
-                "DB\\..*",
-                ignore_case=True,
-            )
-        )
-        assert "match" in _collect_function_names(ignore_case)
-        assert ignore_case != case_sensitive
-
-    def test_regexp_on_array_key(self) -> None:
-        item_filter = self._make_regexp_filter("my_tags", AttributeKey.Type.TYPE_ARRAY, "err.*")
-        result = _span_expression(item_filter)
-        assert isinstance(result, FunctionCall)
-        assert result.function_name == "arrayExists"
-        lam = result.parameters[0]
-        assert isinstance(lam, Lambda)
-        assert lam.parameters == ("x",)
-        assert isinstance(lam.transformation, FunctionCall)
-        assert lam.transformation.function_name == "match"
-
-    def test_regexp_on_array_key_ignore_case(self) -> None:
-        item_filter = self._make_regexp_filter(
-            "my_tags", AttributeKey.Type.TYPE_ARRAY, "err.*", ignore_case=True
-        )
-        result = _span_expression(item_filter)
-        assert isinstance(result, FunctionCall)
-        assert result.function_name == "arrayExists"
-        lam = result.parameters[0]
-        assert isinstance(lam, Lambda)
-        assert isinstance(lam.transformation, FunctionCall)
-        assert lam.transformation.function_name == "match"
-        case_sensitive = _span_expression(
-            self._make_regexp_filter("my_tags", AttributeKey.Type.TYPE_ARRAY, "err.*")
-        )
-        assert result != case_sensitive
-
-    def test_regexp_on_array_key_non_string_value_raises(self) -> None:
-        item_filter = self._make_regexp_filter(
-            "my_tags",
-            AttributeKey.Type.TYPE_ARRAY,
-            "",
-            value=AttributeValue(val_int=42),
-        )
-        with pytest.raises(
-            BadSnubaRPCRequestException,
-            match="REGEXP on array keys requires a string pattern",
-        ):
-            _span_expression(item_filter)
-
-    def test_regexp_on_int_key_raises(self) -> None:
-        item_filter = self._make_regexp_filter("my_int", AttributeKey.Type.TYPE_INT, ".*")
-        with pytest.raises(
-            BadSnubaRPCRequestException,
-            match="REGEXP comparison is only supported on string and array keys",
-        ):
-            _span_expression(item_filter)
-
-    def test_regexp_empty_pattern_raises(self) -> None:
-        item_filter = self._make_regexp_filter("sentry.span.op", AttributeKey.Type.TYPE_STRING, "")
-        with pytest.raises(
-            BadSnubaRPCRequestException,
-            match="REGEXP pattern must be a non-empty string",
         ):
             _span_expression(item_filter)
 
@@ -1083,18 +981,6 @@ class TestAnalyzerSafeFilters:
         ilike = self._build(ComparisonFilter.OP_NOT_LIKE, value="%ok%", ignore_case=True)
         assert "ilike" in self._fn_names(ilike) and "notILike" not in self._fn_names(ilike)
 
-    def test_regexp_keeps_guard(self) -> None:
-        expr = self._build(ComparisonFilter.OP_REGEXP, value="ok.*")
-        self._assert_clean(expr)
-        assert isinstance(expr, FunctionCall) and expr.function_name == "and"
-        assert {"and", "has", "mapKeys", "match", "arrayElement"} <= self._fn_names(expr)
-
-    def test_regexp_ignore_case_differs_from_case_sensitive(self) -> None:
-        sensitive = self._build(ComparisonFilter.OP_REGEXP, value="OK.*")
-        ignore_case = self._build(ComparisonFilter.OP_REGEXP, value="OK.*", ignore_case=True)
-        assert "match" in self._fn_names(ignore_case)
-        assert ignore_case != sensitive
-
 
 class TestBooleanAttributeFilters:
     """Booleans are map-backed, so they need an existence guard — otherwise a missing key
@@ -1329,14 +1215,6 @@ def test_convert_rpc_exception_cannot_compile_regexp_is_400() -> None:
 
 
 class TestAnyAttributeFilter:
-    def test_regexp_on_non_string_value_raises(self) -> None:
-        filt = AnyAttributeFilter(
-            op=AnyAttributeFilter.OP_REGEXP,
-            value=AttributeValue(val_int=42),
-        )
-        with pytest.raises(BadSnubaRPCRequestException, match="REGEXP"):
-            _any_attribute_filter_to_expression(filt)
-
     def test_like_on_non_string_value_raises(self) -> None:
         filt = AnyAttributeFilter(
             op=AnyAttributeFilter.OP_LIKE,
@@ -1585,6 +1463,53 @@ class TestAnyAttributeFilterIntegration:
         )
         assert colors == ["red"]
 
+    def test_regexp_finds_target_span(self) -> None:
+        colors = self._execute(
+            TraceItemFilter(
+                any_attribute_filter=AnyAttributeFilter(
+                    op=AnyAttributeFilter.OP_REGEXP,
+                    value=AttributeValue(val_str=self.UNIQUE_VALUE),
+                )
+            )
+        )
+        assert colors == ["red"]
+
+    def test_regexp_ignore_case(self) -> None:
+        colors = self._execute(
+            TraceItemFilter(
+                any_attribute_filter=AnyAttributeFilter(
+                    op=AnyAttributeFilter.OP_REGEXP,
+                    value=AttributeValue(val_str=self.UNIQUE_VALUE.upper()),
+                    ignore_case=True,
+                )
+            )
+        )
+        assert colors == ["red"]
+
+    def test_regexp_empty_pattern_raises(self) -> None:
+        with pytest.raises(
+            BadSnubaRPCRequestException, match="REGEXP pattern must be a non-empty string"
+        ):
+            self._execute(
+                TraceItemFilter(
+                    any_attribute_filter=AnyAttributeFilter(
+                        op=AnyAttributeFilter.OP_REGEXP,
+                        value=AttributeValue(val_str=""),
+                    )
+                )
+            )
+
+    def test_regexp_on_non_string_value_raises(self) -> None:
+        with pytest.raises(BadSnubaRPCRequestException, match="REGEXP"):
+            self._execute(
+                TraceItemFilter(
+                    any_attribute_filter=AnyAttributeFilter(
+                        op=AnyAttributeFilter.OP_REGEXP,
+                        value=AttributeValue(val_int=42),
+                    )
+                )
+            )
+
     def test_not_equals_excludes_target_span(self) -> None:
         """OP_NOT_EQUALS on the unique value should return the other two spans."""
         colors = self._execute(
@@ -1778,9 +1703,200 @@ class TestEmptyVsAbsentComparison:
         # absent key.
         assert self._execute(ComparisonFilter.OP_LIKE, value="%") == ["blue", "red"]
 
+    def test_regexp_dotstar_matches_present_not_absent(self) -> None:
+        assert self._execute(ComparisonFilter.OP_REGEXP, value=".*") == ["blue", "red"]
+
     def test_not_like_wildcard_matches_only_absent(self) -> None:
         # Present rows all `like '%'`, so only the absent key survives NOT LIKE.
         assert self._execute(ComparisonFilter.OP_NOT_LIKE, value="%") == ["green"]
+
+
+@pytest.mark.eap
+@pytest.mark.redis_db
+class TestRegexpComparisonFilterIntegration:
+    """Ingest spans, then REGEXP-filter them through EndpointTraceItemTable."""
+
+    ATTR = "test.regexp.haystack"
+    ARRAY_ATTR = "test.regexp.tags"
+    BATCH_ATTR = "test.regexp.batch"
+
+    @pytest.fixture(autouse=True)
+    def setup(self, eap: None, redis_db: None) -> None:
+        self.batch = f"batch-{uuid.uuid4().hex}"
+        self.base_time = datetime.now(tz=UTC).replace(
+            minute=0, second=0, microsecond=0
+        ) - timedelta(hours=1)
+        self.start_ts = Timestamp(seconds=int((self.base_time - timedelta(hours=1)).timestamp()))
+        self.end_ts = Timestamp(seconds=int((self.base_time + timedelta(hours=2)).timestamp()))
+        batch = AnyValue(string_value=self.batch)
+        messages = [
+            gen_item_message(
+                start_timestamp=self.base_time,
+                attributes={
+                    self.BATCH_ATTR: batch,
+                    self.ATTR: AnyValue(string_value="db.query"),
+                    self.ARRAY_ATTR: AnyValue(
+                        array_value=ArrayValue(
+                            values=[
+                                AnyValue(string_value="timeout"),
+                                AnyValue(string_value="retry"),
+                            ]
+                        )
+                    ),
+                    "color": AnyValue(string_value="red"),
+                },
+            ),
+            gen_item_message(
+                start_timestamp=self.base_time + timedelta(minutes=1),
+                attributes={
+                    self.BATCH_ATTR: batch,
+                    self.ATTR: AnyValue(string_value="http.server"),
+                    self.ARRAY_ATTR: AnyValue(
+                        array_value=ArrayValue(values=[AnyValue(string_value="ok")])
+                    ),
+                    "color": AnyValue(string_value="blue"),
+                },
+            ),
+        ]
+        storage = get_writable_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(storage, messages)
+
+    def _execute(
+        self,
+        filt: TraceItemFilter,
+    ) -> list[str]:
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="test",
+                referrer="test",
+                start_timestamp=self.start_ts,
+                end_timestamp=self.end_ts,
+                request_id=uuid.uuid4().hex,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                and_filter=AndFilter(
+                    filters=[
+                        TraceItemFilter(
+                            comparison_filter=ComparisonFilter(
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_STRING, name=self.BATCH_ATTR
+                                ),
+                                op=ComparisonFilter.OP_EQUALS,
+                                value=AttributeValue(val_str=self.batch),
+                            )
+                        ),
+                        filt,
+                    ]
+                )
+            ),
+            columns=[Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color"))],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color"))
+                )
+            ],
+            limit=100,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        if not response.column_values:
+            return []
+        return sorted(r.val_str for r in response.column_values[0].results)
+
+    def test_regexp_on_string_key(self) -> None:
+        assert self._execute(
+            TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name=self.ATTR),
+                    op=ComparisonFilter.OP_REGEXP,
+                    value=AttributeValue(val_str=r"db\..*"),
+                )
+            )
+        ) == ["red"]
+
+    def test_regexp_on_string_key_ignore_case(self) -> None:
+        assert self._execute(
+            TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name=self.ATTR),
+                    op=ComparisonFilter.OP_REGEXP,
+                    value=AttributeValue(val_str=r"DB\..*"),
+                    ignore_case=True,
+                )
+            )
+        ) == ["red"]
+
+    def test_regexp_on_array_key(self) -> None:
+        assert self._execute(
+            TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name=self.ARRAY_ATTR),
+                    op=ComparisonFilter.OP_REGEXP,
+                    value=AttributeValue(val_str="time.*"),
+                )
+            )
+        ) == ["red"]
+
+    def test_regexp_on_array_key_ignore_case(self) -> None:
+        assert self._execute(
+            TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name=self.ARRAY_ATTR),
+                    op=ComparisonFilter.OP_REGEXP,
+                    value=AttributeValue(val_str="TIME.*"),
+                    ignore_case=True,
+                )
+            )
+        ) == ["red"]
+
+    def test_regexp_empty_pattern_raises(self) -> None:
+        with pytest.raises(
+            BadSnubaRPCRequestException, match="REGEXP pattern must be a non-empty string"
+        ):
+            self._execute(
+                TraceItemFilter(
+                    comparison_filter=ComparisonFilter(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name=self.ATTR),
+                        op=ComparisonFilter.OP_REGEXP,
+                        value=AttributeValue(val_str=""),
+                    )
+                )
+            )
+
+    def test_regexp_non_string_pattern_raises(self) -> None:
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="REGEXP on array keys requires a string pattern",
+        ):
+            self._execute(
+                TraceItemFilter(
+                    comparison_filter=ComparisonFilter(
+                        key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name=self.ARRAY_ATTR),
+                        op=ComparisonFilter.OP_REGEXP,
+                        value=AttributeValue(val_int=42),
+                    )
+                )
+            )
+
+    def test_regexp_pattern_is_not_interpolated_into_sql(self) -> None:
+        # If PATTERN were concatenated into match(col, 'PATTERN'), `' --` closes
+        # the SQL string and comments out the rest of the statement (including
+        # match's closing paren) — a syntax-error / DoS injection. A dump-all
+        # payload like `') OR 1 --` needs a raw `)`, which RE2 rejects as an
+        # unmatched paren, so that vector isn't available on a bound pattern.
+        # Bound, this is just the regexp `db.query|' --`, which still matches
+        # the seeded row (proves ingest ran). Interpolated, the query fails.
+        assert self._execute(
+            TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name=self.ATTR),
+                    op=ComparisonFilter.OP_REGEXP,
+                    value=AttributeValue(val_str="db.query|' --"),
+                )
+            )
+        ) == ["red"]
 
 
 class TestSemverSortKey:
