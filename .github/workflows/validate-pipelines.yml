@@ -50,6 +50,7 @@ jobs:
                 id_token_include_email: true
             - uses: getsentry/action-gocd-jsonnet@2a32414fa9e58a46d1afea9cbfa7b77a928678e2 # v1.1.1
               with:
+                go-version: "1.25"
                 jb-install: true
                 jsonnet-dir: gocd/templates
                 generated-dir: gocd/generated-pipelines

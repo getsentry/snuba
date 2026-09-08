@@ -99,6 +99,9 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
         let eap_items_emit_received_at = processor_name == "EAPItemsProcessor"
             && crate::processors::eap_items::emit_received_at();
 
+        let validate_schema_enabled =
+            crate::options::validate_schema_enabled(&self.storage_config.name);
+
         // RowBinary storages: the processor swap (JSON → RowBinary sibling) and
         // the column list the RowBinary writer needs, both used below.
         let (process_fn_override, insert_columns): (
@@ -258,6 +261,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                     func,
                     &self.logical_topic_name,
                     self.enforce_schema,
+                    validate_schema_enabled,
                     &self.processing_concurrency,
                     config::ProcessorConfig {
                         env_config: self.env_config.clone(),
@@ -277,6 +281,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                     func,
                     &self.logical_topic_name,
                     self.enforce_schema,
+                    validate_schema_enabled,
                     &self.processing_concurrency,
                     config::ProcessorConfig {
                         env_config: self.env_config.clone(),
@@ -293,7 +298,17 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                 panic!("Consumer with replacements cannot be run in hybrid-mode");
             }
             _ => {
-                let schema = get_schema(&self.logical_topic_name, self.enforce_schema);
+                // Same rule `make_rust_processor` applies on the Rust path:
+                // `enforce_schema` implies validation, so the option can only
+                // turn it off for consumers not running with --enforce-schema.
+                let validate_schema = validate_schema_enabled || self.enforce_schema;
+
+                // Skip loading the schema when we won't validate against it.
+                let schema = if validate_schema {
+                    get_schema(&self.logical_topic_name, self.enforce_schema)
+                } else {
+                    None
+                };
 
                 Box::new(RunTaskInThreads::new(
                     PythonTransformStep::new(
@@ -306,6 +321,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                     SchemaValidator {
                         schema,
                         enforce_schema: self.enforce_schema,
+                        validate_schema,
                     },
                     &self.processing_concurrency,
                     Some("validate_schema"),
@@ -348,6 +364,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
 struct SchemaValidator {
     schema: Option<Arc<Schema>>,
     enforce_schema: bool,
+    validate_schema: bool,
 }
 
 impl SchemaValidator {
@@ -355,7 +372,9 @@ impl SchemaValidator {
         self,
         message: Message<KafkaPayload>,
     ) -> Result<Message<KafkaPayload>, RunTaskError<anyhow::Error>> {
-        validate_schema(&message, &self.schema, self.enforce_schema)?;
+        if self.validate_schema {
+            validate_schema(&message, &self.schema, self.enforce_schema)?;
+        }
         Ok(message)
     }
 }

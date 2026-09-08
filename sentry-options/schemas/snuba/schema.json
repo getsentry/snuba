@@ -123,6 +123,14 @@
       "default": {},
       "description": "Dict mapping storage name to a grace period in minutes; eap-items messages from before the current partition older than this are routed to the DLQ. Storages with no entry have no grace-period dropping. Migrated from per-storage runtime config eap_items_dlq_grace_period_min:<storage>."
     },
+    "validate_schema": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "boolean"
+      },
+      "default": {},
+      "description": "Dict mapping storage name to whether that storage's consumer validates every message against its kafka schema before processing it. Storages with no entry default to true (validation on); false skips validation for that storage. Consumers running with --enforce-schema always validate and ignore a false here. Read once when the consumer builds its processing strategies, so a change requires a consumer restart (or a rebalance) to take effect."
+    },
     "eap_items_emit_received_at": {
       "type": "boolean",
       "default": false,
