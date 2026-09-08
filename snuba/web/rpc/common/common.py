@@ -878,6 +878,44 @@ def _require_nonempty_regexp_pattern(v: AttributeValue) -> None:
         raise BadSnubaRPCRequestException("REGEXP pattern must be a non-empty string")
 
 
+def _any_attribute_op_expression(
+    filt: AnyAttributeFilter,
+    effective_op: int,
+    x: Argument,
+    v: AttributeValue,
+    v_expression: Expression,
+    value_type: str,
+    membership_as_has: bool,
+) -> Expression:
+    match effective_op:
+        case AnyAttributeFilter.OP_EQUALS:
+            if filt.ignore_case:
+                return f.equals(f.lower(x), f.lower(v_expression))
+            return f.equals(x, v_expression)
+        case AnyAttributeFilter.OP_LIKE:
+            if filt.ignore_case:
+                return f.ilike(x, v_expression)
+            return f.like(x, v_expression)
+        case AnyAttributeFilter.OP_REGEXP:
+            return _regexp_match(x, v_expression, filt.ignore_case)
+        case AnyAttributeFilter.OP_IN:
+            if filt.ignore_case:
+                if value_type == "val_str_array":
+                    lowered = [literal(s.lower()) for s in v.val_str_array.values]
+                else:
+                    lowered = [literal(elem.val_str.lower()) for elem in v.val_array.values]
+                return _in_or_has(
+                    f.lower(x),
+                    literals_array(None, lowered),
+                    as_has=membership_as_has,
+                )
+            return _in_or_has(x, v_expression, as_has=membership_as_has)
+        case _:
+            raise BadSnubaRPCRequestException(
+                f"Unsupported any_attribute_filter op: {AnyAttributeFilter.Op.Name(filt.op)}"
+            )
+
+
 def _any_attribute_filter_to_expression(
     filt: AnyAttributeFilter,
     *,
@@ -961,38 +999,9 @@ def _any_attribute_filter_to_expression(
 
     # 3. Build the lambda comparison
     x = Argument(None, "x")
-
-    match effective_op:
-        case AnyAttributeFilter.OP_EQUALS:
-            if filt.ignore_case:
-                comparison = f.equals(f.lower(x), f.lower(v_expression))
-            else:
-                comparison = f.equals(x, v_expression)
-        case AnyAttributeFilter.OP_LIKE:
-            if filt.ignore_case:
-                comparison = f.ilike(x, v_expression)
-            else:
-                comparison = f.like(x, v_expression)
-        case AnyAttributeFilter.OP_REGEXP:
-            comparison = _regexp_match(x, v_expression, filt.ignore_case)
-        case AnyAttributeFilter.OP_IN:
-            if filt.ignore_case:
-                if value_type == "val_str_array":
-                    lowered = [literal(s.lower()) for s in v.val_str_array.values]
-                else:
-                    lowered = [literal(elem.val_str.lower()) for elem in v.val_array.values]
-                comparison = _in_or_has(
-                    f.lower(x),
-                    literals_array(None, lowered),
-                    as_has=membership_as_has,
-                )
-            else:
-                comparison = _in_or_has(x, v_expression, as_has=membership_as_has)
-        case _:
-            raise BadSnubaRPCRequestException(
-                f"Unsupported any_attribute_filter op: {AnyAttributeFilter.Op.Name(filt.op)}"
-            )
-
+    comparison = _any_attribute_op_expression(
+        filt, effective_op, x, v, v_expression, value_type, membership_as_has
+    )
     lam = Lambda(None, ("x",), comparison)
 
     # 4. Build the arrayExists expression for the single matching column.
