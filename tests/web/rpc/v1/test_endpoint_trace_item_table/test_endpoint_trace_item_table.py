@@ -67,11 +67,13 @@ from snuba.query.dsl import column as snuba_column
 from snuba.query.expressions import Expression
 from snuba.web import QueryException
 from snuba.web.rpc import RPCEndpoint
+from snuba.web.rpc.common.aggregation import aggregation_to_expression
 from snuba.web.rpc.common.common import attribute_key_to_expression
 from snuba.web.rpc.common.exceptions import (
     BadSnubaRPCRequestException,
     QueryTimeoutException,
 )
+from snuba.web.rpc.common.trace_item_table import convert_results
 from snuba.web.rpc.proto_visitor import (
     AggregationToConditionalAggregationVisitor,
     TraceItemTableRequestWrapper,
@@ -84,8 +86,6 @@ from snuba.web.rpc.v1.endpoint_trace_item_table import (
     _validate_select_and_groupby,
     build_query,
 )
-from snuba.web.rpc.v1.resolvers.common.aggregation import aggregation_to_expression
-from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import (

@@ -17,13 +17,13 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.expressions import FunctionCall, Lambda, Literal
+from snuba.web.rpc.v1.co_occurring_attrs import (
+    CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION,
+)
 from snuba.web.rpc.v1.endpoint_trace_item_attribute_names import (
     UNSEARCHABLE_ATTRIBUTE_KEYS,
     EndpointTraceItemAttributeNames,
     get_co_occurring_attributes,
-)
-from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs import (
-    CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION,
 )
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
