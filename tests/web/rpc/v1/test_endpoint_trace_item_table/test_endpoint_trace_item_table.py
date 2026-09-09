@@ -4668,9 +4668,7 @@ class TestTraceItemTable(BaseApiTest):
                     label="avg(5.0)",
                     conditional_aggregation=AttributeConditionalAggregation(
                         aggregate=Function.FUNCTION_AVG,
-                        expression=AttributeKeyExpression(
-                            literal=Literal(val_double=5.0)
-                        ),
+                        expression=AttributeKeyExpression(literal=Literal(val_double=5.0)),
                         label="avg(5.0)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     ),
