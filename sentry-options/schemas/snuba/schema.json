@@ -251,6 +251,14 @@
       "default": false,
       "description": "When true, non-consistent EAP-items queries are routed to the read-only table replica."
     },
+    "eap_items_2_tiers": {
+      "type": "array",
+      "items": {
+        "type": "integer"
+      },
+      "default": [],
+      "description": "Sampling tiers served from the eap_items_2 tables instead of eap_items_1. 1 is the unsampled base table; 8, 64 and 512 are the downsample tiers. Any tier not listed keeps reading eap_items_1, and the empty default keeps every read on eap_items_1. Tiers are listed individually because eap_items_2's downsample tiers are populated after its base table, so tier 1 has to be able to cut over on its own; setting [1, 8, 64, 512] before the downsample partitions are attached would silently serve near-empty results. Unrecognised values are ignored."
+    },
     "use_cross_item_path_for_single_item_queries": {
       "type": "boolean",
       "default": false,
