@@ -115,11 +115,26 @@ def _attribute_key_expression_to_expression(
             )
             return func(left_expr, right_expr), left_keys + right_keys
         case "literal":
+            # add support for more than just val_double
             return literal(expr.literal.val_double), []
         case _:
             raise BadSnubaRPCRequestException(
                 "AttributeKeyExpression must have key, literal or formula set"
             )
+
+
+def _is_literal_only(expression: AttributeKeyExpression) -> bool:
+    match expression.WhichOneof("expression"):
+        case "literal":
+            return True
+        case "key":
+            return False
+        case "formula":
+            return _is_literal_only(expression.formula.left) and _is_literal_only(
+                expression.formula.right
+            )
+        case _:
+            return False
 
 
 def _resolve_field_and_existence(
@@ -138,14 +153,18 @@ def _resolve_field_and_existence(
             get_field_existence_expression(attribute_key_to_expression(k)) for k in keys
         ]
 
+        is_literal_only = _is_literal_only(aggregation.expression)
+
         existence: Expression
         if len(existence_checks) >= 2:
             existence = and_cond(*existence_checks)
         elif len(existence_checks) == 1:
             existence = existence_checks[0]
-        else:
+        elif len(existence_checks) == 0 and is_literal_only:
             # No existence checks are expected when only using literals
             existence = literal(True)
+        else:
+            raise RuntimeError("expected existence_checks to never be empty, but it is")
         return field, existence
     # Array keys resolve like scalars now: attribute_key_to_expression reads the typed
     # array column(s) natively and get_field_existence_expression maps that read to a
