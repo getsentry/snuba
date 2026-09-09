@@ -1,9 +1,5 @@
 import os
 
-from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
-    TimeSeriesRequest,
-    TimeSeriesResponse,
-)
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemTableRequest,
     TraceItemTableResponse,
@@ -17,12 +13,6 @@ class ResolverTraceItemTable(TraceItemDataResolver[TraceItemTableRequest, TraceI
     @classmethod
     def endpoint_name(cls) -> str:
         return "TraceItemTable"
-
-
-class ResolverTimeSeries(TraceItemDataResolver[TimeSeriesRequest, TimeSeriesResponse]):
-    @classmethod
-    def endpoint_name(cls) -> str:
-        return "TimeSeries"
 
 
 _TO_IMPORT = {}
