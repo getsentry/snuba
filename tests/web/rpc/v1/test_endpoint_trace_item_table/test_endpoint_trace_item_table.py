@@ -4653,6 +4653,12 @@ class TestTraceItemTable(BaseApiTest):
         """
         Tests avg(5.0), an expression made up of only a literal
         """
+        items_storage = get_writable_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            items_storage,
+            [gen_item_message(BASE_TIME)],
+        )
+
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
