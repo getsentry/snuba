@@ -1,3 +1,8 @@
+from collections.abc import Callable
+from typing import Any
+
+import pytest
+import sentry_sdk
 from arroyo.processing.strategies.run_task_with_multiprocessing import (
     ChildProcessTerminated,
 )
@@ -6,7 +11,8 @@ from redis.exceptions import RedisClusterException
 from redis.exceptions import TimeoutError as RedisTimeoutError
 from sentry_sdk.types import Event, Hint
 
-from snuba.environment import before_send
+from snuba import settings
+from snuba.environment import before_send, traces_sampler
 from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.web.rpc.common.exceptions import RPCAllocationPolicyException
 
@@ -144,3 +150,73 @@ def test_before_send_terminates_on_cyclic_cause_chain() -> None:
     except ValueError:
         err.__context__ = err
         assert before_send(event, _hint_for(err)) is event
+
+
+@pytest.fixture
+def sentry_environment(monkeypatch: pytest.MonkeyPatch) -> Callable[[str | None], None]:
+    def _set(environment: str | None) -> None:
+        monkeypatch.setattr(sentry_sdk.get_client(), "options", {"environment": environment})
+
+    _set(None)
+    return _set
+
+
+@pytest.fixture
+def sample_rates(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "SENTRY_TRACE_SAMPLE_RATE", 0.5)
+    monkeypatch.setattr(settings, "SENTRY_HEALTH_CHECK_TRACE_SAMPLE_RATE", 0.01)
+
+
+def _request(path: str, parent_sampled: bool | None = None) -> dict[str, Any]:
+    return {
+        "transaction_context": {"name": "generic WSGI request"},
+        "parent_sampled": parent_sampled,
+        "wsgi_environ": {"PATH_INFO": path},
+    }
+
+
+@pytest.mark.usefixtures("sentry_environment", "sample_rates")
+def test_traces_sampler_inherits_parent_decision() -> None:
+    assert traces_sampler(_request("/health", parent_sampled=True)) == 1.0
+    assert traces_sampler(_request("/query", parent_sampled=False)) == 0.0
+
+
+@pytest.mark.usefixtures("sentry_environment", "sample_rates")
+def test_traces_sampler_uses_base_rate_for_root_requests() -> None:
+    assert traces_sampler(_request("/query")) == 0.5
+    assert traces_sampler(_request("/rpc/EndpointTraceItemTable/v1")) == 0.5
+
+
+@pytest.mark.usefixtures("sentry_environment", "sample_rates")
+def test_traces_sampler_uses_health_check_rate() -> None:
+    assert traces_sampler(_request("/health")) == 0.01
+    assert traces_sampler(_request("/health/")) == 0.01
+    assert traces_sampler(_request("/health_envoy")) == 0.01
+    assert traces_sampler(_request("/healthy")) == 0.5
+
+
+@pytest.mark.usefixtures("sample_rates")
+def test_traces_sampler_uses_base_rate_without_wsgi_environ(
+    sentry_environment: Callable[[str | None], None],
+) -> None:
+    sentry_environment("us")
+    assert traces_sampler({"transaction_context": {"name": "[cli init] api"}}) == 0.5
+
+
+@pytest.mark.usefixtures("sample_rates")
+@pytest.mark.parametrize("environment", ["dev", "local-simon", "test", "qa-eu", "debug"])
+def test_traces_sampler_samples_everything_in_development_environments(
+    sentry_environment: Callable[[str | None], None], environment: str
+) -> None:
+    sentry_environment(environment)
+    assert traces_sampler(_request("/health")) == 1.0
+    assert traces_sampler(_request("/query")) == 1.0
+
+
+@pytest.mark.usefixtures("sample_rates")
+@pytest.mark.parametrize("environment", ["us", "de", "s4s2", "production"])
+def test_traces_sampler_keeps_rates_in_production_environments(
+    sentry_environment: Callable[[str | None], None], environment: str
+) -> None:
+    sentry_environment(environment)
+    assert traces_sampler(_request("/query")) == 0.5
