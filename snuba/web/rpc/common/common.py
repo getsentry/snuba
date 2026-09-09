@@ -567,7 +567,9 @@ _NEGATIVE_OPS = {
     AnyAttributeFilter.OP_NOT_IN,
 }
 
-_POSITIVE_OP_FOR_NEGATIVE: dict[int, int] = {
+_POSITIVE_OP_FOR_NEGATIVE: dict[
+    AnyAttributeFilter.Op.ValueType, AnyAttributeFilter.Op.ValueType
+] = {
     AnyAttributeFilter.OP_NOT_EQUALS: AnyAttributeFilter.OP_EQUALS,
     AnyAttributeFilter.OP_NOT_LIKE: AnyAttributeFilter.OP_LIKE,
     AnyAttributeFilter.OP_NOT_IN: AnyAttributeFilter.OP_IN,
@@ -861,58 +863,47 @@ def _regexp_match(value: Expression, pattern: Expression, ignore_case: bool) -> 
     return f.match(value, pattern)
 
 
-def _typed_array_regexp_expression(
-    attr_key: AttributeKey, pattern: Expression, ignore_case: bool
-) -> Expression:
-    """REGEXP membership against string array elements."""
-    array_expr = type_array_typed_column_native_array(attr_key, "attributes_array_string")
-    x = Argument(None, "x")
-    return f.arrayExists(
-        Lambda(None, ("x",), _regexp_match(x, pattern, ignore_case)),
-        array_expr,
-    )
-
-
-def _require_nonempty_regexp_pattern(v: AttributeValue) -> None:
-    if v.WhichOneof("value") == "val_str" and v.val_str == "":
+def _is_valid_regexp_pattern(v: AttributeValue) -> None:
+    if v.WhichOneof("value") != "val_str" or v.val_str == "":
         raise BadSnubaRPCRequestException("REGEXP pattern must be a non-empty string")
 
 
 def _any_attribute_op_expression(
-    filt: AnyAttributeFilter,
-    effective_op: int,
-    x: Argument,
-    v: AttributeValue,
-    v_expression: Expression,
-    value_type: str,
+    *,
+    filter_: AnyAttributeFilter,
+    op: AnyAttributeFilter.Op.ValueType,
+    element: Argument,
+    value_expr: Expression,
     membership_as_has: bool,
 ) -> Expression:
-    match effective_op:
+    match op:
         case AnyAttributeFilter.OP_EQUALS:
-            if filt.ignore_case:
-                return f.equals(f.lower(x), f.lower(v_expression))
-            return f.equals(x, v_expression)
+            if filter_.ignore_case:
+                return f.equals(f.lower(element), f.lower(value_expr))
+            return f.equals(element, value_expr)
         case AnyAttributeFilter.OP_LIKE:
-            if filt.ignore_case:
-                return f.ilike(x, v_expression)
-            return f.like(x, v_expression)
+            if filter_.ignore_case:
+                return f.ilike(element, value_expr)
+            return f.like(element, value_expr)
         case AnyAttributeFilter.OP_REGEXP:
-            return _regexp_match(x, v_expression, filt.ignore_case)
+            return _regexp_match(element, value_expr, filter_.ignore_case)
         case AnyAttributeFilter.OP_IN:
-            if filt.ignore_case:
-                if value_type == "val_str_array":
-                    lowered = [literal(s.lower()) for s in v.val_str_array.values]
+            if filter_.ignore_case:
+                if filter_.value.WhichOneof("value") == "val_str_array":
+                    lowered = [literal(s.lower()) for s in filter_.value.val_str_array.values]
                 else:
-                    lowered = [literal(elem.val_str.lower()) for elem in v.val_array.values]
+                    lowered = [
+                        literal(elem.val_str.lower()) for elem in filter_.value.val_array.values
+                    ]
                 return _in_or_has(
-                    f.lower(x),
+                    f.lower(element),
                     literals_array(None, lowered),
                     as_has=membership_as_has,
                 )
-            return _in_or_has(x, v_expression, as_has=membership_as_has)
+            return _in_or_has(element, value_expr, as_has=membership_as_has)
         case _:
             raise BadSnubaRPCRequestException(
-                f"Unsupported any_attribute_filter op: {AnyAttributeFilter.Op.Name(filt.op)}"
+                f"Unsupported any_attribute_filter op: {AnyAttributeFilter.Op.Name(filter_.op)}"
             )
 
 
@@ -989,7 +980,7 @@ def _any_attribute_filter_to_expression(
         raise BadSnubaRPCRequestException(f"{label} operations are only supported on string values")
 
     if effective_op == AnyAttributeFilter.OP_REGEXP:
-        _require_nonempty_regexp_pattern(v)
+        _is_valid_regexp_pattern(v)
 
     # ignore_case uses lower() which only works on string columns
     if filt.ignore_case and col_name not in _STRING_COLUMNS:
@@ -1000,7 +991,11 @@ def _any_attribute_filter_to_expression(
     # 3. Build the lambda comparison
     x = Argument(None, "x")
     comparison = _any_attribute_op_expression(
-        filt, effective_op, x, v, v_expression, value_type, membership_as_has
+        filter_=filt,
+        op=effective_op,
+        element=x,
+        value_expr=v_expression,
+        membership_as_has=membership_as_has,
     )
     lam = Lambda(None, ("x",), comparison)
 
@@ -1303,10 +1298,17 @@ def trace_item_filters_to_expression(
                 return and_cond(exists, comparison_function(value, v_expression))
             return comparison_function(k_expression, v_expression)
         if op == ComparisonFilter.OP_REGEXP:
-            _require_nonempty_regexp_pattern(v)
+            _is_valid_regexp_pattern(v)
             ignore_case = item_filter.comparison_filter.ignore_case
             if k.type in ARRAY_TYPES:
-                return _typed_array_regexp_expression(k, v_expression, ignore_case)
+                return f.arrayExists(
+                    Lambda(
+                        None,
+                        ("x",),
+                        _regexp_match(Argument(None, "x"), v_expression, ignore_case),
+                    ),
+                    type_array_typed_column_native_array(k, "attributes_array_string"),
+                )
             if k.type != AttributeKey.Type.TYPE_STRING:
                 raise BadSnubaRPCRequestException(
                     "the REGEXP comparison is only supported on string and array keys"

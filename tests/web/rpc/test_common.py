@@ -1867,15 +1867,14 @@ class TestRegexpComparisonFilterIntegration:
 
     def test_regexp_non_string_pattern_raises(self) -> None:
         with pytest.raises(
-            BadSnubaRPCRequestException,
-            match="REGEXP on array keys requires a string pattern",
+            BadSnubaRPCRequestException, match="REGEXP pattern must be a non-empty string"
         ):
             self._execute(
                 TraceItemFilter(
                     comparison_filter=ComparisonFilter(
-                        key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name=self.ARRAY_ATTR),
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name=self.ATTR),
                         op=ComparisonFilter.OP_REGEXP,
-                        value=AttributeValue(val_int=42),
+                        value=AttributeValue(val_double=1.5),
                     )
                 )
             )
