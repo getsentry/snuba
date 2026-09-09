@@ -62,6 +62,12 @@ from snuba.request import Request as SnubaRequest
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
+from snuba.web.rpc.common.aggregation import (
+    aggregation_to_expression,
+    get_average_sample_rate_column,
+    get_confidence_interval_column,
+    get_count_column,
+)
 from snuba.web.rpc.common.common import (
     add_existence_check_to_map_attribute_reads,
     attribute_key_to_expression,
@@ -76,11 +82,17 @@ from snuba.web.rpc.common.common import (
     use_sampling_factor,
     valid_sampling_factor_conditions,
 )
+from snuba.web.rpc.common.cross_item_queries import (
+    apply_cross_item_outer_query_settings,
+    get_trace_ids_sql_for_cross_item_query,
+    trace_id_in_subquery_condition,
+)
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.common.pagination import FlexibleTimeWindowPageWithFilters
+from snuba.web.rpc.common.trace_item_table import convert_results
 from snuba.web.rpc.proto_visitor import (
     AggregationToConditionalAggregationVisitor,
     ColumnWrapper,
@@ -91,18 +103,6 @@ from snuba.web.rpc.proto_visitor import (
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     TimeWindow,
 )
-from snuba.web.rpc.v1.resolvers.common.aggregation import (
-    aggregation_to_expression,
-    get_average_sample_rate_column,
-    get_confidence_interval_column,
-    get_count_column,
-)
-from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
-    apply_cross_item_outer_query_settings,
-    get_trace_ids_sql_for_cross_item_query,
-    trace_id_in_subquery_condition,
-)
-from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
 from snuba.web.rpc.v1.visitors.sparse_aggregate_attribute_transformer import (
     SparseAggregateAttributeTransformer,
 )

@@ -49,18 +49,18 @@ from snuba.web.rpc.common.common import (
     treeify_or_and_conditions,
     use_indexed_name_for_request,
 )
-from snuba.web.rpc.common.debug_info import (
-    extract_response_meta,
-    setup_trace_query_settings,
-)
-from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
+from snuba.web.rpc.common.cross_item_queries import (
     CROSS_ITEM_DISTRIBUTED_PRODUCT_MODE,
     convert_trace_filters_to_trace_item_filter_with_type,
     get_trace_ids_sql_for_cross_item_query,
     trace_id_in_subquery_condition,
     use_local_join_for_cross_item_queries,
 )
+from snuba.web.rpc.common.debug_info import (
+    extract_response_meta,
+    setup_trace_query_settings,
+)
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 _DEFAULT_ROW_LIMIT = 10_000
 _BUFFER_WINDOW = 2 * 3600  # 2 hours
