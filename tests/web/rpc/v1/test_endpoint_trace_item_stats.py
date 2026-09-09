@@ -214,9 +214,7 @@ class TestTraceItemAttributesStats(BaseApiTest):
         assert bucket_matches(duration_dist.buckets[1], "50", 18)
         assert bucket_matches(duration_dist.buckets[2], "10", 6)
 
-    @patch(
-        "snuba.web.rpc.v1.resolvers.R_eap_items.resolver_trace_item_stats.MAX_REQUEST_ATTRIBUTES", 2
-    )
+    @patch("snuba.web.rpc.v1.endpoint_trace_item_stats.MAX_REQUEST_ATTRIBUTES", 2)
     def test_allow_list_too_many_attributes(self) -> None:
         message = TraceItemStatsRequest(
             meta=RequestMeta(
@@ -298,7 +296,7 @@ class TestTraceItemAttributesStats(BaseApiTest):
         Once the proto is updated to include the last_seen field, this data will
         be populated in the response buckets.
         """
-        from snuba.web.rpc.v1.resolvers.R_eap_items.resolver_trace_item_stats import (
+        from snuba.web.rpc.v1.endpoint_trace_item_stats import (
             LAST_SEEN_LABEL,
             _build_attr_distribution_query,
         )
