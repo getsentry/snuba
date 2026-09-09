@@ -95,7 +95,33 @@ def _create_local_sql(new_table: str, source_table: str) -> str:
     )
 
 
-def _create_dist_sql(new_table: str, local_table: str) -> str:
+def _create_dist_sql(new_table: str, source_dist_table: str, local_table: str) -> str:
+    # Templated off the *v1 distributed* table, not off the v2 local table.
+    # Two reasons, both load-bearing:
+    #
+    # 1. Topology. Distributed tables are created ON CLUSTER over the query
+    #    nodes, which do not host the local tables -- those live on the
+    #    storage cluster. `AS eap_items_2_local` therefore fails on the query
+    #    nodes with "Table ... does not exist", even though the local table
+    #    was created successfully moments earlier on the storage nodes.
+    #    0056_eap_items_dist_ro templates off the dist tables for the same
+    #    reason.
+    #
+    # 2. Column defaults. eap_items_1_dist carries
+    #    `version DEFAULT toUnixTimestamp64Milli(now64(3))` while
+    #    eap_items_1_local carries `version DEFAULT 0`. A Distributed table
+    #    materialises its *own* defaults on insert and ships the result to
+    #    the shard, so copying the local table's `DEFAULT 0` here would make
+    #    every live write land with version 0 and be unable to supersede an
+    #    attached legacy row. Templating off the v1 dist table inherits the
+    #    right default for free.
+    #
+    # Note this means the downsample tier dist tables have no `version`
+    # column at all, mirroring their v1 counterparts, which only ever gained
+    # the column on `*_local`. That is intended: nothing inserts through the
+    # tier dist tables (the materialized views write to `*_local`) and
+    # nothing queries `version`.
+    #
     # The Distributed engine clause is assembled by hand rather than via
     # table_engines.Distributed, which asserts the cluster is multi-node.
     # forwards_ops() is evaluated even in single-node environments where the
@@ -106,7 +132,7 @@ def _create_dist_sql(new_table: str, local_table: str) -> str:
     database = cluster.get_database()
     return (
         f"CREATE TABLE IF NOT EXISTS {new_table}{_on_cluster_clause(distributed=True)} "
-        f"AS {local_table} "
+        f"AS {source_dist_table} "
         f"ENGINE = Distributed(`{cluster_name}`, {database}, {local_table}, {SHARDING_KEY})"
     )
 
@@ -131,7 +157,11 @@ class Migration(migration.ClickhouseNodeMigration):
             ops.append(
                 operations.RunSql(
                     storage_set=storage_set,
-                    statement=_create_dist_sql(f"{new_prefix}_dist", f"{new_prefix}_local"),
+                    statement=_create_dist_sql(
+                        f"{new_prefix}_dist",
+                        f"{source_prefix}_dist",
+                        f"{new_prefix}_local",
+                    ),
                     target=OperationTarget.DISTRIBUTED,
                 )
             )
