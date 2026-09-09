@@ -62,7 +62,7 @@ jobs:
           google_ar: true
           google_ar_image_name: us-docker.pkg.dev/sentryio/snuba-mr/image
           google_workload_identity_provider: projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool
-          google_service_account: gha-gcr-push@sac-prod-sa.iam.gserviceaccount.com
+          google_service_account: gha-snuba-push@sac-prod-sa.iam.gserviceaccount.com
 
   # Debug image — with busybox for troubleshooting
   build-debug-multiplatform:
