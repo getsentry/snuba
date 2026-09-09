@@ -216,7 +216,13 @@ RECORD_COGS = False
 
 # Sentry Options
 SENTRY_DSN: str | None = None
-SENTRY_TRACE_SAMPLE_RATE = 0
+# Sample rate for traces that start in snuba (no incoming sampling decision).
+# Requests that carry a sampling decision from the caller inherit it.
+SENTRY_TRACE_SAMPLE_RATE = 0.0
+# Sample rate for traces started by health check requests.
+SENTRY_HEALTH_CHECK_TRACE_SAMPLE_RATE = 0.0
+# Environments whose traces are always sampled, matched as substrings.
+SENTRY_ALWAYS_SAMPLED_ENVIRONMENTS = ("debug", "dev", "local", "qa", "test")
 
 # Snuba Admin Options
 SLACK_API_TOKEN = os.environ.get("SLACK_API_TOKEN")

@@ -1,5 +1,7 @@
 import logging
 import os
+import re
+from typing import Any
 
 import sentry_sdk
 import structlog
@@ -160,6 +162,33 @@ def before_send(event: Event, hint: Hint) -> Event | None:
     return event
 
 
+_HEALTH_CHECK_PATH = re.compile(r"^/health(_envoy)?/?$")
+
+
+def traces_sampler(sampling_context: dict[str, Any]) -> float:
+    """
+    Decide the sample rate for a root span. This replaces the server-side
+    dynamic sampling rules for the snuba project.
+
+    A request that carries a sampling decision from the caller keeps that
+    decision, so traces stay complete. Only traces that start in snuba get
+    a fresh decision.
+    """
+    parent_sampled = sampling_context.get("parent_sampled")
+    if parent_sampled is not None:
+        return 1.0 if parent_sampled else 0.0
+
+    environment = sentry_sdk.get_client().options.get("environment") or ""
+    if any(marker in environment for marker in settings.SENTRY_ALWAYS_SAMPLED_ENVIRONMENTS):
+        return 1.0
+
+    path = sampling_context.get("wsgi_environ", {}).get("PATH_INFO", "")
+    if _HEALTH_CHECK_PATH.match(path):
+        return settings.SENTRY_HEALTH_CHECK_TRACE_SAMPLE_RATE
+
+    return settings.SENTRY_TRACE_SAMPLE_RATE
+
+
 def setup_sentry() -> None:
     sentry_sdk.init(
         dsn=settings.SENTRY_DSN,
@@ -179,7 +208,7 @@ def setup_sentry() -> None:
         # the value for release is also computed in rust-snuba, please keep the
         # logic in sync
         release=os.getenv("SNUBA_RELEASE"),
-        traces_sample_rate=settings.SENTRY_TRACE_SAMPLE_RATE,
+        traces_sampler=traces_sampler,
         profiles_sample_rate=settings.SNUBA_PROFILES_SAMPLE_RATE,
         # Stream spans as they finish. Disables the legacy tracing API
         # (start_span/start_transaction/update_current_span/scope.span).
