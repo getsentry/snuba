@@ -302,7 +302,7 @@ def test_metrics_output() -> None:
             return_value=MetricsStrategy(),
         ),
         mock.patch(
-            "snuba.web.rpc.v1.resolvers.R_eap_items.resolver_time_series.run_query",
+            "snuba.web.rpc.v1.endpoint_time_series.run_query",
             return_value=get_query_result(),
         ),
     ):
@@ -452,7 +452,7 @@ def test_strategy_exceeds_time_budget() -> None:
             return_value=TooLongStrategy(),
         ),
         mock.patch(
-            "snuba.web.rpc.v1.resolvers.R_eap_items.resolver_time_series.run_query",
+            "snuba.web.rpc.v1.endpoint_time_series.run_query",
             return_value=get_query_result(12000),
         ),
     ):
@@ -485,7 +485,7 @@ def test_outcomes_based_routing_metrics_sampled_too_low() -> None:
             return_value=TooFastStrategy(),
         ),
         mock.patch(
-            "snuba.web.rpc.v1.resolvers.R_eap_items.resolver_time_series.run_query",
+            "snuba.web.rpc.v1.endpoint_time_series.run_query",
             return_value=get_query_result(900),
         ),
     ):
