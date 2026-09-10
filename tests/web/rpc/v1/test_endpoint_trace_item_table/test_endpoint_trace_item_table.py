@@ -82,10 +82,10 @@ from snuba.web.rpc.v1.endpoint_trace_item_table import (
     _validate_limit_by,
     _validate_order_by,
     _validate_select_and_groupby,
+    build_query,
 )
 from snuba.web.rpc.v1.resolvers.common.aggregation import aggregation_to_expression
 from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
-from snuba.web.rpc.v1.resolvers.R_eap_items.resolver_trace_item_table import build_query
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import (
