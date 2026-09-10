@@ -425,19 +425,29 @@ where
             self.start_stream();
         }
 
-        let pending = self.pending.as_mut().expect("ensure_pending just ran");
-        pending.batch_size += batch_size_inc;
-        pending.num_rows += num_rows;
-        pending.num_bytes += row_bytes_len;
-        for (partition, offset) in commitables {
-            pending.offsets.insert(partition, offset);
-        }
-        let prev_meta = std::mem::take(&mut pending.meta);
-        pending.meta = prev_meta.merge_meta(msg_meta);
+        {
+            let pending = self.pending.as_mut().expect("ensure_pending just ran");
+            pending.batch_size += batch_size_inc;
+            pending.num_rows += num_rows;
+            pending.num_bytes += row_bytes_len;
+            for (partition, offset) in commitables {
+                pending.offsets.insert(partition, offset);
+            }
+            let prev_meta = std::mem::take(&mut pending.meta);
+            pending.meta = prev_meta.merge_meta(msg_meta);
 
-        if !encoded_rows.is_empty() && !skip_write {
-            let new_chunks = pending.compressor.push(&encoded_rows);
-            pending.push_chunks(new_chunks);
+            if !encoded_rows.is_empty() && !skip_write {
+                let new_chunks = pending.compressor.push(&encoded_rows);
+                pending.push_chunks(new_chunks);
+            }
+        }
+
+        // Close the body as soon as the batch is full. RunTaskInThreads can
+        // deliver many completed messages in one poll cycle with no
+        // intervening `poll` here, so waiting until poll would let a single
+        // INSERT grow well past max_batch_size.
+        if self.pending_ready_to_flush() {
+            self.flush_pending();
         }
 
         Ok(())
@@ -634,6 +644,48 @@ mod tests {
         assert_eq!(batches.len(), 2, "size-flush + join-flush");
         assert_eq!(batches[0].num_bytes(), 200, "two messages of 100B");
         assert_eq!(batches[1].num_bytes(), 100, "trailing single message");
+    }
+
+    /// RunTaskInThreads can `submit` many completed messages in one cycle
+    /// with no intervening `poll`. Size-based flush must happen in `submit`
+    /// so a single INSERT cannot grow past `max_batch_size`.
+    #[tokio::test]
+    async fn submit_flushes_full_batch_without_poll() {
+        crate::testutils::initialize_python();
+        let runtime = Handle::current();
+        let recorded = Arc::new(Mutex::new(Vec::new()));
+        let next_step = RecordingStep {
+            batches: recorded.clone(),
+        };
+        let mut strategy = StreamingClickhouseWriter::new(
+            next_step,
+            unreachable_client(),
+            true,
+            runtime,
+            2,
+            2,
+            Duration::from_secs(3600),
+            |b| b.len(),
+        );
+
+        let partition = Partition::new(Topic::new("t"), 0);
+        for i in 0..4 {
+            strategy
+                .submit(make_message(batch_with(1, 100), partition, i))
+                .expect("submit should be accepted");
+        }
+
+        assert!(
+            strategy.pending.is_none(),
+            "the 2nd and 4th submits should have flushed on size"
+        );
+        assert_eq!(strategy.in_flight.len(), 2);
+
+        let _ = strategy.poll();
+        let batches = recorded.lock();
+        assert_eq!(batches.len(), 2);
+        assert_eq!(batches[0].num_bytes(), 200);
+        assert_eq!(batches[1].num_bytes(), 200);
     }
 
     #[tokio::test]
