@@ -106,6 +106,7 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
 @click.option(
     "--clickhouse-concurrency",
     type=int,
+    default=2,
     help=(
         "Number of concurrent clickhouse batches at one time. Defaults to 2. "
         "Independent of --async-inserts: raising it increases concurrent "
