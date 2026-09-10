@@ -4574,6 +4574,120 @@ class TestTraceItemTable(BaseApiTest):
         assert len(res.results) == 1
         assert isclose(res.results[0].val_double, expected_avg)
 
+    def test_literal_in_attribute_aggregation(self) -> None:
+        """
+        Tests p99((ingested_at_ms / 1000) - received_at_seconds) using an AttributeKeyExpression
+        literal to convert from milliseconds to seconds.
+        """
+        items_storage = get_writable_storage(StorageKey("eap_items"))
+
+        base_seconds = 1_700_000_000.0
+        deltas = list(range(1, 100 + 1))
+        write_raw_unprocessed_events(
+            items_storage,
+            [
+                gen_item_message(
+                    BASE_TIME,
+                    attributes={
+                        "received_at_seconds": AnyValue(double_value=base_seconds),
+                        "ingested_at_ms": AnyValue(double_value=(base_seconds + delta) * 1000.0),
+                    },
+                )
+                for delta in deltas
+            ],
+        )
+
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    label="p99((ingested_at_ms / 1000) - received_at_seconds)",
+                    conditional_aggregation=AttributeConditionalAggregation(
+                        aggregate=Function.FUNCTION_P99,
+                        expression=AttributeKeyExpression(
+                            formula=AttributeKeyExpression.Formula(
+                                op=AttributeKeyExpression.OP_SUB,
+                                left=AttributeKeyExpression(
+                                    formula=AttributeKeyExpression.Formula(
+                                        op=AttributeKeyExpression.OP_DIV,
+                                        left=AttributeKeyExpression(
+                                            key=AttributeKey(
+                                                type=AttributeKey.TYPE_DOUBLE, name="ingested_at_ms"
+                                            )
+                                        ),
+                                        right=AttributeKeyExpression(
+                                            literal=Literal(val_double=1000.0)
+                                        ),
+                                    )
+                                ),
+                                right=AttributeKeyExpression(
+                                    key=AttributeKey(
+                                        type=AttributeKey.TYPE_DOUBLE, name="received_at_seconds"
+                                    )
+                                ),
+                            )
+                        ),
+                        label="p99((ingested_at_ms / 1000) - received_at_seconds)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+
+        assert len(response.column_values) == 1
+        res = response.column_values[0]
+        assert len(res.results) == 1
+        # p99 of 1 to 100 seconds
+        assert isclose(res.results[0].val_double, 99.01)
+
+    def test_bare_literal_in_attribute_aggregation(self) -> None:
+        """
+        Tests avg(5.0), an expression made up of only a literal
+        """
+        items_storage = get_writable_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            items_storage,
+            [gen_item_message(BASE_TIME)],
+        )
+
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    label="avg(5.0)",
+                    conditional_aggregation=AttributeConditionalAggregation(
+                        aggregate=Function.FUNCTION_AVG,
+                        expression=AttributeKeyExpression(literal=Literal(val_double=5.0)),
+                        label="avg(5.0)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+
+        assert len(response.column_values) == 1
+        res = response.column_values[0]
+        assert len(res.results) == 1
+        assert isclose(res.results[0].val_double, 5.0)
+
 
 def _str_array(*values: str) -> AnyValue:
     return AnyValue(array_value=ArrayValue(values=[AnyValue(string_value=v) for v in values]))
