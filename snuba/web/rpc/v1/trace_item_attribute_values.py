@@ -39,10 +39,10 @@ from snuba.web.rpc.common.common import (
     treeify_or_and_conditions,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.common.trace_item_table import get_converter_for_type
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingDecision,
 )
-from snuba.web.rpc.v1.resolvers.common.trace_item_table import get_converter_for_type
 
 
 def _map_key_names_for_existence_check(request_key: AttributeKey) -> list[str]:

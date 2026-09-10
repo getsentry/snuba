@@ -10,7 +10,7 @@ from google.protobuf.message import DecodeError
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_sdk import traces
 
 from snuba import environment
@@ -38,7 +38,6 @@ from snuba.web.rpc.common.exceptions import (
 from snuba.web.rpc.common.query_info import extract_query_info_tags
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingContext,
-    RoutingDecision,
 )
 from snuba.web.rpc.storage_routing.routing_strategy_selector import (
     RoutingStrategySelector,
@@ -101,52 +100,6 @@ def _set_rpc_error_tags(in_msg: ProtobufMessage) -> None:
             set_tag_and_attribute("request_id", str(meta.request_id))
 
 
-class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
-    def __init__(
-        self, timer: Timer | None = None, metrics_backend: MetricsBackend | None = None
-    ) -> None:
-        self._timer = timer or Timer("endpoint_timing")
-        self._metrics_backend = metrics_backend or environment.metrics
-
-    @classmethod
-    def config_key(cls) -> str:
-        try:
-            trace_item_type = str(cls.trace_item_type())
-        except NotImplementedError:
-            trace_item_type = "base"
-        return f"{cls.endpoint_name()}__{trace_item_type}"
-
-    @classmethod
-    def endpoint_name(cls) -> str:
-        if cls.__name__ == "TraceItemDataResolver":
-            return cls.__name__
-        raise NotImplementedError
-
-    @classmethod
-    def trace_item_type(cls) -> TraceItemType.ValueType:
-        raise NotImplementedError
-
-    @classmethod
-    def get_from_trace_item_type(
-        cls,
-        trace_item_type: TraceItemType.ValueType,
-    ) -> "type[TraceItemDataResolver[Tin, Tout]]":
-        registry = cls._registry
-        try:
-            shape = registry.get_class_from_name(f"{cls.endpoint_name()}__{trace_item_type}")
-        except InvalidConfigKeyError:
-            shape = registry.get_class_from_name(
-                f"{cls.endpoint_name()}__{TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED}"
-            )
-        return cast(
-            type["TraceItemDataResolver[Tin, Tout]"],
-            shape,
-        )
-
-    def resolve(self, in_msg: Tin, routing_decision: RoutingDecision) -> Tout:
-        raise NotImplementedError
-
-
 class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     def __init__(self, metrics_backend: MetricsBackend | None = None) -> None:
         self._timer = Timer("endpoint_timing")
@@ -167,11 +120,6 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     @classmethod
     def config_key(cls) -> str:
         return f"{cls.__name__}__{cls.version()}"
-
-    def get_resolver(
-        self, trace_item_type: TraceItemType.ValueType
-    ) -> TraceItemDataResolver[Tin, Tout]:
-        raise NotImplementedError
 
     @property
     def metrics(self) -> MetricsWrapper:

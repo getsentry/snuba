@@ -24,14 +24,14 @@ from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.expressions import Column, FunctionCall
+from snuba.web.rpc.v1 import co_occurring_attrs
+from snuba.web.rpc.v1.co_occurring_attrs import (
+    CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION,
+    CO_OCCURRING_ATTRS_V2_STORAGE_KEY,
+)
 from snuba.web.rpc.v1.endpoint_trace_item_attribute_names import (
     EndpointTraceItemAttributeNames,
     get_co_occurring_attributes,
-)
-from snuba.web.rpc.v1.resolvers.R_eap_items import co_occurring_attrs
-from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs import (
-    CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION,
-    CO_OCCURRING_ATTRS_V2_STORAGE_KEY,
 )
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events

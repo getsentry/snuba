@@ -6,7 +6,7 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import Reliability
 
-from snuba.web.rpc.v1.resolvers.common.aggregation import ExtrapolationContext
+from snuba.web.rpc.common.aggregation import ExtrapolationContext
 from snuba.web.rpc.v1.visitors.time_series_request_visitor import (
     GetSubformulaLabelsVisitor,
 )

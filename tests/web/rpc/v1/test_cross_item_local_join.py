@@ -3,7 +3,7 @@ from sentry_options.testing import override_options
 from snuba.downsampled_storage_tiers import Tier
 from snuba.query.expressions import Column, DangerousRawSQL
 from snuba.query.query_settings import HTTPQuerySettings
-from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
+from snuba.web.rpc.common.cross_item_queries import (
     CROSS_ITEM_DISTRIBUTED_PRODUCT_MODE,
     apply_cross_item_outer_query_settings,
     trace_id_in_subquery_condition,

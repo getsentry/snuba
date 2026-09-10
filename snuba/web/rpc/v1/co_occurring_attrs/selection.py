@@ -10,11 +10,11 @@ from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
 
 from snuba.state.sentry_options import get_option
 from snuba.web.rpc.common.common import prev_monday
-from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs.base import (
+from snuba.web.rpc.v1.co_occurring_attrs.base import (
     CoOccurringAttrsSource,
 )
-from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs.v1 import V1
-from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs.v2 import V2
+from snuba.web.rpc.v1.co_occurring_attrs.v1 import V1
+from snuba.web.rpc.v1.co_occurring_attrs.v2 import V2
 
 # Rollout flag. Not sufficient on its own: a request must also fall inside the window v2 has
 # data for, see for_request.

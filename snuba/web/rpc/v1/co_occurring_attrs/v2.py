@@ -15,7 +15,7 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column
 from snuba.query.expressions import Expression
-from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs.base import (
+from snuba.web.rpc.v1.co_occurring_attrs.base import (
     CoOccurringAttrsSource,
 )
 

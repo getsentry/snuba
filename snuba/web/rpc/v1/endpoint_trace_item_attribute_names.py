@@ -39,8 +39,8 @@ from snuba.web.rpc.common.common import (
 )
 from snuba.web.rpc.common.debug_info import extract_response_meta
 from snuba.web.rpc.proto_visitor import ProtoVisitor, TraceItemFilterWrapper
-from snuba.web.rpc.v1.resolvers.R_eap_items import co_occurring_attrs
-from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs import CoOccurringAttrsSource
+from snuba.web.rpc.v1 import co_occurring_attrs
+from snuba.web.rpc.v1.co_occurring_attrs import CoOccurringAttrsSource
 
 # max value the user can provide for 'limit' in their request
 MAX_REQUEST_LIMIT = 1000
@@ -270,7 +270,7 @@ def get_co_occurring_attributes(
 
       **Storage:** the roll-up this reads and the parts of the query shape that differ between
       the two (per-type key arrays, the aggregates) come from the `CoOccurringAttrsSource`
-      returned by `resolvers.R_eap_items.co_occurring_attrs.for_request`.
+      returned by `co_occurring_attrs.for_request`.
 
       **Explanation:**
 
