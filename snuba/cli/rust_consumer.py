@@ -106,7 +106,13 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
 @click.option(
     "--clickhouse-concurrency",
     type=int,
-    help="Number of concurrent clickhouse batches at one time.",
+    default=2,
+    help=(
+        "Number of concurrent clickhouse batches at one time. Defaults to 2. "
+        "Independent of --async-inserts: raising it increases concurrent "
+        "in-flight writes (and inserts/sec) on ClickHouse, so size memory and "
+        "batch buffers accordingly."
+    ),
 )
 @click.option(
     "--use-rust-processor/--use-python-processor",
@@ -316,12 +322,6 @@ def rust_consumer(
             dry_run or 0,
         )
         sys.exit(exitcode)
-
-    if not async_inserts:
-        # we don't want to allow increasing this if
-        # we aren't using async inserts since that will increase
-        # the number of inserts/sec on clickhouse
-        clickhouse_concurrency = 2
 
     exitcode = rust_snuba.consumer(  # type: ignore[attr-defined]
         consumer_group,
