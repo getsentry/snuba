@@ -451,6 +451,24 @@ impl<R> BytesInsertBatch<R> {
     }
 }
 
+impl BytesInsertBatch<()> {
+    /// Merge offsets, latency timers, cogs, item-type metrics and byte
+    /// counts without touching row payloads. Used by the streaming writer,
+    /// which drops encoded rows per message and only carries metadata
+    /// forward to commit.
+    pub fn merge_meta(mut self, other: BytesInsertBatch<()>) -> Self {
+        self.num_bytes += other.num_bytes;
+        self.commit_log_offsets.merge(other.commit_log_offsets);
+        self.message_timestamp.merge(other.message_timestamp);
+        self.origin_timestamp.merge(other.origin_timestamp);
+        self.sentry_received_timestamp
+            .merge(other.sentry_received_timestamp);
+        self.cogs_data.merge(other.cogs_data);
+        self.item_type_metrics.merge(other.item_type_metrics);
+        self
+    }
+}
+
 impl BytesInsertBatch<RowData> {
     pub fn len(&self) -> usize {
         self.rows.num_rows
