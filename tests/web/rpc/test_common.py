@@ -1203,7 +1203,7 @@ def test_convert_rpc_exception_to_proto_packs_details() -> None:
 def test_convert_rpc_exception_cannot_compile_regexp_is_400() -> None:
     exc = QueryException.from_args(
         "ClickhouseError",
-        "Code: 36. Cannot compile regexp",
+        "Code: 427. Cannot compile regexp",
         extra={
             "stats": {"error_code": ErrorCodes.CANNOT_COMPILE_REGEXP},
             "sql": "SELECT 1",
