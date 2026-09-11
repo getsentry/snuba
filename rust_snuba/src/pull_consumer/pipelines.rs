@@ -6,6 +6,7 @@ use crate::pull::pipelines::fire_and_forget::FireAndForgetPipeline;
 
 use super::factories::{self, SharedResources};
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn make_eap_pipeline(
     shared: &SharedResources,
     consumer_config: &config::ConsumerConfig,
