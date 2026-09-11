@@ -1060,7 +1060,18 @@ def get_allowed_projects() -> Response:
 
 @application.route("/admin_regions", methods=["GET"])
 def get_admin_regions() -> Response:
-    return make_response(jsonify(settings.ADMIN_REGIONS), 200)
+    regions = []
+    for region in settings.ADMIN_REGIONS:
+        is_main = region == settings.ADMIN_MAIN_REGION
+        subdomain = "" if is_main else f".{region}"
+        regions.append(
+            {
+                "name": region,
+                "url": f"https://snuba-admin{subdomain}.getsentry.net/",
+                "is_main": is_main,
+            }
+        )
+    return make_response(jsonify(regions), 200)
 
 
 @application.route("/job-specs", methods=["GET"])

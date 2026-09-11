@@ -2,6 +2,12 @@ type AllowedTools = {
   tools: string[];
 };
 
+type AdminRegion = {
+  name: string;
+  url: string;
+  is_main: boolean;
+};
+
 type Settings = {
   dsn: string;
   tracesSampleRate: number;
@@ -12,4 +18,4 @@ type Settings = {
   userEmail: string;
 };
 
-export { AllowedTools, Settings };
+export { AdminRegion, AllowedTools, Settings };
