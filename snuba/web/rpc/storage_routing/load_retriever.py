@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import inspect
 import json
 from collections.abc import Callable
+from dataclasses import dataclass, fields
 from functools import wraps
 from typing import Any
 
@@ -18,25 +21,26 @@ metrics = MetricsWrapper(
 )
 
 
+@dataclass(kw_only=True, slots=True, frozen=True)
 class LoadInfo:
-    cluster_load: float
-    concurrent_queries: int
+    cluster_load: float = -1.0
+    concurrent_queries: float = -1.0
+    cgroup_user_time_normalized: float = -1.0
+    disk_inflight_ops: float = -1.0
+    memory_allocated: float = -1.0
+    part_mutation: float = -1.0
 
-    def __init__(self, cluster_load: float, concurrent_queries: int) -> None:
-        self.cluster_load = cluster_load
-        self.concurrent_queries = concurrent_queries
-
-    def to_dict(self) -> dict[str, float | int]:
-        return {
-            "cluster_load": self.cluster_load,
-            "concurrent_queries": self.concurrent_queries,
-        }
+    def to_dict(self) -> dict[str, float]:
+        return {f.name: getattr(self, f.name) for f in fields(self)}
 
     @classmethod
-    def from_dict(cls, load_info_dict: dict[str, float | int]) -> "LoadInfo":
+    def from_dict(cls, load_info_dict: dict[str, float | int | None]) -> LoadInfo:
         return cls(
-            cluster_load=load_info_dict["cluster_load"],
-            concurrent_queries=int(load_info_dict["concurrent_queries"]),
+            **{
+                f.name: float(v)
+                for f in fields(cls)
+                if (v := load_info_dict.get(f.name)) is not None
+            }
         )
 
 
@@ -82,76 +86,92 @@ def cache(
 def get_cluster_loadinfo(
     storage_set_key: StorageSetKey = StorageSetKey.EVENTS_ANALYTICS_PLATFORM,
 ) -> LoadInfo:
+    cluster_name = None
     try:
         cluster = get_cluster(storage_set_key)
         cluster_name = str(cluster.get_clickhouse_cluster_name())
 
         if cluster.is_single_node():
-            cluster_load_query = """
-    SELECT
-        toFloat32(value)/ (SELECT
-                    max(toInt32(replaceAll(metric, 'OSNiceTimeCPU', ''))) + 1 as num_cpus
-                FROM system.asynchronous_metrics
-                WHERE metric LIKE '%OSNiceTimeCPU%') * 100 as normalized_load
-    FROM system.asynchronous_metrics
-    WHERE metric = 'LoadAverage1'
-            """
-            concurrent_queries_query = """
-            SELECT
-                count()
-            FROM system.processes
+            metrics_from = """
+                SELECT hostName() AS host, metric, toFloat64(value) AS value FROM system.asynchronous_metrics
+                UNION ALL
+                SELECT hostName() AS host, metric, toFloat64(value) AS value FROM system.metrics
             """
         else:
-            cluster_load_query = f"""
-    SELECT
-        max(load_average.value / cpu_counts.num_cpus * 100) AS max_normalized_load
-    FROM (
-        SELECT
-            hostName() AS host,
-            value,
-            metric
-        FROM clusterAllReplicas('{cluster.get_clickhouse_cluster_name()}', 'system', asynchronous_metrics)
-        WHERE metric = 'LoadAverage1'
-    ) AS load_average
-    JOIN (
-        SELECT
-            hostName() AS host,
-            max(toInt32(replaceAll(metric, 'OSNiceTimeCPU', ''))) + 1 AS num_cpus
-        FROM clusterAllReplicas('{cluster.get_clickhouse_cluster_name()}', 'system', asynchronous_metrics)
-        WHERE metric LIKE 'OSNiceTimeCPU%'
-        GROUP BY host
-    ) AS cpu_counts
-    ON load_average.host = cpu_counts.host
-        """
-            concurrent_queries_query = f"""
-            SELECT sum(count) AS concurrent_queries
-            FROM (
-                SELECT count() AS count
-                FROM clusterAllReplicas('{cluster.get_clickhouse_cluster_name()}', 'system', 'processes')
-            )
+            metrics_from = f"""
+                SELECT hostName() AS host, metric, toFloat64(value) AS value
+                FROM clusterAllReplicas('{cluster_name}', 'system', asynchronous_metrics)
+                UNION ALL
+                SELECT hostName() AS host, metric, toFloat64(value) AS value
+                FROM clusterAllReplicas('{cluster_name}', 'system', metrics)
             """
 
-        cluster_load = float(
+        # maxIf() returns 0 when the condition never matches; 0 is a real idle value
+        # (Query/PartMutation). max(if(..., NULL)) stays NULL.
+        # https://clickhouse.com/docs/sql-reference/aggregate-functions/combinators#-if
+        cluster_load_query = f"""
+        SELECT
+            max(cluster_load) AS cluster_load,
+            max(concurrent_queries) AS concurrent_queries,
+            max(cgroup_user_time_normalized) AS cgroup_user_time_normalized,
+            max(disk_inflight_ops) AS disk_inflight_ops,
+            max(memory_allocated) AS memory_allocated,
+            max(part_mutation) AS part_mutation
+        FROM (
+            SELECT
+                ifNull(
+                    max(if(metric = 'LoadAverage1', value, NULL))
+                        / (max(if(
+                            startsWith(metric, 'OSNiceTimeCPU'),
+                            toInt32OrZero(replaceAll(metric, 'OSNiceTimeCPU', '')),
+                            NULL
+                        )) + 1)
+                        * 100,
+                    -1
+                ) AS cluster_load,
+                max(if(metric = 'Query', value, NULL)) AS concurrent_queries,
+                max(if(metric = 'CGroupUserTimeNormalized', value, NULL)) AS cgroup_user_time_normalized,
+                -- Actual metric is BlockInFlightOps_<device name>
+                max(if(startsWith(metric, 'BlockInFlightOps'), value, NULL)) AS disk_inflight_ops,
+                max(if(metric = 'MemoryTracking', value, NULL)) AS memory_allocated,
+                max(if(metric = 'PartMutation', value, NULL)) AS part_mutation
+            FROM (
+                {metrics_from}
+            )
+            WHERE metric IN (
+                'LoadAverage1', 'CGroupUserTimeNormalized',
+                'Query', 'MemoryTracking', 'PartMutation'
+            )
+               OR startsWith(metric, 'OSNiceTimeCPU')
+               OR startsWith(metric, 'BlockInFlightOps')
+            GROUP BY host
+        )
+        """
+
+        row = (
             cluster.get_query_connection(ClickhouseClientSettings.INTERNAL)
             .execute(cluster_load_query)
-            .results[0][0]
+            .results[0]
         )
-        concurrent_queries = int(
-            cluster.get_query_connection(ClickhouseClientSettings.INTERNAL)
-            .execute(concurrent_queries_query)
-            .results[0][0]
+        load_info = LoadInfo.from_dict(
+            {
+                "cluster_load": row[0],
+                "concurrent_queries": row[1],
+                "cgroup_user_time_normalized": row[2],
+                "disk_inflight_ops": row[3],
+                "memory_allocated": row[4],
+                "part_mutation": row[5],
+            }
         )
-        load_info = LoadInfo(cluster_load=cluster_load, concurrent_queries=concurrent_queries)
 
-        metrics.gauge("cluster_load", load_info.cluster_load, tags={"cluster_name": cluster_name})
-        metrics.gauge(
-            "concurrent_queries",
-            load_info.concurrent_queries,
-            tags={"cluster_name": cluster_name},
-        )
+        tags = {"cluster_name": cluster_name}
+        for name, value in load_info.to_dict().items():
+            metrics.gauge(name, value, tags=tags)
         return load_info
 
     except Exception as e:
-        metrics.increment("get_cluster_loadinfo_failure", tags={"cluster_name": cluster_name})
+        metrics.increment(
+            "get_cluster_loadinfo_failure", tags={"cluster_name": cluster_name or "unknown"}
+        )
         sentry_sdk.capture_exception(e)
-        return LoadInfo(cluster_load=-1.0, concurrent_queries=-1)
+        return LoadInfo()
