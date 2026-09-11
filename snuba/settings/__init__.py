@@ -56,8 +56,10 @@ ADMIN_ALLOWED_PROD_PROJECTS: Sequence[int] = []
 ADMIN_ALLOWED_ORG_IDS: Sequence[int] = []
 ADMIN_ROLES_REDIS_TTL = 600
 
+ADMIN_MAIN_REGION: str = os.environ.get("ADMIN_MAIN_REGION", "us")
 # All available regions where region is:
-# https://snuba-admin.<region>.getsentry.net/
+# - https://snuba-admin.<region>.getsentry.net/ generally
+# - https://snuba-admin.getsentry.net/ for ADMIN_MAIN_REGION
 ADMIN_REGIONS: Sequence[str] = []
 
 ######################

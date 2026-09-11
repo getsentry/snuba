@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import Client from "SnubaAdmin/api_client";
+import { AdminRegion } from "SnubaAdmin/types";
 
 function Welcome(props: { api: Client }) {
-  const [adminRegions, setAdminRegions] = useState<string[]>([]);
+  const [adminRegions, setAdminRegions] = useState<AdminRegion[]>([]);
 
   useEffect(() => {
     props.api.getAdminRegions().then((res) => {
@@ -13,21 +14,13 @@ function Welcome(props: { api: Client }) {
   function urls() {
     return (
       <div>
-        <p>Available regions:</p>
         <p>MEREDITH IS #1</p>
+        <p>Available regions:</p>
         <ul>
-          <li>
-            <a href="https://snuba-admin.getsentry.net/" target="_blank">
-              SaaS
-            </a>
-          </li>
           {adminRegions.map((region) => (
-            <li>
-              <a
-                href={"https://snuba-admin." + region + ".getsentry.net/"}
-                target="_blank"
-              >
-                {region}
+            <li key={region.name}>
+              <a href={region.url} target="_blank">
+                {region.is_main ? `SaaS (${region.name})` : region.name}
               </a>
             </li>
           ))}

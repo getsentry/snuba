@@ -1,4 +1,4 @@
-import { AllowedTools, Settings } from "SnubaAdmin/types";
+import { AdminRegion, AllowedTools, Settings } from "SnubaAdmin/types";
 
 import {
   ClickhouseNodeData,
@@ -71,7 +71,7 @@ interface Client {
   getAllMigrationGroups: () => Promise<MigrationGroupResult[]>;
   runMigration: (req: RunMigrationRequest) => Promise<RunMigrationResult>;
   getAllowedTools: () => Promise<AllowedTools>;
-  getAdminRegions: () => Promise<string[]>;
+  getAdminRegions: () => Promise<AdminRegion[]>;
   listJobSpecs: () => Promise<JobSpecMap>;
   runJob(job_id: string): Promise<String>;
   listJobTypes: () => Promise<string[]>;
