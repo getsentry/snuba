@@ -224,7 +224,8 @@ pub fn consumer_impl(
             let producer = KafkaProducer::new(KafkaConfig::new_producer_config(
                 vec![],
                 Some(dlq_topic_config.broker_config),
-            ));
+            ))
+            .expect("failed to create kafka producer");
 
             let kafka_dlq_producer = Box::new(KafkaDlqProducer::new(
                 producer,
@@ -252,7 +253,8 @@ pub fn consumer_impl(
     } else if let Some(topic_config) = consumer_config.commit_log_topic {
         let producer_config =
             KafkaConfig::new_producer_config(vec![], Some(topic_config.broker_config));
-        let producer = KafkaProducer::new(producer_config);
+        let producer =
+            KafkaProducer::new(producer_config).expect("failed to create kafka producer");
         Some((
             Arc::new(producer),
             Topic::new(&topic_config.physical_topic_name),

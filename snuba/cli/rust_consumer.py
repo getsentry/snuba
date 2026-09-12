@@ -320,6 +320,7 @@ def rust_consumer(
             clickhouse_concurrency or 2,
             max_poll_interval_ms,
             dry_run or 0,
+            use_row_binary,
         )
         sys.exit(exitcode)
 
