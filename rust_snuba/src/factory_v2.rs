@@ -246,7 +246,8 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                         self.replacements_config.clone().expect(
                             "replacements topic required for processors that emit replacements",
                         );
-                    let producer = KafkaProducer::new(replacements_config);
+                    let producer = KafkaProducer::new(replacements_config)
+                        .expect("failed to create kafka producer");
                     ProduceReplacements::new(
                         next_step,
                         producer,

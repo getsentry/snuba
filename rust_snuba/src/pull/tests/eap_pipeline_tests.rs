@@ -63,22 +63,22 @@ async fn test_eap_pipeline() {
         ProcessorStage::new(processor, ProcessorConfig::default()),
         1, // processing_concurrency
         DlqHandler::new(
-            dlq_producer,
+            Arc::new(dlq_producer),
             TopicOrPartition::Topic(Topic::new("snuba-dead-letter-items")),
         ),
         BatchStage::new(PipelineBatchBuffer::new(), 2, u64::MAX),
         Some(Duration::from_secs(2)),
         None,
-        ClickHouseWriterStage::new(Arc::clone(&writer)),
+        ClickHouseWriterStage::new(writer.clone()),
         2,
         CommitLogStage::new(
-            commit_log_producer,
+            Arc::new(commit_log_producer),
             Topic::new("snuba-items-commit-log"),
             Topic::new("snuba-items"),
             "test-group".to_string(),
         ),
         CogsStage::new(
-            cogs_producer,
+            Arc::new(cogs_producer),
             Topic::new("shared-resources-usage"),
             "eap_items_processor".to_string(),
         ),

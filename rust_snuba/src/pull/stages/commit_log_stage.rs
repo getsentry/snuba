@@ -31,13 +31,13 @@ pub struct CommitLogStage {
 
 impl CommitLogStage {
     pub fn new(
-        producer: impl Producer<KafkaPayload> + 'static,
+        producer: Arc<dyn Producer<KafkaPayload>>,
         destination: Topic,
         source_topic: Topic,
         consumer_group: String,
     ) -> Self {
         Self {
-            producer: Arc::new(producer),
+            producer,
             destination: TopicOrPartition::Topic(destination),
             source_topic,
             consumer_group,

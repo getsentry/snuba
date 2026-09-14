@@ -72,7 +72,7 @@ async fn test_fire_and_forget_pipeline(#[case] processor_name: &str, #[case] top
         BatchStage::new(PipelineBatchBuffer::new(), 2, u64::MAX),
         Some(Duration::from_secs(2)),
         None,
-        ClickHouseWriterStage::new(Arc::clone(&writer)),
+        ClickHouseWriterStage::new(writer.clone()),
         2,
     );
 
