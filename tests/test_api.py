@@ -1844,6 +1844,23 @@ class TestCreateSubscriptionApi(BaseApiTest):
             }
         }
 
+    def test_skip_query_validation(self) -> None:
+        path = f"{self.dataset_name}/{self.entity_key}/subscriptions"
+        body = json.dumps(
+            {
+                "project_id": 1,
+                "time_window": int(timedelta(minutes=10).total_seconds()),
+                "resolution": int(timedelta(minutes=1).total_seconds()),
+                "query": "MATCH (events) SELECT cout() AS count WHERE platform IN tuple('a')",
+            }
+        ).encode("utf-8")
+
+        validated = self.app.post(path, data=body)
+        assert validated.status_code == 500
+
+        skipped = self.app.post(f"{path}?skip_query_validation=1", data=body)
+        assert skipped.status_code == 202
+
     def test_with_bad_snql(self) -> None:
         expected_uuid = uuid.uuid1()
 

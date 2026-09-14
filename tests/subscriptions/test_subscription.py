@@ -123,6 +123,31 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
             )
 
     @pytest.mark.events_db
+    @pytest.mark.redis_db
+    def test_skip_query_validation(self) -> None:
+        creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
+        subscription = SnQLSubscriptionData(
+            project_id=123,
+            time_window_sec=10 * 60,
+            resolution_sec=60,
+            query="MATCH (events) SELECT cout() AS count WHERE platform IN tuple('a')",
+            entity=get_entity(EntityKey.EVENTS),
+            metadata={},
+        )
+
+        identifier = creator.create(subscription, self.timer, skip_query_validation=True)
+
+        stored = cast(
+            list[tuple[UUID, SubscriptionData]],
+            RedisSubscriptionDataStore(
+                get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
+                self.entity_key,
+                identifier.partition,
+            ).all(),
+        )
+        assert stored[0][1] == subscription
+
+    @pytest.mark.events_db
     def test_invalid_time_window(self) -> None:
         creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         with raises(InvalidSubscriptionError):

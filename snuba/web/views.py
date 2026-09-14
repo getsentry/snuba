@@ -533,10 +533,24 @@ def create_subscription(*, dataset: Dataset, timer: Timer, entity: Entity) -> Re
     if entity not in dataset.get_all_entities():
         raise InvalidSubscriptionError("Invalid subscription dataset and entity combination")
     entity_key = get_entity_name(entity)
-    subscription = SubscriptionDataCodec(entity_key).decode(http_request.data)
-    identifier = SubscriptionCreator(dataset, entity_key).create(subscription, timer)
 
-    metrics.increment("subscription_created", tags={"entity": entity_key.value})
+    # Read off the URL rather than the body: unrecognized body keys are swept into the
+    # stored payload's metadata, and this flag must not outlive the request.
+    requested_skip = http_request.args.get("skip_query_validation", "")
+    skip_query_validation = requested_skip.lower() in ("1", "true")
+
+    subscription = SubscriptionDataCodec(entity_key).decode(http_request.data)
+    identifier = SubscriptionCreator(dataset, entity_key).create(
+        subscription, timer, skip_query_validation=skip_query_validation
+    )
+
+    metrics.increment(
+        "subscription_created",
+        tags={
+            "entity": entity_key.value,
+            "skipped_query_validation": str(skip_query_validation),
+        },
+    )
     return (
         json.dumps({"subscription_id": str(identifier)}),
         202,

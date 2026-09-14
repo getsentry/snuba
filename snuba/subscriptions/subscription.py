@@ -20,7 +20,8 @@ redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
 class SubscriptionCreator:
     """
     Handles creation of a `Subscription`, including assigning an ID and validating that
-    the resulting query is valid.
+    the resulting query is valid. Callers rebuilding known-good subscriptions can skip
+    that validation.
     """
 
     def __init__(self, dataset: Dataset, entity_key: EntityKey):
@@ -32,10 +33,16 @@ class SubscriptionCreator:
             enforce_table_writer(entity).get_stream_loader().get_default_topic_spec()
         )
 
-    def create(self, data: SubscriptionData, timer: Timer) -> SubscriptionIdentifier:
+    def create(
+        self,
+        data: SubscriptionData,
+        timer: Timer,
+        skip_query_validation: bool = False,
+    ) -> SubscriptionIdentifier:
         data.validate()
 
-        self._test_request(data, timer)
+        if not skip_query_validation:
+            self._test_request(data, timer)
 
         identifier = SubscriptionIdentifier(
             self.__partitioner.build_partition_id(data),
