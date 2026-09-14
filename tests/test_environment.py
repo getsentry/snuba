@@ -165,11 +165,17 @@ def sentry_environment(monkeypatch: pytest.MonkeyPatch) -> Callable[[str | None]
 def sample_rates(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "SENTRY_TRACE_SAMPLE_RATE", 0.5)
     monkeypatch.setattr(settings, "SENTRY_HEALTH_CHECK_TRACE_SAMPLE_RATE", 0.01)
+    monkeypatch.setattr(settings, "SENTRY_INHERITED_TRACE_SAMPLE_RATE", 1.0)
 
 
-def _request(path: str, parent_sampled: bool | None = None) -> dict[str, Any]:
+def _request(
+    path: str, parent_sampled: bool | None = None, trace_id: str | None = None
+) -> dict[str, Any]:
+    transaction_context: dict[str, Any] = {"name": "generic WSGI request"}
+    if trace_id is not None:
+        transaction_context["trace_id"] = trace_id
     return {
-        "transaction_context": {"name": "generic WSGI request"},
+        "transaction_context": transaction_context,
         "parent_sampled": parent_sampled,
         "wsgi_environ": {"PATH_INFO": path},
     }
@@ -179,6 +185,28 @@ def _request(path: str, parent_sampled: bool | None = None) -> dict[str, Any]:
 def test_traces_sampler_inherits_parent_decision() -> None:
     assert traces_sampler(_request("/health", parent_sampled=True)) == 1.0
     assert traces_sampler(_request("/query", parent_sampled=False)) == 0.0
+
+
+@pytest.mark.usefixtures("sentry_environment", "sample_rates")
+def test_traces_sampler_keeps_a_fraction_of_sampled_traces_by_trace_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "SENTRY_INHERITED_TRACE_SAMPLE_RATE", 0.1)
+
+    # int("00000005", 16) % 100 == 5 < 10, int("00000063", 16) % 100 == 99
+    kept = "00000005" + "0" * 24
+    dropped = "00000063" + "0" * 24
+    assert traces_sampler(_request("/query", parent_sampled=True, trace_id=kept)) == 1.0
+    assert traces_sampler(_request("/query", parent_sampled=True, trace_id=dropped)) == 0.0
+    assert traces_sampler(_request("/query", parent_sampled=False, trace_id=kept)) == 0.0
+
+
+@pytest.mark.usefixtures("sentry_environment", "sample_rates")
+def test_traces_sampler_falls_back_to_the_inherited_rate_without_trace_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "SENTRY_INHERITED_TRACE_SAMPLE_RATE", 0.1)
+    assert traces_sampler(_request("/query", parent_sampled=True)) == 0.1
 
 
 @pytest.mark.usefixtures("sentry_environment", "sample_rates")
