@@ -358,6 +358,8 @@ class TestTraceItemTable(BaseApiTest):
                 ],
             ),
         )
+        # routing_hint embeds a timestamp; it's covered by the routing hint tests
+        response.ClearField("routing_hint")
         assert MessageToDict(response) == MessageToDict(expected_response)
 
     def test_with_data(self, setup_teardown: Any) -> None:
@@ -411,6 +413,8 @@ class TestTraceItemTable(BaseApiTest):
                 ],
             ),
         )
+        # routing_hint embeds a timestamp; it's covered by the routing hint tests
+        response.ClearField("routing_hint")
         assert MessageToDict(response) == MessageToDict(expected_response)
 
     def test_booleans_and_number_compares(self, setup_teardown: Any) -> None:
@@ -493,6 +497,8 @@ class TestTraceItemTable(BaseApiTest):
                 ],
             ),
         )
+        # routing_hint embeds a timestamp; it's covered by the routing hint tests
+        response.ClearField("routing_hint")
         assert response == expected_response
 
     def test_with_virtual_columns(self, setup_teardown: Any) -> None:
@@ -587,6 +593,8 @@ class TestTraceItemTable(BaseApiTest):
             "sentry.release_version",
             "sentry.sdk.name",
         ]
+        # routing_hint embeds a timestamp; it's covered by the routing hint tests
+        response.ClearField("routing_hint")
         assert response == expected_response, (
             MessageToDict(response),
             MessageToDict(expected_response),
