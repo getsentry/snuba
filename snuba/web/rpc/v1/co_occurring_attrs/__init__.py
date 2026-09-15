@@ -9,21 +9,21 @@ shape. ``CoOccurringAttrsSource`` is that choice, one implementation per table:
 ``for_request`` picks the source for a request.
 """
 
-from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs.base import (
+from snuba.web.rpc.v1.co_occurring_attrs.base import (
     CoOccurringAttrsSource,
 )
-from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs.selection import (
+from snuba.web.rpc.v1.co_occurring_attrs.selection import (
     CO_OCCURRING_ATTRS_V2_OPTION,
     CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_DEFAULT,
     CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION,
     for_request,
 )
-from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs.v1 import (
+from snuba.web.rpc.v1.co_occurring_attrs.v1 import (
     CO_OCCURRING_ATTRS_STORAGE_KEY,
     V1,
     CoOccurringAttrsV1,
 )
-from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs.v2 import (
+from snuba.web.rpc.v1.co_occurring_attrs.v2 import (
     CO_OCCURRING_ATTRS_V2_STORAGE_KEY,
     V2,
     CoOccurringAttrsV2,
