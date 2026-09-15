@@ -1,6 +1,7 @@
 import uuid
 from datetime import timedelta
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -16,8 +17,16 @@ from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue
 
+from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.downsampled_storage_tiers import Tier
+from snuba.web.rpc import RPCEndpoint
+from snuba.web.rpc.common.exceptions import (
+    BadSnubaRPCRequestException,
+    RPCRequestException,
+)
+from snuba.web.rpc.storage_routing.common import decode_routing_hint
 from snuba.web.rpc.v1.endpoint_trace_item_details import (
     EndpointTraceItemDetails,
     _convert_results,
@@ -29,6 +38,7 @@ from tests.web.rpc.v1.test_utils import (
     BASE_TIME,
     END_TIMESTAMP,
     START_TIMESTAMP,
+    create_mock_routing_decision,
     gen_item_message,
 )
 
@@ -560,6 +570,62 @@ class TestTraceItemDetails(BaseApiTest):
             "str_tag",
         }:
             assert k in attributes_returned, k
+
+    def test_routing_hint_finds_item_only_in_downsampled_tier(self, setup_spans_in_db: Any) -> None:
+        start = Timestamp()
+        start.FromDatetime(BASE_TIME - timedelta(hours=3))
+        end = Timestamp()
+        end.GetCurrentTime()
+        meta = RequestMeta(
+            project_ids=[1],
+            organization_id=1,
+            cogs_category="something",
+            referrer="something",
+            start_timestamp=start,
+            end_timestamp=end,
+            request_id=_REQUEST_ID,
+            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+        )
+        table_request = TraceItemTableRequest(
+            meta=meta,
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.trace_id")),
+            ],
+        )
+        with patch.object(RPCEndpoint, "_RPCEndpoint__before_execute"):
+            table = EndpointTraceItemTable()
+            table.routing_decision = create_mock_routing_decision(Tier.TIER_8, table_request)
+            table_response = table.execute(table_request)
+        assert decode_routing_hint(table_response.routing_hint) == Tier.TIER_8
+        item_id = table_response.column_values[0].results[0].val_str
+        trace_id = table_response.column_values[1].results[0].val_str
+
+        # simulate tier 1 retention expiring: the item now only exists downsampled
+        storage = get_storage(StorageKey("eap_items"))
+        cluster = storage.get_cluster()
+        for node in cluster.get_local_nodes():
+            cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node).execute(
+                f"TRUNCATE TABLE {cluster.get_database()}.eap_items_1_local"
+            )
+
+        def details(routing_hint: str) -> Any:
+            return EndpointTraceItemDetails().execute(
+                TraceItemDetailsRequest(
+                    meta=meta, item_id=item_id, trace_id=trace_id, routing_hint=routing_hint
+                )
+            )
+
+        res = details(table_response.routing_hint)
+        assert res.item_id == item_id
+        assert "str_tag" in {a.name for a in res.attributes}
+
+        with pytest.raises(RPCRequestException) as e:
+            details("")
+        assert e.value.status_code == 404
+
+        with pytest.raises(BadSnubaRPCRequestException):
+            details("garbage")
 
 
 def test_convert_results_dedupes() -> None:
