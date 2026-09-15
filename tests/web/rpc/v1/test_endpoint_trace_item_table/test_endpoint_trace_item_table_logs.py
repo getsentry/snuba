@@ -129,6 +129,8 @@ class TestTraceItemTableForLogs(BaseApiTest):
                 ],
             ),
         )
+        # routing_hint embeds a timestamp; it's covered by the routing hint tests
+        response.ClearField("routing_hint")
         assert MessageToDict(response) == MessageToDict(expected_response)
 
 

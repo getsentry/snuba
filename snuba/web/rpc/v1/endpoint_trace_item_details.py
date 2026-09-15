@@ -17,6 +17,7 @@ from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
+from snuba.downsampled_storage_tiers import Tier
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
@@ -45,6 +46,7 @@ from snuba.web.rpc.common.exceptions import (
     BadSnubaRPCRequestException,
     RPCRequestException,
 )
+from snuba.web.rpc.storage_routing.common import decode_routing_hint
 from snuba.web.rpc.v1.endpoint_get_trace import convert_to_attribute_value
 
 
@@ -117,8 +119,9 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
     return res
 
 
-def _build_snuba_request(request: TraceItemDetailsRequest) -> SnubaRequest:
+def _build_snuba_request(request: TraceItemDetailsRequest, tier: Tier) -> SnubaRequest:
     query_settings = setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
+    query_settings.set_sampling_tier(tier)
 
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
@@ -230,7 +233,10 @@ class EndpointTraceItemDetails(RPCEndpoint[TraceItemDetailsRequest, TraceItemDet
                 "This endpoint requires trace_id to be a valid UUID."
             ) from e
 
-        snuba_request = _build_snuba_request(in_msg)
+        self.routing_decision.tier = (
+            decode_routing_hint(in_msg.routing_hint) if in_msg.routing_hint else Tier.TIER_1
+        )
+        snuba_request = _build_snuba_request(in_msg, self.routing_decision.tier)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,

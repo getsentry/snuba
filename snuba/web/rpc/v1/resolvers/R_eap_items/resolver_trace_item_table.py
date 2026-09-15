@@ -77,6 +77,7 @@ from snuba.web.rpc.common.debug_info import (
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.common.pagination import FlexibleTimeWindowPageWithFilters
+from snuba.web.rpc.storage_routing.common import encode_routing_hint
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingDecision,
     TimeWindow,
@@ -894,4 +895,5 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
                 routing_decision.time_window,
             ),
             meta=response_meta,
+            routing_hint=encode_routing_hint(query_settings.get_sampling_tier()),
         )
