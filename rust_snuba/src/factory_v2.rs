@@ -24,7 +24,8 @@ use crate::metrics::global_tags::set_global_tag;
 use crate::processors::{self, get_cogs_label};
 use crate::strategies::accountant::RecordCogs;
 
-use crate::strategies::clickhouse::writer_v2::{JsonWriterStep, RowBinaryWriterStep};
+use crate::strategies::clickhouse::streaming_writer::StreamingClickhouseWriter;
+use crate::strategies::clickhouse::writer_v2::{ClickhouseClient, InsertFormat, JsonWriterStep};
 use crate::strategies::commit_log::ProduceCommitLog;
 use crate::strategies::dlq_by_age::DlqByAge;
 use crate::strategies::healthcheck;
@@ -163,63 +164,77 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             Some(Duration::from_millis(self.join_timeout_ms.unwrap_or(0))),
         );
 
-        // Pick the writer by wire format; RowBinary also needs the column list.
-        let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<RowData>>> =
-            if self.use_row_binary {
-                let columns = insert_columns.expect("use_row_binary resolves a column list above");
-                Box::new(RowBinaryWriterStep::new(
-                    next_step,
-                    self.storage_config.clickhouse_cluster.clone(),
-                    self.storage_config.clickhouse_table_name.clone(),
-                    self.skip_write,
-                    &self.clickhouse_concurrency,
-                    self.storage_config.name.clone(),
-                    columns,
-                ))
-            } else {
-                Box::new(JsonWriterStep::new(
-                    next_step,
-                    self.storage_config.clickhouse_cluster.clone(),
-                    self.storage_config.clickhouse_table_name.clone(),
-                    self.skip_write,
-                    &self.clickhouse_concurrency,
-                    self.storage_config.name.clone(),
-                ))
-            };
-
-        #[allow(clippy::result_large_err)]
-        let accumulator = Arc::new(
-            |batch: BytesInsertBatch<RowData>, small_batch: Message<BytesInsertBatch<RowData>>| {
-                Ok(batch.merge(small_batch.into_payload()))
-            },
-        );
-
         let compute_batch_size: fn(&BytesInsertBatch<RowData>) -> usize =
             match self.max_batch_size_calculation {
                 config::BatchSizeCalculation::Bytes => |batch| batch.num_bytes(),
                 config::BatchSizeCalculation::Rows => |batch| batch.len(),
             };
 
-        let next_step = Reduce::new(
-            next_step,
-            accumulator,
-            Arc::new(move || {
-                BytesInsertBatch::<RowData>::new(
-                    RowData::default(),
-                    None,
-                    None,
-                    None,
-                    Default::default(),
-                    CogsData::default(),
+        // RowBinary streams compressed blocks onto an in-flight POST as
+        // rows arrive (no uncompressed Reduce buffer). JSON stays on the
+        // buffered writer — same pipeline we've shipped.
+        let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<RowData>>> =
+            if self.use_row_binary {
+                tracing::info!("Using streaming ClickHouse writer (RowBinary)");
+                let columns = insert_columns.expect("use_row_binary resolves a column list above");
+                let client = Arc::new(ClickhouseClient::new(
+                    &self.storage_config.clickhouse_cluster,
+                    &self.storage_config.clickhouse_table_name,
+                    self.storage_config.name.clone(),
+                    InsertFormat::RowBinary,
+                    Some(columns),
+                ));
+                Box::new(StreamingClickhouseWriter::new(
+                    next_step,
+                    client,
+                    self.skip_write,
+                    self.clickhouse_concurrency.handle(),
+                    self.clickhouse_concurrency.concurrency,
+                    self.max_batch_size,
+                    self.max_batch_time,
+                    compute_batch_size,
+                ))
+            } else {
+                let writer = JsonWriterStep::new(
+                    next_step,
+                    self.storage_config.clickhouse_cluster.clone(),
+                    self.storage_config.clickhouse_table_name.clone(),
+                    self.skip_write,
+                    &self.clickhouse_concurrency,
+                    self.storage_config.name.clone(),
+                );
+
+                #[allow(clippy::result_large_err)]
+                let accumulator = Arc::new(
+                    |batch: BytesInsertBatch<RowData>,
+                     small_batch: Message<BytesInsertBatch<RowData>>| {
+                        Ok(batch.merge(small_batch.into_payload()))
+                    },
+                );
+
+                Box::new(
+                    Reduce::new(
+                        writer,
+                        accumulator,
+                        Arc::new(move || {
+                            BytesInsertBatch::<RowData>::new(
+                                RowData::default(),
+                                None,
+                                None,
+                                None,
+                                Default::default(),
+                                CogsData::default(),
+                            )
+                        }),
+                        self.max_batch_size,
+                        self.max_batch_time,
+                        compute_batch_size,
+                        // we need to enable this to deal with storages where we skip 100% of values.
+                        // we still need to commit there
+                    )
+                    .flush_empty_batches(true),
                 )
-            }),
-            self.max_batch_size,
-            self.max_batch_time,
-            compute_batch_size,
-            // we need to enable this to deal with storages where we skip 100% of values.
-            // we still need to commit there
-        )
-        .flush_empty_batches(true);
+            };
 
         // RowBinary can only be emitted by the Rust processor (the Python path
         // always returns JSONEachRow bytes). If the storage opted into
