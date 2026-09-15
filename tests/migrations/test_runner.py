@@ -275,7 +275,7 @@ def test_run_all_using_readiness() -> None:
     assert len(runner._get_pending_migrations_for_group(group=group)) == (all_generic_metrics)
 
     # using correct readiness state runs the migration
-    runner.run_all(force=True, group=group, readiness_states=[ReadinessState.COMPLETE])
+    runner.run_all(force=True, group=group, readiness_states=[ReadinessState.DEPRECATE])
     assert len(runner._get_pending_migrations_for_group(group=group)) == 0
 
 
