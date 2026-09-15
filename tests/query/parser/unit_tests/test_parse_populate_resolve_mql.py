@@ -45,14 +45,14 @@ def subscriptable_expression(
 ) -> SubscriptableReference:
     return SubscriptableReference(
         alias=None,
-        column=Column(alias=None, table_name=table_alias, column_name="tags_raw"),
+        column=Column(alias=None, table_name=table_alias, column_name="tags"),
         key=Literal(alias=None, value=tag_key),
     )
 
 
 from_distributions = Entity(
-    EntityKey.GENERIC_METRICS_COUNTERS,
-    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+    EntityKey.METRICS_COUNTERS,
+    get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
 )
 join_clause = JoinClause(
     left_node=IndividualNode(
@@ -83,8 +83,8 @@ join_clause_with_groupby = JoinClause(
     ),
     keys=[
         JoinCondition(
-            left=JoinConditionExpression(table_alias="c1", column="tags_raw[333333]"),
-            right=JoinConditionExpression(table_alias="c0", column="tags_raw[333333]"),
+            left=JoinConditionExpression(table_alias="c1", column="tags[333333]"),
+            right=JoinConditionExpression(table_alias="c0", column="tags[333333]"),
         ),
         JoinCondition(
             left=JoinConditionExpression(table_alias="c1", column="c1.time"),
@@ -113,9 +113,9 @@ test_cases = [
     pytest.param(
         (
             "sum(`c:transactions/duration@millisecond`){status_code:200} / sum(`c:transactions/duration@millisecond`)",
-            get_dataset("generic_metrics"),
+            get_dataset("metrics"),
             {
-                "entity": "generic_metrics_counters",
+                "entity": "metrics_counters",
                 "start": "2023-11-23T18:30:00",
                 "end": "2023-11-23T22:30:00",
                 "rollup": {
@@ -218,7 +218,7 @@ test_cases = [
                         ),
                     ),
                     and_cond(
-                        f.equals(column("tags_raw[222222]", "c0"), literal("200")),
+                        f.equals(column("tags[222222]", "c0"), literal("200")),
                         and_cond(
                             f.equals(column("metric_id", "c0"), literal(123456)),
                             f.equals(column("metric_id", "c1"), literal(123456)),
@@ -239,9 +239,9 @@ test_cases = [
     pytest.param(
         (
             "1 + sum(`c:transactions/duration@millisecond`){status_code:200} / sum(`c:transactions/duration@millisecond`)",
-            get_dataset("generic_metrics"),
+            get_dataset("metrics"),
             {
-                "entity": "generic_metrics_counters",
+                "entity": "metrics_counters",
                 "start": "2023-11-23T18:30:00",
                 "end": "2023-11-23T22:30:00",
                 "rollup": {
@@ -347,7 +347,7 @@ test_cases = [
                         ),
                     ),
                     and_cond(
-                        f.equals(column("tags_raw[222222]", "c0"), literal("200")),
+                        f.equals(column("tags[222222]", "c0"), literal("200")),
                         and_cond(
                             f.equals(column("metric_id", "c0"), literal(123456)),
                             f.equals(column("metric_id", "c1"), literal(123456)),
@@ -368,9 +368,9 @@ test_cases = [
     pytest.param(
         (
             "sum(`c:transactions/duration@millisecond`){status_code:200} by transaction / sum(`c:transactions/duration@millisecond`) by transaction",
-            get_dataset("generic_metrics"),
+            get_dataset("metrics"),
             {
-                "entity": "generic_metrics_counters",
+                "entity": "metrics_counters",
                 "start": "2023-11-23T18:30:00",
                 "end": "2023-11-23T22:30:00",
                 "rollup": {
@@ -415,11 +415,11 @@ test_cases = [
                 ),
                 SelectedExpression(
                     "transaction",
-                    column("tags_raw[333333]", "c0", "c0.transaction"),
+                    column("tags[333333]", "c0", "c0.transaction"),
                 ),
                 SelectedExpression(
                     "transaction",
-                    column("tags_raw[333333]", "c1", "c1.transaction"),
+                    column("tags[333333]", "c1", "c1.transaction"),
                 ),
                 SelectedExpression(
                     "time",
@@ -481,7 +481,7 @@ test_cases = [
                         ),
                     ),
                     and_cond(
-                        f.equals(column("tags_raw[222222]", "c0"), literal("200")),
+                        f.equals(column("tags[222222]", "c0"), literal("200")),
                         and_cond(
                             f.equals(column("metric_id", "c0"), literal(123456)),
                             f.equals(column("metric_id", "c1"), literal(123456)),
@@ -490,8 +490,8 @@ test_cases = [
                 ),
             ),
             groupby=[
-                column("tags_raw[333333]", "c0", "c0.transaction"),
-                column("tags_raw[333333]", "c1", "c1.transaction"),
+                column("tags[333333]", "c0", "c0.transaction"),
+                column("tags[333333]", "c1", "c1.transaction"),
                 time_expression("c1"),
                 time_expression("c0"),
             ],
@@ -507,9 +507,9 @@ test_cases = [
     pytest.param(
         (
             "quantiles(0.5)(`c:transactions/duration@millisecond`){status_code:200} by transaction / sum(`c:transactions/duration@millisecond`) by transaction",
-            get_dataset("generic_metrics"),
+            get_dataset("metrics"),
             {
-                "entity": "generic_metrics_counters",
+                "entity": "metrics_counters",
                 "start": "2023-11-23T18:30:00",
                 "end": "2023-11-23T22:30:00",
                 "rollup": {
@@ -554,11 +554,11 @@ test_cases = [
                 ),
                 SelectedExpression(
                     "transaction",
-                    column("tags_raw[333333]", "c0", "c0.transaction"),
+                    column("tags[333333]", "c0", "c0.transaction"),
                 ),
                 SelectedExpression(
                     "transaction",
-                    column("tags_raw[333333]", "c1", "c1.transaction"),
+                    column("tags[333333]", "c1", "c1.transaction"),
                 ),
                 SelectedExpression(
                     "time",
@@ -620,7 +620,7 @@ test_cases = [
                         ),
                     ),
                     and_cond(
-                        f.equals(column("tags_raw[222222]", "c0"), literal("200")),
+                        f.equals(column("tags[222222]", "c0"), literal("200")),
                         and_cond(
                             f.equals(column("metric_id", "c0"), literal(123456)),
                             f.equals(column("metric_id", "c1"), literal(123456)),
@@ -629,8 +629,8 @@ test_cases = [
                 ),
             ),
             groupby=[
-                column("tags_raw[333333]", "c0", "c0.transaction"),
-                column("tags_raw[333333]", "c1", "c1.transaction"),
+                column("tags[333333]", "c0", "c0.transaction"),
+                column("tags[333333]", "c1", "c1.transaction"),
                 time_expression("c1"),
                 time_expression("c0"),
             ],
@@ -646,9 +646,9 @@ test_cases = [
     pytest.param(
         (
             "sum(`c:transactions/duration@millisecond`) / ((max(`c:transactions/duration@millisecond`) + avg(`c:transactions/duration@millisecond`)) * min(`c:transactions/duration@millisecond`))",
-            get_dataset("generic_metrics"),
+            get_dataset("metrics"),
             {
-                "entity": "generic_metrics_counters",
+                "entity": "metrics_counters",
                 "start": "2023-11-23T18:30:00",
                 "end": "2023-11-23T22:30:00",
                 "rollup": {
@@ -907,9 +907,9 @@ test_cases = [
     pytest.param(
         (
             "(sum(`c:transactions/duration@millisecond`) / max(`c:transactions/duration@millisecond`)){status_code:200}",
-            get_dataset("generic_metrics"),
+            get_dataset("metrics"),
             {
-                "entity": "generic_metrics_counters",
+                "entity": "metrics_counters",
                 "start": "2023-11-23T18:30:00",
                 "end": "2023-11-23T22:30:00",
                 "rollup": {
@@ -1013,11 +1013,11 @@ test_cases = [
                     ),
                     and_cond(
                         and_cond(
-                            f.equals(column("tags_raw[222222]", "c0"), literal("200")),
+                            f.equals(column("tags[222222]", "c0"), literal("200")),
                             f.equals(column("metric_id", "c0"), literal(123456)),
                         ),
                         and_cond(
-                            f.equals(column("tags_raw[222222]", "c1"), literal("200")),
+                            f.equals(column("tags[222222]", "c1"), literal("200")),
                             f.equals(column("metric_id", "c1"), literal(123456)),
                         ),
                     ),
@@ -1036,9 +1036,9 @@ test_cases = [
     pytest.param(
         (
             "(sum(`c:transactions/duration@millisecond`) / max(`c:transactions/duration@millisecond`)){status_code:200} by transaction",
-            get_dataset("generic_metrics"),
+            get_dataset("metrics"),
             {
-                "entity": "generic_metrics_counters",
+                "entity": "metrics_counters",
                 "start": "2023-11-23T18:30:00",
                 "end": "2023-11-23T22:30:00",
                 "rollup": {
@@ -1083,11 +1083,11 @@ test_cases = [
                 ),
                 SelectedExpression(
                     "transaction",
-                    column("tags_raw[333333]", "c0", "c0.transaction"),
+                    column("tags[333333]", "c0", "c0.transaction"),
                 ),
                 SelectedExpression(
                     "transaction",
-                    column("tags_raw[333333]", "c1", "c1.transaction"),
+                    column("tags[333333]", "c1", "c1.transaction"),
                 ),
                 SelectedExpression(
                     "time",
@@ -1150,19 +1150,19 @@ test_cases = [
                     ),
                     and_cond(
                         and_cond(
-                            f.equals(column("tags_raw[222222]", "c0"), literal("200")),
+                            f.equals(column("tags[222222]", "c0"), literal("200")),
                             f.equals(column("metric_id", "c0"), literal(123456)),
                         ),
                         and_cond(
-                            f.equals(column("tags_raw[222222]", "c1"), literal("200")),
+                            f.equals(column("tags[222222]", "c1"), literal("200")),
                             f.equals(column("metric_id", "c1"), literal(123456)),
                         ),
                     ),
                 ),
             ),
             groupby=[
-                column("tags_raw[333333]", "c0", "c0.transaction"),
-                column("tags_raw[333333]", "c1", "c1.transaction"),
+                column("tags[333333]", "c0", "c0.transaction"),
+                column("tags[333333]", "c1", "c1.transaction"),
                 time_expression("c1"),
                 time_expression("c0"),
             ],
@@ -1178,9 +1178,9 @@ test_cases = [
     pytest.param(
         (
             "(sum(`c:transactions/duration@millisecond`) / sum(`c:transactions/duration@millisecond`)) + 100",
-            get_dataset("generic_metrics"),
+            get_dataset("metrics"),
             {
-                "entity": "generic_metrics_counters",
+                "entity": "metrics_counters",
                 "start": "2023-11-23T18:30:00",
                 "end": "2023-11-23T22:30:00",
                 "rollup": {
@@ -1304,9 +1304,9 @@ test_cases = [
     pytest.param(
         (
             "apdex(sum(`c:transactions/duration@millisecond`), 123) / max(`c:transactions/duration@millisecond`)",
-            get_dataset("generic_metrics"),
+            get_dataset("metrics"),
             {
-                "entity": "generic_metrics_counters",
+                "entity": "metrics_counters",
                 "start": "2023-11-23T18:30:00",
                 "end": "2023-11-23T22:30:00",
                 "rollup": {
@@ -1434,7 +1434,7 @@ test_cases = [
     pytest.param(
         (
             'sum(`c:transactions/duration@millisecond`){dist:["dist1", "dist2"]} by (transaction, status_code)',
-            get_dataset("generic_metrics"),
+            get_dataset("metrics"),
             {
                 "start": "2023-11-23T18:30:00",
                 "end": "2023-11-23T22:30:00",
@@ -1462,15 +1462,15 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
                     "aggregate_value", f.sum(column("value"), alias="aggregate_value")
                 ),
-                SelectedExpression("transaction", column("tags_raw[111111]", None, "transaction")),
-                SelectedExpression("status_code", column("tags_raw[222222]", None, "status_code")),
+                SelectedExpression("transaction", column("tags[111111]", None, "transaction")),
+                SelectedExpression("status_code", column("tags[222222]", None, "status_code")),
                 SelectedExpression(
                     "time",
                     f.toStartOfInterval(
@@ -1508,14 +1508,14 @@ test_cases = [
                 and_cond(
                     f.equals(column("metric_id", None), literal(123456)),
                     in_cond(
-                        column("tags_raw[888]"),
+                        column("tags[888]"),
                         f.tuple(literal("dist1"), literal("dist2")),
                     ),
                 ),
             ),
             groupby=[
-                column("tags_raw[111111]", None, "transaction"),
-                column("tags_raw[222222]", None, "status_code"),
+                column("tags[111111]", None, "transaction"),
+                column("tags[222222]", None, "status_code"),
                 f.toStartOfInterval(
                     column("timestamp"),
                     f.toIntervalSecond(literal(60)),
@@ -1545,7 +1545,7 @@ test_cases = [
     pytest.param(
         (
             'sum(`c:transactions/duration@millisecond`){dist:["dist1", "dist2"]}',
-            get_dataset("generic_metrics"),
+            get_dataset("metrics"),
             {
                 "start": "2021-01-01T00:00:00",
                 "end": "2021-01-02T00:00:00",
@@ -1571,8 +1571,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -1610,7 +1610,7 @@ test_cases = [
                 and_cond(
                     f.equals(column("metric_id", None), literal(123456)),
                     in_cond(
-                        column("tags_raw[888]"),
+                        column("tags[888]"),
                         f.tuple(literal("dist1"), literal("dist2")),
                     ),
                 ),
@@ -1628,7 +1628,7 @@ test_cases = [
     pytest.param(
         (
             "sum(`c:transactions/duration@millisecond`){}",
-            get_dataset("generic_metrics"),
+            get_dataset("metrics"),
             {
                 "start": "2021-01-01T00:00:00",
                 "end": "2021-01-02T00:00:00",
@@ -1651,8 +1651,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -1702,7 +1702,7 @@ test_cases = [
     pytest.param(
         (
             'quantiles(0.5, 0.75)(c:transactions/user@none{!dist:["dist1", "dist2"]}){foo: bar} by (transaction)',
-            get_dataset("generic_metrics"),
+            get_dataset("metrics"),
             {
                 "start": "2021-01-01T01:36:00",
                 "end": "2021-01-05T04:15:00",
@@ -1731,8 +1731,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -1743,7 +1743,7 @@ test_cases = [
                         (column("value"),),
                     ),
                 ),
-                SelectedExpression("transaction", column("tags_raw[111111]", None, "transaction")),
+                SelectedExpression("transaction", column("tags[111111]", None, "transaction")),
                 SelectedExpression(
                     "time",
                     time_expression(None),
@@ -1777,15 +1777,15 @@ test_cases = [
                     f.equals(column("metric_id", None), literal(567890)),
                     and_cond(
                         f.notIn(
-                            column("tags_raw[888888]"),
+                            column("tags[888888]"),
                             f.tuple(literal("dist1"), literal("dist2")),
                         ),
-                        f.equals(column("tags_raw[777777]"), literal("bar")),
+                        f.equals(column("tags[777777]"), literal("bar")),
                     ),
                 ),
             ),
             groupby=[
-                column("tags_raw[111111]", None, "transaction"),
+                column("tags[111111]", None, "transaction"),
                 time_expression(None),
             ],
             having=None,
@@ -1800,7 +1800,7 @@ test_cases = [
     pytest.param(
         (
             'quantiles(0.5)(`c:transactions/duration@millisecond`){dist:["dist1", "dist2"]} by (transaction, status_code)',
-            get_dataset("generic_metrics"),
+            get_dataset("metrics"),
             {
                 "start": "2023-11-23T18:30:00",
                 "end": "2023-11-23T22:30:00",
@@ -1828,8 +1828,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -1838,8 +1838,8 @@ test_cases = [
                         "aggregate_value", f.quantiles(literal(0.5)), (column("value"),)
                     ),
                 ),
-                SelectedExpression("transaction", column("tags_raw[111111]", None, "transaction")),
-                SelectedExpression("status_code", column("tags_raw[222222]", None, "status_code")),
+                SelectedExpression("transaction", column("tags[111111]", None, "transaction")),
+                SelectedExpression("status_code", column("tags[222222]", None, "status_code")),
                 SelectedExpression(
                     "time",
                     time_expression(None),
@@ -1872,14 +1872,14 @@ test_cases = [
                 and_cond(
                     f.equals(column("metric_id", None), literal(123456)),
                     in_cond(
-                        column("tags_raw[888]"),
+                        column("tags[888]"),
                         f.tuple(literal("dist1"), literal("dist2")),
                     ),
                 ),
             ),
             groupby=[
-                column("tags_raw[111111]", None, "transaction"),
-                column("tags_raw[222222]", None, "status_code"),
+                column("tags[111111]", None, "transaction"),
+                column("tags[222222]", None, "status_code"),
                 time_expression(None),
             ],
             having=None,
@@ -1987,7 +1987,7 @@ test_cases = [
     pytest.param(
         (
             'max(c:transactions/duration@millisecond){bar:" !\\"#$%&\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"} by (transaction)',
-            get_dataset("generic_metrics"),
+            get_dataset("metrics"),
             {
                 "start": "2024-01-07T13:35:00+00:00",
                 "end": "2024-01-08T13:40:00+00:00",
@@ -2015,14 +2015,14 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
                     "aggregate_value", f.max(column("value"), alias="aggregate_value")
                 ),
-                SelectedExpression("transaction", column("tags_raw[141516]", None, "transaction")),
+                SelectedExpression("transaction", column("tags[141516]", None, "transaction")),
                 SelectedExpression(
                     "time",
                     f.toStartOfInterval(
@@ -2060,7 +2060,7 @@ test_cases = [
                 and_cond(
                     f.equals(column("metric_id", None), literal(123456)),
                     f.equals(
-                        column("tags_raw[111213]"),
+                        column("tags[111213]"),
                         literal(
                             " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
                         ),
@@ -2068,7 +2068,7 @@ test_cases = [
                 ),
             ),
             groupby=[
-                column("tags_raw[141516]", None, "transaction"),
+                column("tags[141516]", None, "transaction"),
                 time_expression(None, 300),
             ],
             having=None,
@@ -2088,7 +2088,7 @@ test_cases = [
     pytest.param(
         (
             'apdex(sum(`c:transactions/duration@millisecond`), 500){dist:["dist1", "dist2"]}',
-            get_dataset("generic_metrics"),
+            get_dataset("metrics"),
             {
                 "start": "2021-01-01T00:00:00",
                 "end": "2021-01-02T00:00:00",
@@ -2114,8 +2114,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -2154,7 +2154,7 @@ test_cases = [
                 and_cond(
                     f.equals(column("metric_id", None), literal(123456)),
                     in_cond(
-                        column("tags_raw[888]"),
+                        column("tags[888]"),
                         f.tuple(literal("dist1"), literal("dist2")),
                     ),
                 ),
@@ -2172,7 +2172,7 @@ test_cases = [
     pytest.param(
         (
             "topK(10)(sum(c:transactions/user@none), 300)",
-            get_dataset("generic_metrics"),
+            get_dataset("metrics"),
             {
                 "start": "2021-01-01T01:36:00",
                 "end": "2021-01-05T04:15:00",
@@ -2201,8 +2201,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -2257,7 +2257,7 @@ test_cases = [
     pytest.param(
         (
             'avg(c:custom/sentry.event_manager.save_transactions.fetch_organizations@second){(event_type:"transaction" AND transaction:"sentry.tasks.store.save_event_transaction")}',
-            get_dataset("generic_metrics"),
+            get_dataset("metrics"),
             {
                 "start": "2021-01-01T00:00:00",
                 "end": "2021-01-02T00:00:00",
@@ -2280,8 +2280,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -2316,9 +2316,9 @@ test_cases = [
                 and_cond(
                     f.equals(column("metric_id"), literal(111111)),
                     and_cond(
-                        f.equals(column("tags_raw[222222]"), literal("transaction")),
+                        f.equals(column("tags[222222]"), literal(333333)),
                         f.equals(
-                            column("tags_raw[333333]"),
+                            column("tags[333333]"),
                             literal("sentry.tasks.store.save_event_transaction"),
                         ),
                     ),
@@ -2337,7 +2337,7 @@ test_cases = [
     pytest.param(
         (
             '((avg(c:transactions/duration@millisecond) * 100.0) * 100.0){transaction:"getsentry.tasks.calculate_spike_projections"}',
-            get_dataset("generic_metrics"),
+            get_dataset("metrics"),
             {
                 "end": "2024-04-08T06:49:00+00:00",
                 "indexer_mappings": {
@@ -2363,8 +2363,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -2413,7 +2413,7 @@ test_cases = [
                 ),
                 and_cond(
                     f.equals(
-                        column("tags_raw[9223372036854776020]"),
+                        column("tags[9223372036854776020]"),
                         literal("getsentry.tasks.calculate_spike_projections"),
                     ),
                     f.equals(column("metric_id"), literal(9223372036854775909)),
@@ -2455,9 +2455,9 @@ failure_cases = [
     pytest.param(
         (
             "sum(`c:transactions/duration@millisecond`){status_code:200} by transaction / sum(`c:transactions/duration@millisecond`) by status_code",
-            get_dataset("generic_metrics"),
+            get_dataset("metrics"),
             {
-                "entity": "generic_metrics_counters",
+                "entity": "metrics_counters",
                 "start": "2023-11-23T18:30:00",
                 "end": "2023-11-23T22:30:00",
                 "rollup": {
@@ -2486,9 +2486,9 @@ failure_cases = [
     pytest.param(
         (
             "apdex(sum(`c:transactions/duration@millisecond`) / max(`c:transactions/duration@millisecond`), 123)",
-            get_dataset("generic_metrics"),
+            get_dataset("metrics"),
             {
-                "entity": "generic_metrics_counters",
+                "entity": "metrics_counters",
                 "start": "2023-11-23T18:30:00",
                 "end": "2023-11-23T22:30:00",
                 "rollup": {
@@ -2517,9 +2517,9 @@ failure_cases = [
     pytest.param(
         (
             'apdex(sum(`c:transactions/duration@millisecond`) / max(`c:transactions/duration@millisecond`), 500){dist:["dist1", "dist2"]}',
-            get_dataset("generic_metrics"),
+            get_dataset("metrics"),
             {
-                "entity": "generic_metrics_counters",
+                "entity": "metrics_counters",
                 "start": "2023-11-23T18:30:00",
                 "end": "2023-11-23T22:30:00",
                 "rollup": {
@@ -2548,7 +2548,7 @@ failure_cases = [
     pytest.param(
         (
             'sum(`c:transactions/duration@millisecond`){dist:["dist1", "dist2"]}',
-            get_dataset("generic_metrics"),
+            get_dataset("metrics"),
             {
                 "start": "2021-01-01T00:00:00",
                 "end": "2021-01-02T00:00:00",
@@ -2577,7 +2577,7 @@ failure_cases = [
     pytest.param(
         (
             'sum(`c:transactions/duration@millisecond`){dist:["dist1", "dist2"]}',
-            get_dataset("generic_metrics"),
+            get_dataset("metrics"),
             {
                 "start": "2021-01-01T00:00:00",
                 "end": "2021-01-02T00:00:00",
@@ -2606,7 +2606,7 @@ failure_cases = [
     pytest.param(
         (
             'sum(`c:transactions/duration@millisecond`){dist:["dist1", "dist2"]}',
-            get_dataset("generic_metrics"),
+            get_dataset("metrics"),
             {
                 "end": "2021-01-02T00:00:00",
                 "rollup": {
@@ -2634,7 +2634,7 @@ failure_cases = [
     pytest.param(
         (
             'sum(`c:transactions/duration@millisecond`){dist:["dist1", "dist2"]}',
-            get_dataset("generic_metrics"),
+            get_dataset("metrics"),
             {
                 "start": "2021-01-01T00:00:00",
                 "end": "2021-01-02T00:00:00",
@@ -2663,7 +2663,7 @@ failure_cases = [
     pytest.param(
         (
             'sum(`transaction.duration`){dist:["dist1", "dist2"]}',
-            get_dataset("generic_metrics"),
+            get_dataset("metrics"),
             {
                 "start": "2021-01-01T00:00:00",
                 "end": "2021-01-02T00:00:00",
@@ -2692,7 +2692,7 @@ failure_cases = [
     pytest.param(
         (
             "sum(`transaction.duration",
-            get_dataset("generic_metrics"),
+            get_dataset("metrics"),
             {
                 "start": "2021-01-01T00:00:00",
                 "end": "2021-01-02T00:00:00",

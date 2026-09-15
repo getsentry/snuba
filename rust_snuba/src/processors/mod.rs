@@ -3,7 +3,6 @@
 pub mod eap_items;
 mod errors;
 mod functions;
-mod generic_metrics;
 mod llm_proxy_cost;
 mod outcomes;
 mod profile_chunks;
@@ -57,7 +56,6 @@ define_processing_functions! {
     ("QuerylogProcessor", "snuba-queries", ProcessingFunctionType::ProcessingFunction(querylog::process_message)),
     ("ReplaysProcessor", "ingest-replay-events", ProcessingFunctionType::ProcessingFunction(replays::process_message)),
     ("OutcomesProcessor", "outcomes", ProcessingFunctionType::ProcessingFunction(outcomes::process_message)),
-    ("GenericCountersMetricsProcessor", "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_counter_message)),
     ("PolymorphicMetricsProcessor", "snuba-metrics", ProcessingFunctionType::ProcessingFunction(release_health_metrics::process_metrics_message)),
     ("ErrorsProcessor", "events", ProcessingFunctionType::ProcessingFunctionWithReplacements(errors::process_message_with_replacement)),
     ("ProfileChunksProcessor", "snuba-profile-chunks", ProcessingFunctionType::ProcessingFunction(profile_chunks::process_message)),
@@ -68,7 +66,6 @@ define_processing_functions! {
 // COGS is recorded for these processors
 pub fn get_cogs_label(processor_name: &str) -> Option<String> {
     match processor_name {
-        "GenericCountersMetricsProcessor" => Some("generic_metrics_processor_counters".to_string()),
         "EAPItemsProcessor" => Some("eap_items_processor".to_string()),
         _ => None,
     }

@@ -146,7 +146,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
 
         let cogs_label = get_cogs_label(&self.storage_config.message_processor.python_class_name);
 
-        // Produce cogs if generic metrics AND we are not skipping writes AND record_cogs is true
+        // Produce cogs if the processor has a COGS label AND we are not skipping writes AND record_cogs is true
         let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<()>>> =
             match (self.env_config.record_cogs, self.skip_write, cogs_label) {
                 (true, false, Some(resource_id)) => Box::new(RecordCogs::new(

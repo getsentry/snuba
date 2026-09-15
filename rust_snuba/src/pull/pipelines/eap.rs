@@ -18,7 +18,7 @@ use crate::pull::stages::processor_stage::ProcessorStage;
 ///
 /// Processor → [DLQ rejections] → Batch → Writer → CommitLog → COGS
 ///
-/// Covers: eap_items, generic_metrics (same shape).
+/// Covers: eap_items.
 pub struct EapPipeline {
     processor: ProcessorStage,
     processing_concurrency: usize,

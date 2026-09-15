@@ -142,7 +142,7 @@ _REGISTERED_MIGRATION_GROUPS: dict[MigrationGroup, _MigrationGroup] = {
     MigrationGroup.GENERIC_METRICS: _MigrationGroup(
         loader=GenericMetricsLoader(),
         storage_sets_keys={StorageSetKey.GENERIC_METRICS_COUNTERS},
-        readiness_state=ReadinessState.COMPLETE,
+        readiness_state=ReadinessState.DEPRECATE,
     ),
     MigrationGroup.TEST_MIGRATION: _MigrationGroup(
         loader=TestMigrationLoader(),

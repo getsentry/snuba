@@ -23,15 +23,15 @@ from snuba.query.snql.parser import CustomProcessors
 from snuba.utils.metrics.timer import Timer
 
 tags = NestedColumn("tags")
-tags_raw = NestedColumn("tags_raw")
+tags = NestedColumn("tags")
 
 test_cases = [
     pytest.param(
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_COUNTERS,
-                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                    EntityKey.METRICS_COUNTERS,
+                    get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -40,7 +40,7 @@ test_cases = [
                             f.sumIf(
                                 column("value"),
                                 and_cond(
-                                    f.equals(column("tags_raw[222222]"), literal("200")),
+                                    f.equals(column("tags[222222]"), literal("200")),
                                     f.equals(column("metric_id"), literal(123456)),
                                 ),
                             ),
@@ -115,8 +115,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -125,7 +125,7 @@ test_cases = [
                         f.sumIf(
                             column("value", None, "_snuba_value"),
                             and_cond(
-                                f.equals(tags_raw["222222"], literal("200")),
+                                f.equals(tags["222222"], literal("200")),
                                 f.equals(
                                     column("metric_id", None, "_snuba_metric_id"),
                                     literal(123456),
@@ -157,7 +157,7 @@ test_cases = [
                 and_cond(
                     or_cond(
                         and_cond(
-                            f.equals(tags_raw["222222"], literal("200")),
+                            f.equals(tags["222222"], literal("200")),
                             f.equals(
                                 column("metric_id", None, "_snuba_metric_id"),
                                 literal(123456),
@@ -230,8 +230,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_COUNTERS,
-                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                    EntityKey.METRICS_COUNTERS,
+                    get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -242,7 +242,7 @@ test_cases = [
                                 f.sumIf(
                                     column("value"),
                                     and_cond(
-                                        f.equals(column("tags_raw[222222]"), literal("200")),
+                                        f.equals(column("tags[222222]"), literal("200")),
                                         f.equals(column("metric_id"), literal(123456)),
                                     ),
                                 ),
@@ -318,8 +318,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -330,7 +330,7 @@ test_cases = [
                             f.sumIf(
                                 column("value", None, "_snuba_value"),
                                 and_cond(
-                                    f.equals(tags_raw["222222"], literal("200")),
+                                    f.equals(tags["222222"], literal("200")),
                                     f.equals(
                                         column("metric_id", None, "_snuba_metric_id"),
                                         literal(123456),
@@ -363,7 +363,7 @@ test_cases = [
                 and_cond(
                     or_cond(
                         and_cond(
-                            f.equals(tags_raw["222222"], literal("200")),
+                            f.equals(tags["222222"], literal("200")),
                             f.equals(
                                 column("metric_id", None, "_snuba_metric_id"),
                                 literal(123456),
@@ -436,8 +436,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_COUNTERS,
-                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                    EntityKey.METRICS_COUNTERS,
+                    get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -446,7 +446,7 @@ test_cases = [
                             f.sumIf(
                                 column("value"),
                                 and_cond(
-                                    f.equals(column("tags_raw[222222]"), literal("200")),
+                                    f.equals(column("tags[222222]"), literal("200")),
                                     f.equals(column("metric_id"), literal(123456)),
                                 ),
                             ),
@@ -457,9 +457,7 @@ test_cases = [
                             alias="aggregate_value",
                         ),
                     ),
-                    SelectedExpression(
-                        "transaction", column("tags_raw[333333]", None, "transaction")
-                    ),
+                    SelectedExpression("transaction", column("tags[333333]", None, "transaction")),
                     SelectedExpression(
                         "time",
                         f.toStartOfInterval(
@@ -494,7 +492,7 @@ test_cases = [
                     ),
                 ),
                 groupby=[
-                    column("tags_raw[333333]", None, "transaction"),
+                    column("tags[333333]", None, "transaction"),
                     f.toStartOfInterval(
                         column("timestamp"),
                         f.toIntervalSecond(literal(60)),
@@ -525,8 +523,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -535,7 +533,7 @@ test_cases = [
                         f.sumIf(
                             column("value", None, "_snuba_value"),
                             and_cond(
-                                f.equals(tags_raw["222222"], literal("200")),
+                                f.equals(tags["222222"], literal("200")),
                                 f.equals(
                                     column("metric_id", None, "_snuba_metric_id"),
                                     literal(123456),
@@ -552,7 +550,7 @@ test_cases = [
                         alias="_snuba_aggregate_value",
                     ),
                 ),
-                SelectedExpression("transaction", tags_raw["333333"]),
+                SelectedExpression("transaction", tags["333333"]),
                 SelectedExpression(
                     "time",
                     f.toStartOfInterval(
@@ -568,7 +566,7 @@ test_cases = [
                 and_cond(
                     or_cond(
                         and_cond(
-                            f.equals(tags_raw["222222"], literal("200")),
+                            f.equals(tags["222222"], literal("200")),
                             f.equals(
                                 column("metric_id", None, "_snuba_metric_id"),
                                 literal(123456),
@@ -611,7 +609,7 @@ test_cases = [
                 ),
             ),
             groupby=[
-                tags_raw["333333"],
+                tags["333333"],
                 f.toStartOfInterval(
                     column("timestamp", None, "_snuba_timestamp"),
                     f.toIntervalSecond(literal(60)),
@@ -642,8 +640,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_COUNTERS,
-                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                    EntityKey.METRICS_COUNTERS,
+                    get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -655,7 +653,7 @@ test_cases = [
                                 (
                                     column("value"),
                                     and_cond(
-                                        f.equals(column("tags_raw[222222]"), literal("200")),
+                                        f.equals(column("tags[222222]"), literal("200")),
                                         f.equals(column("metric_id"), literal(123456)),
                                     ),
                                 ),
@@ -667,9 +665,7 @@ test_cases = [
                             alias="aggregate_value",
                         ),
                     ),
-                    SelectedExpression(
-                        "transaction", column("tags_raw[333333]", None, "transaction")
-                    ),
+                    SelectedExpression("transaction", column("tags[333333]", None, "transaction")),
                     SelectedExpression(
                         "time",
                         f.toStartOfInterval(
@@ -704,7 +700,7 @@ test_cases = [
                     ),
                 ),
                 groupby=[
-                    column("tags_raw[333333]", None, "transaction"),
+                    column("tags[333333]", None, "transaction"),
                     f.toStartOfInterval(
                         column("timestamp"),
                         f.toIntervalSecond(literal(60)),
@@ -735,8 +731,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -749,7 +745,7 @@ test_cases = [
                                 (
                                     column("value", None, "_snuba_value"),
                                     and_cond(
-                                        f.equals(tags_raw["222222"], literal("200")),
+                                        f.equals(tags["222222"], literal("200")),
                                         f.equals(
                                             column("metric_id", None, "_snuba_metric_id"),
                                             literal(123456),
@@ -769,7 +765,7 @@ test_cases = [
                         alias="_snuba_aggregate_value",
                     ),
                 ),
-                SelectedExpression("transaction", tags_raw["333333"]),
+                SelectedExpression("transaction", tags["333333"]),
                 SelectedExpression(
                     "time",
                     f.toStartOfInterval(
@@ -785,7 +781,7 @@ test_cases = [
                 and_cond(
                     or_cond(
                         and_cond(
-                            f.equals(tags_raw["222222"], literal("200")),
+                            f.equals(tags["222222"], literal("200")),
                             f.equals(
                                 column("metric_id", None, "_snuba_metric_id"),
                                 literal(123456),
@@ -828,7 +824,7 @@ test_cases = [
                 ),
             ),
             groupby=[
-                tags_raw["333333"],
+                tags["333333"],
                 f.toStartOfInterval(
                     column("timestamp", None, "_snuba_timestamp"),
                     f.toIntervalSecond(literal(60)),
@@ -859,8 +855,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_COUNTERS,
-                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                    EntityKey.METRICS_COUNTERS,
+                    get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -953,8 +949,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -1092,8 +1088,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_COUNTERS,
-                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                    EntityKey.METRICS_COUNTERS,
+                    get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -1102,14 +1098,14 @@ test_cases = [
                             f.sumIf(
                                 column("value"),
                                 and_cond(
-                                    f.equals(column("tags_raw[222222]"), literal("200")),
+                                    f.equals(column("tags[222222]"), literal("200")),
                                     f.equals(column("metric_id"), literal(123456)),
                                 ),
                             ),
                             f.maxIf(
                                 column("value"),
                                 and_cond(
-                                    f.equals(column("tags_raw[222222]"), literal("200")),
+                                    f.equals(column("tags[222222]"), literal("200")),
                                     f.equals(column("metric_id"), literal(123456)),
                                 ),
                             ),
@@ -1180,8 +1176,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -1190,7 +1186,7 @@ test_cases = [
                         f.sumIf(
                             column("value", None, "_snuba_value"),
                             and_cond(
-                                f.equals(tags_raw["222222"], literal("200")),
+                                f.equals(tags["222222"], literal("200")),
                                 f.equals(
                                     column("metric_id", None, "_snuba_metric_id"),
                                     literal(123456),
@@ -1200,7 +1196,7 @@ test_cases = [
                         f.maxIf(
                             column("value", None, "_snuba_value"),
                             and_cond(
-                                f.equals(tags_raw["222222"], literal("200")),
+                                f.equals(tags["222222"], literal("200")),
                                 f.equals(
                                     column("metric_id", None, "_snuba_metric_id"),
                                     literal(123456),
@@ -1225,14 +1221,14 @@ test_cases = [
                 and_cond(
                     or_cond(
                         and_cond(
-                            f.equals(tags_raw["222222"], literal("200")),
+                            f.equals(tags["222222"], literal("200")),
                             f.equals(
                                 column("metric_id", None, "_snuba_metric_id"),
                                 literal(123456),
                             ),
                         ),
                         and_cond(
-                            f.equals(tags_raw["222222"], literal("200")),
+                            f.equals(tags["222222"], literal("200")),
                             f.equals(
                                 column("metric_id", None, "_snuba_metric_id"),
                                 literal(123456),
@@ -1301,8 +1297,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_COUNTERS,
-                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                    EntityKey.METRICS_COUNTERS,
+                    get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -1311,23 +1307,21 @@ test_cases = [
                             f.sumIf(
                                 column("value"),
                                 and_cond(
-                                    f.equals(column("tags_raw[222222]"), literal("200")),
+                                    f.equals(column("tags[222222]"), literal("200")),
                                     f.equals(column("metric_id"), literal(123456)),
                                 ),
                             ),
                             f.maxIf(
                                 column("value"),
                                 and_cond(
-                                    f.equals(column("tags_raw[222222]"), literal("200")),
+                                    f.equals(column("tags[222222]"), literal("200")),
                                     f.equals(column("metric_id"), literal(123456)),
                                 ),
                             ),
                             alias="aggregate_value",
                         ),
                     ),
-                    SelectedExpression(
-                        "transaction", column("tags_raw[333333]", None, "transaction")
-                    ),
+                    SelectedExpression("transaction", column("tags[333333]", None, "transaction")),
                     SelectedExpression(
                         "time",
                         f.toStartOfInterval(
@@ -1362,7 +1356,7 @@ test_cases = [
                     ),
                 ),
                 groupby=[
-                    column("tags_raw[333333]", None, "transaction"),
+                    column("tags[333333]", None, "transaction"),
                     f.toStartOfInterval(
                         column("timestamp"),
                         f.toIntervalSecond(literal(60)),
@@ -1393,8 +1387,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -1403,7 +1397,7 @@ test_cases = [
                         f.sumIf(
                             column("value", None, "_snuba_value"),
                             and_cond(
-                                f.equals(tags_raw["222222"], literal("200")),
+                                f.equals(tags["222222"], literal("200")),
                                 f.equals(
                                     column("metric_id", None, "_snuba_metric_id"),
                                     literal(123456),
@@ -1413,7 +1407,7 @@ test_cases = [
                         f.maxIf(
                             column("value", None, "_snuba_value"),
                             and_cond(
-                                f.equals(tags_raw["222222"], literal("200")),
+                                f.equals(tags["222222"], literal("200")),
                                 f.equals(
                                     column("metric_id", None, "_snuba_metric_id"),
                                     literal(123456),
@@ -1423,7 +1417,7 @@ test_cases = [
                         alias="_snuba_aggregate_value",
                     ),
                 ),
-                SelectedExpression("transaction", tags_raw["333333"]),
+                SelectedExpression("transaction", tags["333333"]),
                 SelectedExpression(
                     "time",
                     f.toStartOfInterval(
@@ -1439,14 +1433,14 @@ test_cases = [
                 and_cond(
                     or_cond(
                         and_cond(
-                            f.equals(tags_raw["222222"], literal("200")),
+                            f.equals(tags["222222"], literal("200")),
                             f.equals(
                                 column("metric_id", None, "_snuba_metric_id"),
                                 literal(123456),
                             ),
                         ),
                         and_cond(
-                            f.equals(tags_raw["222222"], literal("200")),
+                            f.equals(tags["222222"], literal("200")),
                             f.equals(
                                 column("metric_id", None, "_snuba_metric_id"),
                                 literal(123456),
@@ -1485,7 +1479,7 @@ test_cases = [
                 ),
             ),
             groupby=[
-                tags_raw["333333"],
+                tags["333333"],
                 f.toStartOfInterval(
                     column("timestamp", None, "_snuba_timestamp"),
                     f.toIntervalSecond(literal(60)),
@@ -1516,8 +1510,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_COUNTERS,
-                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                    EntityKey.METRICS_COUNTERS,
+                    get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -1601,8 +1595,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -1713,8 +1707,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_COUNTERS,
-                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                    EntityKey.METRICS_COUNTERS,
+                    get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -1795,8 +1789,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -1904,20 +1898,16 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_COUNTERS,
-                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                    EntityKey.METRICS_COUNTERS,
+                    get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
                         "aggregate_value",
                         f.sum(column("value"), alias="aggregate_value"),
                     ),
-                    SelectedExpression(
-                        "transaction", column("tags_raw[111111]", None, "transaction")
-                    ),
-                    SelectedExpression(
-                        "status_code", column("tags_raw[222222]", None, "status_code")
-                    ),
+                    SelectedExpression("transaction", column("tags[111111]", None, "transaction")),
+                    SelectedExpression("status_code", column("tags[222222]", None, "status_code")),
                     SelectedExpression(
                         "time",
                         f.toStartOfInterval(
@@ -1953,7 +1943,7 @@ test_cases = [
                             and_cond(
                                 f.equals(column("metric_id"), literal(123456)),
                                 in_cond(
-                                    column("tags_raw[888]"),
+                                    column("tags[888]"),
                                     f.tuple(literal("dist1"), literal("dist2")),
                                 ),
                             ),
@@ -1961,8 +1951,8 @@ test_cases = [
                     ),
                 ),
                 groupby=[
-                    column("tags_raw[111111]", None, "transaction"),
-                    column("tags_raw[222222]", None, "status_code"),
+                    column("tags[111111]", None, "transaction"),
+                    column("tags[222222]", None, "status_code"),
                     f.toStartOfInterval(
                         column("timestamp"),
                         f.toIntervalSecond(literal(60)),
@@ -1993,8 +1983,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -2004,8 +1994,8 @@ test_cases = [
                         alias="_snuba_aggregate_value",
                     ),
                 ),
-                SelectedExpression("transaction", tags_raw["111111"]),
-                SelectedExpression("status_code", tags_raw["222222"]),
+                SelectedExpression("transaction", tags["111111"]),
+                SelectedExpression("status_code", tags["222222"]),
                 SelectedExpression(
                     "time",
                     f.toStartOfInterval(
@@ -2053,13 +2043,13 @@ test_cases = [
                             column("metric_id", None, "_snuba_metric_id"),
                             literal(123456),
                         ),
-                        in_cond(tags_raw["888"], f.tuple(literal("dist1"), literal("dist2"))),
+                        in_cond(tags["888"], f.tuple(literal("dist1"), literal("dist2"))),
                     ),
                 ),
             ),
             groupby=[
-                tags_raw["111111"],
-                tags_raw["222222"],
+                tags["111111"],
+                tags["222222"],
                 f.toStartOfInterval(
                     column("timestamp", None, "_snuba_timestamp"),
                     f.toIntervalSecond(literal(60)),
@@ -2090,8 +2080,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_COUNTERS,
-                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                    EntityKey.METRICS_COUNTERS,
+                    get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -2124,7 +2114,7 @@ test_cases = [
                             and_cond(
                                 f.equals(column("metric_id"), literal(123456)),
                                 in_cond(
-                                    column("tags_raw[888]"),
+                                    column("tags[888]"),
                                     f.tuple(literal("dist1"), literal("dist2")),
                                 ),
                             ),
@@ -2145,8 +2135,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -2194,7 +2184,7 @@ test_cases = [
                             column("metric_id", None, "_snuba_metric_id"),
                             literal(123456),
                         ),
-                        in_cond(tags_raw["888"], f.tuple(literal("dist1"), literal("dist2"))),
+                        in_cond(tags["888"], f.tuple(literal("dist1"), literal("dist2"))),
                     ),
                 ),
             ),
@@ -2220,8 +2210,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_COUNTERS,
-                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                    EntityKey.METRICS_COUNTERS,
+                    get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -2269,8 +2259,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -2338,8 +2328,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_COUNTERS,
-                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                    EntityKey.METRICS_COUNTERS,
+                    get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -2350,9 +2340,7 @@ test_cases = [
                             (column("value"),),
                         ),
                     ),
-                    SelectedExpression(
-                        "transaction", column("tags_raw[111111]", None, "transaction")
-                    ),
+                    SelectedExpression("transaction", column("tags[111111]", None, "transaction")),
                 ],
                 array_join=None,
                 condition=and_cond(
@@ -2380,16 +2368,16 @@ test_cases = [
                                 f.equals(column("metric_id"), literal(567890)),
                                 and_cond(
                                     f.notIn(
-                                        column("tags_raw[888888]"),
+                                        column("tags[888888]"),
                                         f.tuple(literal("dist1"), literal("dist2")),
                                     ),
-                                    f.equals(column("tags_raw[777777]"), literal("bar")),
+                                    f.equals(column("tags[777777]"), literal("bar")),
                                 ),
                             ),
                         ),
                     ),
                 ),
-                groupby=[column("tags_raw[111111]", None, "transaction")],
+                groupby=[column("tags[111111]", None, "transaction")],
                 having=None,
                 order_by=None,
                 limitby=None,
@@ -2403,8 +2391,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -2415,7 +2403,7 @@ test_cases = [
                         (column("value", None, "_snuba_value"),),
                     ),
                 ),
-                SelectedExpression("transaction", tags_raw["111111"]),
+                SelectedExpression("transaction", tags["111111"]),
             ],
             array_join=None,
             condition=and_cond(
@@ -2456,15 +2444,15 @@ test_cases = [
                         ),
                         and_cond(
                             f.notIn(
-                                tags_raw["888888"],
+                                tags["888888"],
                                 f.tuple(literal("dist1"), literal("dist2")),
                             ),
-                            f.equals(tags_raw["777777"], literal("bar")),
+                            f.equals(tags["777777"], literal("bar")),
                         ),
                     ),
                 ),
             ),
-            groupby=[tags_raw["111111"]],
+            groupby=[tags["111111"]],
             having=None,
             order_by=None,
             limitby=None,
@@ -2478,8 +2466,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_COUNTERS,
-                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                    EntityKey.METRICS_COUNTERS,
+                    get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -2490,12 +2478,8 @@ test_cases = [
                             (column("value"),),
                         ),
                     ),
-                    SelectedExpression(
-                        "transaction", column("tags_raw[111111]", None, "transaction")
-                    ),
-                    SelectedExpression(
-                        "status_code", column("tags_raw[222222]", None, "status_code")
-                    ),
+                    SelectedExpression("transaction", column("tags[111111]", None, "transaction")),
+                    SelectedExpression("status_code", column("tags[222222]", None, "status_code")),
                     SelectedExpression(
                         "time",
                         f.toStartOfInterval(
@@ -2531,7 +2515,7 @@ test_cases = [
                             and_cond(
                                 f.equals(column("metric_id"), literal(123456)),
                                 in_cond(
-                                    column("tags_raw[888]"),
+                                    column("tags[888]"),
                                     f.tuple(literal("dist1"), literal("dist2")),
                                 ),
                             ),
@@ -2539,8 +2523,8 @@ test_cases = [
                     ),
                 ),
                 groupby=[
-                    column("tags_raw[111111]", None, "transaction"),
-                    column("tags_raw[222222]", None, "status_code"),
+                    column("tags[111111]", None, "transaction"),
+                    column("tags[222222]", None, "status_code"),
                     f.toStartOfInterval(
                         column("timestamp"),
                         f.toIntervalSecond(literal(60)),
@@ -2571,8 +2555,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -2587,8 +2571,8 @@ test_cases = [
                         alias="_snuba_aggregate_value",
                     ),
                 ),
-                SelectedExpression("transaction", tags_raw["111111"]),
-                SelectedExpression("status_code", tags_raw["222222"]),
+                SelectedExpression("transaction", tags["111111"]),
+                SelectedExpression("status_code", tags["222222"]),
                 SelectedExpression(
                     "time",
                     f.toStartOfInterval(
@@ -2636,13 +2620,13 @@ test_cases = [
                             column("metric_id", None, "_snuba_metric_id"),
                             literal(123456),
                         ),
-                        in_cond(tags_raw["888"], f.tuple(literal("dist1"), literal("dist2"))),
+                        in_cond(tags["888"], f.tuple(literal("dist1"), literal("dist2"))),
                     ),
                 ),
             ),
             groupby=[
-                tags_raw["111111"],
-                tags_raw["222222"],
+                tags["111111"],
+                tags["222222"],
                 f.toStartOfInterval(
                     column("timestamp", None, "_snuba_timestamp"),
                     f.toIntervalSecond(literal(60)),
@@ -2805,17 +2789,15 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_COUNTERS,
-                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                    EntityKey.METRICS_COUNTERS,
+                    get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
                         "aggregate_value",
                         f.max(column("value"), alias="aggregate_value"),
                     ),
-                    SelectedExpression(
-                        "transaction", column("tags_raw[141516]", None, "transaction")
-                    ),
+                    SelectedExpression("transaction", column("tags[141516]", None, "transaction")),
                     SelectedExpression(
                         "time",
                         f.toStartOfInterval(
@@ -2851,7 +2833,7 @@ test_cases = [
                             and_cond(
                                 f.equals(column("metric_id"), literal(123456)),
                                 f.equals(
-                                    column("tags_raw[111213]"),
+                                    column("tags[111213]"),
                                     literal(
                                         " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
                                     ),
@@ -2861,7 +2843,7 @@ test_cases = [
                     ),
                 ),
                 groupby=[
-                    column("tags_raw[141516]", None, "transaction"),
+                    column("tags[141516]", None, "transaction"),
                     f.toStartOfInterval(
                         column("timestamp"),
                         f.toIntervalSecond(literal(300)),
@@ -2892,8 +2874,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -2903,7 +2885,7 @@ test_cases = [
                         alias="_snuba_aggregate_value",
                     ),
                 ),
-                SelectedExpression("transaction", tags_raw["141516"]),
+                SelectedExpression("transaction", tags["141516"]),
                 SelectedExpression(
                     "time",
                     f.toStartOfInterval(
@@ -2952,7 +2934,7 @@ test_cases = [
                             literal(123456),
                         ),
                         f.equals(
-                            tags_raw["111213"],
+                            tags["111213"],
                             literal(
                                 " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
                             ),
@@ -2961,7 +2943,7 @@ test_cases = [
                 ),
             ),
             groupby=[
-                tags_raw["141516"],
+                tags["141516"],
                 f.toStartOfInterval(
                     column("timestamp", None, "_snuba_timestamp"),
                     f.toIntervalSecond(literal(300)),
@@ -2992,8 +2974,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_COUNTERS,
-                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                    EntityKey.METRICS_COUNTERS,
+                    get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -3030,7 +3012,7 @@ test_cases = [
                             and_cond(
                                 f.equals(column("metric_id"), literal(123456)),
                                 in_cond(
-                                    column("tags_raw[888]"),
+                                    column("tags[888]"),
                                     f.tuple(literal("dist1"), literal("dist2")),
                                 ),
                             ),
@@ -3051,8 +3033,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -3101,7 +3083,7 @@ test_cases = [
                             column("metric_id", None, "_snuba_metric_id"),
                             literal(123456),
                         ),
-                        in_cond(tags_raw["888"], f.tuple(literal("dist1"), literal("dist2"))),
+                        in_cond(tags["888"], f.tuple(literal("dist1"), literal("dist2"))),
                     ),
                 ),
             ),
@@ -3128,8 +3110,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_COUNTERS,
-                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                    EntityKey.METRICS_COUNTERS,
+                    get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -3184,8 +3166,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -3252,8 +3234,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_COUNTERS,
-                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                    EntityKey.METRICS_COUNTERS,
+                    get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -3287,11 +3269,11 @@ test_cases = [
                                 f.equals(column("metric_id"), literal(111111)),
                                 and_cond(
                                     f.equals(
-                                        column("tags_raw[222222]"),
+                                        column("tags[222222]"),
                                         literal("transaction"),
                                     ),
                                     f.equals(
-                                        column("tags_raw[333333]"),
+                                        column("tags[333333]"),
                                         literal("sentry.tasks.store.save_event_transaction"),
                                     ),
                                 ),
@@ -3313,8 +3295,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -3363,9 +3345,9 @@ test_cases = [
                             ),
                         ),
                         and_cond(
-                            f.equals(tags_raw["222222"], literal("transaction")),
+                            f.equals(tags["222222"], literal("transaction")),
                             f.equals(
-                                tags_raw["333333"],
+                                tags["333333"],
                                 literal("sentry.tasks.store.save_event_transaction"),
                             ),
                         ),
@@ -3386,8 +3368,8 @@ test_cases = [
         (
             Query(
                 from_clause=Entity(
-                    EntityKey.GENERIC_METRICS_COUNTERS,
-                    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                    EntityKey.METRICS_COUNTERS,
+                    get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -3398,7 +3380,7 @@ test_cases = [
                                     column("value"),
                                     and_cond(
                                         f.equals(
-                                            column("tags_raw[9223372036854776020]"),
+                                            column("tags[9223372036854776020]"),
                                             literal("getsentry.tasks.calculate_spike_projections"),
                                         ),
                                         f.equals(
@@ -3477,8 +3459,8 @@ test_cases = [
         ),
         Query(
             from_clause=Entity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -3489,7 +3471,7 @@ test_cases = [
                                 column("value", None, "_snuba_value"),
                                 and_cond(
                                     f.equals(
-                                        tags_raw["9223372036854776020"],
+                                        tags["9223372036854776020"],
                                         literal("getsentry.tasks.calculate_spike_projections"),
                                     ),
                                     f.equals(
@@ -3519,7 +3501,7 @@ test_cases = [
                 and_cond(
                     and_cond(
                         f.equals(
-                            tags_raw["9223372036854776020"],
+                            tags["9223372036854776020"],
                             literal("getsentry.tasks.calculate_spike_projections"),
                         ),
                         f.equals(

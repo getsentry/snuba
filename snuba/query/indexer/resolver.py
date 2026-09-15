@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import replace
 
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.factory import get_dataset_name
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import build_match
 from snuba.query.data_source.join import (
@@ -28,20 +27,17 @@ def resolve(value: str, mapping: dict[str, str | int]) -> str | int:
     raise InvalidQueryException(f"Could not resolve {value}")
 
 
-def resolve_tag_column_name(value: str, mapping: dict[str, str | int], dataset: Dataset) -> str:
-    if get_dataset_name(dataset) == "metrics":
-        return f"tags[{resolve(value, mapping)}]"
-    return f"tags_raw[{resolve(value, mapping)}]"
+def resolve_tag_column_name(value: str, mapping: dict[str, str | int]) -> str:
+    return f"tags[{resolve(value, mapping)}]"
 
 
 def resolve_tag_key_mappings(
     query: CompositeQuery[QueryEntity] | LogicalQuery,
     indexer_mapping: dict[str, str | int],
-    dataset: Dataset,
 ) -> None:
     def resolve_tag_column(exp: Expression) -> Expression:
         if isinstance(exp, Column) and exp.column_name in indexer_mapping:
-            column_name = resolve_tag_column_name(exp.column_name, indexer_mapping, dataset)
+            column_name = resolve_tag_column_name(exp.column_name, indexer_mapping)
             return replace(exp, column_name=column_name)
         return exp
 
@@ -59,10 +55,10 @@ def resolve_tag_key_mappings(
             left = join_cond.left
             right = join_cond.right
             if left.column in indexer_mapping:
-                resolved_name = resolve_tag_column_name(left.column, indexer_mapping, dataset)
+                resolved_name = resolve_tag_column_name(left.column, indexer_mapping)
                 left = JoinConditionExpression(left.table_alias, resolved_name)
             if right.column in indexer_mapping:
-                resolved_name = resolve_tag_column_name(right.column, indexer_mapping, dataset)
+                resolved_name = resolve_tag_column_name(right.column, indexer_mapping)
                 right = JoinConditionExpression(right.table_alias, resolved_name)
             new_join_cond = JoinCondition(left, right)
             keys.append(new_join_cond)
@@ -159,7 +155,6 @@ def resolve_mappings(
     mimics the behavior of the indexer to resolve the metric_id and tag filters
     by using the indexer_mapping provided by the client.
     """
-    resolve_tag_key_mappings(query, mappings, dataset)
+    resolve_tag_key_mappings(query, mappings)
     resolve_metric_id_mapping(query, mappings)
-    if get_dataset_name(dataset) == "metrics":
-        resolve_tag_value_mappings(query, mappings)
+    resolve_tag_value_mappings(query, mappings)

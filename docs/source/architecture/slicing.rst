@@ -67,7 +67,7 @@ data.
 
 This is done with the `partition_key_column_name` property in the storage schema (we do not
 support sharded storages for non-YAML based entities). You can see an example of how one
-might shard by organization_id in generic_metrics_counters
+might shard by organization_id in metrics_counters
 dataset YAML files.
 
 Adding sliced Kafka topics
@@ -80,9 +80,9 @@ configuration details to ``settings.SLICED_KAFKA_BROKER_CONFIG``. Here, use the 
 
 Example configurations:
 
-``SLICED_KAFKA_TOPIC_MAP`` = {("snuba-generic-metrics", 1): "snuba-generic-metrics-1"}
+``SLICED_KAFKA_TOPIC_MAP`` = {("snuba-metrics", 1): "snuba-metrics-1"}
 
-``SLICED_KAFKA_BROKER_CONFIG`` = {("snuba-generic-metrics", 1): BROKER_CONFIG}
+``SLICED_KAFKA_BROKER_CONFIG`` = {("snuba-metrics", 1): BROKER_CONFIG}
 
 These types of topics can be "sliced": raw topics, replacements topics, commit log topics,
 subscription scheduler topics. Note that the slicing boundary stops at this point and

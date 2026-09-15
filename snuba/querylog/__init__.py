@@ -144,52 +144,15 @@ def _record_cogs(
 
     cluster_name = query_metadata.query_list[0].stats.get("cluster_name", "")
 
-    if cluster_name.startswith("snuba-events-analytics-platform"):
-        if random() < (get_option("snuba_api_cogs_probability", 0.0)):
-            record_cogs(
-                resource_id="eap_clickhouse",
-                app_feature=_get_eap_app_feature(request),
-                amount=bytes_scanned,
-                usage_type=UsageUnit.BYTES,
-            )
-        return
-
-    # The dataset is usually a good proxy for app_feature
-    # However, this is not always the case. We can
-    # check the entity as well as a fallback option
-    # if the dataset is incorrect in the querylog.
-
-    app_feature = query_metadata.dataset.replace("_", "")
-
-    if (
-        query_metadata.dataset == "generic_metrics"
-        or query_metadata.entity.startswith("generic_metrics")
-    ) and ((use_case_id := request.attribution_info.tenant_ids.get("use_case_id")) is not None):
-        app_feature = f"genericmetrics_{use_case_id}"
-
-    elif query_metadata.dataset == "events":
-        app_feature = "errors"
-
-    if not cluster_name.startswith("snuba-gen-metrics"):
-        return  # Only track shared clusters
-
-    # Sanitize the cluster name to line up with the resource_id naming convention
-    cluster_name = (
-        cluster_name.replace("-", "_")
-        .replace("snuba_gen_metrics", "generic_metrics_clickhouse")
-        .replace("_0", "")
-    )
-
-    if random() < (get_option("snuba_api_cogs_probability", 0.0)):
+    if cluster_name.startswith("snuba-events-analytics-platform") and random() < (
+        get_option("snuba_api_cogs_probability", 0.0)
+    ):
         record_cogs(
-            resource_id=f"{cluster_name}",
-            app_feature=app_feature,
+            resource_id="eap_clickhouse",
+            app_feature=_get_eap_app_feature(request),
             amount=bytes_scanned,
             usage_type=UsageUnit.BYTES,
         )
-
-        # TODO: Record the time spent in the API compared to time spent running the
-        # Clickhouse query, so we can track usage of the API pods themselves.
 
 
 def record_query(

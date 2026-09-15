@@ -23,7 +23,6 @@ use super::super::test_fixtures::sources::VecSource;
 #[case::querylog("QuerylogProcessor", "snuba-queries")]
 #[case::replays("ReplaysProcessor", "ingest-replay-events")]
 #[case::outcomes("OutcomesProcessor", "outcomes")]
-#[case::generic_metrics("GenericCountersMetricsProcessor", "snuba-generic-metrics")]
 #[case::profile_chunks("ProfileChunksProcessor", "snuba-profile-chunks")]
 #[case::eap_items("EAPItemsProcessor", "snuba-items")]
 #[case::llm_proxy_cost("LlmProxyCostProcessor", "snuba-llm-proxy-cost")]
