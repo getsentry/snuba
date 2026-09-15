@@ -1,19 +1,6 @@
 import os
 
-from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
-    TraceItemTableRequest,
-    TraceItemTableResponse,
-)
-
 from snuba.utils.registered_class import import_submodules_in_directory
-from snuba.web.rpc import TraceItemDataResolver
-
-
-class ResolverTraceItemTable(TraceItemDataResolver[TraceItemTableRequest, TraceItemTableResponse]):
-    @classmethod
-    def endpoint_name(cls) -> str:
-        return "TraceItemTable"
-
 
 _TO_IMPORT = {}
 
