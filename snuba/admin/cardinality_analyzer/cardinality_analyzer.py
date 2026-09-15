@@ -1,15 +1,11 @@
-from typing import cast
-
 from snuba.admin.audit_log.query import audit_log
 from snuba.admin.clickhouse.common import (
-    get_ro_query_node_connection,
+    get_ro_cluster_node_connection,
     validate_ro_query,
 )
 from snuba.clickhouse.pool import ClickhousePool, ClickhouseResult
-from snuba.clusters.cluster import ClickhouseClientSettings
-from snuba.datasets.schemas.tables import TableSchema
-from snuba.datasets.storages.factory import get_storage
-from snuba.datasets.storages.storage_key import StorageKey
+from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
+from snuba.clusters.storage_sets import StorageSetKey
 
 # HACK (VOLO): Everything in this file is a hack
 
@@ -27,36 +23,30 @@ def _stringify_result(result: ClickhouseResult) -> ClickhouseResult:
 @audit_log
 def run_metrics_query(query: str, user: str) -> ClickhouseResult:
     """
-    Validates, audit logs, and executes given query against Querylog
-    table in ClickHouse. `user` param is necessary for audit_log
-    decorator.
+    Validates, audit logs, and executes given query against leftover generic
+    metrics ClickHouse tables. `user` param is necessary for audit_log decorator.
     """
-    storage_keys = {
-        StorageKey("generic_metrics_counters"),
-    }
-    schemas = {get_storage(storage_key).get_schema() for storage_key in storage_keys}
-    raw_tables = {
+    allowed_tables = {
         "generic_metric_counters_raw_dist",
-    }
-    meta_tables = {
+        "generic_metric_counters_aggregated_dist",
         "generic_metric_counters_meta_aggregated_dist",
         "generic_metric_counters_meta_tag_value_aggregated_dist",
         "generic_metric_counters_meta_dist",
         "generic_metric_counters_meta_tag_values_dist",
     }
 
-    allowed_tables = (
-        {cast(TableSchema, schema).get_table_name() for schema in schemas}
-        | raw_tables
-        | meta_tables
-    )
+    def get_connection() -> ClickhousePool:
+        cluster = get_cluster(StorageSetKey.GENERIC_METRICS_COUNTERS)
+        return get_ro_cluster_node_connection(
+            cluster,
+            cluster.get_query_node(),
+            ClickhouseClientSettings.CARDINALITY_ANALYZER,
+        )
+
     connection = validate_ro_query(
         sql_query=query,
         allowed_tables=allowed_tables,
-        get_connection=lambda: get_ro_query_node_connection(
-            StorageKey("generic_metrics_counters").value,
-            ClickhouseClientSettings.CARDINALITY_ANALYZER,
-        ),
+        get_connection=get_connection,
     )
     assert connection is not None
     return _stringify_result(__run_query(query, connection))
@@ -64,7 +54,7 @@ def run_metrics_query(query: str, user: str) -> ClickhouseResult:
 
 def __run_query(query: str, connection: ClickhousePool) -> ClickhouseResult:
     """
-    Runs given Query against metrics distributions in ClickHouse. This function assumes valid
+    Runs given Query against metrics tables in ClickHouse. This function assumes valid
     query and does not validate/sanitize query or response data.
     """
     query_result = connection.execute(

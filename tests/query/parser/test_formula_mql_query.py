@@ -32,8 +32,8 @@ from snuba.query.mql.parser import parse_mql_query
 
 # Commonly used expressions
 from_distributions = QueryEntity(
-    EntityKey.GENERIC_METRICS_COUNTERS,
-    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+    EntityKey.METRICS_COUNTERS,
+    get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
 )
 
 
@@ -56,8 +56,8 @@ def subscriptable_expression(
     tag_key: str, table_alias: str | None = None
 ) -> SubscriptableReference:
     return SubscriptableReference(
-        alias=f"_snuba_tags_raw[{tag_key}]",
-        column=Column(alias="_snuba_tags_raw", table_name=table_alias, column_name="tags_raw"),
+        alias=f"_snuba_tags[{tag_key}]",
+        column=Column(alias="_snuba_tags", table_name=table_alias, column_name="tags"),
         key=Literal(alias=None, value=tag_key),
     )
 
@@ -100,7 +100,7 @@ def condition(table_alias: str | None = None) -> list[FunctionCall]:
 
 
 mql_context = {
-    "entity": "generic_metrics_counters",
+    "entity": "metrics_counters",
     "start": "2023-11-23T18:30:00",
     "end": "2023-11-23T22:30:00",
     "rollup": {
@@ -174,11 +174,11 @@ def tag_column(tag: str, table_alias: str | None = None) -> SubscriptableReferen
     assert isinstance(indexer_mappings, dict)
     tag_val = indexer_mappings.get(tag)
     return SubscriptableReference(
-        alias=f"_snuba_tags_raw[{tag_val}]",
+        alias=f"_snuba_tags[{tag_val}]",
         column=Column(
-            alias="_snuba_tags_raw",
+            alias="_snuba_tags",
             table_name=table_alias,
-            column_name="tags_raw",
+            column_name="tags",
         ),
         key=Literal(alias=None, value=f"{tag_val}"),
     )
@@ -257,10 +257,10 @@ def test_simple_formula() -> None:
         offset=0,
     )
 
-    generic_metrics = get_dataset(
-        "generic_metrics",
+    metrics_dataset = get_dataset(
+        "metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query = parse_mql_query(str(query_body), mql_context, metrics_dataset)
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -417,10 +417,10 @@ def test_bracket_on_formula() -> None:
         offset=0,
     )
 
-    generic_metrics = get_dataset(
-        "generic_metrics",
+    metrics_dataset = get_dataset(
+        "metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query = parse_mql_query(str(query_body), mql_context, metrics_dataset)
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -456,8 +456,8 @@ def test_multiple_filter_same_groupby_formula() -> None:
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="c1", column="tags_raw[222222]"),
-                right=JoinConditionExpression(table_alias="c0", column="tags_raw[222222]"),
+                left=JoinConditionExpression(table_alias="c1", column="tags[222222]"),
+                right=JoinConditionExpression(table_alias="c0", column="tags[222222]"),
             ),
             JoinCondition(
                 left=JoinConditionExpression(table_alias="c1", column="c1.time"),
@@ -531,10 +531,10 @@ def test_multiple_filter_same_groupby_formula() -> None:
         offset=0,
     )
 
-    generic_metrics = get_dataset(
-        "generic_metrics",
+    metrics_dataset = get_dataset(
+        "metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query = parse_mql_query(str(query_body), mql_context, metrics_dataset)
     eq, reason = query.equals(expected)
 
     assert eq, reason
@@ -655,10 +655,10 @@ def test_distribute_tags() -> None:
         offset=0,
     )
 
-    generic_metrics = get_dataset(
-        "generic_metrics",
+    metrics_dataset = get_dataset(
+        "metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query = parse_mql_query(str(query_body), mql_context, metrics_dataset)
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -747,10 +747,10 @@ def test_formula_with_scalar() -> None:
         offset=0,
     )
 
-    generic_metrics = get_dataset(
-        "generic_metrics",
+    metrics_dataset = get_dataset(
+        "metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query = parse_mql_query(str(query_body), mql_context, metrics_dataset)
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -786,8 +786,8 @@ def test_groupby() -> None:
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="c1", column="tags_raw[333333]"),
-                right=JoinConditionExpression(table_alias="c0", column="tags_raw[333333]"),
+                left=JoinConditionExpression(table_alias="c1", column="tags[333333]"),
+                right=JoinConditionExpression(table_alias="c0", column="tags[333333]"),
             ),
             JoinCondition(
                 left=JoinConditionExpression(table_alias="c1", column="c1.time"),
@@ -845,10 +845,10 @@ def test_groupby() -> None:
         offset=0,
     )
 
-    generic_metrics = get_dataset(
-        "generic_metrics",
+    metrics_dataset = get_dataset(
+        "metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query = parse_mql_query(str(query_body), mql_context, metrics_dataset)
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -887,8 +887,8 @@ def test_groupby_with_totals() -> None:
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="c1", column="tags_raw[333333]"),
-                right=JoinConditionExpression(table_alias="c0", column="tags_raw[333333]"),
+                left=JoinConditionExpression(table_alias="c1", column="tags[333333]"),
+                right=JoinConditionExpression(table_alias="c0", column="tags[333333]"),
             )
         ],
         join_type=JoinType.INNER,
@@ -927,24 +927,24 @@ def test_groupby_with_totals() -> None:
         totals=True,
     )
 
-    generic_metrics = get_dataset(
-        "generic_metrics",
+    metrics_dataset = get_dataset(
+        "metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context_new, generic_metrics)
+    query = parse_mql_query(str(query_body), mql_context_new, metrics_dataset)
     eq, reason = query.equals(expected)
     assert eq, reason
 
 
 def test_mismatch_groupby() -> None:
     query_body = "sum(`c:transactions/duration@millisecond`){status_code:200} by transaction / sum(`c:transactions/duration@millisecond`) by status_code"
-    generic_metrics = get_dataset(
-        "generic_metrics",
+    metrics_dataset = get_dataset(
+        "metrics",
     )
     with pytest.raises(
         Exception,
         match=re.escape("All terms in a formula must have the same groupby"),
     ):
-        parse_mql_query(str(query_body), mql_context, generic_metrics)
+        parse_mql_query(str(query_body), mql_context, metrics_dataset)
 
 
 def test_onesided_groupby() -> None:
@@ -1027,17 +1027,17 @@ def test_onesided_groupby() -> None:
         offset=0,
     )
 
-    generic_metrics = get_dataset(
-        "generic_metrics",
+    metrics_dataset = get_dataset(
+        "metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query = parse_mql_query(str(query_body), mql_context, metrics_dataset)
     eq, reason = query.equals(expected)
     assert eq, reason
 
-    generic_metrics = get_dataset(
-        "generic_metrics",
+    metrics_dataset = get_dataset(
+        "metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query = parse_mql_query(str(query_body), mql_context, metrics_dataset)
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -1123,10 +1123,10 @@ def test_formula_with_nested_functions() -> None:
         offset=0,
     )
 
-    generic_metrics = get_dataset(
-        "generic_metrics",
+    metrics_dataset = get_dataset(
+        "metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query = parse_mql_query(str(query_body), mql_context, metrics_dataset)
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -1212,10 +1212,10 @@ def test_formula_with_nested_functions_with_filter_outside() -> None:
         offset=0,
     )
 
-    generic_metrics = get_dataset(
-        "generic_metrics",
+    metrics_dataset = get_dataset(
+        "metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query = parse_mql_query(str(query_body), mql_context, metrics_dataset)
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -1301,10 +1301,10 @@ def test_curried_aggregate_formula() -> None:
         offset=0,
     )
 
-    generic_metrics = get_dataset(
-        "generic_metrics",
+    metrics_dataset = get_dataset(
+        "metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query = parse_mql_query(str(query_body), mql_context, metrics_dataset)
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -1366,10 +1366,10 @@ def test_formula_no_groupby_no_interval_with_totals() -> None:
         totals=False,
     )
 
-    generic_metrics = get_dataset(
-        "generic_metrics",
+    metrics_dataset = get_dataset(
+        "metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context_new, generic_metrics)
+    query = parse_mql_query(str(query_body), mql_context_new, metrics_dataset)
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -1439,10 +1439,10 @@ def test_formula_onesided_groupby_no_interval_with_totals() -> None:
         totals=True,
     )
 
-    generic_metrics = get_dataset(
-        "generic_metrics",
+    metrics_dataset = get_dataset(
+        "metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context_new, generic_metrics)
+    query = parse_mql_query(str(query_body), mql_context_new, metrics_dataset)
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -1528,8 +1528,8 @@ def test_formula_extrapolation_with_nested_functions() -> None:
         offset=0,
     )
 
-    generic_metrics = get_dataset(
-        "generic_metrics",
+    metrics_dataset = get_dataset(
+        "metrics",
     )
 
     mql_context_with_extrapolation = deepcopy(mql_context)
@@ -1538,6 +1538,6 @@ def test_formula_extrapolation_with_nested_functions() -> None:
         123456
     )
 
-    query = parse_mql_query(str(query_body), mql_context_with_extrapolation, generic_metrics)
+    query = parse_mql_query(str(query_body), mql_context_with_extrapolation, metrics_dataset)
     eq, reason = query.equals(expected)
     assert eq, reason

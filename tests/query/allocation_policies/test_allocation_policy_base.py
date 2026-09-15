@@ -472,7 +472,7 @@ class TestComponentNameBackwardsCompatibility:
             StorageKey.ERRORS_RO,
             StorageKey.FUNCTIONS,
             StorageKey.FUNCTIONS_RAW,
-            StorageKey.GENERIC_METRICS_COUNTERS,
+            StorageKey.METRICS_COUNTERS,
         ],
     )
     def test_component_name_equals_old_runtime_config_prefix_pattern(

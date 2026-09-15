@@ -30,11 +30,6 @@
       "default": 300,
       "description": "Timeout in seconds for --health-check partition-stall. A partition with in-flight work and no commit progress for this long is unhealthy (the health file is not touched). 0 disables stall detection (file is touched on every poll). Ignored for other --health-check values."
     },
-    "generic_metrics_use_case_killswitch": {
-      "type": "string",
-      "default": "",
-      "description": "Substring-matched list of generic-metrics use case ids to drop in the consumer; a message is skipped when its use_case_id appears in this string."
-    },
     "clickhouse_load_balancing": {
       "type": "object",
       "additionalProperties": {
@@ -769,11 +764,6 @@
       "type": "boolean",
       "default": true,
       "description": "Killswitch for the MappingOptimizer flags-hashmap query optimization on the errors/errors_ro storages. When false the optimizer is a no-op."
-    },
-    "generic_metrics/tags_hash_map_enabled": {
-      "type": "boolean",
-      "default": true,
-      "description": "Killswitch for the MappingOptimizer tags-hashmap query optimization on generic-metrics storages (distributions, gauges). When false the optimizer is a no-op."
     },
     "use_sentry_metrics": {
       "type": "boolean",

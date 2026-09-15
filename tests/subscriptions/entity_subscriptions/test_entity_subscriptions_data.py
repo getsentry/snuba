@@ -19,10 +19,10 @@ from snuba.utils.metrics.timer import Timer
 from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
 from snuba.utils.streams.topics import Topic as SnubaTopic
 
-dataset = get_dataset("generic_metrics")
-entity = get_entity(EntityKey.GENERIC_METRICS_COUNTERS)
+dataset = get_dataset("metrics")
+entity = get_entity(EntityKey.METRICS_COUNTERS)
 entity_key = get_entity_name(entity)
-storage = get_storage(StorageKey.GENERIC_METRICS_COUNTERS_RAW)
+storage = get_storage(StorageKey.METRICS_RAW)
 assert storage is not None
 assert isinstance(storage, WritableTableStorage)
 stream_loader = storage.get_table_writer().get_stream_loader()
@@ -33,7 +33,7 @@ metadata = {"organization": org_id}
 project_id = 1
 resolution_sec = 60
 time_window_sec = 60
-query = "MATCH (generic_metrics_counters) SELECT count() AS count WHERE project_id = 1"
+query = "MATCH (metrics_counters) SELECT count() AS count WHERE project_id = 1"
 
 timer = Timer("test_entity_subscription_data")
 
@@ -51,11 +51,11 @@ def subscription_data_builder() -> SubscriptionData:
     )
 
 
-@pytest.mark.genmetrics_db
+@pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 def test_entity_subscriptions_data() -> None:
     admin_client = AdminClient(get_default_kafka_configuration())
-    create_topics(admin_client, [SnubaTopic.GENERIC_METRICS])
+    create_topics(admin_client, [SnubaTopic.METRICS])
 
     subscription_data = subscription_data_builder()
 

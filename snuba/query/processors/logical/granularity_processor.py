@@ -193,7 +193,7 @@ DEFAULT_MAPPED_GRANULARITY_ENUM = 1
 class MappedGranularityProcessor(BaseGranularityProcessor):
     """
     A mapped granularity processor which finds the granularity in the query,
-    validates/transforms its value according to the generic-metrics style
+    validates/transforms its value according to the metrics style
     enum mapping (e.g. input granularity of 60s is mapped to the enum
     granularity of 1), and transforms the conditions appropriately to reflect
     this change.

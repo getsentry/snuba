@@ -35,7 +35,7 @@ TEST_CASES = [
     ),
     pytest.param(
         """
-        MATCH (generic_metrics_counters)
+        MATCH (metrics_counters)
         SELECT sum(value) AS total BY project_id, org_id
         WHERE org_id = 1
         AND project_id = 1
@@ -44,10 +44,10 @@ TEST_CASES = [
         AND timestamp < toDateTime('2022-01-02')
         GRANULARITY 60
         """,
-        get_dataset("generic_metrics"),
-        get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_all_storage_connections(),
-        SimpleQueryStorageSelector(StorageKey.GENERIC_METRICS_COUNTERS.value),
-        get_storage(StorageKey.GENERIC_METRICS_COUNTERS),
+        get_dataset("metrics"),
+        get_entity(EntityKey.METRICS_COUNTERS).get_all_storage_connections(),
+        SimpleQueryStorageSelector(StorageKey.METRICS_COUNTERS.value),
+        get_storage(StorageKey.METRICS_COUNTERS),
         id="Simple storage selector",
     ),
 ]
@@ -75,7 +75,7 @@ def test_default_query_storage_selector(
 
 def test_assert_raises() -> None:
     query = parse_snql_query(
-        """ MATCH (generic_metrics_counters)
+        """ MATCH (metrics_counters)
         SELECT sum(value) AS total BY project_id, org_id
         WHERE org_id = 1
         AND project_id = 1
@@ -84,9 +84,9 @@ def test_assert_raises() -> None:
         AND timestamp < toDateTime('2022-01-02')
         GRANULARITY 60
         """,
-        get_dataset("generic_metrics"),
+        get_dataset("metrics"),
     )
-    selector = SimpleQueryStorageSelector(StorageKey.GENERIC_METRICS_COUNTERS.value)
+    selector = SimpleQueryStorageSelector(StorageKey.METRICS_COUNTERS.value)
     with pytest.raises(QueryStorageSelectorError):
         assert isinstance(query, Query)
         selector.select_storage(query, HTTPQuerySettings(), [])
