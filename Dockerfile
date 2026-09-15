@@ -148,11 +148,11 @@ CMD [ "api" ]
 
 # Prepare artifacts for the DHI runtime: fix venv symlinks and verify shared libs.
 # The build image has Python at /usr/local/bin/python3, but the DHI
-# runtime has it at /opt/python/bin/python3.
+# runtime has it at /usr/bin/python3.
 FROM application_base AS runtime_prep
 USER 0
-RUN ln -sf /opt/python/bin/python3 /.venv/bin/python3 && \
-    ln -sf /opt/python/bin/python3 /.venv/bin/python
+RUN ln -sf /usr/bin/python3 /.venv/bin/python3 && \
+    ln -sf /usr/bin/python3 /.venv/bin/python
 RUN find /.venv -name "*.so" -exec ldd {} \; 2>&1 | grep "not found" && exit 1 || true
 
 # Production image — DHI runtime, no shell
@@ -167,7 +167,7 @@ COPY --from=runtime_prep /etc/group /etc/group
 
 WORKDIR /usr/src/snuba
 ARG SOURCE_COMMIT
-ENV PATH="/.venv/bin:/opt/python/bin:$PATH" \
+ENV PATH="/.venv/bin:$PATH" \
     LD_PRELOAD=/usr/lib/libjemalloc.so.2 \
     SNUBA_RELEASE=$SOURCE_COMMIT \
     FLASK_DEBUG=0 \
@@ -192,7 +192,7 @@ COPY --from=runtime_prep /etc/group /etc/group
 
 WORKDIR /usr/src/snuba
 ARG SOURCE_COMMIT
-ENV PATH="/.venv/bin:/opt/python/bin:$PATH" \
+ENV PATH="/.venv/bin:$PATH" \
     LD_PRELOAD=/usr/lib/libjemalloc.so.2 \
     SNUBA_RELEASE=$SOURCE_COMMIT \
     FLASK_DEBUG=0 \
