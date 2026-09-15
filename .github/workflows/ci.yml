@@ -40,7 +40,7 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
 
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
           enable-cache: false
 
@@ -71,7 +71,7 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
 
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
           # we just cache the venv-dir directly in action-setup-venv
           enable-cache: false
@@ -160,7 +160,7 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
 
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
           # we just cache the venv-dir directly in action-setup-venv
           enable-cache: false
@@ -612,6 +612,11 @@ jobs:
           /name/ { pkg = $2 }
           /version/ { if (pkg == "devservices") print "version="$2 }
         ' uv.lock >> $GITHUB_OUTPUT
+
+    - name: Configure devenv coderoot
+      run: |
+        mkdir -p ~/.config/sentry-devenv
+        printf '[devenv]\ncoderoot = %s\n' "$RUNNER_WORKSPACE" > ~/.config/sentry-devenv/config.ini
 
     - uses: getsentry/action-validate-devservices-config@711ae7221998ddf81211f25f5e3873ecffd22387
       name: Validate devservices config
