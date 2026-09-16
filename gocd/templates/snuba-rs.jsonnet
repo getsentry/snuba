@@ -16,8 +16,6 @@ local rs_pipedream_config = {
         'Dockerfile',
         '.dockerignore',
         'docker_entrypoint.py',
-        'pyproject.toml',
-        'uv.lock',
         'scripts/rust-dummy-build.sh',
         'snuba/cli/**/*',
         'snuba/consumers/consumer_config.py',
