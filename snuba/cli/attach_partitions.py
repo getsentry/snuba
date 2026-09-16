@@ -1,14 +1,17 @@
 import logging
 from collections.abc import Sequence
+from datetime import datetime, timedelta
 
 import click
 
 from snuba.clickhouse.partition_management import (
+    DEFAULT_MAX_FUTURE_PARTITION_AGE,
     PartitionBoundaryError,
     attach_partition_from_table,
     attach_partitions_from_table,
     build_health_check,
     get_partition_boundaries,
+    is_partition_too_far_in_future,
 )
 from snuba.clickhouse.pool import ClickhousePool
 from snuba.clusters.cluster import (
@@ -67,6 +70,18 @@ logger = logging.getLogger("snuba.attach_partitions")
         "component."
     ),
 )
+@click.option(
+    "--max-future-days",
+    type=int,
+    default=int(DEFAULT_MAX_FUTURE_PARTITION_AGE.total_seconds() // 86400),
+    show_default=True,
+    help=(
+        "Skip partitions that begin more than this many days in the future, "
+        "which excludes implausibly dated partitions produced by bad ingestion. "
+        "The partition start boundary is compared, so a partition straddling the "
+        "cutoff is kept. Pass 0 to attach future-dated partitions regardless."
+    ),
+)
 @click.option("--log-level", help="Logging level to use.")
 def attach_partitions(
     source_table: str,
@@ -81,19 +96,26 @@ def attach_partitions(
     execute: bool,
     partition_id: str | None,
     health_check_query: str | None,
+    max_future_days: int,
     log_level: str | None,
 ) -> None:
     """Attach SOURCE_TABLE partitions to DESTINATION_TABLE one at a time.
 
     Table names are unqualified and must be in the database used by STORAGE.
-    In discovery mode, existing destination partitions are skipped. A specific
-    partition ID is attached directly. The source data is not removed.
+    In discovery mode, existing destination partitions and partitions dated too
+    far in the future are skipped. A specific partition ID is attached directly.
+    The source data is not removed.
     """
     setup_logging(log_level)
     setup_sentry()
 
     if (clickhouse_host is None) != (clickhouse_port is None):
         raise click.UsageError("--clickhouse-host and --clickhouse-port must be provided together")
+
+    if max_future_days < 0:
+        raise click.UsageError("--max-future-days must not be negative")
+
+    max_future_age = timedelta(days=max_future_days) if max_future_days > 0 else None
 
     try:
         storage = get_storage(StorageKey(storage_name))
@@ -138,13 +160,26 @@ def attach_partitions(
     try:
         if partition_id is not None:
             partition_ids = [partition_id]
-            if execute:
-                boundaries = (
-                    get_partition_boundaries(connection, database, source_table)
-                    if health_check_query is not None
-                    else None
+            boundaries = (
+                get_partition_boundaries(connection, database, source_table)
+                if max_future_age is not None or health_check_query is not None
+                else None
+            )
+            if max_future_age is not None and is_partition_too_far_in_future(
+                (boundaries or {}).get(partition_id, partition_id),
+                now=datetime.now(),
+                max_future_age=max_future_age,
+            ):
+                raise click.UsageError(
+                    f"Partition {partition_id} begins more than {max_future_days} day(s) "
+                    "in the future. Pass --max-future-days 0 to attach it anyway."
                 )
-                build_health_check(connection, health_check_query, boundaries)(partition_id)
+            if execute:
+                build_health_check(
+                    connection,
+                    health_check_query,
+                    boundaries if health_check_query is not None else None,
+                )(partition_id)
                 attach_partition_from_table(
                     connection,
                     database,
@@ -162,12 +197,19 @@ def attach_partitions(
                 source_table,
                 destination_table,
                 health_check_query=health_check_query,
+                max_future_age=max_future_age,
                 dry_run=not execute,
                 on_partition_attached=lambda attached_partition_id: logger.info(
                     "Attached partition %s from %s to %s",
                     attached_partition_id,
                     source,
                     destination,
+                ),
+                on_partition_skipped=lambda skipped_partition_id, boundary: logger.info(
+                    "Skipping partition %s (boundary %s) dated more than %d day(s) ahead",
+                    skipped_partition_id,
+                    boundary,
+                    max_future_days,
                 ),
             )
     except PartitionBoundaryError as error:

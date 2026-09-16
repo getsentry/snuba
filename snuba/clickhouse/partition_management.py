@@ -1,7 +1,7 @@
 import logging
 import re
 from collections.abc import Callable, Sequence
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from snuba.clickhouse.escaping import escape_identifier
 from snuba.clickhouse.pool import ClickhousePool
@@ -10,9 +10,14 @@ logger = logging.getLogger("snuba.clickhouse.partition_management")
 
 HealthCheck = Callable[[str], None]
 PartitionAttached = Callable[[str], None]
+PartitionSkipped = Callable[[str, str], None]
 
 PARTITION_START_PARAM = "partition_start"
 RETENTION_DAYS_PARAM = "retention_days"
+
+# Default horizon beyond which a partition is treated as implausibly
+# far in the future and skipped.
+DEFAULT_MAX_FUTURE_PARTITION_AGE = timedelta(weeks=2)
 
 
 class UnhealthyError(Exception):
@@ -178,6 +183,79 @@ def run_health_check_query(
         )
 
 
+def _is_parseable_boundary(partition: str) -> bool:
+    """Report whether a time boundary can be read from a partition value."""
+    try:
+        parse_partition_start(partition)
+    except PartitionBoundaryError:
+        return False
+    return True
+
+
+def is_partition_too_far_in_future(
+    partition: str,
+    *,
+    now: datetime,
+    max_future_age: timedelta = DEFAULT_MAX_FUTURE_PARTITION_AGE,
+) -> bool:
+    """
+    Report whether a partition begins further ahead of ``now`` than
+    ``max_future_age``.
+
+    The comparison uses the partition's *start* boundary, so a partition is
+    skipped only once the earliest timestamp it can hold is beyond the cutoff.
+    A weekly partition straddling the cutoff is therefore kept, which errs
+    toward attaching data rather than silently dropping it.
+
+    Partitions whose boundary cannot be parsed are not considered future-dated;
+    reporting them here would turn an unparseable boundary into a silent skip
+    rather than the explicit ``PartitionBoundaryError`` raised elsewhere.
+    """
+    try:
+        partition_start = parse_partition_start(partition)
+    except PartitionBoundaryError:
+        return False
+
+    return partition_start > now + max_future_age
+
+
+def filter_future_partitions(
+    partition_ids: Sequence[str],
+    boundaries: dict[str, str],
+    *,
+    now: datetime,
+    max_future_age: timedelta = DEFAULT_MAX_FUTURE_PARTITION_AGE,
+    on_partition_skipped: PartitionSkipped | None = None,
+) -> Sequence[str]:
+    """
+    Drop partitions that begin further ahead of ``now`` than ``max_future_age``.
+
+    Corrupt or mis-dated ingestion can create partitions dated years ahead.
+    Attaching those would publish data that no query time range reaches while
+    keeping the parts on disk indefinitely, so they are skipped.
+
+    ``boundaries`` maps partition IDs to their readable ``partition`` values,
+    which is the only way to recover a boundary once the partition ID is
+    hashed. A partition ID missing from ``boundaries`` falls back to parsing the
+    ID itself.
+    """
+    kept = []
+    for partition_id in partition_ids:
+        partition_value = boundaries.get(partition_id, partition_id)
+        if is_partition_too_far_in_future(partition_value, now=now, max_future_age=max_future_age):
+            logger.warning(
+                "Skipping partition %s: boundary %s is more than %s in the future",
+                partition_id,
+                partition_value,
+                max_future_age,
+            )
+            if on_partition_skipped is not None:
+                on_partition_skipped(partition_id, partition_value)
+            continue
+        kept.append(partition_id)
+    return kept
+
+
 def get_active_partition_ids(
     clickhouse: ClickhousePool, database: str, table: str
 ) -> Sequence[str]:
@@ -268,6 +346,9 @@ def attach_partitions_from_table(
     health_check: HealthCheck | None = None,
     health_check_query: str | None = None,
     on_partition_attached: PartitionAttached | None = None,
+    on_partition_skipped: PartitionSkipped | None = None,
+    max_future_age: timedelta | None = DEFAULT_MAX_FUTURE_PARTITION_AGE,
+    now: datetime | None = None,
     dry_run: bool = False,
 ) -> Sequence[str]:
     """
@@ -282,6 +363,10 @@ def attach_partitions_from_table(
     Passing ``health_check_query`` builds that scoped check here, resolving each
     partition's boundary from the source table so it works even when partition
     IDs are hashed. An explicit ``health_check`` takes precedence.
+
+    Partitions beginning more than ``max_future_age`` ahead of ``now`` are
+    skipped, which keeps implausibly future-dated partitions out of the
+    destination. Pass ``max_future_age=None`` to attach them regardless.
 
     ClickHouse's ``ATTACH PARTITION ... FROM`` leaves the source partition in
     place. Re-running this function is safe because active destination partition
@@ -300,18 +385,38 @@ def attach_partitions_from_table(
         if partition_id not in destination_partition_ids
     ]
 
+    # Boundaries resolve hashed partition IDs, and are read once because the
+    # date filter and a scoped health check query both need them. The date
+    # filter only needs them when a pending partition ID is not itself a
+    # readable date, which avoids an extra system.parts query in the common case.
+    needs_boundaries = health_check_query is not None or (
+        max_future_age is not None
+        and any(not _is_parseable_boundary(partition_id) for partition_id in pending_partition_ids)
+    )
+    boundaries = (
+        get_partition_boundaries(clickhouse, database, source_table) if needs_boundaries else None
+    )
+
+    if max_future_age is not None:
+        pending_partition_ids = list(
+            filter_future_partitions(
+                pending_partition_ids,
+                boundaries or {},
+                now=now if now is not None else datetime.now(),
+                max_future_age=max_future_age,
+                on_partition_skipped=on_partition_skipped,
+            )
+        )
+
     if dry_run:
         return pending_partition_ids
 
     if health_check is not None:
         check_health = health_check
     else:
-        boundaries = (
-            get_partition_boundaries(clickhouse, database, source_table)
-            if health_check_query is not None
-            else None
+        check_health = build_health_check(
+            clickhouse, health_check_query, boundaries if health_check_query is not None else None
         )
-        check_health = build_health_check(clickhouse, health_check_query, boundaries)
 
     attached_partition_ids = []
     for partition_id in pending_partition_ids:

@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest.mock import Mock, call
 
 import pytest
@@ -11,6 +11,7 @@ from snuba.clickhouse.partition_management import (
     attach_partitions_from_table,
     build_health_check,
     get_partition_boundaries,
+    is_partition_too_far_in_future,
     parse_partition_start,
     parse_retention_days,
     run_health_check_query,
@@ -88,6 +89,7 @@ def test_stops_before_next_partition_when_health_check_fails() -> None:
             "source",
             "destination",
             health_check=health_check,
+            max_future_age=None,
         )
 
     assert clickhouse.execute.call_args_list[2:] == [
@@ -109,6 +111,7 @@ def test_dry_run_does_not_check_health_or_attach() -> None:
         "source",
         "destination",
         health_check=health_check,
+        max_future_age=None,
         dry_run=True,
     )
 
@@ -376,3 +379,147 @@ def test_rejects_attaching_a_table_to_itself() -> None:
         attach_partitions_from_table(clickhouse, "default", "source", "source")
 
     clickhouse.execute.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "partition,expected",
+    [
+        # Well inside the horizon.
+        ("20240213", False),
+        # The current partition, and one already in the past.
+        ("20240220", False),
+        ("20240101", False),
+        # Exactly at the horizon is kept; only partitions beyond it are skipped.
+        ("20240305", False),
+        # Beyond two weeks.
+        ("20240306", True),
+        ("20250213", True),
+        # Rendered tuple values are compared on their date component.
+        ("(90,'2024-03-25')", True),
+        ("(90,'2024-02-12')", False),
+        # An unreadable boundary is not treated as future-dated, which leaves
+        # the explicit error to the health check path.
+        ("an-opaque-partition-id", False),
+    ],
+)
+def test_identifies_partitions_dated_too_far_in_the_future(partition: str, expected: bool) -> None:
+    assert is_partition_too_far_in_future(partition, now=datetime(2024, 2, 20)) is expected
+
+
+def test_future_horizon_is_configurable() -> None:
+    # Beyond the two week default, but inside a wider horizon.
+    partition = "20240310"
+
+    assert is_partition_too_far_in_future(partition, now=datetime(2024, 2, 20)) is True
+    assert (
+        is_partition_too_far_in_future(
+            partition, now=datetime(2024, 2, 20), max_future_age=timedelta(weeks=8)
+        )
+        is False
+    )
+
+
+def test_skips_future_dated_partitions_when_attaching() -> None:
+    clickhouse = make_clickhouse(["20240213", "20240220", "20250213"], [])
+    skipped = Mock(spec=Callable[[str, str], None])
+
+    result = attach_partitions_from_table(
+        clickhouse,
+        "default",
+        "source",
+        "destination",
+        health_check=Mock(spec=Callable[[str], None]),
+        on_partition_skipped=skipped,
+        now=datetime(2024, 2, 20),
+    )
+
+    assert result == ["20240213", "20240220"]
+    assert skipped.call_args_list == [call("20250213", "20250213")]
+    assert [
+        call_args.args[1]["partition_id"]
+        for call_args in clickhouse.execute.call_args_list
+        if "ATTACH PARTITION" in call_args.args[0]
+    ] == ["20240213", "20240220"]
+
+
+def test_parseable_partition_ids_need_no_boundary_query() -> None:
+    clickhouse = make_clickhouse(["20240213", "20250213"], [])
+
+    attach_partitions_from_table(
+        clickhouse,
+        "default",
+        "source",
+        "destination",
+        health_check=Mock(spec=Callable[[str], None]),
+        now=datetime(2024, 2, 20),
+    )
+
+    assert not [
+        call_args
+        for call_args in clickhouse.execute.call_args_list
+        if "partition_id, partition" in call_args.args[0]
+    ]
+
+
+def test_resolves_hashed_partition_ids_before_date_filtering() -> None:
+    # A String column in the partition key hashes the ID, so the future date is
+    # only visible through the rendered partition value.
+    clickhouse = Mock(spec=ClickhousePool)
+    clickhouse.execute.side_effect = [
+        ClickhouseResult([("hash-past",), ("hash-future",)]),
+        ClickhouseResult([]),
+        ClickhouseResult(
+            [
+                ("hash-past", "('prod','2024-02-12')"),
+                ("hash-future", "('prod','2025-02-12')"),
+            ]
+        ),
+        ClickhouseResult(),
+    ]
+
+    result = attach_partitions_from_table(
+        clickhouse,
+        "default",
+        "source",
+        "destination",
+        health_check=Mock(spec=Callable[[str], None]),
+        now=datetime(2024, 2, 20),
+    )
+
+    assert result == ["hash-past"]
+
+
+def test_attaches_future_partitions_when_the_filter_is_disabled() -> None:
+    clickhouse = make_clickhouse(["20240213", "20250213"], [])
+
+    result = attach_partitions_from_table(
+        clickhouse,
+        "default",
+        "source",
+        "destination",
+        health_check=Mock(spec=Callable[[str], None]),
+        max_future_age=None,
+        now=datetime(2024, 2, 20),
+    )
+
+    assert result == ["20240213", "20250213"]
+
+
+def test_dry_run_reports_the_date_filtered_partitions() -> None:
+    clickhouse = make_clickhouse(["20240213", "20250213"], [])
+
+    result = attach_partitions_from_table(
+        clickhouse,
+        "default",
+        "source",
+        "destination",
+        now=datetime(2024, 2, 20),
+        dry_run=True,
+    )
+
+    assert result == ["20240213"]
+    assert not [
+        call_args
+        for call_args in clickhouse.execute.call_args_list
+        if "ATTACH PARTITION" in call_args.args[0]
+    ]
