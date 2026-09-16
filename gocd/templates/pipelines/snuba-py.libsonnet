@@ -172,7 +172,6 @@ function(region) {
       shallow_clone: false,
       branch: 'master',
       destination: 'snuba',
-      ignore: ['rust_snuba/**/*'],
     },
   },
   stages: [
