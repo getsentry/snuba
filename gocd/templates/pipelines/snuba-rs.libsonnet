@@ -154,6 +154,7 @@ function(region) {
         'Dockerfile',
         '.dockerignore',
         'docker_entrypoint.py',
+        'gocd/templates/bash/**/*',
         'snuba/cli/**/*',
         'snuba/consumers/consumer_config.py',
         'sentry-options/**/*',
