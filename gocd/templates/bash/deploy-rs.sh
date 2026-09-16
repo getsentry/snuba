@@ -4,27 +4,5 @@ eval $(regions-project-env-vars --region="${SENTRY_REGION}")
 
 IMAGE_TAG="${GO_REVISION_SNUBA_REPO}"
 
-/devinfra/scripts/get-cluster-credentials \
-&& k8s-deploy \
-  --label-selector="${LABEL_SELECTOR}" \
-  --image="us-docker.pkg.dev/sentryio/snuba-mr/image:${IMAGE_TAG}" \
-  --container-name="consumer" \
-  --container-name="eap-accepted-outcomes-consumer" \
-  --container-name="eap-items-consumer" \
-  --container-name="eap-items-dlq-replay-consumer" \
-  --container-name="llm-proxy-cost-consumer" \
-  --container-name="loadbalancer-outcomes-consumer" \
-  --container-name="metrics-consumer" \
-  --container-name="outcomes-billing-consumer" \
-  --container-name="outcomes-consumer" \
-  --container-name="profile-chunks-consumer" \
-  --container-name="profiles-consumer" \
-  --container-name="profiling-functions-consumer" \
-  --container-name="querylog-consumer" \
-  --container-name="replays-consumer" \
-  --container-name="transactions-consumer-new" \
-&& k8s-deploy \
-  --label-selector="${LABEL_SELECTOR}" \
-  --image="us-docker.pkg.dev/sentryio/snuba-mr/image:${IMAGE_TAG}" \
-  --type="statefulset" \
-  --container-name="eap-items-sts-consumer"
+echo "TODO drop"
+echo "We are collapsing this into the python deploy script, check that"
