@@ -56,6 +56,7 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.common.formula_ops import EXPRESSION_OP_TO_EXPR
 from snuba.web.rpc.proto_visitor import (
     AggregationToConditionalAggregationVisitor,
     TimeSeriesRequestWrapper,
@@ -79,13 +80,6 @@ from snuba.web.rpc.v1.resolvers.common.formula_reliability import (
 from snuba.web.rpc.v1.visitors.time_series_request_visitor import (
     preprocess_expression_labels,
 )
-
-OP_TO_EXPR = {
-    ProtoExpression.BinaryFormula.OP_ADD: f.plus,
-    ProtoExpression.BinaryFormula.OP_SUBTRACT: f.minus,
-    ProtoExpression.BinaryFormula.OP_MULTIPLY: f.multiply,
-    ProtoExpression.BinaryFormula.OP_DIVIDE: f.divide,
-}
 
 
 def _get_attribute_key_to_expression_function(
@@ -328,7 +322,7 @@ def _proto_expression_to_ast_expression(
                     )
             return replace(aggregate_expr, alias=expr.label)
         case "formula":
-            formula_expr = OP_TO_EXPR[expr.formula.op](
+            formula_expr = EXPRESSION_OP_TO_EXPR[expr.formula.op](
                 _proto_expression_to_ast_expression(expr.formula.left, request_meta),
                 _proto_expression_to_ast_expression(expr.formula.right, request_meta),
             )

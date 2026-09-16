@@ -1,5 +1,5 @@
 import uuid
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import replace
 from itertools import islice
 from typing import Any
@@ -76,6 +76,11 @@ from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.common.formula_ops import (
+    AGGREGATION_COMPARISON_OP_TO_EXPR,
+    COLUMN_OP_TO_EXPR,
+    FORMULA_CONDITION_OP_TO_EXPR,
+)
 from snuba.web.rpc.common.pagination import FlexibleTimeWindowPageWithFilters
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingDecision,
@@ -96,23 +101,6 @@ from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
 from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
 
 _DEFAULT_ROW_LIMIT = 10_000
-
-
-OP_TO_EXPR = {
-    Column.BinaryFormula.OP_ADD: f.plus,
-    Column.BinaryFormula.OP_SUBTRACT: f.minus,
-    Column.BinaryFormula.OP_MULTIPLY: f.multiply,
-    Column.BinaryFormula.OP_DIVIDE: f.divide,
-}
-
-COMPARISON_OP_TO_EXPR: dict[int, Callable[..., FunctionCall]] = {
-    Column.FormulaCondition.OP_LESS_THAN: f.less,
-    Column.FormulaCondition.OP_GREATER_THAN: f.greater,
-    Column.FormulaCondition.OP_LESS_THAN_OR_EQUALS: f.lessOrEquals,
-    Column.FormulaCondition.OP_GREATER_THAN_OR_EQUALS: f.greaterOrEquals,
-    Column.FormulaCondition.OP_EQUALS: f.equals,
-    Column.FormulaCondition.OP_NOT_EQUALS: f.notEquals,
-}
 
 
 def _apply_virtual_columns(
@@ -215,18 +203,9 @@ def _apply_virtual_columns(
 def aggregation_filter_to_expression(
     agg_filter: AggregationFilter, request_meta: RequestMeta
 ) -> Expression:
-    op_to_expr = {
-        AggregationComparisonFilter.OP_LESS_THAN: f.less,
-        AggregationComparisonFilter.OP_GREATER_THAN: f.greater,
-        AggregationComparisonFilter.OP_LESS_THAN_OR_EQUALS: f.lessOrEquals,
-        AggregationComparisonFilter.OP_GREATER_THAN_OR_EQUALS: f.greaterOrEquals,
-        AggregationComparisonFilter.OP_EQUALS: f.equals,
-        AggregationComparisonFilter.OP_NOT_EQUALS: f.notEquals,
-    }
-
     match agg_filter.WhichOneof("value"):
         case "comparison_filter":
-            op_expr = op_to_expr.get(agg_filter.comparison_filter.op)
+            op_expr = AGGREGATION_COMPARISON_OP_TO_EXPR.get(agg_filter.comparison_filter.op)
             if op_expr is None:
                 raise BadSnubaRPCRequestException(
                     f"Unsupported aggregation filter op: {AggregationComparisonFilter.Op.Name(agg_filter.comparison_filter.op)}"
@@ -544,7 +523,7 @@ def _formula_to_expression(formula: Column.BinaryFormula, request_meta: RequestM
             f.divide(left_expr, right_expr),
         )
 
-    formula_expr = OP_TO_EXPR[formula.op](left_expr, right_expr)
+    formula_expr = COLUMN_OP_TO_EXPR[formula.op](left_expr, right_expr)
 
     if default_value is not None:
         return f.coalesce(formula_expr, default_value)
@@ -564,12 +543,12 @@ def _conditional_formula_to_expression(
     left_expr = _column_to_expression(condition.left, request_meta)
     right_expr = _column_to_expression(condition.right, request_meta)
 
-    if condition.op not in COMPARISON_OP_TO_EXPR:
+    if condition.op not in FORMULA_CONDITION_OP_TO_EXPR:
         raise BadSnubaRPCRequestException(
             f"Unsupported comparison operator in ConditionalFormula: {condition.op}"
         )
 
-    comparison_expr = COMPARISON_OP_TO_EXPR[condition.op](left_expr, right_expr)
+    comparison_expr = FORMULA_CONDITION_OP_TO_EXPR[condition.op](left_expr, right_expr)
     # 'match' is the value when condition is true, 'default' is when false
     # Note: 'match' is a Python keyword in 3.10+, but protobuf accesses it as an attribute
     match_expr = _column_to_expression(conditional_formula.match, request_meta)
