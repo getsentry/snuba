@@ -154,7 +154,6 @@ function(region) {
         'Dockerfile',
         '.dockerignore',
         'docker_entrypoint.py',
-        'scripts/rust-dummy-build.sh',
         'snuba/cli/**/*',
         'snuba/consumers/consumer_config.py',
         'sentry-options/**/*',
