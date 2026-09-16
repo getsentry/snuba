@@ -2,6 +2,7 @@ from datetime import timedelta
 from typing import Any
 
 import pytest
+import time_machine
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageMeta
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
@@ -28,6 +29,8 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.downsampled_storage_tiers import Tier
+from snuba.web.rpc.storage_routing.common import encode_routing_hint
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -99,7 +102,9 @@ class TestTraceItemTableForLogs(BaseApiTest):
             ],
             limit=20,
         )
-        response = EndpointTraceItemTable().execute(message)
+        with time_machine.travel(BASE_TIME, tick=False):
+            response = EndpointTraceItemTable().execute(message)
+            expected_routing_hint = encode_routing_hint(Tier.TIER_1)
         index_range = range(0, 40, 2)
         expected_response = TraceItemTableResponse(
             column_values=[
@@ -128,9 +133,8 @@ class TestTraceItemTableForLogs(BaseApiTest):
                     )
                 ],
             ),
+            routing_hint=expected_routing_hint,
         )
-        # routing_hint embeds a timestamp; it's covered by the routing hint tests
-        response.ClearField("routing_hint")
         assert MessageToDict(response) == MessageToDict(expected_response)
 
 

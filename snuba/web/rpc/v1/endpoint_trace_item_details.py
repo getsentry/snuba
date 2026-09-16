@@ -233,9 +233,7 @@ class EndpointTraceItemDetails(RPCEndpoint[TraceItemDetailsRequest, TraceItemDet
                 "This endpoint requires trace_id to be a valid UUID."
             ) from e
 
-        self.routing_decision.tier = (
-            decode_routing_hint(in_msg.routing_hint) if in_msg.routing_hint else Tier.TIER_1
-        )
+        self.routing_decision.tier = decode_routing_hint(in_msg.routing_hint)
         snuba_request = _build_snuba_request(in_msg, self.routing_decision.tier)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),

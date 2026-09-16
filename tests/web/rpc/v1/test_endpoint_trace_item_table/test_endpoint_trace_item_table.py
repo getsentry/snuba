@@ -6,6 +6,7 @@ from typing import Any
 from unittest.mock import MagicMock, call, patch
 
 import pytest
+import time_machine
 from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
@@ -60,6 +61,7 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.downsampled_storage_tiers import Tier
 from snuba.protos.common import _resolve_canonical
 from snuba.query import LimitBy, OrderBy, OrderByDirection
 from snuba.query.dsl import Functions as f
@@ -76,6 +78,7 @@ from snuba.web.rpc.proto_visitor import (
     AggregationToConditionalAggregationVisitor,
     TraceItemTableRequestWrapper,
 )
+from snuba.web.rpc.storage_routing.common import encode_routing_hint
 from snuba.web.rpc.v1.endpoint_trace_item_table import (
     EndpointTraceItemTable,
     _apply_labels_to_columns,
@@ -333,7 +336,9 @@ class TestTraceItemTable(BaseApiTest):
             columns=[Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="server_name"))],
             order_by=[TraceItemTableRequest.OrderBy(column=Column(label="server_name"))],
         )
-        response = EndpointTraceItemTable().execute(message)
+        with time_machine.travel(BASE_TIME, tick=False):
+            response = EndpointTraceItemTable().execute(message)
+            expected_routing_hint = encode_routing_hint(Tier.TIER_1)
         expected_response = TraceItemTableResponse(
             column_values=[
                 TraceItemColumnValues(
@@ -357,9 +362,8 @@ class TestTraceItemTable(BaseApiTest):
                     )
                 ],
             ),
+            routing_hint=expected_routing_hint,
         )
-        # routing_hint embeds a timestamp; it's covered by the routing hint tests
-        response.ClearField("routing_hint")
         assert MessageToDict(response) == MessageToDict(expected_response)
 
     def test_with_data(self, setup_teardown: Any) -> None:
@@ -388,7 +392,9 @@ class TestTraceItemTable(BaseApiTest):
                 )
             ],
         )
-        response = EndpointTraceItemTable().execute(message)
+        with time_machine.travel(BASE_TIME, tick=False):
+            response = EndpointTraceItemTable().execute(message)
+            expected_routing_hint = encode_routing_hint(Tier.TIER_1)
         expected_response = TraceItemTableResponse(
             column_values=[
                 TraceItemColumnValues(
@@ -412,9 +418,8 @@ class TestTraceItemTable(BaseApiTest):
                     )
                 ],
             ),
+            routing_hint=expected_routing_hint,
         )
-        # routing_hint embeds a timestamp; it's covered by the routing hint tests
-        response.ClearField("routing_hint")
         assert MessageToDict(response) == MessageToDict(expected_response)
 
     def test_booleans_and_number_compares(self, setup_teardown: Any) -> None:
@@ -468,7 +473,9 @@ class TestTraceItemTable(BaseApiTest):
             ],
             limit=61,
         )
-        response = EndpointTraceItemTable().execute(message)
+        with time_machine.travel(BASE_TIME, tick=False):
+            response = EndpointTraceItemTable().execute(message)
+            expected_routing_hint = encode_routing_hint(Tier.TIER_1)
         expected_response = TraceItemTableResponse(
             column_values=[
                 TraceItemColumnValues(
@@ -496,9 +503,8 @@ class TestTraceItemTable(BaseApiTest):
                     )
                 ],
             ),
+            routing_hint=expected_routing_hint,
         )
-        # routing_hint embeds a timestamp; it's covered by the routing hint tests
-        response.ClearField("routing_hint")
         assert response == expected_response
 
     def test_with_virtual_columns(self, setup_teardown: Any) -> None:
@@ -553,7 +559,9 @@ class TestTraceItemTable(BaseApiTest):
                 ),
             ],
         )
-        response = EndpointTraceItemTable().execute(message)
+        with time_machine.travel(BASE_TIME, tick=False):
+            response = EndpointTraceItemTable().execute(message)
+            expected_routing_hint = encode_routing_hint(Tier.TIER_1)
         expected_response = TraceItemTableResponse(
             column_values=[
                 TraceItemColumnValues(
@@ -585,6 +593,7 @@ class TestTraceItemTable(BaseApiTest):
                     )
                 ],
             ),
+            routing_hint=expected_routing_hint,
         )
         assert response.page_token == expected_response.page_token
         # make sure columns are ordered in the order they are requested
@@ -593,8 +602,6 @@ class TestTraceItemTable(BaseApiTest):
             "sentry.release_version",
             "sentry.sdk.name",
         ]
-        # routing_hint embeds a timestamp; it's covered by the routing hint tests
-        response.ClearField("routing_hint")
         assert response == expected_response, (
             MessageToDict(response),
             MessageToDict(expected_response),

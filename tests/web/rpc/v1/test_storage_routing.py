@@ -758,20 +758,30 @@ def test_routing_hint_no_tier_encodes_as_tier_1() -> None:
 
 
 def _b64(payload: object) -> str:
-    return base64.urlsafe_b64encode(json.dumps(payload).encode()).decode()
+    return base64.b64encode(json.dumps(payload).encode()).decode()
 
 
 @pytest.mark.parametrize(
     "hint",
     [
         "not base64!",
+        encode_routing_hint(Tier.TIER_8) + "!!",
+        base64.b64encode(b"not json").decode(),
         _b64("not an object"),
+        _b64({"tier": 8, "ts": 0}),
         _b64({"v": 2, "tier": 8, "ts": 0}),
+        _b64({"v": 1, "ts": 0}),
         _b64({"v": 1, "tier": 7, "ts": 0}),
         _b64({"v": 1, "tier": -1, "ts": 0}),
-        _b64({"v": 1, "ts": 0}),
+        _b64({"v": 1, "tier": "8", "ts": 0}),
+        _b64({"v": 1, "tier": True, "ts": 0}),
+        _b64({"v": 1, "tier": [8], "ts": 0}),
     ],
 )
 def test_routing_hint_invalid(hint: str) -> None:
-    with pytest.raises(BadSnubaRPCRequestException):
+    with pytest.raises(BadSnubaRPCRequestException, match="^invalid routing_hint$"):
         decode_routing_hint(hint)
+
+
+def test_routing_hint_empty_is_tier_1() -> None:
+    assert decode_routing_hint("") == Tier.TIER_1

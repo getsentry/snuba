@@ -1,5 +1,4 @@
 import base64
-import binascii
 import json
 import time
 
@@ -13,6 +12,9 @@ from snuba.downsampled_storage_tiers import Tier
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 _ROUTING_HINT_VERSION = 1
+_ROUTING_HINT_TIERS = frozenset(tier.value for tier in Tier if tier != Tier.TIER_NO_TIER)
+_ROUTING_HINT_DEFAULT_TIER = Tier.TIER_1
+_INVALID_ROUTING_HINT = "invalid routing_hint"
 
 
 def extract_message_meta(in_msg: ProtobufMessage) -> RequestMeta:
@@ -24,36 +26,29 @@ def extract_message_meta(in_msg: ProtobufMessage) -> RequestMeta:
 
 
 def encode_routing_hint(tier: Tier) -> str:
-    """
-    Encode the tier a TraceItemTable query read from into the opaque routing_hint
-    returned to the client, who passes it to TraceItemDetails so the lookup reads
-    the same tier instead of 404ing on rows past tier 1's retention.
-
-    Format: urlsafe base64 of {"v": version, "tier": int, "ts": unix seconds}.
-    `ts` only varies the string so clients treat it as opaque; decode ignores it.
-    A tier (not a storage name) is encoded so hints survive storage cutovers.
-
-    Every page of a paginated query gets its own hint since pages can route
-    differently. Flextime routing never changes the tier, so its hints always
-    carry the default tier.
-    """
     # TIER_NO_TIER is served by the unsampled table, same as TIER_1
-    if tier == Tier.TIER_NO_TIER:
-        tier = Tier.TIER_1
-    payload = {"v": _ROUTING_HINT_VERSION, "tier": tier.value, "ts": int(time.time())}
-    return base64.urlsafe_b64encode(json.dumps(payload).encode()).decode()
+    if tier not in _ROUTING_HINT_TIERS:
+        tier = _ROUTING_HINT_DEFAULT_TIER
+    payload = json.dumps(
+        {"v": _ROUTING_HINT_VERSION, "tier": tier.value, "ts": int(time.time())}
+    ).encode()
+    return base64.b64encode(payload).decode()
 
 
 def decode_routing_hint(hint: str) -> Tier:
-    # Note: unsigned, a caller can forge a hint for any tier; add an HMAC if
-    # hints ever gate more than single-item lookups
+    if not hint:
+        return _ROUTING_HINT_DEFAULT_TIER
+
     try:
-        payload = json.loads(base64.urlsafe_b64decode(hint.encode()))
-        if payload["v"] != _ROUTING_HINT_VERSION:
-            raise ValueError("unsupported version")
-        tier = Tier(payload["tier"])
-        if tier == Tier.TIER_NO_TIER:
-            raise ValueError("invalid tier")
-        return tier
-    except (binascii.Error, UnicodeError, ValueError, TypeError, KeyError) as e:
-        raise BadSnubaRPCRequestException(f"invalid routing_hint: {hint!r}") from e
+        decoded = base64.b64decode(hint, validate=True)
+        payload = json.loads(decoded)
+    except ValueError as e:
+        raise BadSnubaRPCRequestException(_INVALID_ROUTING_HINT) from e
+
+    if not isinstance(payload, dict) or payload.get("v") != _ROUTING_HINT_VERSION:
+        raise BadSnubaRPCRequestException(_INVALID_ROUTING_HINT)
+    tier_value = payload.get("tier")
+    if type(tier_value) is not int or tier_value not in _ROUTING_HINT_TIERS:
+        raise BadSnubaRPCRequestException(_INVALID_ROUTING_HINT)
+
+    return Tier(tier_value)
