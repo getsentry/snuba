@@ -88,6 +88,7 @@ from snuba.web.rpc.proto_visitor import (
     GetColumnAggregationsVisitor,
     TraceItemTableRequestWrapper,
 )
+from snuba.web.rpc.storage_routing.common import encode_routing_hint
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     TimeWindow,
 )
@@ -1181,4 +1182,5 @@ class EndpointTraceItemTable(RPCEndpoint[TraceItemTableRequest, TraceItemTableRe
                 routing_decision.time_window,
             ),
             meta=response_meta,
+            routing_hint=encode_routing_hint(query_settings.get_sampling_tier()),
         )
