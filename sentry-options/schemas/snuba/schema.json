@@ -131,6 +131,11 @@
       "default": false,
       "description": "When true, the EAP items consumer writes the Kafka broker timestamp in epoch milliseconds to the received_at column."
     },
+    "eap_items_bytes_processed_sample_rate": {
+      "type": "integer",
+      "default": 0,
+      "description": "Emit one eap_items.item_bytes_processed distribution sample per this many messages, as an independent coin flip per message. 0 (the default) disables the distribution entirely; 1 samples every message. Negative values fall back to the default. Sized for spans: low-volume item types get proportionally fewer samples, so read their percentiles over longer windows. Only the distribution is sampled; the insertions.item_bytes_processed counter is always exact. Read per message, so changes apply without a redeploy."
+    },
     "quantized_rebalance_consumer_group_delay_secs": {
       "type": "object",
       "additionalProperties": {
