@@ -140,7 +140,7 @@ class TestTraceItemTableCrossItemQueries(BaseApiTest):
         with (
             override_options("snuba", {"use_local_join_for_cross_item_queries": True}),
             patch(
-                "snuba.web.rpc.v1.resolvers.R_eap_items.resolver_trace_item_table.run_query",
+                "snuba.web.rpc.v1.endpoint_trace_item_table.run_query",
                 side_effect=capturing_run_query,
             ),
         ):
