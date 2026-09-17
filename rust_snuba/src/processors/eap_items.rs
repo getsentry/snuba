@@ -5,7 +5,6 @@ use chrono::Utc;
 use prost::Message;
 use seq_macro::seq;
 use serde::{Serialize, Serializer};
-use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use uuid::Uuid;
 
@@ -38,10 +37,9 @@ const DLQ_GRACE_PERIOD_MIN_KEY: &str = "eap_items_dlq_grace_period_min";
 const EMIT_RECEIVED_AT_KEY: &str = "eap_items_emit_received_at";
 
 /// Runtime config key `eap_items_bytes_processed_sample_rate`: emit one
-/// message-size distribution sample per this many messages, per item type,
-/// per processing thread. `1` samples every message, `0` turns the
-/// distribution off, and anything negative or non-integer falls back to
-/// [`DEFAULT_BYTES_PROCESSED_SAMPLE_RATE`].
+/// message-size distribution sample per this many messages. `1` samples every
+/// message, `0` turns the distribution off, and anything negative or
+/// non-integer falls back to [`DEFAULT_BYTES_PROCESSED_SAMPLE_RATE`].
 const BYTES_PROCESSED_SAMPLE_RATE_KEY: &str = "eap_items_bytes_processed_sample_rate";
 
 /// Sample rate used when `eap_items_bytes_processed_sample_rate` is unset:
@@ -50,8 +48,7 @@ const BYTES_PROCESSED_SAMPLE_RATE_KEY: &str = "eap_items_bytes_processed_sample_
 /// The DogStatsD exporter ships every histogram point it is given (no
 /// reservoir sampling), so an unsampled per-message distribution would put
 /// one point per span on the wire. Raising the rate from zero bounds that
-/// traffic while keeping percentiles representative, because the sampled
-/// subset is spread evenly over the stream.
+/// traffic while keeping percentiles representative.
 const DEFAULT_BYTES_PROCESSED_SAMPLE_RATE: u64 = 0;
 
 /// Precision factor for sampling_factor calculations to compensate for floating point errors
@@ -199,25 +196,10 @@ fn bytes_processed_sample_rate() -> Option<u64> {
     (sample_rate > 0).then_some(sample_rate)
 }
 
-thread_local! {
-    /// Per-item-type count of messages seen by this thread, driving the 1-in-N
-    /// sampling decision. Counting per item type rather than globally keeps
-    /// low-volume item types from being starved of samples by spans.
-    static BYTES_PROCESSED_SEEN: RefCell<HashMap<TraceItemType, u64>> =
-        RefCell::new(HashMap::new());
-}
-
-/// True for the first message of each item type this thread sees, then every
-/// `sample_rate`-th one after that.
-fn should_sample_bytes_processed(item_type: TraceItemType, sample_rate: u64) -> bool {
-    debug_assert!(sample_rate > 0);
-    BYTES_PROCESSED_SEEN.with(|seen| {
-        let mut seen = seen.borrow_mut();
-        let count = seen.entry(item_type).or_insert(0);
-        let sample = *count % sample_rate == 0;
-        *count = count.wrapping_add(1);
-        sample
-    })
+/// An independent 1-in-`sample_rate` coin flip. A rate of 1 always samples,
+/// since `rand::random::<f64>()` is in `[0, 1)`.
+fn should_sample_bytes_processed(sample_rate: u64) -> bool {
+    rand::random::<f64>() * (sample_rate as f64) < 1.0
 }
 
 /// Record the raw Kafka payload size of one item as a distribution sample.
@@ -227,15 +209,20 @@ fn should_sample_bytes_processed(item_type: TraceItemType, sample_rate: u64) -> 
 /// by `item_type`, and answers "how big is a span/log/metric" — which the
 /// `insertions.item_bytes_processed` counter cannot, being a per-batch sum.
 ///
-/// Because samples are dropped at a 1-in-N rate, only the shape of this
-/// distribution (percentiles, min, max, avg) is meaningful; its `count` and
-/// `sum` are not. Total bytes processed stays on the counter.
+/// Sampling is an independent 1-in-N coin flip per message, so an item type
+/// gets samples in proportion to its own volume. That is sized for spans;
+/// percentiles for the low-volume item types are correspondingly thinner and
+/// should be read over longer windows.
+///
+/// Because samples are dropped, only the shape of this distribution
+/// (percentiles, min, max, avg) is meaningful; its `count` and `sum` are not.
+/// Total bytes processed stays on the counter.
 fn record_item_bytes_distribution(item_type: TraceItemType, size_bytes: usize) {
     let Some(sample_rate) = bytes_processed_sample_rate() else {
         return;
     };
 
-    if !should_sample_bytes_processed(item_type, sample_rate) {
+    if !should_sample_bytes_processed(sample_rate) {
         return;
     }
 
@@ -1453,31 +1440,20 @@ mod tests {
     }
 
     #[test]
-    fn test_should_sample_bytes_processed_counts_per_item_type() {
-        // The sampling counters are thread-local, so run on a thread of our own
-        // to start from a known-empty state.
-        std::thread::spawn(|| {
-            // First message of an item type is always sampled, then every 3rd.
-            let spans: Vec<bool> = (0..7)
-                .map(|_| should_sample_bytes_processed(TraceItemType::Span, 3))
-                .collect();
-            assert_eq!(
-                spans,
-                vec![true, false, false, true, false, false, true],
-                "expected the 1st, 4th and 7th span to be sampled"
-            );
+    fn test_should_sample_bytes_processed() {
+        // A rate of 1 samples every message: rand::random::<f64>() is in
+        // [0, 1), so the product can never reach 1.0.
+        assert!((0..1_000).all(|_| should_sample_bytes_processed(1)));
 
-            // A second item type keeps its own counter, so it is not starved by
-            // the messages already counted for spans.
-            assert!(should_sample_bytes_processed(TraceItemType::Log, 3));
-            assert!(!should_sample_bytes_processed(TraceItemType::Log, 3));
-
-            // A rate of 1 samples everything.
-            assert!(should_sample_bytes_processed(TraceItemType::Metric, 1));
-            assert!(should_sample_bytes_processed(TraceItemType::Metric, 1));
-        })
-        .join()
-        .unwrap();
+        // Anything higher is a 1-in-N coin flip. Bounds are deliberately loose
+        // (expected 10_000, sigma ~87) so this cannot flake.
+        let sampled = (0..40_000)
+            .filter(|_| should_sample_bytes_processed(4))
+            .count();
+        assert!(
+            (8_000..12_000).contains(&sampled),
+            "expected roughly 1 in 4 of 40k draws to be sampled, got {sampled}"
+        );
     }
 
     #[test]
