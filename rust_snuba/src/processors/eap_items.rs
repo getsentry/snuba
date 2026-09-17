@@ -5,11 +5,12 @@ use chrono::Utc;
 use prost::Message;
 use seq_macro::seq;
 use serde::{Serialize, Serializer};
+use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use uuid::Uuid;
 
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
-use sentry_arroyo::counter;
+use sentry_arroyo::{counter, timer};
 use sentry_options::options;
 use sentry_protos::snuba::v1::any_value::Value;
 use sentry_protos::snuba::v1::{ArrayValue, TraceItem, TraceItemType};
@@ -35,6 +36,23 @@ use crate::types::{item_type_name, InsertBatch, ItemTypeMetrics, KafkaMessageMet
 /// over-eagerly dropping current-week stragglers.
 const DLQ_GRACE_PERIOD_MIN_KEY: &str = "eap_items_dlq_grace_period_min";
 const EMIT_RECEIVED_AT_KEY: &str = "eap_items_emit_received_at";
+
+/// Runtime config key `eap_items_bytes_processed_sample_rate`: emit one
+/// message-size distribution sample per this many messages, per item type,
+/// per processing thread. `1` samples every message, `0` turns the
+/// distribution off, and anything negative or non-integer falls back to
+/// [`DEFAULT_BYTES_PROCESSED_SAMPLE_RATE`].
+const BYTES_PROCESSED_SAMPLE_RATE_KEY: &str = "eap_items_bytes_processed_sample_rate";
+
+/// Sample rate used when `eap_items_bytes_processed_sample_rate` is unset:
+/// off, so the distribution costs nothing until someone opts in.
+///
+/// The DogStatsD exporter ships every histogram point it is given (no
+/// reservoir sampling), so an unsampled per-message distribution would put
+/// one point per span on the wire. Raising the rate from zero bounds that
+/// traffic while keeping percentiles representative, because the sampled
+/// subset is spread evenly over the stream.
+const DEFAULT_BYTES_PROCESSED_SAMPLE_RATE: u64 = 0;
 
 /// Precision factor for sampling_factor calculations to compensate for floating point errors
 const SAMPLING_FACTOR_PRECISION: f64 = 1e6;
@@ -115,6 +133,7 @@ fn process_eap_item(
 
     let mut item_type_metrics = ItemTypeMetrics::new();
     item_type_metrics.record_item(item_type, payload.len());
+    record_item_bytes_distribution(item_type, payload.len());
 
     // COGS tracking by item type
     let app_feature = match item_type {
@@ -164,6 +183,67 @@ pub(crate) fn emit_received_at() -> bool {
         .and_then(|o| o.get(EMIT_RECEIVED_AT_KEY).ok())
         .and_then(|v| v.as_bool())
         .unwrap_or(false)
+}
+
+/// `None` when the message-size distribution is switched off (the default),
+/// otherwise the 1-in-N rate to sample at.
+fn bytes_processed_sample_rate() -> Option<u64> {
+    let sample_rate = options("snuba")
+        .ok()
+        .and_then(|o| o.get(BYTES_PROCESSED_SAMPLE_RATE_KEY).ok())
+        .and_then(|v| v.as_i64())
+        .filter(|&n| n >= 0)
+        .map(|n| n as u64)
+        .unwrap_or(DEFAULT_BYTES_PROCESSED_SAMPLE_RATE);
+
+    (sample_rate > 0).then_some(sample_rate)
+}
+
+thread_local! {
+    /// Per-item-type count of messages seen by this thread, driving the 1-in-N
+    /// sampling decision. Counting per item type rather than globally keeps
+    /// low-volume item types from being starved of samples by spans.
+    static BYTES_PROCESSED_SEEN: RefCell<HashMap<TraceItemType, u64>> =
+        RefCell::new(HashMap::new());
+}
+
+/// True for the first message of each item type this thread sees, then every
+/// `sample_rate`-th one after that.
+fn should_sample_bytes_processed(item_type: TraceItemType, sample_rate: u64) -> bool {
+    debug_assert!(sample_rate > 0);
+    BYTES_PROCESSED_SEEN.with(|seen| {
+        let mut seen = seen.borrow_mut();
+        let count = seen.entry(item_type).or_insert(0);
+        let sample = *count % sample_rate == 0;
+        *count = count.wrapping_add(1);
+        sample
+    })
+}
+
+/// Record the raw Kafka payload size of one item as a distribution sample.
+///
+/// Reaches Datadog as `snuba.consumer.eap_items.item_bytes_processed.distribution`
+/// (arroyo timers are recorded as distributions, see `metrics::statsd`), tagged
+/// by `item_type`, and answers "how big is a span/log/metric" — which the
+/// `insertions.item_bytes_processed` counter cannot, being a per-batch sum.
+///
+/// Because samples are dropped at a 1-in-N rate, only the shape of this
+/// distribution (percentiles, min, max, avg) is meaningful; its `count` and
+/// `sum` are not. Total bytes processed stays on the counter.
+fn record_item_bytes_distribution(item_type: TraceItemType, size_bytes: usize) {
+    let Some(sample_rate) = bytes_processed_sample_rate() else {
+        return;
+    };
+
+    if !should_sample_bytes_processed(item_type, sample_rate) {
+        return;
+    }
+
+    timer!(
+        "eap_items.item_bytes_processed",
+        size_bytes as u64,
+        "item_type" => item_type_name(item_type)
+    );
 }
 
 /// Most recent Monday 00:00 UTC at or before `now` — the active weekly
@@ -1338,6 +1418,66 @@ mod tests {
             .unwrap();
             assert_eq!(get_dlq_grace_period_min("eap_items_dlq_test"), None);
         }
+    }
+
+    #[test]
+    fn test_bytes_processed_sample_rate_option() {
+        init_options();
+        // Unset means off: no distribution samples until someone opts in.
+        assert_eq!(DEFAULT_BYTES_PROCESSED_SAMPLE_RATE, 0);
+        assert_eq!(bytes_processed_sample_rate(), None);
+
+        {
+            let _guard =
+                override_options(&[("snuba", BYTES_PROCESSED_SAMPLE_RATE_KEY, json!(1))]).unwrap();
+            assert_eq!(bytes_processed_sample_rate(), Some(1));
+        }
+        {
+            let _guard =
+                override_options(&[("snuba", BYTES_PROCESSED_SAMPLE_RATE_KEY, json!(100))])
+                    .unwrap();
+            assert_eq!(bytes_processed_sample_rate(), Some(100));
+        }
+        {
+            // Zero is the kill switch.
+            let _guard =
+                override_options(&[("snuba", BYTES_PROCESSED_SAMPLE_RATE_KEY, json!(0))]).unwrap();
+            assert_eq!(bytes_processed_sample_rate(), None);
+        }
+        {
+            // Negative values are rejected in favour of the default.
+            let _guard =
+                override_options(&[("snuba", BYTES_PROCESSED_SAMPLE_RATE_KEY, json!(-5))]).unwrap();
+            assert_eq!(bytes_processed_sample_rate(), None);
+        }
+    }
+
+    #[test]
+    fn test_should_sample_bytes_processed_counts_per_item_type() {
+        // The sampling counters are thread-local, so run on a thread of our own
+        // to start from a known-empty state.
+        std::thread::spawn(|| {
+            // First message of an item type is always sampled, then every 3rd.
+            let spans: Vec<bool> = (0..7)
+                .map(|_| should_sample_bytes_processed(TraceItemType::Span, 3))
+                .collect();
+            assert_eq!(
+                spans,
+                vec![true, false, false, true, false, false, true],
+                "expected the 1st, 4th and 7th span to be sampled"
+            );
+
+            // A second item type keeps its own counter, so it is not starved by
+            // the messages already counted for spans.
+            assert!(should_sample_bytes_processed(TraceItemType::Log, 3));
+            assert!(!should_sample_bytes_processed(TraceItemType::Log, 3));
+
+            // A rate of 1 samples everything.
+            assert!(should_sample_bytes_processed(TraceItemType::Metric, 1));
+            assert!(should_sample_bytes_processed(TraceItemType::Metric, 1));
+        })
+        .join()
+        .unwrap();
     }
 
     #[test]
