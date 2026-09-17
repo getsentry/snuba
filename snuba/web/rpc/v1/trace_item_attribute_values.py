@@ -155,7 +155,8 @@ def _build_query(
     # Under SORT_SEMVER, tiebreak equally-frequent values by the semver key
     # instead of lexicographically (count() stays the primary ordering). Only
     # string values: semver_sort_key uses string functions, so every other type
-    # enumerable here keeps plain ordering, like the table resolver's guard.
+    # enumerable here keeps plain ordering, like `_convert_order_by`'s guard in
+    # `endpoint_trace_item_table`.
     if (
         request.order_by.sort == TraceItemAttributeValuesRequest.OrderBy.SORT_SEMVER
         and request.key.type == AttributeKey.TYPE_STRING
