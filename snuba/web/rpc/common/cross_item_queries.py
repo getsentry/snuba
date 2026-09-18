@@ -145,7 +145,7 @@ def get_trace_ids_sql_for_cross_item_query(
                 for trace_filter in trace_filters
             ]
 
-        use_indexed_name = use_indexed_name_for_request(request_meta)
+        use_indexed_name = use_indexed_name_for_request(sampling_tier)
         for trace_filter in converted_trace_filters:
             item_type_cond = f.equals(column("item_type"), trace_filter.item_type)
             filter_expressions.append(

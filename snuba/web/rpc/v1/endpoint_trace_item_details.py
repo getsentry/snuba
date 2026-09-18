@@ -50,7 +50,7 @@ from snuba.web.rpc.storage_routing.common import decode_routing_hint
 from snuba.web.rpc.v1.endpoint_get_trace import convert_to_attribute_value
 
 
-def _build_query(request: TraceItemDetailsRequest) -> Query:
+def _build_query(request: TraceItemDetailsRequest, sampling_tier: Tier) -> Query:
     entity = Entity(
         key=EntityKey("eap_items"),
         schema=get_entity(EntityKey("eap_items")).get_data_model(),
@@ -109,7 +109,7 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
                 request.meta.trace_item_type,
                 request.filter,
                 attribute_key_to_expression,
-                use_indexed_name=use_indexed_name_for_request(request.meta),
+                use_indexed_name=use_indexed_name_for_request(sampling_tier),
             ),
         ),
         limit=1,
@@ -126,7 +126,7 @@ def _build_snuba_request(request: TraceItemDetailsRequest, tier: Tier) -> SnubaR
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
         original_body=MessageToDict(request),
-        query=_build_query(request),
+        query=_build_query(request, tier),
         query_settings=query_settings,
         attribution_info=AttributionInfo(
             referrer=request.meta.referrer,

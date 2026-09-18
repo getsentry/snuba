@@ -296,6 +296,7 @@ class TestTraceItemAttributesStats(BaseApiTest):
         Once the proto is updated to include the last_seen field, this data will
         be populated in the response buckets.
         """
+        from snuba.downsampled_storage_tiers import Tier
         from snuba.web.rpc.v1.endpoint_trace_item_stats import (
             LAST_SEEN_LABEL,
             _build_attr_distribution_query,
@@ -329,7 +330,7 @@ class TestTraceItemAttributesStats(BaseApiTest):
 
         # Verify the query includes the last_seen column
         query = _build_attr_distribution_query(
-            message, message.stats_types[0].attribute_distributions
+            message, message.stats_types[0].attribute_distributions, Tier.TIER_1
         )
         selected_column_names = [col.name for col in query.get_selected_columns()]
         assert LAST_SEEN_LABEL in selected_column_names

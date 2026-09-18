@@ -832,14 +832,6 @@
       "type": "integer",
       "default": 1785110400,
       "description": "Unix timestamp of the earliest weekly date bucket the v2 co-occurring-attributes tables hold data for; TraceItemAttributeNames only reads v2 for requests whose range starts at or after it, and reads v1 otherwise. Defaults to 2026-07-27 00:00 UTC, the Monday of the week the v2 tables and their materialized view were created. Must be a Monday: the date column is bucketed weekly with toMonday() and the query rounds its lower bound down to the previous Monday, so a mid-week value would let a request read a bucket v2 never populated. Lower it only to a bucket v2 has been backfilled to."
-    },
-    "eap_items_use_indexed_name_organization_ids": {
-      "type": "array",
-      "items": {
-        "type": "integer"
-      },
-      "default": [],
-      "description": "Organization ids the eap_items indexed_name rewrite is enabled for. For each listed org, equality and IN filters on sentry.op / sentry.metric.name read the bloom-filter-indexed indexed_name column instead of the unindexed attributes_string bucket lookup. Empty (the default) disables the rewrite everywhere. Only add an org once indexed_name is fully populated across its queried retention window, otherwise rows written before it was populated are silently dropped."
     }
   }
 }

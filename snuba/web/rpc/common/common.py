@@ -2,7 +2,7 @@ import math
 from collections.abc import Callable, Iterable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
-from typing import Any, TypeVar, cast
+from typing import Any, TypeVar
 
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
@@ -15,6 +15,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 
 from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
+from snuba.downsampled_storage_tiers import Tier
 from snuba.protos.common import (
     ARRAY_TYPES,
     EMPTY_STRING_DEFAULT_COLUMNS,
@@ -1012,13 +1013,9 @@ _INDEXED_NAME_KEY_BY_ITEM_TYPE: dict[TraceItemType.ValueType, str] = {
     TraceItemType.TRACE_ITEM_TYPE_METRIC: "sentry.metric.name",
 }
 
-USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION = "eap_items_use_indexed_name_organization_ids"
 
-
-def use_indexed_name_for_request(meta: RequestMeta) -> bool:
-    return meta.organization_id in cast(
-        "list[int]", get_option(USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION, [])
-    )
+def use_indexed_name_for_request(tier: Tier | None) -> bool:
+    return tier == Tier.TIER_1
 
 
 def trace_item_filters_to_expression(
