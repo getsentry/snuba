@@ -180,7 +180,8 @@ pub fn accepted_outcomes_consumer_impl(
     let dlq_policy = consumer_config.dlq_topic.map(|dlq_topic_config| {
         let dlq_producer_config =
             KafkaConfig::new_producer_config(vec![], Some(dlq_topic_config.broker_config));
-        let dlq_producer = KafkaProducer::new(dlq_producer_config);
+        let dlq_producer =
+            KafkaProducer::new(dlq_producer_config).expect("failed to create kafka producer");
 
         let kafka_dlq_producer = Box::new(KafkaDlqProducer::new(
             dlq_producer,
@@ -219,7 +220,8 @@ pub fn accepted_outcomes_consumer_impl(
     // TODO consider adding a higher linger.ms to the config for batching produced messages
     let producer_config =
         KafkaConfig::new_producer_config(vec![], Some(topic_config.broker_config));
-    let producer = Arc::new(KafkaProducer::new(producer_config));
+    let producer =
+        Arc::new(KafkaProducer::new(producer_config).expect("failed to create kafka producer"));
     let produce_topic = Topic::new(&topic_config.physical_topic_name);
 
     let factory = AcceptedOutcomesStrategyFactory {
