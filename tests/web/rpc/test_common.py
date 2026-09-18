@@ -35,6 +35,7 @@ from snuba import settings
 from snuba.clickhouse.error_codes import ErrorCodes
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.downsampled_storage_tiers import Tier
 from snuba.protos.common import (
     ATTRIBUTES_TO_COALESCE,
     MalformedAttributeException,
@@ -56,7 +57,6 @@ from snuba.query.expressions import (
 from snuba.query.logical import Query
 from snuba.web import QueryException
 from snuba.web.rpc.common.common import (
-    USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION,
     _any_attribute_filter_to_expression,
     _comparison_can_match_column_default,
     add_existence_check_to_map_attribute_reads,
@@ -1990,10 +1990,12 @@ class TestAnyAttributeFilterOption:
 
 
 class TestIndexedNameRedirect:
-    def test_organization_gate(self) -> None:
-        with override_options("snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: [42]}):
-            assert use_indexed_name_for_request(RequestMeta(organization_id=42))
-            assert not use_indexed_name_for_request(RequestMeta(organization_id=43))
+    def test_tier_gate(self) -> None:
+        assert use_indexed_name_for_request(Tier.TIER_1)
+        assert not use_indexed_name_for_request(Tier.TIER_8)
+        assert not use_indexed_name_for_request(Tier.TIER_64)
+        assert not use_indexed_name_for_request(Tier.TIER_512)
+        assert not use_indexed_name_for_request(None)
 
     def _filter(
         self,

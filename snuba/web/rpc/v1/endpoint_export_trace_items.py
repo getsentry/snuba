@@ -25,6 +25,7 @@ from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
+from snuba.downsampled_storage_tiers import Tier
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
@@ -252,6 +253,8 @@ def _build_query(
     limit: int,
     page_token: ExportTraceItemsPageToken | None = None,
     query_meta: RequestMeta | None = None,
+    *,
+    sampling_tier: Tier,
 ) -> Query:
     # The cutoff must be evaluated against the time window actually queried (the
     # routing-adjusted query_meta used in the WHERE clause below), not the original
@@ -348,7 +351,7 @@ def _build_query(
                 meta.trace_item_type,
                 in_msg.filter,
                 attribute_key_to_expression,
-                use_indexed_name=use_indexed_name_for_request(meta),
+                use_indexed_name=use_indexed_name_for_request(sampling_tier),
             ),
             *page_token_filter,
             *item_type_filter,
@@ -392,6 +395,7 @@ def _build_snuba_request(
             limit,
             page_token,
             query_meta=_export_query_meta(in_msg, routing_decision),
+            sampling_tier=routing_decision.tier,
         ),
         query_settings=query_settings,
         attribution_info=AttributionInfo(

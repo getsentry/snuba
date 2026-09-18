@@ -579,7 +579,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         for trace_filter in filters:
             filters_by_item_type[trace_filter.item_type].append(trace_filter.filter)
 
-        use_indexed_name = use_indexed_name_for_request(request_meta)
+        use_indexed_name = use_indexed_name_for_request(self.routing_decision.tier)
         for item_type in filters_by_item_type:
             filter_expressions_by_item_type[item_type] = and_cond(
                 f.equals(column("item_type"), item_type),
@@ -617,7 +617,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                 ),
             ),
             attribute_key_to_expression,
-            use_indexed_name=use_indexed_name_for_request(request.meta),
+            use_indexed_name=use_indexed_name_for_request(self.routing_decision.tier),
         )
         selected_columns: list[SelectedExpression] = [
             SelectedExpression(

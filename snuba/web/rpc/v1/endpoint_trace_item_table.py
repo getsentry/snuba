@@ -722,7 +722,7 @@ def build_query(
                 request.meta.trace_item_type,
                 request.filter,
                 attribute_key_to_expression,
-                use_indexed_name=use_indexed_name_for_request(request.meta),
+                use_indexed_name=use_indexed_name_for_request(sampling_tier),
             ),
             valid_sampling_factor_conditions(),
             *item_type_conds,

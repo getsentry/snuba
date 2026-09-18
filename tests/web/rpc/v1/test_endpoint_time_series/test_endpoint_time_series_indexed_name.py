@@ -2,7 +2,6 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
-from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     TimeSeriesRequest,
     TimeSeriesResponse,
@@ -23,7 +22,6 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.rpc.common.common import USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION
 from snuba.web.rpc.v1.endpoint_time_series import EndpointTimeSeries
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -95,14 +93,7 @@ def _total(response: TimeSeriesResponse) -> float:
 @pytest.mark.eap
 @pytest.mark.redis_db
 class TestTimeSeriesIndexedName(BaseApiTest):
-    def test_indexed_name_rewrite_is_result_preserving(self) -> None:
+    def test_indexed_name_rewrite_on_tier_1(self) -> None:
         _store_metrics()
-
-        with override_options("snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: []}):
-            disabled = EndpointTimeSeries().execute(_request())
-
-        with override_options("snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: [1]}):
-            enabled = EndpointTimeSeries().execute(_request())
-
-        assert _total(disabled) == float(MATCHING_COUNT)
-        assert list(enabled.result_timeseries) == list(disabled.result_timeseries)
+        response = EndpointTimeSeries().execute(_request())
+        assert _total(response) == float(MATCHING_COUNT)

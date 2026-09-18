@@ -189,7 +189,9 @@ def _grab_all_attributes_query() -> Expression:
 
 
 def _build_attr_distribution_query(
-    in_msg: TraceItemStatsRequest, distributions_params: AttributeDistributionsRequest
+    in_msg: TraceItemStatsRequest,
+    distributions_params: AttributeDistributionsRequest,
+    sampling_tier: Tier,
 ) -> Query:
     # kv is a column that contains all attributes in the form of a tuple (key, value)
     # each attribute will be its own row
@@ -240,7 +242,7 @@ def _build_attr_distribution_query(
         in_msg.meta.trace_item_type,
         in_msg.filter,
         (attribute_key_to_expression),
-        use_indexed_name=use_indexed_name_for_request(in_msg.meta),
+        use_indexed_name=use_indexed_name_for_request(sampling_tier),
     )
     item_type_filter = f.equals(column("item_type"), in_msg.meta.trace_item_type)
     query = Query(
@@ -334,7 +336,9 @@ class EndpointTraceItemStats(RPCEndpoint[TraceItemStatsRequest, TraceItemStatsRe
                     )
 
                 query = _build_attr_distribution_query(
-                    in_msg, requested_type.attribute_distributions
+                    in_msg,
+                    requested_type.attribute_distributions,
+                    routing_decision.tier,
                 )
                 treeify_or_and_conditions(query)
 
