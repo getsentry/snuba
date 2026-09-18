@@ -22,12 +22,7 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-from snuba.web.rpc.common.common import (
-    attribute_key_to_expression,
-    get_field_existence_expression,
-)
-from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.v1.resolvers.common.aggregation import (
+from snuba.web.rpc.common.aggregation import (
     CUSTOM_COLUMN_PREFIX,
     CustomColumnInformation,
     ExtrapolationContext,
@@ -35,6 +30,11 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     aggregation_to_expression,
     get_confidence_interval_column,
 )
+from snuba.web.rpc.common.common import (
+    attribute_key_to_expression,
+    get_field_existence_expression,
+)
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
 def _collect_column_names(expr: Expression) -> set[str]:

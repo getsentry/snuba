@@ -8,7 +8,7 @@ import pytest
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.query.expressions import FunctionCall
-from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs.v1 import (
+from snuba.web.rpc.v1.co_occurring_attrs.v1 import (
     CO_OCCURRING_ATTRS_STORAGE_KEY,
     V1,
 )

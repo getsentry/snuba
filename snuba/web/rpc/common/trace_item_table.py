@@ -18,12 +18,12 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 )
 
 from snuba.protos.common import ARRAY_TYPES, PROTO_ARRAY_TYPE_TO_COLUMN
+from snuba.web.rpc.common.aggregation import (
+    ExtrapolationContext,
+)
 from snuba.web.rpc.common.common import merge_typed_array_subcolumns
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.endpoint_get_trace import convert_to_attribute_value
-from snuba.web.rpc.v1.resolvers.common.aggregation import (
-    ExtrapolationContext,
-)
 
 
 def _array_raw_to_attribute_value(raw: Any) -> AttributeValue:

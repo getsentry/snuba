@@ -39,10 +39,10 @@ from snuba.web.rpc.common.common import (
     treeify_or_and_conditions,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.common.trace_item_table import get_converter_for_type
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingDecision,
 )
-from snuba.web.rpc.v1.resolvers.common.trace_item_table import get_converter_for_type
 
 
 def _map_key_names_for_existence_check(request_key: AttributeKey) -> list[str]:
@@ -155,7 +155,8 @@ def _build_query(
     # Under SORT_SEMVER, tiebreak equally-frequent values by the semver key
     # instead of lexicographically (count() stays the primary ordering). Only
     # string values: semver_sort_key uses string functions, so every other type
-    # enumerable here keeps plain ordering, like the table resolver's guard.
+    # enumerable here keeps plain ordering, like `_convert_order_by`'s guard in
+    # `endpoint_trace_item_table`.
     if (
         request.order_by.sort == TraceItemAttributeValuesRequest.OrderBy.SORT_SEMVER
         and request.key.type == AttributeKey.TYPE_STRING

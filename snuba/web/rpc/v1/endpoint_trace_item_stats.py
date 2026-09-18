@@ -59,7 +59,7 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingDecision,
 )
-from snuba.web.rpc.v1.resolvers.R_eap_items.heatmap_builder import HeatmapBuilder
+from snuba.web.rpc.v1.heatmap_builder import HeatmapBuilder
 
 _DEFAULT_ROW_LIMIT = 10_000
 

@@ -64,7 +64,7 @@ def apply_cross_item_outer_query_settings(
     sampling_tier: Tier,
 ) -> None:
     """Apply the ClickHouse settings for the outer query of a (potentially) cross-item
-    query. Shared by all EAP resolvers so the logic lives in one place.
+    query. Shared by all EAP endpoints so the logic lives in one place.
 
     For cross-item queries (``has_trace_filters``):
     - skip sampling on the outer query when ``cross_item_queries_no_sample_outer`` is set —
