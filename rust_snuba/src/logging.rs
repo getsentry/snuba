@@ -66,7 +66,6 @@ pub fn setup_sentry(sentry_dsn: &str) -> ClientInitGuard {
             // the value for release is also computed in python snuba, please keep the
             // logic in sync
             .maybe_release(std::env::var("SNUBA_RELEASE").ok())
-            .enable_logs(true)
             // Only recorded when a Sentry DSN is configured, and while ERROR
             // still maps to `EventFilter::Event` in `setup_logging`.
             .before_send(|event| {
