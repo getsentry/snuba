@@ -1009,7 +1009,7 @@ def _any_attribute_filter_to_expression(
 
 _INDEXED_NAME_KEY_BY_ITEM_TYPE: dict[TraceItemType.ValueType, str] = {
     TraceItemType.TRACE_ITEM_TYPE_SPAN: "sentry.op",
-    TraceItemType.TRACE_ITEM_TYPE_METRIC: "sentry.metric.name",
+    TraceItemType.TRACE_ITEM_TYPE_METRIC: "sentry.metric_name",
 }
 
 USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION = "eap_items_use_indexed_name_organization_ids"

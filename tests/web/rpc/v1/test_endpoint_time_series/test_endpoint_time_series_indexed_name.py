@@ -50,7 +50,7 @@ def _store_metrics() -> None:
                     type=TraceItemType.TRACE_ITEM_TYPE_METRIC,
                     remove_default_attributes=True,
                     attributes={
-                        "sentry.metric.name": AnyValue(string_value=name),
+                        "sentry.metric_name": AnyValue(string_value=name),
                         "value": AnyValue(double_value=1.0),
                     },
                 )
@@ -71,7 +71,7 @@ def _request() -> TimeSeriesRequest:
         ),
         filter=TraceItemFilter(
             comparison_filter=ComparisonFilter(
-                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.metric.name"),
+                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.metric_name"),
                 op=ComparisonFilter.OP_EQUALS,
                 value=AttributeValue(val_str="my.metric"),
             )
