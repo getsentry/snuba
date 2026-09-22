@@ -2038,7 +2038,7 @@ class TestIndexedNameRedirect:
 
     def test_metric_name_redirected_for_metrics(self) -> None:
         assert self._reads_indexed_name(
-            self._filter(name="sentry.metric.name"),
+            self._filter(name="sentry.metric_name"),
             item_type=TraceItemType.TRACE_ITEM_TYPE_METRIC,
         )
 
@@ -2046,7 +2046,7 @@ class TestIndexedNameRedirect:
         assert not self._reads_indexed_name(self._filter(), use_indexed_name=False)
 
     def test_not_redirected_for_other_key(self) -> None:
-        assert not self._reads_indexed_name(self._filter(name="sentry.metric.name"))
+        assert not self._reads_indexed_name(self._filter(name="sentry.metric_name"))
 
     def test_not_redirected_for_item_type_without_promoted_name(self) -> None:
         assert not self._reads_indexed_name(
