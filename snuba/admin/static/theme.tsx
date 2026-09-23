@@ -1,7 +1,6 @@
 const COLORS = {
   HEADER_BG: "#303030",
   HEADER_TEXT: "white",
-  REGION_BG: "#FFC53D",
   REGION_TEXT: "black",
   NAV_BORDER: "#CBCBCB",
   TABLE_BORDER: "#CBCBCB",
