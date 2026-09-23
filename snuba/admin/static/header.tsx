@@ -30,13 +30,7 @@ function Header() {
         src="./static/snuba.svg"
         alt="Snuba admin"
       />
-      <div style={regionStripStyle}>
-        {Array.from({ length: REGION_REPEAT_COUNT }, (_, i) => (
-          <span key={i} style={regionBadgeStyle}>
-            {current_region}
-          </span>
-        ))}
-      </div>
+      <div style={regionBarStyle}>{current_region}</div>
       <span style={adminTextStyle}>ADMIN</span>
     </header>
   );
@@ -54,25 +48,16 @@ const headerStyle = {
 const adminTextStyle = {
   color: COLORS.HEADER_TEXT,
 };
-// Repeat the region across the header so it's always in view when glancing up.
-const REGION_REPEAT_COUNT = 4;
-
-const regionStripStyle = {
-  flex: 1,
-  display: "flex",
-  justifyContent: "space-around",
-  alignItems: "center",
-  margin: "0 20px",
-  minWidth: 0,
-};
-
-const regionBadgeStyle = {
+// Wide bar so the region is always in view when glancing up.
+const regionBarStyle = {
+  width: "50%",
   backgroundColor: COLORS.REGION_BG,
   color: COLORS.REGION_TEXT,
   fontSize: "18px",
   fontWeight: 700,
   letterSpacing: "0.05em",
   textTransform: "uppercase" as const,
+  textAlign: "center" as const,
   padding: "4px 14px",
   borderRadius: "4px",
   whiteSpace: "nowrap" as const,
