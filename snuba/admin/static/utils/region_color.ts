@@ -38,4 +38,4 @@ function regionColor(region: string): string {
   return `oklch(${LIGHTNESS} ${CHROMA} ${regionHue(region)})`;
 }
 
-export { regionColor, regionHue };
+export { regionColor };
