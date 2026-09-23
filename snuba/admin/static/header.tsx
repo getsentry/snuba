@@ -30,9 +30,7 @@ function Header() {
         src="./static/snuba.svg"
         alt="Snuba admin"
       />
-      <span style={regionTextStyle}>
-        <strong>{current_region}</strong>
-      </span>
+      <div style={regionBarStyle}>{current_region}</div>
       <span style={adminTextStyle}>ADMIN</span>
     </header>
   );
@@ -50,9 +48,19 @@ const headerStyle = {
 const adminTextStyle = {
   color: COLORS.HEADER_TEXT,
 };
-const regionTextStyle = {
-  color: COLORS.RED,
-  fontSize: "20px",
+// Wide bar so the region is always in view when glancing up.
+const regionBarStyle = {
+  width: "50%",
+  backgroundColor: COLORS.REGION_BG,
+  color: COLORS.REGION_TEXT,
+  fontSize: "18px",
+  fontWeight: 700,
+  letterSpacing: "0.05em",
+  textTransform: "uppercase" as const,
+  textAlign: "center" as const,
+  padding: "4px 14px",
+  borderRadius: "4px",
+  whiteSpace: "nowrap" as const,
 };
 
 export default Header;
