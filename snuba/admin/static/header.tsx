@@ -1,5 +1,6 @@
 import React from "react";
 import { COLORS } from "SnubaAdmin/theme";
+import { regionColor } from "SnubaAdmin/utils/region_color";
 
 function Header() {
   const PROD_URL_START = "https://snuba-admin";
@@ -30,7 +31,14 @@ function Header() {
         src="./static/snuba.svg"
         alt="Snuba admin"
       />
-      <div style={regionBarStyle}>{current_region}</div>
+      <div
+        style={{
+          ...regionBarStyle,
+          backgroundColor: regionColor(current_region),
+        }}
+      >
+        {current_region}
+      </div>
       <span style={adminTextStyle}>ADMIN</span>
     </header>
   );
@@ -51,7 +59,6 @@ const adminTextStyle = {
 // Wide bar so the region is always in view when glancing up.
 const regionBarStyle = {
   width: "50%",
-  backgroundColor: COLORS.REGION_BG,
   color: COLORS.REGION_TEXT,
   fontSize: "18px",
   fontWeight: 700,
