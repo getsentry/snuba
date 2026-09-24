@@ -490,8 +490,9 @@ jobs:
       matrix:
         version:
           [
-            "25.8.16.10001.altinitystable",
-            "26.3.33.10001.altinitystable",
+            "altinity-clickhouse-server:25.8.16.10001.altinitystable",
+            "altinity-clickhouse-server:26.3.33.10001.altinitystable",
+            "clickhouse-clickhouse-server:26.8.1.2041",
           ]
         test_type: [snuba-test, snuba-test-migrations]
 
@@ -523,7 +524,7 @@ jobs:
             docker load --input /tmp/docker-deps/deps.tar
           fi
           images=(
-            "ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:${{ matrix.version }}"
+            "ghcr.io/getsentry/image-mirror-${{ matrix.version }}"
             "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:6.2.0"
             "ghcr.io/getsentry/image-mirror-confluentinc-cp-zookeeper:6.2.0"
             "ghcr.io/getsentry/docker-redis-cluster:7.0.10"
@@ -540,7 +541,7 @@ jobs:
 
       - name: Docker Snuba Test other ClickHouse versions
         run: |
-          export CLICKHOUSE_IMAGE=ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:${{matrix.version}}
+          export CLICKHOUSE_IMAGE=ghcr.io/getsentry/image-mirror-${{matrix.version}}
           SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=test docker compose -f docker-compose.gcb.yml run --rm ${{ matrix.test_type }}
 
   image-smoke-test:
