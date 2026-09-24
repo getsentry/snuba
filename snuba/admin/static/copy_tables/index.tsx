@@ -282,8 +282,6 @@ const textInputStyle = {
 const tableListStyle = {
   marginTop: 10,
   marginLeft: 5,
-  maxHeight: '200px',
-  overflowY: "auto" as const,
 }
 
 const copyTableResultStyle = {
