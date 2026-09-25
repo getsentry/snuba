@@ -1032,7 +1032,7 @@ def use_indexed_name_for_request(meta: RequestMeta) -> bool:
         "list[int]", get_option(USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION, [])
     ):
         return False
-    start_timestamp = cast(int, get_option(INDEXED_NAME_START_TIMESTAMP_OPTION))
+    start_timestamp = get_option(INDEXED_NAME_START_TIMESTAMP_OPTION, 0)
     return meta.HasField("start_timestamp") and meta.start_timestamp.seconds >= start_timestamp
 
 
