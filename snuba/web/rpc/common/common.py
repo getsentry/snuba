@@ -1015,7 +1015,24 @@ _INDEXED_NAME_KEY_BY_ITEM_TYPE: dict[TraceItemType.ValueType, str] = {
 USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION = "eap_items_use_indexed_name_organization_ids"
 
 
+# Earliest instant indexed_name is known to be populated for every org. Rows written before it
+# may have an empty indexed_name (metrics were keyed on the wrong attribute until #8488), so the
+# rewrite is only result-preserving for requests whose whole time range starts at or after it.
+INDEXED_NAME_START_TIMESTAMP_OPTION = "eap_items_indexed_name_start_timestamp"
+INDEXED_NAME_START_TIMESTAMP_DEFAULT = 1790294400  # 2026-09-25 00:00:00 UTC
+
+
 def use_indexed_name_for_request(meta: RequestMeta) -> bool:
+    """Whether filters on the promoted name attribute can read ``indexed_name``.
+
+    True when the request's time range starts at or after the point indexed_name is fully
+    populated, or when the org is explicitly opted in.
+    """
+    start_timestamp = get_option(
+        INDEXED_NAME_START_TIMESTAMP_OPTION, INDEXED_NAME_START_TIMESTAMP_DEFAULT
+    )
+    if meta.HasField("start_timestamp") and meta.start_timestamp.seconds >= start_timestamp:
+        return True
     return meta.organization_id in cast(
         "list[int]", get_option(USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION, [])
     )

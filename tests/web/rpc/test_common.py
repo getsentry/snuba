@@ -56,6 +56,7 @@ from snuba.query.expressions import (
 from snuba.query.logical import Query
 from snuba.web import QueryException
 from snuba.web.rpc.common.common import (
+    INDEXED_NAME_START_TIMESTAMP_OPTION,
     USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION,
     _any_attribute_filter_to_expression,
     _comparison_can_match_column_default,
@@ -1994,6 +1995,37 @@ class TestIndexedNameRedirect:
         with override_options("snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: [42]}):
             assert use_indexed_name_for_request(RequestMeta(organization_id=42))
             assert not use_indexed_name_for_request(RequestMeta(organization_id=43))
+
+    def test_time_gate(self) -> None:
+        with override_options(
+            "snuba",
+            {
+                USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: [],
+                INDEXED_NAME_START_TIMESTAMP_OPTION: 1000,
+            },
+        ):
+            # Range starting at or after the cutoff: enabled for every org.
+            assert use_indexed_name_for_request(
+                RequestMeta(organization_id=43, start_timestamp=Timestamp(seconds=1000))
+            )
+            # Range reaching back before the cutoff: not enabled.
+            assert not use_indexed_name_for_request(
+                RequestMeta(organization_id=43, start_timestamp=Timestamp(seconds=999))
+            )
+            # No start timestamp: not enabled.
+            assert not use_indexed_name_for_request(RequestMeta(organization_id=43))
+
+    def test_org_gate_applies_before_cutoff(self) -> None:
+        with override_options(
+            "snuba",
+            {
+                USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: [42],
+                INDEXED_NAME_START_TIMESTAMP_OPTION: 1000,
+            },
+        ):
+            assert use_indexed_name_for_request(
+                RequestMeta(organization_id=42, start_timestamp=Timestamp(seconds=1))
+            )
 
     def _filter(
         self,
