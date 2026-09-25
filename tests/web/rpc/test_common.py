@@ -2015,8 +2015,8 @@ class TestIndexedNameRedirect:
             )
 
     def test_start_timestamp_uses_schema_default(self) -> None:
-        # 2026-09-26 00:00:00 UTC, the schema default for the cutoff.
-        cutoff = 1790380800
+        # 2026-09-23 00:00:00 UTC, the schema default for the cutoff.
+        cutoff = 1790121600
         with override_options("snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: [42]}):
             assert use_indexed_name_for_request(
                 RequestMeta(organization_id=42, start_timestamp=Timestamp(seconds=cutoff))

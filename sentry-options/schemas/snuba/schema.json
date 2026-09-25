@@ -843,8 +843,8 @@
     },
     "eap_items_indexed_name_start_timestamp": {
       "type": "integer",
-      "default": 1790380800,
-      "description": "Unix timestamp from which indexed_name is fully populated. The indexed_name rewrite only applies to requests from orgs listed in eap_items_use_indexed_name_organization_ids whose start_timestamp is at or after it; older ranges keep the attributes_string bucket lookup. Defaults to 2026-09-26 00:00 UTC, after indexed_name started being populated from sentry.metric_name (#8488). Never lower it below a point where indexed_name was fully populated, otherwise rows written before it was populated are silently dropped."
+      "default": 1790121600,
+      "description": "Unix timestamp from which indexed_name is fully populated. The indexed_name rewrite only applies to requests from orgs listed in eap_items_use_indexed_name_organization_ids whose start_timestamp is at or after it; older ranges keep the attributes_string bucket lookup. Defaults to 2026-09-23 00:00 UTC, the first midnight after the fix populating indexed_name from sentry.metric_name (#8488) was merged, plus an hour of padding. That is not a verified deployment time across regions; raise it if any region deployed #8488 later. Never lower it below a point where indexed_name was fully populated, otherwise rows written before it was populated are silently dropped."
     }
   }
 }
