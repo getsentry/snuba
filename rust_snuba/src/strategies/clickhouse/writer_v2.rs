@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use bytes::Bytes;
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, Response};
 use sentry_arroyo::processing::strategies::run_task_in_threads::{
@@ -195,13 +196,17 @@ where
 
 impl_writer_delegate!(JsonWriterStep);
 
-/// Writer for the `RowBinary` wire format. `columns` is required: RowBinary is
-/// positional, so the explicit column list maps wire order to the table's
-/// columns (see `EAPItemRow::COLUMN_NAMES`).
+/// Buffered writer for the `RowBinary` wire format. Production RowBinary
+/// inserts go through [`super::streaming_writer::StreamingClickhouseWriter`];
+/// this remains as a fallback that POSTs a fully-buffered body.
+/// `columns` is required: RowBinary is positional, so the explicit column
+/// list maps wire order to the table's columns (see `EAPItemRow::COLUMN_NAMES`).
+#[allow(dead_code)]
 pub struct RowBinaryWriterStep<N> {
     inner: WriterInner<N>,
 }
 
+#[allow(dead_code)]
 impl<N> RowBinaryWriterStep<N>
 where
     N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
@@ -326,18 +331,34 @@ impl ClickhouseClient {
 
     async fn send_once(
         &self,
-        body: bytes::Bytes,
+        body: Bytes,
         attempt: usize,
         max_retries: usize,
+    ) -> Result<Response, FailedAttempt> {
+        self.send_once_body(
+            reqwest::Body::from(body),
+            attempt,
+            max_retries,
+            get_clickhouse_write_client_timeouts(&self.storage_name).request,
+        )
+        .await
+    }
+
+    async fn send_once_body(
+        &self,
+        body: reqwest::Body,
+        attempt: usize,
+        max_retries: usize,
+        timeout: Duration,
     ) -> Result<Response, FailedAttempt> {
         let started = Instant::now();
         let res = self
             .client
             .post(self.build_url())
             .headers(self.headers.clone())
-            .timeout(get_clickhouse_write_client_timeouts(&self.storage_name).request)
+            .timeout(timeout)
             .query(&[("query", &self.query)])
-            .body(reqwest::Body::from(body))
+            .body(body)
             .send()
             .await;
 
@@ -411,15 +432,109 @@ impl ClickhouseClient {
             )
         })
     }
+
+    /// Stream `body_stream` as the POST body for the first attempt; on
+    /// failure, wait until `body_complete` fires (the caller has finished
+    /// the batch, so `retry_buf` is immutable) and retry from `retry_buf`.
+    ///
+    /// The caller MUST tee every chunk it pushes into `body_stream` into
+    /// `retry_buf` in the same order, and MUST only close the stream when
+    /// the entire batch has been pushed. Closing early lands a truncated
+    /// body that ClickHouse will accept as a complete INSERT.
+    ///
+    /// If the first attempt fails while the caller is still producing
+    /// chunks, retrying immediately would replay a partial `retry_buf`.
+    /// Waiting on `body_complete` is what makes live streaming safe.
+    /// Dropping the oneshot sender (batch abandoned) cancels retries.
+    ///
+    /// `first_attempt_extra` is added to the configured request timeout
+    /// for attempt 0 so the open connection can cover batch accumulation
+    /// plus the ClickHouse write. Retries use the plain request timeout:
+    /// the body is already complete.
+    pub async fn send_streamed<S>(
+        &self,
+        body_stream: S,
+        retry_buf: Arc<parking_lot::Mutex<Vec<Bytes>>>,
+        body_complete: tokio::sync::oneshot::Receiver<()>,
+        first_attempt_extra: Duration,
+    ) -> anyhow::Result<Response>
+    where
+        S: futures::stream::Stream<Item = Result<Bytes, std::io::Error>> + Send + 'static,
+    {
+        let retry_policy = get_clickhouse_write_retry_policy(&self.storage_name);
+        let request_timeout = get_clickhouse_write_client_timeouts(&self.storage_name).request;
+        let first_timeout = request_timeout.saturating_add(first_attempt_extra);
+
+        let first = self
+            .send_once_body(
+                reqwest::Body::wrap_stream(body_stream),
+                0,
+                retry_policy.max_retries,
+                first_timeout,
+            )
+            .await;
+
+        match first {
+            Ok(response) => return Ok(response),
+            Err(failure) if retry_policy.max_retries == 0 => {
+                return Err(anyhow::anyhow!(
+                    "error writing to clickhouse after 1 attempts: {}",
+                    failure.detail
+                ));
+            }
+            Err(_) => {
+                if body_complete.await.is_err() {
+                    anyhow::bail!(
+                        "streamed insert cancelled before the body was complete; \
+                         not retrying a partial batch"
+                    );
+                }
+            }
+        }
+
+        for attempt in 1..retry_policy.max_retries {
+            tokio::time::sleep(retry_policy.backoff(attempt - 1)).await;
+            let body = retry_body(&retry_buf);
+            if let Ok(response) = self
+                .send_once_body(body, attempt, retry_policy.max_retries, request_timeout)
+                .await
+            {
+                return Ok(response);
+            }
+        }
+
+        tokio::time::sleep(retry_policy.backoff(retry_policy.max_retries.saturating_sub(1))).await;
+        self.send_once_body(
+            retry_body(&retry_buf),
+            retry_policy.max_retries,
+            retry_policy.max_retries,
+            request_timeout,
+        )
+        .await
+        .map_err(|failure| {
+            anyhow::anyhow!(
+                "error writing to clickhouse after {} attempts: {}",
+                retry_policy.max_retries + 1,
+                failure.detail
+            )
+        })
+    }
+}
+
+fn retry_body(retry_buf: &parking_lot::Mutex<Vec<Bytes>>) -> reqwest::Body {
+    let chunks: Vec<Bytes> = retry_buf.lock().clone();
+    reqwest::Body::wrap_stream(futures::stream::iter(
+        chunks.into_iter().map(Ok::<_, std::io::Error>),
+    ))
 }
 
 /// ClickHouse native compressed-block size cap. Matches the server's
 /// `max_compress_block_size` default; sending larger blocks risks tripping
 /// server-side decompress limits.
-const LZ4_BLOCK_SIZE: usize = 1024 * 1024;
+pub(super) const LZ4_BLOCK_SIZE: usize = 1024 * 1024;
 
 /// ClickHouse compression method identifier for LZ4 in the native block header.
-const LZ4_METHOD_BYTE: u8 = 0x82;
+pub(super) const LZ4_METHOD_BYTE: u8 = 0x82;
 
 /// CityHash128 over `data` in the wire layout ClickHouse's
 /// `CompressedReadBuffer` reads: 8 little-endian bytes of the low 64-bit half
@@ -435,7 +550,7 @@ const LZ4_METHOD_BYTE: u8 = 0x82;
 /// We use CityHash 1.0.2 — that's the variant ClickHouse bundles for
 /// compression checksums; the 110 variant is reserved for newer hash columns
 /// and is NOT interchangeable here.
-fn ch_compression_checksum(data: &[u8]) -> [u8; 16] {
+pub(super) fn ch_compression_checksum(data: &[u8]) -> [u8; 16] {
     cityhash_rs::cityhash_102_128(data)
         .rotate_left(64)
         .to_le_bytes()
@@ -859,5 +974,132 @@ mod tests {
                 "{format:?}: took {elapsed:?}"
             );
         }
+    }
+
+    fn streamed_test_client(port: u16, storage_name: &str) -> ClickhouseClient {
+        ClickhouseClient::new(
+            &ClickhouseConfig {
+                host: "127.0.0.1".to_string(),
+                port,
+                secure: false,
+                user: "default".to_string(),
+                password: "".to_string(),
+                database: "default".to_string(),
+            },
+            "test_table",
+            storage_name.to_string(),
+            InsertFormat::RowBinary,
+            Some(&["col"]),
+        )
+    }
+
+    #[tokio::test]
+    async fn test_send_streamed_retries_from_buffered_chunks() {
+        crate::testutils::initialize_python();
+        init_options();
+        let _guard = override_options(&[(
+            "snuba",
+            "clickhouse_write_retry_policy",
+            json!({
+                "streamed_retry_test": {
+                    "initial_backoff_ms": 50.0,
+                    "max_retries": 2,
+                    "jitter_factor": 0.0
+                }
+            }),
+        )])
+        .unwrap();
+
+        let client = streamed_test_client(1, "streamed_retry_test");
+        let retry_buf = Arc::new(parking_lot::Mutex::new(vec![
+            Bytes::from_static(b"chunk-a"),
+            Bytes::from_static(b"chunk-b"),
+        ]));
+        let stream_chunks = retry_buf.lock().clone();
+        let body_stream =
+            futures::stream::iter(stream_chunks.into_iter().map(Ok::<_, std::io::Error>));
+        let (complete_tx, complete_rx) = tokio::sync::oneshot::channel();
+        complete_tx.send(()).unwrap();
+
+        let start = Instant::now();
+        let result = client
+            .send_streamed(body_stream, retry_buf, complete_rx, Duration::ZERO)
+            .await;
+        let elapsed = start.elapsed();
+
+        assert!(result.is_err());
+        // Two backoffs of 50ms (attempts 1 and 2 after the live attempt).
+        assert!(elapsed >= Duration::from_millis(90));
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("after 3 attempts"), "got: {err}");
+    }
+
+    #[tokio::test]
+    async fn test_send_streamed_waits_for_body_complete_before_retry() {
+        crate::testutils::initialize_python();
+        init_options();
+        let _guard = override_options(&[(
+            "snuba",
+            "clickhouse_write_retry_policy",
+            json!({
+                "streamed_wait_complete_test": {
+                    "initial_backoff_ms": 10.0,
+                    "max_retries": 1,
+                    "jitter_factor": 0.0
+                }
+            }),
+        )])
+        .unwrap();
+
+        let client = streamed_test_client(1, "streamed_wait_complete_test");
+        let retry_buf = Arc::new(parking_lot::Mutex::new(vec![Bytes::from_static(b"chunk")]));
+        // Connection is refused immediately, so the live attempt fails
+        // without consuming the (never-ending) stream. Retries must then
+        // wait for `body_complete` rather than replaying a partial buf.
+        let body_stream = futures::stream::pending::<Result<Bytes, std::io::Error>>();
+        let (complete_tx, complete_rx) = tokio::sync::oneshot::channel();
+
+        let handle = tokio::spawn(async move {
+            client
+                .send_streamed(body_stream, retry_buf, complete_rx, Duration::ZERO)
+                .await
+        });
+
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        assert!(
+            !handle.is_finished(),
+            "must not retry until the caller signals body complete"
+        );
+
+        complete_tx.send(()).unwrap();
+        let result = tokio::time::timeout(Duration::from_secs(5), handle)
+            .await
+            .expect("retries should finish after body_complete")
+            .expect("task should not panic");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("after 2 attempts"), "got: {err}");
+    }
+
+    #[tokio::test]
+    async fn test_send_streamed_cancelled_if_body_complete_dropped() {
+        crate::testutils::initialize_python();
+        init_options();
+        let client = streamed_test_client(1, "streamed_cancel_test");
+        let retry_buf = Arc::new(parking_lot::Mutex::new(vec![Bytes::from_static(b"chunk")]));
+        let body_stream = futures::stream::iter(std::iter::once(Ok::<_, std::io::Error>(
+            Bytes::from_static(b"chunk"),
+        )));
+        let (complete_tx, complete_rx) = tokio::sync::oneshot::channel();
+        drop(complete_tx);
+
+        let result = client
+            .send_streamed(body_stream, retry_buf, complete_rx, Duration::ZERO)
+            .await;
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("cancelled before the body was complete"),
+            "got: {err}"
+        );
     }
 }
