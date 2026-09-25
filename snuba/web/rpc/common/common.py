@@ -1,5 +1,4 @@
 import math
-import sys
 from collections.abc import Callable, Iterable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -1033,8 +1032,7 @@ def use_indexed_name_for_request(meta: RequestMeta) -> bool:
         "list[int]", get_option(USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION, [])
     ):
         return False
-    # Fallback only applies if the option can't be read at all: disable the rewrite.
-    start_timestamp = get_option(INDEXED_NAME_START_TIMESTAMP_OPTION, sys.maxsize)
+    start_timestamp = cast(int, get_option(INDEXED_NAME_START_TIMESTAMP_OPTION))
     return meta.HasField("start_timestamp") and meta.start_timestamp.seconds >= start_timestamp
 
 

@@ -1,5 +1,7 @@
 from unittest import mock
 
+import pytest
+import sentry_options
 from sentry_options.testing import override_options
 
 from snuba.state.sentry_options import (
@@ -45,6 +47,28 @@ def test_unexpected_error_falls_back_to_default() -> None:
         side_effect=RuntimeError("boom"),
     ):
         assert get_option("enable_any_attribute_filter", "fallback") == "fallback"
+
+
+def test_get_option_without_default_returns_schema_default() -> None:
+    assert get_option("enable_any_attribute_filter") is True
+    with override_options(SNUBA_OPTIONS_NAMESPACE, {"enable_any_attribute_filter": False}):
+        assert get_option("enable_any_attribute_filter") is False
+
+
+def test_get_option_without_default_raises_for_unknown_option() -> None:
+    with pytest.raises(sentry_options.UnknownOptionError):
+        get_option("option_that_does_not_exist")
+
+
+def test_get_option_without_default_raises_unexpected_error() -> None:
+    with (
+        mock.patch(
+            "snuba.state.sentry_options.sentry_options.options",
+            side_effect=RuntimeError("boom"),
+        ),
+        pytest.raises(RuntimeError),
+    ):
+        get_option("enable_any_attribute_filter")
 
 
 def test_mapped_option_returns_entry_for_name() -> None:
