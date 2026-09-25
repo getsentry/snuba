@@ -56,6 +56,7 @@ from snuba.query.expressions import (
 from snuba.query.logical import Query
 from snuba.web import QueryException
 from snuba.web.rpc.common.common import (
+    INDEXED_NAME_START_TIMESTAMP_OPTION,
     USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION,
     _any_attribute_filter_to_expression,
     _comparison_can_match_column_default,
@@ -1990,10 +1991,39 @@ class TestAnyAttributeFilterOption:
 
 
 class TestIndexedNameRedirect:
-    def test_organization_gate(self) -> None:
+    def test_requires_org_and_time_range(self) -> None:
+        with override_options(
+            "snuba",
+            {
+                USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: [42],
+                INDEXED_NAME_START_TIMESTAMP_OPTION: 1000,
+            },
+        ):
+            # Enabled org, range starting at or after the cutoff.
+            assert use_indexed_name_for_request(
+                RequestMeta(organization_id=42, start_timestamp=Timestamp(seconds=1000))
+            )
+            # Enabled org, range reaching back before the cutoff.
+            assert not use_indexed_name_for_request(
+                RequestMeta(organization_id=42, start_timestamp=Timestamp(seconds=999))
+            )
+            # Enabled org, no start timestamp.
+            assert not use_indexed_name_for_request(RequestMeta(organization_id=42))
+            # Org not enabled, even with a range after the cutoff.
+            assert not use_indexed_name_for_request(
+                RequestMeta(organization_id=43, start_timestamp=Timestamp(seconds=1000))
+            )
+
+    def test_start_timestamp_uses_schema_default(self) -> None:
+        # 2026-09-23 00:00:00 UTC, the schema default for the cutoff.
+        cutoff = 1790121600
         with override_options("snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: [42]}):
-            assert use_indexed_name_for_request(RequestMeta(organization_id=42))
-            assert not use_indexed_name_for_request(RequestMeta(organization_id=43))
+            assert use_indexed_name_for_request(
+                RequestMeta(organization_id=42, start_timestamp=Timestamp(seconds=cutoff))
+            )
+            assert not use_indexed_name_for_request(
+                RequestMeta(organization_id=42, start_timestamp=Timestamp(seconds=cutoff - 1))
+            )
 
     def _filter(
         self,

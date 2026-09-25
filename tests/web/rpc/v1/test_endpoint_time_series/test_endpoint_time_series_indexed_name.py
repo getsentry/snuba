@@ -98,6 +98,7 @@ class TestTimeSeriesIndexedName(BaseApiTest):
     def test_indexed_name_rewrite_is_result_preserving(self) -> None:
         _store_metrics()
 
+        # The request range is after the schema-default cutoff, so only the org list decides.
         with override_options("snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: []}):
             disabled = EndpointTimeSeries().execute(_request())
 
