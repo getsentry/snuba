@@ -23,10 +23,7 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.rpc.common.common import (
-    INDEXED_NAME_START_TIMESTAMP_OPTION,
-    USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION,
-)
+from snuba.web.rpc.common.common import USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION
 from snuba.web.rpc.v1.endpoint_time_series import EndpointTimeSeries
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -101,17 +98,11 @@ class TestTimeSeriesIndexedName(BaseApiTest):
     def test_indexed_name_rewrite_is_result_preserving(self) -> None:
         _store_metrics()
 
-        # Org not enabled: the rewrite is off even though the range is after the cutoff.
-        with override_options(
-            "snuba",
-            {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: [], INDEXED_NAME_START_TIMESTAMP_OPTION: 0},
-        ):
+        # The request range is after the schema-default cutoff, so only the org list decides.
+        with override_options("snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: []}):
             disabled = EndpointTimeSeries().execute(_request())
 
-        with override_options(
-            "snuba",
-            {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: [1], INDEXED_NAME_START_TIMESTAMP_OPTION: 0},
-        ):
+        with override_options("snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: [1]}):
             enabled = EndpointTimeSeries().execute(_request())
 
         assert _total(disabled) == float(MATCHING_COUNT)
