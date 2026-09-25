@@ -218,7 +218,18 @@ RECORD_COGS = False
 
 # Sentry Options
 SENTRY_DSN: str | None = None
-SENTRY_TRACE_SAMPLE_RATE = 0
+# Sample rate for traces that start in snuba (no incoming sampling decision).
+SENTRY_TRACE_SAMPLE_RATE = 0.0
+# Fraction of the traces sampled by the caller that snuba keeps. Nearly all
+# snuba traffic carries a caller decision, so this is the main lever on the
+# volume of the snuba project.
+SENTRY_INHERITED_TRACE_SAMPLE_RATE = float(
+    os.environ.get("SENTRY_INHERITED_TRACE_SAMPLE_RATE", 0.1)
+)
+# Sample rate for traces started by health check requests.
+SENTRY_HEALTH_CHECK_TRACE_SAMPLE_RATE = 0.0
+# Environments whose traces are always sampled, matched as substrings.
+SENTRY_ALWAYS_SAMPLED_ENVIRONMENTS = ("debug", "dev", "local", "qa", "test")
 
 # Snuba Admin Options
 SLACK_API_TOKEN = os.environ.get("SLACK_API_TOKEN")
