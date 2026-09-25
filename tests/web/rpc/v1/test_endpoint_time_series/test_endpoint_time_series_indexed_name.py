@@ -101,33 +101,18 @@ class TestTimeSeriesIndexedName(BaseApiTest):
     def test_indexed_name_rewrite_is_result_preserving(self) -> None:
         _store_metrics()
 
-        # Cutoff far in the future so only the org list can enable the rewrite.
-        never = 2**62
+        # Org not enabled: the rewrite is off even though the range is after the cutoff.
         with override_options(
             "snuba",
-            {
-                USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: [],
-                INDEXED_NAME_START_TIMESTAMP_OPTION: never,
-            },
+            {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: [], INDEXED_NAME_START_TIMESTAMP_OPTION: 0},
         ):
             disabled = EndpointTimeSeries().execute(_request())
 
         with override_options(
             "snuba",
-            {
-                USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: [1],
-                INDEXED_NAME_START_TIMESTAMP_OPTION: never,
-            },
+            {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: [1], INDEXED_NAME_START_TIMESTAMP_OPTION: 0},
         ):
-            enabled_by_org = EndpointTimeSeries().execute(_request())
-
-        # Request range starts after the cutoff: enabled for every org.
-        with override_options(
-            "snuba",
-            {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: [], INDEXED_NAME_START_TIMESTAMP_OPTION: 0},
-        ):
-            enabled_by_time = EndpointTimeSeries().execute(_request())
+            enabled = EndpointTimeSeries().execute(_request())
 
         assert _total(disabled) == float(MATCHING_COUNT)
-        assert list(enabled_by_org.result_timeseries) == list(disabled.result_timeseries)
-        assert list(enabled_by_time.result_timeseries) == list(disabled.result_timeseries)
+        assert list(enabled.result_timeseries) == list(disabled.result_timeseries)

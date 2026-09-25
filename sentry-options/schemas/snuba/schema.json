@@ -839,12 +839,12 @@
         "type": "integer"
       },
       "default": [],
-      "description": "Organization ids the eap_items indexed_name rewrite is enabled for regardless of the request time range. For each listed org, equality and IN filters on sentry.op / sentry.metric_name read the bloom-filter-indexed indexed_name column instead of the unindexed attributes_string bucket lookup. Requests starting at or after eap_items_indexed_name_start_timestamp use the rewrite for every org, so this list only matters for older ranges. Only add an org once indexed_name is fully populated across its queried retention window, otherwise rows written before it was populated are silently dropped."
+      "description": "Organization ids the eap_items indexed_name rewrite is enabled for. For each listed org, equality and IN filters on sentry.op / sentry.metric_name read the bloom-filter-indexed indexed_name column instead of the unindexed attributes_string bucket lookup, but only for requests whose start_timestamp is at or after eap_items_indexed_name_start_timestamp. Empty (the default) disables the rewrite everywhere."
     },
     "eap_items_indexed_name_start_timestamp": {
       "type": "integer",
       "default": 1790294400,
-      "description": "Unix timestamp from which indexed_name is fully populated for every org. Requests whose start_timestamp is at or after it read the bloom-filter-indexed indexed_name column for equality and IN filters on sentry.op / sentry.metric_name, for all orgs. Defaults to 2026-09-25 00:00 UTC, the first full day after indexed_name started being populated from sentry.metric_name (#8488). Never lower it below a point where indexed_name was fully populated, otherwise rows written before it was populated are silently dropped."
+      "description": "Unix timestamp from which indexed_name is fully populated. The indexed_name rewrite only applies to requests from orgs listed in eap_items_use_indexed_name_organization_ids whose start_timestamp is at or after it; older ranges keep the attributes_string bucket lookup. Defaults to 2026-09-25 00:00 UTC, the first full day after indexed_name started being populated from sentry.metric_name (#8488). Never lower it below a point where indexed_name was fully populated, otherwise rows written before it was populated are silently dropped."
     }
   }
 }
