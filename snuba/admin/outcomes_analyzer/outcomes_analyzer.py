@@ -46,7 +46,7 @@ def run_outcomes_query(query: str, user: str) -> ClickhouseResult:
         allowed_tables=_allowed_tables(),
         get_connection=lambda: get_ro_query_node_connection(
             StorageKey("outcomes_hourly").value,
-            ClickhouseClientSettings.CARDINALITY_ANALYZER,
+            ClickhouseClientSettings.OUTCOMES_ANALYZER,
         ),
     )
     assert connection is not None

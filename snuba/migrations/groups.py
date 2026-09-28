@@ -8,7 +8,6 @@ from snuba.migrations.group_loader import (
     EventsAnalyticsPlatformLoader,
     EventsLoader,
     FunctionsLoader,
-    GenericMetricsLoader,
     GroupAttributesLoader,
     GroupLoader,
     MetricsLoader,
@@ -37,7 +36,6 @@ class MigrationGroup(Enum):
     PROFILES = "profiles"
     FUNCTIONS = "functions"
     REPLAYS = "replays"
-    GENERIC_METRICS = "generic_metrics"
     TEST_MIGRATION = "test_migration"
     SEARCH_ISSUES = "search_issues"
     EVENTS_ANALYTICS_PLATFORM = "events_analytics_platform"
@@ -55,7 +53,6 @@ OPTIONAL_GROUPS = {
     MigrationGroup.PROFILES,
     MigrationGroup.FUNCTIONS,
     MigrationGroup.REPLAYS,
-    MigrationGroup.GENERIC_METRICS,
     MigrationGroup.TEST_MIGRATION,
     MigrationGroup.SEARCH_ISSUES,
     MigrationGroup.GROUP_ATTRIBUTES,
@@ -138,11 +135,6 @@ _REGISTERED_MIGRATION_GROUPS: dict[MigrationGroup, _MigrationGroup] = {
         loader=ReplaysLoader(),
         storage_sets_keys={StorageSetKey.REPLAYS},
         readiness_state=ReadinessState.COMPLETE,
-    ),
-    MigrationGroup.GENERIC_METRICS: _MigrationGroup(
-        loader=GenericMetricsLoader(),
-        storage_sets_keys={StorageSetKey.GENERIC_METRICS_COUNTERS},
-        readiness_state=ReadinessState.DEPRECATE,
     ),
     MigrationGroup.TEST_MIGRATION: _MigrationGroup(
         loader=TestMigrationLoader(),

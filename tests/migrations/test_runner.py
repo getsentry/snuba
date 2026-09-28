@@ -225,7 +225,7 @@ def test_run_all_using_through() -> None:
     Using "through" allows migrating up to (including)
     a specified migration id (or prefix) for a given group.
 
-    `snuba migrations migrate generic_metrics 0003`
+    `snuba migrations migrate metrics 0003`
 
     Prefix must match exactly one migration id to be valid.
     """
@@ -235,9 +235,9 @@ def test_run_all_using_through() -> None:
         # using through requires a group
         runner.run_all(force=True, through="0001")
 
-    group = MigrationGroup.GENERIC_METRICS
-    all_generic_metrics = len(get_group_loader(group).get_migrations())
-    assert len(runner._get_pending_migrations_for_group(group=group)) == all_generic_metrics
+    group = MigrationGroup.METRICS
+    all_metrics = len(get_group_loader(group).get_migrations())
+    assert len(runner._get_pending_migrations_for_group(group=group)) == all_metrics
 
     with pytest.raises(MigrationError):
         # too many migrations id matches
@@ -248,15 +248,15 @@ def test_run_all_using_through() -> None:
         runner.run_all(force=True, group=group, through="9999")
 
     runner.run_all(force=True, group=group, through="0002")
-    assert len(runner._get_pending_migrations_for_group(group=group)) == (all_generic_metrics - 2)
+    assert len(runner._get_pending_migrations_for_group(group=group)) == (all_metrics - 2)
 
     # Running with --fake
-    # (generic_metric_sets_aggregation_mv was added in 0003)
+    # (metrics_counters_buckets_local was added in 0003)
     runner.run_all(force=True, group=group, through="0003", fake=True)
-    connection = get_cluster(StorageSetKey.GENERIC_METRICS_SETS).get_query_connection(
+    connection = get_cluster(StorageSetKey.METRICS).get_query_connection(
         ClickhouseClientSettings.MIGRATE
     )
-    assert connection.execute("SHOW TABLES LIKE 'generic_metric_sets_aggregation_mv'").results == []
+    assert connection.execute("SHOW TABLES LIKE 'metrics_counters_buckets_local'").results == []
 
 
 @pytest.mark.custom_clickhouse_db

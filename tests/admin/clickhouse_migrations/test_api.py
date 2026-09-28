@@ -177,7 +177,7 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
         "snuba.admin.auth.DEFAULT_ROLES",
         [
             generate_migration_test_role("system", "all"),
-            generate_migration_test_role("generic_metrics", "none"),
+            generate_migration_test_role("profiles", "none"),
             generate_migration_test_role("events", "non_blocking", True),
             generate_migration_test_role("querylog", "non_blocking", True),
             generate_tool_test_role("all"),
@@ -209,7 +209,7 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
             assert mock_run_migration.call_count == 0
 
             # not allowed migration group policy
-            response = admin_api.post(f"/migrations/generic_metrics/{action}/0003_sets_mv")
+            response = admin_api.post(f"/migrations/profiles/{action}/0001_profiles")
             assert response.status_code == 403
             assert json.loads(response.data) == {"error": f"Group not allowed {action} policy"}
             assert mock_run_migration.call_count == 0
