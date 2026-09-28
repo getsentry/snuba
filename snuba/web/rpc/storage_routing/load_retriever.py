@@ -10,6 +10,7 @@ from typing import Any
 import sentry_sdk
 
 from snuba import environment
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.redis import RedisClientKey, get_redis_client
@@ -169,9 +170,16 @@ def get_cluster_loadinfo(
             metrics.gauge(name, value, tags=tags)
         return load_info
 
+    except ClickhouseError:
+        metrics.increment(
+            "get_cluster_loadinfo_failure",
+            tags={"cluster_name": cluster_name or "unknown", "cause": "clickhouse"},
+        )
+        return LoadInfo(cluster_load=10000)
     except Exception as e:
         metrics.increment(
-            "get_cluster_loadinfo_failure", tags={"cluster_name": cluster_name or "unknown"}
+            "get_cluster_loadinfo_failure",
+            tags={"cluster_name": cluster_name or "unknown", "cause": "unknown"},
         )
         sentry_sdk.capture_exception(e)
         return LoadInfo()
