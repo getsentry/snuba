@@ -228,11 +228,10 @@ def get_ro_node_connection(
         ClickhouseClientSettings.QUERY.name,
         ClickhouseClientSettings.QUERYLOG.name,
         ClickhouseClientSettings.TRACING.name,
-        ClickhouseClientSettings.CARDINALITY_ANALYZER.name,
+        ClickhouseClientSettings.OUTCOMES_ANALYZER.name,
     }
     assert getattr(client_settings, "name", None) in allowed, (
-        "admin can only use QUERY, QUERYLOG, TRACING or CARDINALITY_ANALYZER "
-        "ClickhouseClientSettings"
+        "admin can only use QUERY, QUERYLOG, TRACING or OUTCOMES_ANALYZER ClickhouseClientSettings"
     )
 
     storage = _get_storage(storage_name)
@@ -296,11 +295,10 @@ def get_ro_cluster_node_connection(
         ClickhouseClientSettings.QUERY.name,
         ClickhouseClientSettings.QUERYLOG.name,
         ClickhouseClientSettings.TRACING.name,
-        ClickhouseClientSettings.CARDINALITY_ANALYZER.name,
+        ClickhouseClientSettings.OUTCOMES_ANALYZER.name,
     }
     assert getattr(client_settings, "name", None) in allowed, (
-        "admin can only use QUERY, QUERYLOG, TRACING or CARDINALITY_ANALYZER "
-        "ClickhouseClientSettings"
+        "admin can only use QUERY, QUERYLOG, TRACING or OUTCOMES_ANALYZER ClickhouseClientSettings"
     )
 
     if getattr(client_settings, "name", None) in {

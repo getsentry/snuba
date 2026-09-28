@@ -687,7 +687,7 @@ def test_query_node_connection_uses_cluster_http_port() -> None:
     """
     Counterpart to test_by_host_connection_uses_default_http_port: the
     query-node helper (get_ro_query_node_connection — used by the tracing,
-    querylog and cardinality tools) connects to the cluster's *configured query
+    querylog and outcomes tools) connects to the cluster's *configured query
     endpoint*, the same host the normal read path reaches on
     cluster.get_port(). That endpoint may be a load balancer on a
     non-default HTTP port, so this path must keep using cluster.get_port()
@@ -721,7 +721,7 @@ def test_query_node_connection_uses_cluster_http_port() -> None:
 
 
 def test_ro_profiles_use_matching_credentials() -> None:
-    """QUERY uses the readonly user; CARDINALITY_ANALYZER uses the trace user."""
+    """QUERY uses the readonly user; OUTCOMES_ANALYZER uses the trace user."""
     from snuba.admin.clickhouse import common
 
     with (
@@ -731,13 +731,13 @@ def test_ro_profiles_use_matching_credentials() -> None:
         patch.object(common, "build_pool") as mock_pool,
     ):
         common.get_ro_query_node_connection("errors", ClickhouseClientSettings.QUERY)
-        common.get_ro_query_node_connection("errors", ClickhouseClientSettings.CARDINALITY_ANALYZER)
+        common.get_ro_query_node_connection("errors", ClickhouseClientSettings.OUTCOMES_ANALYZER)
 
     profiles = [call.args[0] for call in mock_pool.call_args_list]
     usernames = [call.args[2] for call in mock_pool.call_args_list]
     assert profiles == [
         ClickhouseClientSettings.QUERY,
-        ClickhouseClientSettings.CARDINALITY_ANALYZER,
+        ClickhouseClientSettings.OUTCOMES_ANALYZER,
     ]
     assert usernames == ["ro_user", "trace_user"]
 
