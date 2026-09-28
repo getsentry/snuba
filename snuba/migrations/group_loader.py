@@ -164,17 +164,6 @@ class FunctionsLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.functions")
 
 
-class GenericMetricsLoader(GroupLoader):
-    def get_migrations(self) -> Sequence[str]:
-        """
-        Generic metrics is deprecated
-        """
-        return []
-
-    def load_migration(self, migration_id: str) -> Migration:
-        raise MigrationDoesNotExist("Generic metrics is deprecated")
-
-
 class SearchIssuesLoader(DirectoryLoader):
     def __init__(self) -> None:
         super().__init__("snuba.snuba_migrations.search_issues")

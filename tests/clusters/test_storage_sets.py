@@ -13,15 +13,11 @@ def test_storage_set_combination() -> None:
 
 
 def test_unregistered_storage_set_key_is_constructible() -> None:
-    assert "GENERIC_METRICS_DISTRIBUTIONS" not in _HARDCODED_STORAGE_SET_KEYS
-    popped = _REGISTERED_STORAGE_SET_KEYS.pop("GENERIC_METRICS_DISTRIBUTIONS", None)
-    try:
-        key = StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS
-        assert key.value == "generic_metrics_distributions"
-        assert key not in set(StorageSetKey)
-    finally:
-        if popped is not None:
-            _REGISTERED_STORAGE_SET_KEYS["GENERIC_METRICS_DISTRIBUTIONS"] = popped
+    assert "UNREGISTERED_STORAGE_SET" not in _HARDCODED_STORAGE_SET_KEYS
+    assert "UNREGISTERED_STORAGE_SET" not in _REGISTERED_STORAGE_SET_KEYS
+    key = StorageSetKey.UNREGISTERED_STORAGE_SET
+    assert key.value == "unregistered_storage_set"
+    assert key not in set(StorageSetKey)
 
 
 def test_private_storage_set_key_attr_raises() -> None:
