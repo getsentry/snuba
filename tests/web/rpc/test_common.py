@@ -1,5 +1,6 @@
 import uuid
 from datetime import UTC, datetime, timedelta
+from unittest import mock
 
 import pytest
 from google.protobuf import json_format, struct_pb2
@@ -56,6 +57,7 @@ from snuba.query.expressions import (
 from snuba.query.logical import Query
 from snuba.web import QueryException
 from snuba.web.rpc.common.common import (
+    INDEXED_NAME_START_TIMESTAMP_OPTION,
     USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION,
     _any_attribute_filter_to_expression,
     _comparison_can_match_column_default,
@@ -1990,10 +1992,45 @@ class TestAnyAttributeFilterOption:
 
 
 class TestIndexedNameRedirect:
-    def test_organization_gate(self) -> None:
+    def test_requires_org_and_time_range(self) -> None:
+        with override_options(
+            "snuba",
+            {
+                USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: [42],
+                INDEXED_NAME_START_TIMESTAMP_OPTION: 1000,
+            },
+        ):
+            assert use_indexed_name_for_request(
+                RequestMeta(organization_id=42, start_timestamp=Timestamp(seconds=1000))
+            )
+            assert not use_indexed_name_for_request(
+                RequestMeta(organization_id=42, start_timestamp=Timestamp(seconds=999))
+            )
+            assert not use_indexed_name_for_request(RequestMeta(organization_id=42))
+            assert not use_indexed_name_for_request(
+                RequestMeta(organization_id=43, start_timestamp=Timestamp(seconds=1000))
+            )
+
+    def test_start_timestamp_uses_schema_default(self) -> None:
+        cutoff = 1790121600
         with override_options("snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: [42]}):
-            assert use_indexed_name_for_request(RequestMeta(organization_id=42))
-            assert not use_indexed_name_for_request(RequestMeta(organization_id=43))
+            assert use_indexed_name_for_request(
+                RequestMeta(organization_id=42, start_timestamp=Timestamp(seconds=cutoff))
+            )
+            assert not use_indexed_name_for_request(
+                RequestMeta(organization_id=42, start_timestamp=Timestamp(seconds=cutoff - 1))
+            )
+
+    def test_unreadable_start_timestamp_disables_rewrite(self) -> None:
+        def fake_get_option(key: str, default: object) -> object:
+            if key == INDEXED_NAME_START_TIMESTAMP_OPTION:
+                return default
+            return [42]
+
+        with mock.patch("snuba.web.rpc.common.common.get_option", side_effect=fake_get_option):
+            assert not use_indexed_name_for_request(
+                RequestMeta(organization_id=42, start_timestamp=Timestamp(seconds=2_000_000_000))
+            )
 
     def _filter(
         self,

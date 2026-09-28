@@ -1015,10 +1015,21 @@ _INDEXED_NAME_KEY_BY_ITEM_TYPE: dict[TraceItemType.ValueType, str] = {
 USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION = "eap_items_use_indexed_name_organization_ids"
 
 
+# Rows written before this cutoff may have an empty indexed_name.
+INDEXED_NAME_START_TIMESTAMP_OPTION = "eap_items_indexed_name_start_timestamp"
+# Fail closed if the cutoff can't be read.
+_INDEXED_NAME_START_TIMESTAMP_FALLBACK = 2**63 - 1
+
+
 def use_indexed_name_for_request(meta: RequestMeta) -> bool:
-    return meta.organization_id in cast(
+    if meta.organization_id not in cast(
         "list[int]", get_option(USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION, [])
+    ):
+        return False
+    start_timestamp = get_option(
+        INDEXED_NAME_START_TIMESTAMP_OPTION, _INDEXED_NAME_START_TIMESTAMP_FALLBACK
     )
+    return meta.HasField("start_timestamp") and meta.start_timestamp.seconds >= start_timestamp
 
 
 def trace_item_filters_to_expression(
