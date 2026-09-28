@@ -2000,23 +2000,18 @@ class TestIndexedNameRedirect:
                 INDEXED_NAME_START_TIMESTAMP_OPTION: 1000,
             },
         ):
-            # Enabled org, range starting at or after the cutoff.
             assert use_indexed_name_for_request(
                 RequestMeta(organization_id=42, start_timestamp=Timestamp(seconds=1000))
             )
-            # Enabled org, range reaching back before the cutoff.
             assert not use_indexed_name_for_request(
                 RequestMeta(organization_id=42, start_timestamp=Timestamp(seconds=999))
             )
-            # Enabled org, no start timestamp.
             assert not use_indexed_name_for_request(RequestMeta(organization_id=42))
-            # Org not enabled, even with a range after the cutoff.
             assert not use_indexed_name_for_request(
                 RequestMeta(organization_id=43, start_timestamp=Timestamp(seconds=1000))
             )
 
     def test_start_timestamp_uses_schema_default(self) -> None:
-        # 2026-09-23 00:00:00 UTC, the schema default for the cutoff.
         cutoff = 1790121600
         with override_options("snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: [42]}):
             assert use_indexed_name_for_request(
@@ -2027,7 +2022,6 @@ class TestIndexedNameRedirect:
             )
 
     def test_unreadable_start_timestamp_disables_rewrite(self) -> None:
-        # If the cutoff can't be read, fail closed instead of treating every range as eligible.
         def fake_get_option(key: str, default: object) -> object:
             if key == INDEXED_NAME_START_TIMESTAMP_OPTION:
                 return default
