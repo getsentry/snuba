@@ -1,5 +1,6 @@
 import uuid
 from datetime import UTC, datetime, timedelta
+from unittest import mock
 
 import pytest
 from google.protobuf import json_format, struct_pb2
@@ -2023,6 +2024,18 @@ class TestIndexedNameRedirect:
             )
             assert not use_indexed_name_for_request(
                 RequestMeta(organization_id=42, start_timestamp=Timestamp(seconds=cutoff - 1))
+            )
+
+    def test_unreadable_start_timestamp_disables_rewrite(self) -> None:
+        # If the cutoff can't be read, fail closed instead of treating every range as eligible.
+        def fake_get_option(key: str, default: object) -> object:
+            if key == INDEXED_NAME_START_TIMESTAMP_OPTION:
+                return default
+            return [42]
+
+        with mock.patch("snuba.web.rpc.common.common.get_option", side_effect=fake_get_option):
+            assert not use_indexed_name_for_request(
+                RequestMeta(organization_id=42, start_timestamp=Timestamp(seconds=2_000_000_000))
             )
 
     def _filter(

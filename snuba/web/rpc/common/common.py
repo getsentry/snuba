@@ -1020,6 +1020,9 @@ USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION = "eap_items_use_indexed_name_organizat
 # only result-preserving for requests whose whole time range starts at or after it. The default
 # lives in the schema.
 INDEXED_NAME_START_TIMESTAMP_OPTION = "eap_items_indexed_name_start_timestamp"
+# Fallback when the cutoff can't be read: fail closed (no request qualifies) rather than risk
+# silently dropping rows written before indexed_name was populated.
+_INDEXED_NAME_START_TIMESTAMP_FALLBACK = 2**63 - 1
 
 
 def use_indexed_name_for_request(meta: RequestMeta) -> bool:
@@ -1032,7 +1035,9 @@ def use_indexed_name_for_request(meta: RequestMeta) -> bool:
         "list[int]", get_option(USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION, [])
     ):
         return False
-    start_timestamp = get_option(INDEXED_NAME_START_TIMESTAMP_OPTION, 0)
+    start_timestamp = get_option(
+        INDEXED_NAME_START_TIMESTAMP_OPTION, _INDEXED_NAME_START_TIMESTAMP_FALLBACK
+    )
     return meta.HasField("start_timestamp") and meta.start_timestamp.seconds >= start_timestamp
 
 
