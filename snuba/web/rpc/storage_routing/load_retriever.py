@@ -170,16 +170,16 @@ def get_cluster_loadinfo(
             metrics.gauge(name, value, tags=tags)
         return load_info
 
-    except ClickhouseError:
+    except ClickhouseError as e:
         metrics.increment(
             "get_cluster_loadinfo_failure",
-            tags={"cluster_name": cluster_name or "unknown", "cause": "clickhouse"},
+            tags={"cluster_name": cluster_name or "unknown", "cause": f"Clickhouse: {e.code}"},
         )
         return LoadInfo(cluster_load=10000)
     except Exception as e:
         metrics.increment(
             "get_cluster_loadinfo_failure",
-            tags={"cluster_name": cluster_name or "unknown", "cause": "unknown"},
+            tags={"cluster_name": cluster_name or "unknown", "cause": e.__class__.__name__},
         )
         sentry_sdk.capture_exception(e)
         return LoadInfo()
