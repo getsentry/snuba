@@ -143,7 +143,7 @@ ENV SENTRY_OPTIONS_DIR=/etc/sentry-options
 
 USER snuba
 EXPOSE 1218 1219
-ENTRYPOINT [ "./docker_entrypoint.sh" ]
+ENTRYPOINT ["python3", "/usr/src/snuba/docker_entrypoint.py"]
 CMD [ "api" ]
 
 # Prepare artifacts for the DHI runtime: fix venv symlinks and verify shared libs.
