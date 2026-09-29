@@ -25,10 +25,6 @@ import {
 import { QuerylogRequest, QuerylogResult } from "SnubaAdmin/querylog/types";
 import { EapStatsRequest, EapStatsResult } from "SnubaAdmin/eap_stats/types";
 import {
-  CardinalityQueryRequest,
-  CardinalityQueryResult,
-} from "SnubaAdmin/cardinality_analyzer/types";
-import {
   OutcomesEnumOptions,
   OutcomesQueryRequest,
   OutcomesQueryResult,
@@ -59,10 +55,6 @@ interface Client {
   getQuerylogSchema: () => Promise<QuerylogResult>;
   executeQuerylogQuery: (req: QuerylogRequest) => Promise<QuerylogResult>;
   runEapStats: (req: EapStatsRequest) => Promise<EapStatsResult>;
-  getPredefinedCardinalityQueryOptions: () => Promise<[PredefinedQuery]>;
-  executeCardinalityQuery: (
-    req: CardinalityQueryRequest,
-  ) => Promise<CardinalityQueryResult>;
   getPredefinedOutcomesQueryOptions: () => Promise<[PredefinedQuery]>;
   getOutcomesEnumOptions: () => Promise<OutcomesEnumOptions>;
   executeOutcomesQuery: (
@@ -300,24 +292,6 @@ function Client(): Client {
         headers: { "Content-Type": "application/json" },
         method: "POST",
         body: JSON.stringify(req),
-      }).then((resp) => {
-        if (resp.ok) {
-          return resp.json();
-        } else {
-          return resp.json().then(Promise.reject.bind(Promise));
-        }
-      });
-    },
-    getPredefinedCardinalityQueryOptions: () => {
-      const url = baseUrl + "cardinality_queries";
-      return fetch(url).then((resp) => resp.json());
-    },
-    executeCardinalityQuery: (query: CardinalityQueryRequest) => {
-      const url = baseUrl + "cardinality_query";
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
-        body: JSON.stringify(query),
       }).then((resp) => {
         if (resp.ok) {
           return resp.json();

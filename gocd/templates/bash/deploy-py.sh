@@ -46,5 +46,4 @@ IMAGE_TAG="${GO_REVISION_SNUBA_REPO}"
   --image="us-docker.pkg.dev/sentryio/snuba-mr/image:${IMAGE_TAG}" \
   --type="cronjob" \
   --container-name="optimize" \
-  --container-name="cleanup" \
-  --container-name="cardinality-report"
+  --container-name="cleanup"

@@ -126,14 +126,14 @@ class ClickhouseClientSettings(Enum):
         # seconds; clickhouse-connect maps this to urllib3 Timeout(read=...)
         settings.REPLACER_CLIENT_TIMEOUT,
     )
-    CARDINALITY_ANALYZER = ClickhouseClientSettingsType(
+    OUTCOMES_ANALYZER = ClickhouseClientSettingsType(
         {
             # Allow reading data and changing settings.
             "readonly": 2,
-            # Allow more threads for faster processing since cardinality queries
+            # Allow more threads for faster processing since outcomes analyzer queries
             # need more resources.
             "max_threads": 10,
-            # Don't use up production cache for cardinality analyzer queries.
+            # Don't use up production cache for outcomes analyzer queries.
             "use_uncompressed_cache": 0,
             # Allow longer running queries.
             "max_execution_time": 60,

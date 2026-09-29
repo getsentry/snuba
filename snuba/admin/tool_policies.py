@@ -26,7 +26,6 @@ class AdminTools(Enum):
     QUERY_TRACING = "tracing"
     QUERYLOG = "querylog"
     PRODUCTION_QUERIES = "production-queries"
-    CARDINALITY_ANALYZER = "cardinality-analyzer"
     OUTCOMES_ANALYZER = "outcomes-analyzer"
     SNUBA_EXPLAIN = "snuba-explain"
     MANUAL_JOBS = "view-jobs"
