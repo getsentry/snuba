@@ -492,7 +492,6 @@ jobs:
           [
             "altinity-clickhouse-server:25.8.16.10001.altinitystable",
             "altinity-clickhouse-server:26.3.33.10001.altinitystable",
-            "clickhouse-clickhouse-server:26.8.1.2041",
             "clickhouse-clickhouse-server:26.8.10.6",
           ]
         test_type: [snuba-test, snuba-test-migrations]
