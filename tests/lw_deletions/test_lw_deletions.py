@@ -514,7 +514,10 @@ def _make_eap_message(
 @patch("snuba.lw_deletions.strategy._execute_query")
 @pytest.mark.redis_db
 @override_options("snuba", {"org_ids_delete_allowlist": "1"})
-def test_allowlist_partial_batch(mock_execute: Mock, mock_num_mutations: Mock) -> None:
+@pytest.mark.parametrize("storage_key", [StorageKey.EAP_ITEMS, StorageKey.EAP_ITEMS_2])
+def test_allowlist_partial_batch(
+    mock_execute: Mock, mock_num_mutations: Mock, storage_key: StorageKey
+) -> None:
     """
     Batch with 2 conditions (org 1 and org 2), allowlist = "1".
     Only org 1's conditions should be executed; org 2 is skipped.
@@ -522,7 +525,7 @@ def test_allowlist_partial_batch(mock_execute: Mock, mock_num_mutations: Mock) -
     """
     commit_step = Mock()
     metrics = Mock()
-    storage = get_writable_storage(StorageKey("eap_items"))
+    storage = get_writable_storage(storage_key)
 
     format_query = FormatQuery(commit_step, storage, EAPItemsFormatter(), metrics)
 
@@ -542,6 +545,9 @@ def test_allowlist_partial_batch(mock_execute: Mock, mock_num_mutations: Mock) -
 
     # _execute_query is called once per table (4 tables) but only with org 1's conditions
     assert mock_execute.call_count == 4
+    assert [c.kwargs["table"] for c in mock_execute.call_args_list] == list(
+        storage.get_deletion_settings().tables
+    )
     assert commit_step.submit.call_count == 1
 
     # delete_skipped metric incremented once (for org 2)

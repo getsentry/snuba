@@ -10,6 +10,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import ComparisonFilter
 
 from snuba.attribution.appid import AppID
+from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.lw_deletions.types import AttributeConditions
@@ -157,8 +158,11 @@ class EndpointDeleteTraceItems(RPCEndpoint[DeleteTraceItemsRequest, DeleteTraceI
             # Add item_type to conditions for the delete query
             conditions["item_type"] = [attribute_conditions.item_type]
 
+        storage = get_writable_storage(StorageKey.EAP_ITEMS_2)
+        schema = storage.get_schema()
+        assert isinstance(schema, TableSchema)
         delete_result = delete_from_storage(
-            get_writable_storage(StorageKey.EAP_ITEMS),
+            storage,
             conditions,
             attribution_info,
             attribute_conditions,
@@ -170,7 +174,7 @@ class EndpointDeleteTraceItems(RPCEndpoint[DeleteTraceItemsRequest, DeleteTraceI
         response.matching_items_count = next(
             (
                 x["rows_to_delete"]
-                for x in delete_result.get("eap_items_1_local", {}).get("data", [])
+                for x in delete_result.get(schema.get_local_table_name(), {}).get("data", [])
                 if "rows_to_delete" in x
             ),
             0,

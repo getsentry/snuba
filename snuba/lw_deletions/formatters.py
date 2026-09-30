@@ -105,5 +105,7 @@ class EAPItemsFormatter(Formatter):
 
 STORAGE_FORMATTER: Mapping[str, type[Formatter]] = {
     StorageKey.SEARCH_ISSUES.value: SearchIssuesFormatter,
+    # TODO: remove EAP_ITEMS once every region's consumer runs --storage eap_items_2
     StorageKey.EAP_ITEMS.value: EAPItemsFormatter,
+    StorageKey.EAP_ITEMS_2.value: EAPItemsFormatter,
 }

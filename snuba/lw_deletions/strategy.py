@@ -82,7 +82,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
     def _filter_allowed_conditions(
         self, conditions: Sequence[ConditionsBag]
     ) -> Sequence[ConditionsBag]:
-        if self.__storage.get_storage_key() != StorageKey.EAP_ITEMS:
+        if self.__storage.get_storage_key() not in (StorageKey.EAP_ITEMS, StorageKey.EAP_ITEMS_2):
             return conditions
 
         str_config = get_option("org_ids_delete_allowlist", "")
