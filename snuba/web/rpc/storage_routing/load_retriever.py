@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import math
 from collections.abc import Callable
 from dataclasses import dataclass, fields
 from functools import wraps
@@ -36,11 +37,13 @@ class LoadInfo:
 
     @classmethod
     def from_dict(cls, load_info_dict: dict[str, float | int | None]) -> LoadInfo:
+        # Missing and NaN values fall back to the -1 default. ClickHouse 26.8+ can
+        # return NaN instead of NULL for an aggregate with no matching metric rows.
         return cls(
             **{
                 f.name: float(v)
                 for f in fields(cls)
-                if (v := load_info_dict.get(f.name)) is not None
+                if (v := load_info_dict.get(f.name)) is not None and not math.isnan(v)
             }
         )
 

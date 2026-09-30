@@ -1,7 +1,7 @@
 use chrono::{DateTime, NaiveDateTime, Utc};
 use schemars::JsonSchema;
 use sentry_options::options;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 // Equivalent to "%Y-%m-%dT%H:%M:%S.%fZ" in python
 // Notice the differennce of .%fZ vs %.fZ, this comes from a difference in how rust's chrono handles the format
@@ -117,6 +117,41 @@ pub struct StringToIntDatetime(
     pub u32,
 );
 
+/// Formats a DateTime64 tick count (at `precision` fractional digits) as a
+/// quoted `"<seconds>.<fraction>"` string for JSONEachRow inserts.
+///
+/// Since ClickHouse 26.8, an unquoted JSON number fed to a DateTime64 column
+/// is read as seconds instead of raw ticks
+/// (https://github.com/ClickHouse/ClickHouse/pull/108091). A quoted decimal
+/// seconds string is parsed identically by old and new versions.
+pub fn format_datetime64(ticks: u64, precision: u32) -> String {
+    let scale = 10u64.pow(precision);
+    format!(
+        "{}.{:0width$}",
+        ticks / scale,
+        ticks % scale,
+        width = precision as usize
+    )
+}
+
+pub fn serialize_datetime64_ms<S: Serializer>(ticks: &u64, s: S) -> Result<S::Ok, S::Error> {
+    s.serialize_str(&format_datetime64(*ticks, 3))
+}
+
+pub fn serialize_datetime64_us<S: Serializer>(ticks: &u64, s: S) -> Result<S::Ok, S::Error> {
+    s.serialize_str(&format_datetime64(*ticks, 6))
+}
+
+pub fn serialize_opt_datetime64_us<S: Serializer>(
+    ticks: &Option<u64>,
+    s: S,
+) -> Result<S::Ok, S::Error> {
+    match ticks {
+        Some(t) => serialize_datetime64_us(t, s),
+        None => s.serialize_none(),
+    }
+}
+
 #[derive(Debug, Deserialize, JsonSchema, Default, Serialize)]
 pub struct StringToIntDatetime64(
     #[serde(deserialize_with = "ensure_valid_datetime_64")]
@@ -157,6 +192,14 @@ mod tests {
         assert_eq!(enforce_standard_retention(Some(89)), 89);
         assert_eq!(enforce_standard_retention(Some(90)), 90);
         assert_eq!(enforce_standard_retention(Some(100)), 90);
+    }
+
+    #[test]
+    fn test_format_datetime64() {
+        assert_eq!(format_datetime64(1677512412223, 3), "1677512412.223");
+        assert_eq!(format_datetime64(1677512412005, 3), "1677512412.005");
+        assert_eq!(format_datetime64(1710805688000012, 6), "1710805688.000012");
+        assert_eq!(format_datetime64(0, 3), "0.000");
     }
 
     #[test]

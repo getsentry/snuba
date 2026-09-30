@@ -1,4 +1,5 @@
 import os
+import re
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -23,6 +24,16 @@ from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.migrations import table_engines
 from snuba.migrations.groups import MigrationGroup
 from snuba.state.sentry_options import SNUBA_OPTIONS_NAMESPACE
+
+
+def _normalize_statement(statement: str) -> str:
+    """
+    ClickHouse 26.8+ wraps single-expression PARTITION BY keys in parentheses
+    in SHOW CREATE TABLE output, e.g. `PARTITION BY (toStartOfMonth(timestamp))`.
+    Strip them so expectations hold across versions.
+    """
+    return re.sub(r"^PARTITION BY \((.*)\)$", r"PARTITION BY \1", statement, flags=re.MULTILINE)
+
 
 OUTCOMES_DAILY_TABLE_NO_CLUSTER = """
 CREATE TABLE IF NOT EXISTS {db}.outcomes_daily_local_v2
@@ -144,7 +155,10 @@ def test_get_table_statements(
     )
     ts = table_statements[0]
     assert ts.is_mergetree == is_mergetree
-    assert ts.statement == statement.format(db=database_name, engine=engine).strip()
+    assert (
+        _normalize_statement(ts.statement)
+        == statement.format(db=database_name, engine=engine).strip()
+    )
 
 
 @pytest.mark.redis_db
@@ -181,7 +195,10 @@ def test_get_table_statement_without_cluster() -> None:
     )
     ts = table_statements[0]
     assert ts.is_mergetree
-    assert ts.statement == statement.format(db=database_name, engine=engine).strip()
+    assert (
+        _normalize_statement(ts.statement)
+        == statement.format(db=database_name, engine=engine).strip()
+    )
 
 
 @pytest.mark.redis_db
