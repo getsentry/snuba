@@ -142,7 +142,7 @@ class BeforeAfterBytesScannedComparison(QuerylogQuery):
 
 
 class TopBytesScannedByOrg(QuerylogQuery):
-    """Top 10 orgs by bytes scanned for a given date range; all projects on the row."""
+    """Top 10 org/project-set pairs by bytes scanned in a date range; an org repeats per distinct project set."""
 
     sql = """
     SELECT
