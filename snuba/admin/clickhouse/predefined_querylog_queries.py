@@ -154,7 +154,7 @@ class TopBytesScannedByOrg(QuerylogQuery):
     FROM querylog_dist
     WHERE toDateTime('{{start_timestamp}}', 'Universal') <= timestamp
       AND timestamp <= toDateTime('{{end_timestamp}}', 'Universal')
-    GROUP BY organization
+    GROUP BY organization, projects
     ORDER BY total_bytes DESC
     LIMIT 10
     """
