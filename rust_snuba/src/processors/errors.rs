@@ -15,7 +15,9 @@ use uuid::Uuid;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 
 use crate::config::ProcessorConfig;
-use crate::processors::utils::{enforce_standard_retention, StringToIntDatetime64};
+use crate::processors::utils::{
+    enforce_standard_retention, serialize_datetime64_ms, StringToIntDatetime64,
+};
 use crate::types::{
     InsertBatch, InsertOrReplacement, KafkaMessageMetadata, ReplacementData, RowData,
 };
@@ -414,6 +416,7 @@ struct ErrorRow {
     #[serde(rename = "flags.value")]
     flags_value: Vec<String>,
     timestamp: u32,
+    #[serde(serialize_with = "serialize_datetime64_ms")]
     timestamp_ms: u64,
     title: String,
     #[serde(skip_serializing_if = "Option::is_none")]

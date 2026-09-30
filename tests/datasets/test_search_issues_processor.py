@@ -122,7 +122,8 @@ class TestSearchIssuesMessageProcessor:
         self.assert_required_columns(processed)
         insert_row = processed.rows[0]
         client_timestamp_utc = insert_row["client_timestamp"].replace(tzinfo=UTC)
-        assert insert_row["timestamp_ms"] == int(client_timestamp_utc.timestamp() * 1000)
+        ms = int(client_timestamp_utc.timestamp() * 1000)
+        assert insert_row["timestamp_ms"] == f"{ms // 1000}.{ms % 1000:03d}"
 
     def test_extract_user(self, message_base):
         message_with_user = message_base

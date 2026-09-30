@@ -332,7 +332,8 @@ class ErrorEvent:
             "partition": meta.partition,
             "offset": meta.offset,
             "message_timestamp": int(self.timestamp.replace(tzinfo=UTC).timestamp()),
-            "timestamp_ms": int(self.timestamp.replace(tzinfo=UTC).timestamp() * 1000),
+            "timestamp_ms": f"{int(self.timestamp.replace(tzinfo=UTC).timestamp())}"
+            f".{self.timestamp.microsecond // 1000:03d}",
             "retention_days": 58,
             "deleted": 0,
             "group_id": self.group_id,
