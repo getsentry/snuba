@@ -1056,6 +1056,12 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             group_by=[
                 AttributeKey(type=AttributeKey.TYPE_STRING, name="myattr"),
             ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="myattr")),
+                    descending=True,
+                ),
+            ],
             limit=10,
         )
         response = EndpointTraceItemTable().execute(message)
