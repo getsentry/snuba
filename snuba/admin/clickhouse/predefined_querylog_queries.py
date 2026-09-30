@@ -147,7 +147,7 @@ class TopBytesScannedByOrg(QuerylogQuery):
     sql = """
     SELECT
         organization,
-        projects,
+        arrayStringConcat(groupUniqArray(projects), ', '),
         formatReadableSize(
            sum(arraySum(clickhouse_queries.bytes_scanned)) AS total_bytes
          ) AS bytes_scanned
