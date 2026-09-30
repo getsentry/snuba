@@ -2,7 +2,7 @@ import math
 from collections.abc import Callable, Iterable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
-from typing import Any, TypeVar, cast
+from typing import Any, TypeVar
 
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
@@ -1012,9 +1012,6 @@ _INDEXED_NAME_KEY_BY_ITEM_TYPE: dict[TraceItemType.ValueType, str] = {
     TraceItemType.TRACE_ITEM_TYPE_METRIC: "sentry.metric_name",
 }
 
-USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION = "eap_items_use_indexed_name_organization_ids"
-
-
 # Rows written before this cutoff may have an empty indexed_name.
 INDEXED_NAME_START_TIMESTAMP_OPTION = "eap_items_indexed_name_start_timestamp"
 # Fail closed if the cutoff can't be read.
@@ -1022,10 +1019,6 @@ _INDEXED_NAME_START_TIMESTAMP_FALLBACK = 2**63 - 1
 
 
 def use_indexed_name_for_request(meta: RequestMeta) -> bool:
-    if meta.organization_id not in cast(
-        "list[int]", get_option(USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION, [])
-    ):
-        return False
     start_timestamp = get_option(
         INDEXED_NAME_START_TIMESTAMP_OPTION, _INDEXED_NAME_START_TIMESTAMP_FALLBACK
     )

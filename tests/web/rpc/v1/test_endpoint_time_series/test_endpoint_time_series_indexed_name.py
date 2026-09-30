@@ -23,7 +23,7 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.rpc.common.common import USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION
+from snuba.web.rpc.common.common import INDEXED_NAME_START_TIMESTAMP_OPTION
 from snuba.web.rpc.v1.endpoint_time_series import EndpointTimeSeries
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -98,10 +98,12 @@ class TestTimeSeriesIndexedName(BaseApiTest):
     def test_indexed_name_rewrite_is_result_preserving(self) -> None:
         _store_metrics()
 
-        with override_options("snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: []}):
+        # A cutoff after the request start keeps the bucket lookup; one before it
+        # enables the indexed_name rewrite.
+        with override_options("snuba", {INDEXED_NAME_START_TIMESTAMP_OPTION: 2**62}):
             disabled = EndpointTimeSeries().execute(_request())
 
-        with override_options("snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: [1]}):
+        with override_options("snuba", {INDEXED_NAME_START_TIMESTAMP_OPTION: 0}):
             enabled = EndpointTimeSeries().execute(_request())
 
         assert _total(disabled) == float(MATCHING_COUNT)
