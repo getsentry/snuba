@@ -2161,6 +2161,54 @@ class TestTimeSeriesApi(BaseApiTest):
             )
         ]
 
+    def test_interpolate_happy_path(self) -> None:
+        # query 0–30m, 5m buckets. events at 10/20m only → 0/5m leading empty, rest LOCF
+        granularity_secs = 300
+        query_duration = 60 * 30
+        store_spans_timeseries(
+            BASE_TIME + timedelta(seconds=600),
+            600,
+            1200,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+        )
+
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
+                debug=True,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+        present = DataPoint(data=1, data_present=True, sample_count=1)
+        empty = DataPoint(data=0, data_present=False)
+        expected = TimeSeries(
+            label="sum",
+            buckets=expected_buckets,
+            data_points=[empty, empty, present, present, present, present],
+        )
+
+        assert len(response.result_timeseries) == 1
+        assert response.result_timeseries[0] == expected
+
 
 class TestUtils:
     @pytest.mark.redis_db

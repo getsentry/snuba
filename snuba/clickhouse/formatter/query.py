@@ -183,7 +183,20 @@ def _format_orderby(query: AbstractQuery, formatter: ExpressionVisitor[str]) -> 
     ast_orderby = query.get_orderby()
     if ast_orderby:
         orderby = [f"{e.expression.accept(formatter)} {e.direction.value}" for e in ast_orderby]
-        return StringNode(f"ORDER BY {', '.join(orderby)}")
+        interpolate = query.get_interpolate()
+        fill = query.get_with_fill()
+        extra = ""
+        if fill is not None or interpolate:
+            extra = " WITH FILL"
+            if fill is not None:
+                extra += (
+                    f" FROM {fill[0].accept(formatter)}"
+                    f" TO {fill[1].accept(formatter)}"
+                    f" STEP {fill[2].accept(formatter)}"
+                )
+            if interpolate:
+                extra += f" INTERPOLATE ({', '.join(e.accept(formatter) for e in interpolate)})"
+        return StringNode(f"ORDER BY {', '.join(orderby)}{extra}")
     return None
 
 

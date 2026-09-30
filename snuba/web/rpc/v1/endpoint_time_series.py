@@ -438,6 +438,16 @@ def build_query(
         ],
         order_by=[OrderBy(expression=column("time_slot"), direction=OrderByDirection.ASC)],
     )
+    # ponytail: always INTERPOLATE; gate with InterpolationMode later
+    if True:
+        interp = [column(expr.label) for expr in request.expressions]
+        interp.extend(column(c.name) for c in additional_context_columns if c.name)
+        res.set_interpolate(interp)
+        res.set_with_fill(
+            f.toDateTime(literal(request.meta.start_timestamp.seconds)),
+            f.toDateTime(literal(request.meta.end_timestamp.seconds)),
+            literal(request.granularity_secs),
+        )
     treeify_or_and_conditions(res)
     add_existence_check_to_map_attribute_reads(res)
     return res
