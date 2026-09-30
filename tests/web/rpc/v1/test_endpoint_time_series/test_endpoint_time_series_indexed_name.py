@@ -98,8 +98,6 @@ class TestTimeSeriesIndexedName(BaseApiTest):
     def test_indexed_name_rewrite_is_result_preserving(self) -> None:
         _store_metrics()
 
-        # A cutoff after the request start keeps the bucket lookup; one before it
-        # enables the indexed_name rewrite.
         with override_options("snuba", {INDEXED_NAME_START_TIMESTAMP_OPTION: 2**62}):
             disabled = EndpointTimeSeries().execute(_request())
 

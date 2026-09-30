@@ -833,14 +833,6 @@
       "default": 1785110400,
       "description": "Unix timestamp of the earliest weekly date bucket the v2 co-occurring-attributes tables hold data for; TraceItemAttributeNames only reads v2 for requests whose range starts at or after it, and reads v1 otherwise. Defaults to 2026-07-27 00:00 UTC, the Monday of the week the v2 tables and their materialized view were created. Must be a Monday: the date column is bucketed weekly with toMonday() and the query rounds its lower bound down to the previous Monday, so a mid-week value would let a request read a bucket v2 never populated. Lower it only to a bucket v2 has been backfilled to."
     },
-    "eap_items_use_indexed_name_organization_ids": {
-      "type": "array",
-      "items": {
-        "type": "integer"
-      },
-      "default": [],
-      "description": "Deprecated and unused. The eap_items indexed_name rewrite now applies to every organization for requests whose start_timestamp is at or after eap_items_indexed_name_start_timestamp. Kept only so existing option values still validate; remove once no deployment sets it."
-    },
     "eap_items_indexed_name_start_timestamp": {
       "type": "integer",
       "default": 1790121600,
