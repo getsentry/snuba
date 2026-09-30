@@ -93,6 +93,8 @@ class Query(DataSource, ABC):
         groupby: Sequence[Expression] | None = None,
         having: Expression | None = None,
         order_by: Sequence[OrderBy] | None = None,
+        interpolate: Sequence[Expression] | None = None,
+        with_fill: tuple[Expression, Expression, Expression] | None = None,
         limitby: LimitBy | None = None,
         limit: int | None = None,
         offset: int = 0,
@@ -108,8 +110,8 @@ class Query(DataSource, ABC):
         self.__groupby = groupby or []
         self.__having = having
         self.__order_by = order_by or []
-        self.__interpolate: Sequence[Expression] = []
-        self.__with_fill: tuple[Expression, Expression, Expression] | None = None
+        self.__interpolate: Sequence[Expression] = interpolate or []
+        self.__with_fill = with_fill
         self.__limitby = limitby
         self.__limit = limit
         self.__offset = offset
@@ -505,6 +507,8 @@ class ProcessableQuery(Query, ABC, Generic[TSimpleDataSource]):
         groupby: Sequence[Expression] | None = None,
         having: Expression | None = None,
         order_by: Sequence[OrderBy] | None = None,
+        interpolate: Sequence[Expression] | None = None,
+        with_fill: tuple[Expression, Expression, Expression] | None = None,
         limitby: LimitBy | None = None,
         limit: int | None = None,
         offset: int = 0,
@@ -520,6 +524,8 @@ class ProcessableQuery(Query, ABC, Generic[TSimpleDataSource]):
             groupby=groupby,
             having=having,
             order_by=order_by,
+            interpolate=interpolate,
+            with_fill=with_fill,
             limitby=limitby,
             limit=limit,
             offset=offset,

@@ -440,9 +440,10 @@ def build_query(
     )
     # ponytail: always INTERPOLATE; gate with InterpolationMode later
     if True:
-        interp = [column(expr.label) for expr in request.expressions]
-        interp.extend(column(c.name) for c in additional_context_columns if c.name)
-        res.set_interpolate(interp)
+        res.set_interpolate(
+            [column(expr.label) for expr in request.expressions]
+            + [column(c.name) for c in additional_context_columns if c.name]
+        )
         res.set_with_fill(
             f.toDateTime(literal(request.meta.start_timestamp.seconds)),
             f.toDateTime(literal(request.meta.end_timestamp.seconds)),

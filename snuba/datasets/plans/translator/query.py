@@ -13,7 +13,7 @@ def identity_translate(query: LogicalQuery) -> ClickhouseQuery:
 
     It is exposed by this module because it is often useful in tests.
     """
-    ch = ClickhouseQuery(
+    return ClickhouseQuery(
         from_clause=None,
         selected_columns=query.get_selected_columns(),
         array_join=query.get_arrayjoin(),
@@ -21,17 +21,14 @@ def identity_translate(query: LogicalQuery) -> ClickhouseQuery:
         groupby=query.get_groupby(),
         having=query.get_having(),
         order_by=query.get_orderby(),
+        interpolate=query.get_interpolate(),
+        with_fill=query.get_with_fill(),
         limitby=query.get_limitby(),
         limit=query.get_limit(),
         offset=query.get_offset(),
         totals=query.has_totals(),
         granularity=query.get_granularity(),
     )
-    ch.set_interpolate(query.get_interpolate())
-    fill = query.get_with_fill()
-    if fill is not None:
-        ch.set_with_fill(*fill)
-    return ch
 
 
 class QueryTranslator:
