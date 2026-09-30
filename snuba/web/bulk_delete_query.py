@@ -62,7 +62,9 @@ class DeleteQueryMessage(TypedDict, total=False):
 PRODUCER_MAP: MutableMapping[str, Producer] = {}
 STORAGE_TOPIC: Mapping[str, Topic] = {
     StorageKey.SEARCH_ISSUES.value: Topic.LW_DELETIONS_GENERIC_EVENTS,
+    # TODO: remove EAP_ITEMS once every region's consumer runs --storage eap_items_2
     StorageKey.EAP_ITEMS.value: Topic.LW_DELETIONS_EAP_ITEMS,
+    StorageKey.EAP_ITEMS_2.value: Topic.LW_DELETIONS_EAP_ITEMS,
 }
 
 

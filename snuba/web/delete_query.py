@@ -117,12 +117,13 @@ def delete_from_storage(
 
 
 def _preprocess_for_items(storage: WritableTableStorage, where_clause: Expression) -> Expression:
-    if storage.get_storage_key() != StorageKey.EAP_ITEMS:
+    storage_key = storage.get_storage_key()
+    if storage_key not in (StorageKey.EAP_ITEMS, StorageKey.EAP_ITEMS_2):
         return where_clause
 
     entity = get_entity(EntityKey.EAP_ITEMS)
     for storage_connection in entity.get_all_storage_connections():
-        if storage_connection.storage.get_storage_key() == StorageKey.EAP_ITEMS:
+        if storage_connection.storage.get_storage_key() == storage_key:
             translation_mappers = storage_connection.translation_mappers
             translator = SnubaClickhouseMappingTranslator(translation_mappers)
             return where_clause.accept(translator)
