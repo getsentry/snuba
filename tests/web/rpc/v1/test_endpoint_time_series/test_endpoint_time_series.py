@@ -2289,11 +2289,18 @@ class TestTimeSeriesApi(BaseApiTest):
     def test_interpolate_mixed_modes(self) -> None:
         granularity_secs = 300
         query_duration = 60 * 30
+        # dense metric at 10m and 20m; sparse metric only at 10m so 20m is a sibling NULL
         store_spans_timeseries(
             BASE_TIME + timedelta(seconds=600),
             600,
             1200,
-            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+            metrics=[DummyMetric("dense_metric", get_value=lambda x: 1)],
+        )
+        store_spans_timeseries(
+            BASE_TIME + timedelta(seconds=600),
+            600,
+            600,
+            metrics=[DummyMetric("sparse_metric", get_value=lambda x: 1)],
         )
         message = TimeSeriesRequest(
             meta=RequestMeta(
@@ -2309,14 +2316,14 @@ class TestTimeSeriesApi(BaseApiTest):
             aggregations=[
                 AttributeAggregation(
                     aggregate=Function.FUNCTION_SUM,
-                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="sparse_metric"),
                     label="sum_locf",
                     extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     interpolation_mode=InterpolationMode.INTERPOLATION_MODE_LOCF,
                 ),
                 AttributeAggregation(
                     aggregate=Function.FUNCTION_SUM,
-                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="dense_metric"),
                     label="sum_none",
                     extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     interpolation_mode=InterpolationMode.INTERPOLATION_MODE_NONE,
@@ -2343,7 +2350,8 @@ class TestTimeSeriesApi(BaseApiTest):
         assert by_label["sum_locf"] == TimeSeries(
             label="sum_locf",
             buckets=expected_buckets,
-            data_points=[empty, empty, present, locf, present, locf],
+            # 15m is a FILL hole (LOCF); 20m is a real row for dense_metric so sparse stays empty
+            data_points=[empty, empty, present, locf, empty, empty],
         )
         assert by_label["sum_none"] == TimeSeries(
             label="sum_none",
