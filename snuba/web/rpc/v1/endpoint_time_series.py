@@ -8,6 +8,7 @@ from typing import Any
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     DataPoint,
     TimeSeries,
@@ -557,6 +558,25 @@ def _enforce_no_duplicate_labels(request: TimeSeriesRequest) -> None:
         labels.add(agg.label)
 
 
+def _validate_interpolation(request: TimeSeriesRequest) -> None:
+    interpolating = any(
+        _expr_interpolation_mode(expr) != InterpolationMode.INTERPOLATION_MODE_NONE
+        for expr in request.expressions
+    ) or any(
+        agg.interpolation_mode
+        not in (
+            InterpolationMode.INTERPOLATION_MODE_UNSPECIFIED,
+            InterpolationMode.INTERPOLATION_MODE_NONE,
+        )
+        for agg in request.aggregations
+    )
+    if interpolating and (
+        request.meta.downsampled_storage_config.mode
+        == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME
+    ):
+        raise BadSnubaRPCRequestException("interpolation is not supported with flextime routing")
+
+
 def _validate_time_buckets(request: TimeSeriesRequest) -> None:
     if request.meta.start_timestamp.seconds > request.meta.end_timestamp.seconds:
         raise BadSnubaRPCRequestException("start timestamp is after end timestamp")
@@ -615,6 +635,7 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
     def _execute(self, in_msg: TimeSeriesRequest) -> TimeSeriesResponse:
         _enforce_no_duplicate_labels(in_msg)
         _validate_time_buckets(in_msg)
+        _validate_interpolation(in_msg)
 
         if in_msg.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
             raise BadSnubaRPCRequestException(

@@ -53,6 +53,7 @@ from snuba.web.rpc.proto_visitor import (
 )
 from snuba.web.rpc.v1.endpoint_time_series import (
     EndpointTimeSeries,
+    _validate_interpolation,
     _validate_time_buckets,
 )
 from tests.base import BaseApiTest
@@ -2745,3 +2746,31 @@ class TestUtils:
         _validate_time_buckets(message)
         # add another bucket to fit into granularity_secs
         assert message.meta.end_timestamp.seconds == int(BASE_TIME.timestamp()) + 75
+
+    def test_interpolation_rejected_with_flextime(self) -> None:
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp()) + 60),
+                debug=True,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME
+                ),
+            ),
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum",
+                    interpolation_mode=InterpolationMode.INTERPOLATION_MODE_LOCF,
+                ),
+            ],
+            granularity_secs=15,
+        )
+        with pytest.raises(BadSnubaRPCRequestException, match="flextime"):
+            _validate_interpolation(message)
