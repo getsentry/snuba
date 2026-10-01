@@ -287,22 +287,51 @@ def handle_dead_letters(dead: beam.PCollection, opts: EapItemsOptions) -> None:
     )
 
 
+def _format_streaming_insert_errors(errors: Any) -> str:
+    """STREAMING_INSERTS errors are a list of insertErrors entries, e.g.
+    [{"reason": "invalid", "location": "col", "message": "..."}]."""
+    if not isinstance(errors, list):
+        return str(errors)
+    parts = []
+    for err in errors:
+        if not isinstance(err, dict):
+            parts.append(str(err))
+            continue
+        prefix = ":".join(str(err[k]) for k in ("reason", "location") if err.get(k))
+        message = str(err.get("message", ""))
+        parts.append(f"{prefix}: {message}" if prefix else message)
+    return "; ".join(parts)
+
+
+def bq_failure_to_dead_letter(row_and_error: Any) -> dict[str, Any]:
+    """Normalize a `WriteResult.failed_rows_with_errors` element.
+
+    The shape depends on the write method (Beam 2.75):
+    - STORAGE_WRITE_API with dict input: {"failed_row": dict, "error_message": str}
+    - STREAMING_INSERTS: (destination, row, errors_list)
+    """
+    if isinstance(row_and_error, dict):
+        row = row_and_error.get("failed_row")
+        error = str(row_and_error.get("error_message"))
+    else:
+        _destination, row, errors = row_and_error
+        error = _format_streaming_insert_errors(errors)
+    return {
+        "stage": "bigquery",
+        "error": error,
+        "row": json.dumps(row, default=str, sort_keys=True),
+        "observed_at": dt.datetime.now(dt.UTC).isoformat(),
+    }
+
+
 def failed_bq_rows_to_dead_letters(result, opts: EapItemsOptions) -> beam.PCollection:
     failed_bq = Metrics.counter(METRICS_NAMESPACE, "dead_letter_bigquery")
 
     def _to_record(row_and_error: Any) -> dict[str, Any]:
         failed_bq.inc()
-        if isinstance(row_and_error, dict):
-            row, error = row_and_error.get("failed_row"), row_and_error.get("error_message")
-        else:  # STREAMING_INSERTS: (destination, row, errors)
-            row, error = row_and_error[1], row_and_error[2] if len(row_and_error) > 2 else None
-        LOG.warning("BigQuery rejected row: %s", error)
-        return {
-            "stage": "bigquery",
-            "error": str(error),
-            "row": json.dumps(row, default=str, sort_keys=True),
-            "observed_at": dt.datetime.now(dt.UTC).isoformat(),
-        }
+        record = bq_failure_to_dead_letter(row_and_error)
+        LOG.warning("BigQuery rejected row: %s", record["error"])
+        return record
 
     return result.failed_rows_with_errors | "BigQueryFailuresToDeadLetter" >> beam.Map(_to_record)
 

@@ -14,6 +14,7 @@ from eap_items_dataflow.pipeline import (
     DEAD_LETTER,
     EapItemsOptions,
     TraceItemToRow,
+    bq_failure_to_dead_letter,
     kafka_consumer_config,
     to_storage_write_row,
 )
@@ -169,3 +170,22 @@ def test_dead_letter_files_written(tmp_path):
         "empty payload",
         "protobuf decode error",
     ]
+
+
+def test_bq_failure_streaming_inserts_shape():
+    errors = [
+        {"reason": "invalid", "location": "attributes", "debugInfo": "", "message": "bad JSON"},
+        {"reason": "stopped", "location": "", "message": ""},
+    ]
+    record = bq_failure_to_dead_letter(("proj:ds.tbl", {"item_id": "a"}, errors))
+    assert record["stage"] == "bigquery"
+    assert record["error"] == "invalid:attributes: bad JSON; stopped: "
+    assert json.loads(record["row"]) == {"item_id": "a"}
+
+
+def test_bq_failure_storage_write_api_shape():
+    record = bq_failure_to_dead_letter(
+        {"failed_row": {"item_id": "a"}, "error_message": "schema mismatch"}
+    )
+    assert record["error"] == "schema mismatch"
+    assert json.loads(record["row"]) == {"item_id": "a"}
