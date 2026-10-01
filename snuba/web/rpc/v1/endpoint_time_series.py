@@ -90,6 +90,9 @@ def _get_attribute_key_to_expression_function(
     return attribute_key_to_expression
 
 
+_FILL_SENTINEL = "__snuba_fill"
+
+
 def _expr_interpolation_mode(expr: ProtoExpression) -> InterpolationMode.ValueType:
     if expr.HasField("conditional_aggregation"):
         mode = expr.conditional_aggregation.interpolation_mode
@@ -212,12 +215,8 @@ def _convert_result_timeseries(
                 continue
             extrapolation_context = ExtrapolationContext.from_row(timeseries.label, row_data)
             value = row_data.get(timeseries.label, None)
-            if (
-                timeseries.label in interpolated_labels
-                and extrapolation_context.sample_count == 0
-                and value is not None
-                and timeseries_key in seen_real
-            ):
+            is_fill = timeseries.label in interpolated_labels and not row_data.get(_FILL_SENTINEL)
+            if is_fill and value is not None and timeseries_key in seen_real:
                 timeseries.data_points.append(
                     DataPoint(
                         data=value,
@@ -225,7 +224,7 @@ def _convert_result_timeseries(
                         interpolated=interpolated_labels[timeseries.label],
                     )
                 )
-            elif value is None or extrapolation_context.sample_count == 0:
+            elif value is None or is_fill or extrapolation_context.sample_count == 0:
                 timeseries.data_points.append(DataPoint(data=0, data_present=False))
             else:
                 seen_real.add(timeseries_key)
@@ -410,6 +409,11 @@ def build_query(
         )
         for attr_key in request.group_by
     ]
+    interpolated_exprs = [
+        expr
+        for expr in request.expressions
+        if _expr_interpolation_mode(expr) != InterpolationMode.INTERPOLATION_MODE_NONE
+    ]
     item_type_conds = [f.equals(column("item_type"), request.meta.trace_item_type)]
 
     # Handle cross item queries by first getting trace IDs
@@ -453,6 +457,11 @@ def build_query(
             *aggregation_columns,
             *groupby_columns,
             *additional_context_columns,
+            *(
+                [SelectedExpression(name=_FILL_SENTINEL, expression=f.count(alias=_FILL_SENTINEL))]
+                if interpolated_exprs
+                else []
+            ),
         ],
         granularity=request.granularity_secs,
         condition=base_conditions_and(
@@ -476,11 +485,6 @@ def build_query(
         ],
         order_by=[OrderBy(expression=column("time_slot"), direction=OrderByDirection.ASC)],
     )
-    interpolated_exprs = [
-        expr
-        for expr in request.expressions
-        if _expr_interpolation_mode(expr) != InterpolationMode.INTERPOLATION_MODE_NONE
-    ]
     if interpolated_exprs:
         res.set_interpolate([column(expr.label) for expr in interpolated_exprs])
         res.set_with_fill(
