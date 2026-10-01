@@ -208,7 +208,7 @@ class Query(DataSource, ABC):
     def get_with_fill(self) -> WithFill | None:
         return self.__with_fill
 
-    def set_with_fill(self, with_fill: WithFill) -> None:
+    def set_with_fill(self, with_fill: WithFill | None) -> None:
         self.__with_fill = with_fill
 
     def get_limitby(self) -> LimitBy | None:
