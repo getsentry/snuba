@@ -190,9 +190,9 @@ def _format_orderby(query: AbstractQuery, formatter: ExpressionVisitor[str]) -> 
             extra = " WITH FILL"
             if fill is not None:
                 extra += (
-                    f" FROM {fill[0].accept(formatter)}"
-                    f" TO {fill[1].accept(formatter)}"
-                    f" STEP {fill[2].accept(formatter)}"
+                    f" FROM {fill.from_expr.accept(formatter)}"
+                    f" TO {fill.to_expr.accept(formatter)}"
+                    f" STEP {fill.step.accept(formatter)}"
                 )
             if interpolate:
                 extra += f" INTERPOLATE ({', '.join(e.accept(formatter) for e in interpolate)})"

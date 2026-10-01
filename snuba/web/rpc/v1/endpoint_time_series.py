@@ -30,7 +30,7 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.downsampled_storage_tiers import Tier
-from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query import OrderBy, OrderByDirection, SelectedExpression, WithFill
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal
@@ -481,9 +481,11 @@ def build_query(
     if interpolated_exprs:
         res.set_interpolate([column(expr.label) for expr in interpolated_exprs])
         res.set_with_fill(
-            f.toDateTime(literal(request.meta.start_timestamp.seconds)),
-            f.toDateTime(literal(request.meta.end_timestamp.seconds)),
-            literal(request.granularity_secs),
+            WithFill(
+                f.toDateTime(literal(request.meta.start_timestamp.seconds)),
+                f.toDateTime(literal(request.meta.end_timestamp.seconds)),
+                literal(request.granularity_secs),
+            )
         )
     treeify_or_and_conditions(res)
     add_existence_check_to_map_attribute_reads(res)

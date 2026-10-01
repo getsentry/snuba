@@ -34,6 +34,13 @@ class LimitBy:
     columns: Sequence[Expression]
 
 
+@dataclass(frozen=True)
+class WithFill:
+    from_expr: Expression
+    to_expr: Expression
+    step: Expression
+
+
 class OrderByDirection(Enum):
     ASC = "ASC"
     DESC = "DESC"
@@ -94,7 +101,7 @@ class Query(DataSource, ABC):
         having: Expression | None = None,
         order_by: Sequence[OrderBy] | None = None,
         interpolate: Sequence[Expression] | None = None,
-        with_fill: tuple[Expression, Expression, Expression] | None = None,
+        with_fill: WithFill | None = None,
         limitby: LimitBy | None = None,
         limit: int | None = None,
         offset: int = 0,
@@ -198,11 +205,11 @@ class Query(DataSource, ABC):
     def set_interpolate(self, interpolate: Sequence[Expression] | None) -> None:
         self.__interpolate = interpolate or []
 
-    def get_with_fill(self) -> tuple[Expression, Expression, Expression] | None:
+    def get_with_fill(self) -> WithFill | None:
         return self.__with_fill
 
-    def set_with_fill(self, from_expr: Expression, to_expr: Expression, step: Expression) -> None:
-        self.__with_fill = (from_expr, to_expr, step)
+    def set_with_fill(self, with_fill: WithFill) -> None:
+        self.__with_fill = with_fill
 
     def get_limitby(self) -> LimitBy | None:
         return self.__limitby
@@ -275,7 +282,11 @@ class Query(DataSource, ABC):
             self.__having or [],
             chain.from_iterable(orderby.expression for orderby in self.__order_by),
             chain.from_iterable(self.__interpolate),
-            chain.from_iterable(self.__with_fill or ()),
+            (
+                (self.__with_fill.from_expr, self.__with_fill.to_expr, self.__with_fill.step)
+                if self.__with_fill
+                else ()
+            ),
             self.__limitby.columns if self.__limitby else [],
             self._get_expressions_impl(),
         )
@@ -331,10 +342,11 @@ class Query(DataSource, ABC):
             ]
         self.__interpolate = transform_expression_list(self.__interpolate)
         if self.__with_fill is not None:
-            self.__with_fill = (
-                self.__with_fill[0].transform(func),
-                self.__with_fill[1].transform(func),
-                self.__with_fill[2].transform(func),
+            self.__with_fill = replace(
+                self.__with_fill,
+                from_expr=self.__with_fill.from_expr.transform(func),
+                to_expr=self.__with_fill.to_expr.transform(func),
+                step=self.__with_fill.step.transform(func),
             )
 
         if self.__limitby is not None:
@@ -381,10 +393,11 @@ class Query(DataSource, ABC):
         ]
         self.__interpolate = [e.accept(visitor) for e in self.__interpolate]
         if self.__with_fill is not None:
-            self.__with_fill = (
-                self.__with_fill[0].accept(visitor),
-                self.__with_fill[1].accept(visitor),
-                self.__with_fill[2].accept(visitor),
+            self.__with_fill = replace(
+                self.__with_fill,
+                from_expr=self.__with_fill.from_expr.accept(visitor),
+                to_expr=self.__with_fill.to_expr.accept(visitor),
+                step=self.__with_fill.step.accept(visitor),
             )
         if self.__limitby is not None:
             self.__limitby = LimitBy(
@@ -508,7 +521,7 @@ class ProcessableQuery(Query, ABC, Generic[TSimpleDataSource]):
         having: Expression | None = None,
         order_by: Sequence[OrderBy] | None = None,
         interpolate: Sequence[Expression] | None = None,
-        with_fill: tuple[Expression, Expression, Expression] | None = None,
+        with_fill: WithFill | None = None,
         limitby: LimitBy | None = None,
         limit: int | None = None,
         offset: int = 0,

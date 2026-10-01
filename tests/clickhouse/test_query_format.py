@@ -14,7 +14,7 @@ from snuba.clickhouse.formatter.query import (
 )
 from snuba.clickhouse.query import Query
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
+from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression, WithFill
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -804,6 +804,8 @@ def test_format_orderby_fill(set_interpolate: bool, set_fill: bool, expected_tai
     if set_interpolate:
         query.set_interpolate([Column(None, None, "sum")])
     if set_fill:
-        query.set_with_fill(f.toDateTime(literal(1)), f.toDateTime(literal(10)), literal(5))
+        query.set_with_fill(
+            WithFill(f.toDateTime(literal(1)), f.toDateTime(literal(10)), literal(5))
+        )
     sql = format_query(query).get_sql()
     assert sql.endswith("ORDER BY time ASC" + expected_tail)
