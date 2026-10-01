@@ -474,6 +474,7 @@ class Query(DataSource, ABC):
             "get_having",
             "get_orderby",
             "get_interpolate",
+            "get_with_fill",
             "get_limitby",
             "get_limit",
             "get_offset",
