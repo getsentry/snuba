@@ -2645,6 +2645,10 @@ class TestTimeSeriesApi(BaseApiTest):
         )
         response = EndpointTimeSeries().execute(message)
         dps = response.result_timeseries[0].data_points
+        # leading fill is type-default (coalesce → 99), not LOCF
+        assert dps[0].interpolated == InterpolationMode.INTERPOLATION_MODE_UNSPECIFIED
+        assert not dps[0].data_present
+        assert dps[0].data == 0
         assert dps[3].interpolated == InterpolationMode.INTERPOLATION_MODE_LOCF
         assert dps[3].data == 1
 

@@ -199,7 +199,9 @@ def _convert_result_timeseries(
             ] = row
 
     # Go through every possible time bucket in the query, if there's row data for it, fill in its data
-    # otherwise put a dummy datapoint in
+    # otherwise put a dummy datapoint in.
+    # INTERPOLATE with no previous value uses the column type default (NULL or 0), which is not LOCF.
+    seen_real: set[tuple[str, str]] = set()
     for bucket in time_buckets:
         for timeseries_key, timeseries in result_timeseries.items():
             row_data = result_timeseries_timestamp_to_row.get(timeseries_key, {}).get(
@@ -207,35 +209,35 @@ def _convert_result_timeseries(
             )
             if not row_data:
                 timeseries.data_points.append(DataPoint(data=0, data_present=False))
+                continue
+            extrapolation_context = ExtrapolationContext.from_row(timeseries.label, row_data)
+            value = row_data.get(timeseries.label, None)
+            if (
+                timeseries.label in interpolated_labels
+                and extrapolation_context.sample_count == 0
+                and value is not None
+                and timeseries_key in seen_real
+            ):
+                timeseries.data_points.append(
+                    DataPoint(
+                        data=value,
+                        data_present=False,
+                        interpolated=interpolated_labels[timeseries.label],
+                    )
+                )
+            elif value is None or extrapolation_context.sample_count == 0:
+                timeseries.data_points.append(DataPoint(data=0, data_present=False))
             else:
-                extrapolation_context = ExtrapolationContext.from_row(timeseries.label, row_data)
-                value = row_data.get(timeseries.label, None)
-                if value is None or (
-                    extrapolation_context.sample_count == 0
-                    and timeseries.label not in interpolated_labels
-                ):
-                    timeseries.data_points.append(DataPoint(data=0, data_present=False))
-                elif (
-                    timeseries.label in interpolated_labels
-                    and extrapolation_context.sample_count == 0
-                ):
-                    timeseries.data_points.append(
-                        DataPoint(
-                            data=value,
-                            data_present=False,
-                            interpolated=interpolated_labels[timeseries.label],
-                        )
+                seen_real.add(timeseries_key)
+                timeseries.data_points.append(
+                    DataPoint(
+                        data=value,
+                        data_present=True,
+                        avg_sampling_rate=extrapolation_context.average_sample_rate,
+                        sample_count=extrapolation_context.sample_count,
+                        reliability=extrapolation_context.reliability,
                     )
-                else:
-                    timeseries.data_points.append(
-                        DataPoint(
-                            data=value,
-                            data_present=True,
-                            avg_sampling_rate=extrapolation_context.average_sample_rate,
-                            sample_count=extrapolation_context.sample_count,
-                            reliability=extrapolation_context.reliability,
-                        )
-                    )
+                )
 
     frc = FormulaReliabilityCalculator(request, data, time_buckets)
     for timeseries in result_timeseries.values():
