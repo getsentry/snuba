@@ -209,7 +209,10 @@ def _convert_result_timeseries(
             else:
                 extrapolation_context = ExtrapolationContext.from_row(timeseries.label, row_data)
                 value = row_data.get(timeseries.label, None)
-                if value is None:
+                if value is None or (
+                    extrapolation_context.sample_count == 0
+                    and timeseries.label not in interpolated_labels
+                ):
                     timeseries.data_points.append(DataPoint(data=0, data_present=False))
                 elif (
                     timeseries.label in interpolated_labels

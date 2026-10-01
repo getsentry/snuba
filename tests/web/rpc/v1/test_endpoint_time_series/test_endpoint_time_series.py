@@ -47,6 +47,10 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web import QueryException
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.proto_visitor import (
+    AggregationToConditionalAggregationVisitor,
+    TimeSeriesRequestWrapper,
+)
 from snuba.web.rpc.v1.endpoint_time_series import (
     EndpointTimeSeries,
     _validate_time_buckets,
@@ -2215,6 +2219,433 @@ class TestTimeSeriesApi(BaseApiTest):
 
         assert len(response.result_timeseries) == 1
         assert response.result_timeseries[0] == expected
+        for i, dp in enumerate(response.result_timeseries[0].data_points):
+            if i in (0, 1):
+                assert dp.interpolated == InterpolationMode.INTERPOLATION_MODE_UNSPECIFIED
+                assert not dp.data_present
+            elif i in (2, 4):
+                assert dp.data_present
+                assert dp.interpolated == InterpolationMode.INTERPOLATION_MODE_UNSPECIFIED
+            else:
+                assert not dp.data_present
+                assert dp.interpolated == InterpolationMode.INTERPOLATION_MODE_LOCF
+                assert dp.sample_count == 0
+                assert dp.avg_sampling_rate == 0
+
+    @pytest.mark.parametrize(
+        "interpolation_mode",
+        [
+            InterpolationMode.INTERPOLATION_MODE_UNSPECIFIED,
+            InterpolationMode.INTERPOLATION_MODE_NONE,
+        ],
+    )
+    def test_interpolate_off(self, interpolation_mode: InterpolationMode.ValueType) -> None:
+        granularity_secs = 300
+        query_duration = 60 * 30
+        store_spans_timeseries(
+            BASE_TIME + timedelta(seconds=600),
+            600,
+            1200,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+        )
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
+                debug=True,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    interpolation_mode=interpolation_mode,
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        sql = response.meta.query_info[0].metadata.sql
+        assert "INTERPOLATE" not in sql
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+        present = DataPoint(data=1, data_present=True, sample_count=1)
+        empty = DataPoint(data=0, data_present=False)
+        assert response.result_timeseries[0] == TimeSeries(
+            label="sum",
+            buckets=expected_buckets,
+            data_points=[empty, empty, present, empty, present, empty],
+        )
+
+    def test_interpolate_mixed_modes(self) -> None:
+        granularity_secs = 300
+        query_duration = 60 * 30
+        store_spans_timeseries(
+            BASE_TIME + timedelta(seconds=600),
+            600,
+            1200,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+        )
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
+                debug=True,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum_locf",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    interpolation_mode=InterpolationMode.INTERPOLATION_MODE_LOCF,
+                ),
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum_none",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    interpolation_mode=InterpolationMode.INTERPOLATION_MODE_NONE,
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        sql = response.meta.query_info[0].metadata.sql
+        assert "INTERPOLATE (sum_locf)" in sql
+        assert "sum_none" not in sql.split("INTERPOLATE", 1)[1]
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+        present = DataPoint(data=1, data_present=True, sample_count=1)
+        empty = DataPoint(data=0, data_present=False)
+        locf = DataPoint(
+            data=1,
+            data_present=False,
+            interpolated=InterpolationMode.INTERPOLATION_MODE_LOCF,
+        )
+        by_label = {ts.label: ts for ts in response.result_timeseries}
+        assert by_label["sum_locf"] == TimeSeries(
+            label="sum_locf",
+            buckets=expected_buckets,
+            data_points=[empty, empty, present, locf, present, locf],
+        )
+        assert by_label["sum_none"] == TimeSeries(
+            label="sum_none",
+            buckets=expected_buckets,
+            data_points=[empty, empty, present, empty, present, empty],
+        )
+
+    def test_interpolate_via_expressions(self) -> None:
+        granularity_secs = 300
+        query_duration = 60 * 30
+        store_spans_timeseries(
+            BASE_TIME + timedelta(seconds=600),
+            600,
+            1200,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+        )
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
+                debug=True,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            expressions=[
+                Expression(
+                    conditional_aggregation=AttributeConditionalAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                        label="sum",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                        interpolation_mode=InterpolationMode.INTERPOLATION_MODE_LOCF,
+                    ),
+                    label="sum",
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+        present = DataPoint(data=1, data_present=True, sample_count=1)
+        empty = DataPoint(data=0, data_present=False)
+        locf = DataPoint(
+            data=1,
+            data_present=False,
+            interpolated=InterpolationMode.INTERPOLATION_MODE_LOCF,
+        )
+        assert response.result_timeseries[0] == TimeSeries(
+            label="sum",
+            buckets=expected_buckets,
+            data_points=[empty, empty, present, locf, present, locf],
+        )
+
+    def test_interpolation_mode_survives_aggregation_conversion(self) -> None:
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=0),
+                end_timestamp=Timestamp(seconds=60),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            expressions=[
+                Expression(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                        label="sum",
+                        interpolation_mode=InterpolationMode.INTERPOLATION_MODE_LOCF,
+                    ),
+                    label="sum",
+                )
+            ],
+            granularity_secs=60,
+        )
+        TimeSeriesRequestWrapper(message).accept(AggregationToConditionalAggregationVisitor())
+        assert (
+            message.expressions[0].conditional_aggregation.interpolation_mode
+            == InterpolationMode.INTERPOLATION_MODE_LOCF
+        )
+
+    def test_interpolate_group_by(self) -> None:
+        granularity_secs = 300
+        query_duration = 60 * 30
+        store_spans_timeseries(
+            BASE_TIME + timedelta(seconds=600),
+            600,
+            1200,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+            attributes={"customer": AnyValue(string_value="alice")},
+        )
+        store_spans_timeseries(
+            BASE_TIME + timedelta(seconds=1200),
+            600,
+            600,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 2)],
+            attributes={"customer": AnyValue(string_value="bob")},
+        )
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
+                debug=True,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    interpolation_mode=InterpolationMode.INTERPOLATION_MODE_LOCF,
+                ),
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="customer")],
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+        empty = DataPoint(data=0, data_present=False)
+        locf = DataPoint(
+            data=1,
+            data_present=False,
+            interpolated=InterpolationMode.INTERPOLATION_MODE_LOCF,
+        )
+        alice_present = DataPoint(data=1, data_present=True, sample_count=1)
+        bob_present = DataPoint(data=2, data_present=True, sample_count=1)
+        bob_locf = DataPoint(
+            data=2,
+            data_present=False,
+            interpolated=InterpolationMode.INTERPOLATION_MODE_LOCF,
+        )
+        by_group = {ts.group_by_attributes["customer"]: ts for ts in response.result_timeseries}
+        assert by_group["alice"] == TimeSeries(
+            label="sum",
+            group_by_attributes={"customer": "alice"},
+            buckets=expected_buckets,
+            data_points=[empty, empty, alice_present, locf, alice_present, locf],
+        )
+        assert by_group["bob"] == TimeSeries(
+            label="sum",
+            group_by_attributes={"customer": "bob"},
+            buckets=expected_buckets,
+            data_points=[empty, empty, empty, empty, bob_present, bob_locf],
+        )
+
+    def test_interpolate_with_sample_weighted(self) -> None:
+        granularity_secs = 300
+        query_duration = 60 * 30
+        store_spans_timeseries(
+            BASE_TIME + timedelta(seconds=600),
+            600,
+            1200,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+        )
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
+                debug=True,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                    interpolation_mode=InterpolationMode.INTERPOLATION_MODE_LOCF,
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        dps = response.result_timeseries[0].data_points
+        assert dps[2].data_present
+        assert dps[2].sample_count == 1
+        assert dps[3].interpolated == InterpolationMode.INTERPOLATION_MODE_LOCF
+        assert dps[3].sample_count == 0
+        assert dps[3].avg_sampling_rate == 0
+
+    def test_interpolate_no_events_in_window(self) -> None:
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + 60 * 30)),
+                debug=True,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum",
+                    interpolation_mode=InterpolationMode.INTERPOLATION_MODE_LOCF,
+                ),
+            ],
+            granularity_secs=300,
+        )
+        response = EndpointTimeSeries().execute(message)
+        assert list(response.result_timeseries) == []
+
+    def test_interpolate_non_aggregation_expr(self) -> None:
+        granularity_secs = 300
+        query_duration = 60 * 30
+        store_spans_timeseries(
+            BASE_TIME + timedelta(seconds=600),
+            600,
+            1200,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+        )
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
+                debug=True,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            expressions=[
+                Expression(
+                    formula=Expression.BinaryFormula(
+                        op=Expression.BinaryFormula.OP_ADD,
+                        left=Expression(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_SUM,
+                                key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                                label="left",
+                                interpolation_mode=InterpolationMode.INTERPOLATION_MODE_NONE,
+                            )
+                        ),
+                        right=Expression(literal=Literal(val_double=0)),
+                    ),
+                    label="sum_plus_zero",
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        sql = response.meta.query_info[0].metadata.sql
+        assert "INTERPOLATE" not in sql
+
+    def test_interpolate_aggregation_default_value(self) -> None:
+        granularity_secs = 300
+        query_duration = 60 * 30
+        store_spans_timeseries(
+            BASE_TIME + timedelta(seconds=600),
+            600,
+            1200,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+        )
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
+                debug=True,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum",
+                    default_value_double=99,
+                    interpolation_mode=InterpolationMode.INTERPOLATION_MODE_LOCF,
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        dps = response.result_timeseries[0].data_points
+        assert dps[3].interpolated == InterpolationMode.INTERPOLATION_MODE_LOCF
+        assert dps[3].data == 1
 
 
 class TestUtils:
