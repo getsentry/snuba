@@ -182,6 +182,7 @@ def _convert_aggregation_to_conditional_aggregation(
         key=input_agg.key,
         label=input_agg.label,
         extrapolation_mode=input_agg.extrapolation_mode,
+        interpolation_mode=input_agg.interpolation_mode,
     )
 
     if input_agg.HasField("ranked_by"):

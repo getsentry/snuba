@@ -21,6 +21,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKey,
     ExtrapolationMode,
+    InterpolationMode,
 )
 
 from snuba.attribution.appid import AppID
@@ -88,6 +89,20 @@ def _get_attribute_key_to_expression_function(
     return attribute_key_to_expression
 
 
+def _expr_interpolation_mode(expr: ProtoExpression) -> InterpolationMode.ValueType:
+    if expr.HasField("conditional_aggregation"):
+        mode = expr.conditional_aggregation.interpolation_mode
+    elif expr.HasField("aggregation"):
+        mode = expr.aggregation.interpolation_mode
+    else:
+        mode = InterpolationMode.INTERPOLATION_MODE_NONE
+
+    if mode == InterpolationMode.INTERPOLATION_MODE_UNSPECIFIED:
+        return InterpolationMode.INTERPOLATION_MODE_NONE
+
+    return mode
+
+
 def _convert_result_timeseries(
     request: TimeSeriesRequest, data: list[dict[str, Any]]
 ) -> Iterable[TimeSeries]:
@@ -133,6 +148,11 @@ def _convert_result_timeseries(
 
     # the aggregations that we will include in the result
     aggregation_labels = {expr.label for expr in request.expressions}
+    interpolated_labels = {
+        expr.label: mode
+        for expr in request.expressions
+        if (mode := _expr_interpolation_mode(expr)) != InterpolationMode.INTERPOLATION_MODE_NONE
+    }
 
     group_by_labels = {attr.name for attr in request.group_by}
 
@@ -188,18 +208,30 @@ def _convert_result_timeseries(
                 timeseries.data_points.append(DataPoint(data=0, data_present=False))
             else:
                 extrapolation_context = ExtrapolationContext.from_row(timeseries.label, row_data)
-                if row_data.get(timeseries.label, None) is not None:
+                value = row_data.get(timeseries.label, None)
+                if value is None:
+                    timeseries.data_points.append(DataPoint(data=0, data_present=False))
+                elif (
+                    timeseries.label in interpolated_labels
+                    and extrapolation_context.sample_count == 0
+                ):
                     timeseries.data_points.append(
                         DataPoint(
-                            data=row_data[timeseries.label],
+                            data=value,
+                            data_present=False,
+                            interpolated=interpolated_labels[timeseries.label],
+                        )
+                    )
+                else:
+                    timeseries.data_points.append(
+                        DataPoint(
+                            data=value,
                             data_present=True,
                             avg_sampling_rate=extrapolation_context.average_sample_rate,
                             sample_count=extrapolation_context.sample_count,
                             reliability=extrapolation_context.reliability,
                         )
                     )
-                else:
-                    timeseries.data_points.append(DataPoint(data=0, data_present=False))
 
     frc = FormulaReliabilityCalculator(request, data, time_buckets)
     for timeseries in result_timeseries.values():
@@ -438,12 +470,13 @@ def build_query(
         ],
         order_by=[OrderBy(expression=column("time_slot"), direction=OrderByDirection.ASC)],
     )
-    # ponytail: always INTERPOLATE; gate with InterpolationMode later
-    if True:
-        res.set_interpolate(
-            [column(expr.label) for expr in request.expressions]
-            + [column(c.name) for c in additional_context_columns if c.name]
-        )
+    interpolated_exprs = [
+        expr
+        for expr in request.expressions
+        if _expr_interpolation_mode(expr) != InterpolationMode.INTERPOLATION_MODE_NONE
+    ]
+    if interpolated_exprs:
+        res.set_interpolate([column(expr.label) for expr in interpolated_exprs])
         res.set_with_fill(
             f.toDateTime(literal(request.meta.start_timestamp.seconds)),
             f.toDateTime(literal(request.meta.end_timestamp.seconds)),

@@ -32,6 +32,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeValue,
     ExtrapolationMode,
     Function,
+    InterpolationMode,
 )
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     AndFilter,
@@ -2189,6 +2190,7 @@ class TestTimeSeriesApi(BaseApiTest):
                     key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
                     label="sum",
                     extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    interpolation_mode=InterpolationMode.INTERPOLATION_MODE_LOCF,
                 ),
             ],
             granularity_secs=granularity_secs,
@@ -2200,10 +2202,15 @@ class TestTimeSeriesApi(BaseApiTest):
         ]
         present = DataPoint(data=1, data_present=True, sample_count=1)
         empty = DataPoint(data=0, data_present=False)
+        locf = DataPoint(
+            data=1,
+            data_present=False,
+            interpolated=InterpolationMode.INTERPOLATION_MODE_LOCF,
+        )
         expected = TimeSeries(
             label="sum",
             buckets=expected_buckets,
-            data_points=[empty, empty, present, present, present, present],
+            data_points=[empty, empty, present, locf, present, locf],
         )
 
         assert len(response.result_timeseries) == 1
