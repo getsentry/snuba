@@ -5,12 +5,13 @@ import os
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 from enum import Enum, IntEnum
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 from redis.exceptions import TimeoutError as RedisTimeoutError
 from sentry_sdk import traces
 
 from snuba import environment, settings
+from snuba.clusters.load_info import LoadInfo
 from snuba.configs.configuration import (
     ConfigurableComponent,
     ConfigurableComponentData,
@@ -24,11 +25,6 @@ from snuba.utils.registered_class import import_submodules_in_directory
 from snuba.utils.sentry import SENTRY_OP
 from snuba.utils.serializable_exception import JsonSerializable, SerializableException
 from snuba.web import QueryResult
-
-if TYPE_CHECKING:
-    # Importing load_retriever at runtime pulls in snuba.web.rpc, which
-    # eventually imports db_query → AllocationPolicy (cycle).
-    from snuba.web.rpc.storage_routing.load_retriever import LoadInfo
 
 IS_ENFORCED = "is_enforced"
 MAX_THREADS = "max_threads"

@@ -26,6 +26,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_sdk import traces
 
 from snuba import environment, settings
+from snuba.clusters.load_info import LoadInfo, get_cluster_loadinfo
 from snuba.configs.configuration import (
     ConfigurableComponent,
     ConfigurableComponentData,
@@ -54,7 +55,6 @@ from snuba.web import QueryException, QueryResult
 from snuba.web.rpc.common.exceptions import RPCAllocationPolicyException
 from snuba.web.rpc.common.query_info import extract_query_info, extract_query_info_tags
 from snuba.web.rpc.storage_routing.common import extract_message_meta
-from snuba.web.rpc.storage_routing.load_retriever import LoadInfo, get_cluster_loadinfo
 
 _SAMPLING_IN_STORAGE_PREFIX = "sampling_in_storage_"
 _START_ESTIMATION_MARK = "start_sampling_in_storage_estimation"

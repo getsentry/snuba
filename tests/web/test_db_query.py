@@ -12,6 +12,7 @@ from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query as ClickhouseQuery
+from snuba.clusters.load_info import LoadInfo
 from snuba.configs.configuration import Configuration, ResourceIdentifier
 from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.storage import Storage
@@ -41,7 +42,6 @@ from snuba.web.db_query import (
     db_query,
     execute_query,
 )
-from snuba.web.rpc.storage_routing.load_retriever import LoadInfo
 from tests.query.allocation_policies.attachment import (
     match_block,
     override_allocation_policy,

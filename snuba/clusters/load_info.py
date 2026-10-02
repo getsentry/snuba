@@ -20,7 +20,7 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(
     environment.metrics,
-    "snuba.web.rpc.storage_routing.load_retriever",
+    "snuba.clusters.load_info",
 )
 
 

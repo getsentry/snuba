@@ -13,6 +13,7 @@ from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageCon
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
+from snuba.clusters.load_info import LoadInfo
 from snuba.configs.configuration import Configuration, ResourceIdentifier
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
@@ -35,7 +36,6 @@ from snuba.web.rpc.storage_routing.common import (
     encode_routing_hint,
     extract_message_meta,
 )
-from snuba.web.rpc.storage_routing.load_retriever import LoadInfo
 from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
     OutcomesBasedRoutingStrategy,
 )

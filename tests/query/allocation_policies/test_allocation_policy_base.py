@@ -4,6 +4,7 @@ from unittest import TestCase, mock
 
 import pytest
 
+from snuba.clusters.load_info import LoadInfo
 from snuba.configs.configuration import Configuration, InvalidConfig
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
@@ -30,7 +31,6 @@ from snuba.query.allocation_policies.concurrent_rate_limit import (
 from snuba.query.allocation_policies.cross_org import CrossOrgQueryAllocationPolicy
 from snuba.query.allocation_policies.per_referrer import ReferrerGuardRailPolicy
 from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
-from snuba.web.rpc.storage_routing.load_retriever import LoadInfo
 from tests.configs.component_config import (
     delete_component_config,
     set_component_config,

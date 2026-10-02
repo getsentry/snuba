@@ -5,7 +5,7 @@ import pytest
 from sentry_options import OptionValue
 from sentry_options.testing import override_options
 
-from snuba.web.rpc.storage_routing.load_retriever import LoadInfo, get_cluster_loadinfo
+from snuba.clusters.load_info import LoadInfo, get_cluster_loadinfo
 
 # Always present on CH. CGroupUserTimeNormalized / disk_inflight_ops are
 # host-dependent and may be -1 without failing the probe.
@@ -48,6 +48,7 @@ def test_from_dict_ignores_unknown_keys() -> None:
     assert load_info.cluster_load == 2.0
     assert load_info.concurrent_queries == -1
 
+
 ENABLE_LOADINFO: dict[str, OptionValue] = {"storage_routing.enable_get_cluster_loadinfo": True}
 
 
@@ -69,7 +70,9 @@ def test_get_cluster_loadinfo_disabled() -> None:
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
 def test_get_cluster_load() -> None:
-    _assert_probe_ok(get_cluster_loadinfo())
+    load_info = get_cluster_loadinfo()
+    assert load_info is not None
+    _assert_probe_ok(load_info)
 
 
 @pytest.mark.redis_db
@@ -93,7 +96,9 @@ def test_get_cluster_loadinfo_if_cache_fails() -> None:
     mock_redis.side_effect = Exception("Test error")
     with patch("snuba.redis.get_redis_client") as mock_redis_client:
         mock_redis_client.return_value = mock_redis
-        _assert_probe_ok(get_cluster_loadinfo())
+        load_info = get_cluster_loadinfo()
+        assert load_info is not None
+        _assert_probe_ok(load_info)
 
 
 @pytest.mark.redis_db
@@ -102,6 +107,7 @@ def test_get_cluster_load_error_handling() -> None:
     with patch("snuba.clickhouse.connect.ClickhouseConnectPool.execute") as mock_execute:
         mock_execute.side_effect = Exception("Test error")
         load_info = get_cluster_loadinfo()
+        assert load_info is not None
         _assert_probe_failed(load_info)
         assert load_info.is_idle() is False
 

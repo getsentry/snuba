@@ -26,6 +26,7 @@ from snuba.clickhouse.formatter.query import format_query_anonymized
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_dsl.accessors import get_time_range_estimate
 from snuba.clickhouse.query_profiler import generate_profile
+from snuba.clusters.load_info import get_cluster_loadinfo
 from snuba.configs.configuration import ResourceIdentifier
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -77,7 +78,6 @@ from snuba.utils.serializable_exception import (
     SerializableExceptionDict,
 )
 from snuba.web import QueryException, QueryResult, constants
-from snuba.web.rpc.storage_routing.load_retriever import get_cluster_loadinfo
 
 metrics = MetricsWrapper(environment.metrics, "db_query")
 
