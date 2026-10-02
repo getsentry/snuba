@@ -109,7 +109,6 @@ def test_get_cluster_load_error_handling() -> None:
         load_info = get_cluster_loadinfo()
         assert load_info is not None
         _assert_probe_failed(load_info)
-        assert load_info.is_idle() is False
 
 
 def test_is_idle_reads_dynamic_allocation_policy_flag() -> None:

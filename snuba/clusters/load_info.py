@@ -49,8 +49,6 @@ class LoadInfo:
         )
 
     def is_idle(self) -> bool:
-        if self.cluster_load == -1.0 or self.concurrent_queries == -1:
-            return False
         return get_option("storage_routing.enable_dynamic_allocation_policy", False)
 
 

@@ -27,6 +27,7 @@ from snuba.utils.serializable_exception import JsonSerializable, SerializableExc
 from snuba.web import QueryResult
 
 IS_ENFORCED = "is_enforced"
+IS_PARDONABLE = "is_pardonable"
 MAX_THREADS = "max_threads"
 NO_UNITS = "no_units"
 NO_SUGGESTION = "no_suggestion"
@@ -246,9 +247,11 @@ class AllocationPolicy(ConfigurableComponent, ABC):
     Any configuration definition that exists in your sub class' `_additional_config_definitions()` will appear in the
     Capacity Management Snuba Admin UI for the policy. From there you can modify the live values to alter how your policy works.
 
-    The base class comes with a built in config accessible as a property of the class itself:
+    The base class comes with built in configs accessible as properties of the class itself:
     - is_enforced
         - Use this to throttle/reject queries OR just log stuff. A configured policy is always active.
+    - is_pardonable
+        - When true, rejections from this policy can be pardoned if the cluster is idle.
 
     Eg.
 
@@ -368,6 +371,12 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                 default=kwargs.get(IS_ENFORCED, 1),
             ),
             AllocationPolicyConfig(
+                name=IS_PARDONABLE,
+                description="Toggles whether rejections from this policy can be pardoned when the cluster is idle.",
+                value_type=int,
+                default=kwargs.get(IS_PARDONABLE, 1),
+            ),
+            AllocationPolicyConfig(
                 name=MAX_THREADS,
                 description="The max threads Clickhouse can use for the query.",
                 value_type=int,
@@ -402,7 +411,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
 
     @property
     def is_pardonable(self) -> bool:
-        return True
+        return bool(self.get_config_value(IS_PARDONABLE))
 
     @property
     def max_threads(self) -> int:
@@ -453,6 +462,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
             for t, tid in tenant_ids.items():
                 span.set_attribute(f"tenant_ids.{t}", str(tid))
 
+            passthrough = _default_passthough_policy(self._resource_identifier.value)
             try:
                 allowance = self._get_quota_allowance(tenant_ids, query_id)
             except InvalidTenantsForAllocationPolicy as e:
@@ -475,9 +485,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                     1,
                     tags={"method": "get_quota_allowance", "reason": type(e).__name__},
                 )
-                return _default_passthough_policy(
-                    self._resource_identifier.value
-                ).get_quota_allowance(tenant_ids, query_id, load_info)
+                return passthrough.get_quota_allowance(tenant_ids, query_id, load_info)
             except Exception:
                 self.metrics.increment("fail_open", 1, tags={"method": "get_quota_allowance"})
                 logger.exception(
@@ -485,9 +493,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                 )
                 if settings.RAISE_ON_ALLOCATION_POLICY_FAILURES:
                     raise
-                return _default_passthough_policy(
-                    self._resource_identifier.value
-                ).get_quota_allowance(tenant_ids, query_id, load_info)
+                return passthrough.get_quota_allowance(tenant_ids, query_id, load_info)
 
             decision = allowance.decision(self, load_info)
             referrer = str(tenant_ids.get("referrer", "no_referrer"))

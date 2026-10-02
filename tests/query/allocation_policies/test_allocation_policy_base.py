@@ -309,6 +309,12 @@ def test_default_config_overrides(policy: AllocationPolicy) -> None:
     set_component_config(policy, config_key="is_enforced", value=1)
     assert policy.is_enforced == 1
 
+    assert policy.is_pardonable == 1
+    set_component_config(policy, config_key="is_pardonable", value=0)
+    assert policy.is_pardonable == 0
+    set_component_config(policy, config_key="is_pardonable", value=1)
+    assert policy.is_pardonable == 1
+
     assert policy.max_threads == 10
     set_component_config(policy, config_key="max_threads", value=4)
     assert policy.max_threads == 4
@@ -318,7 +324,7 @@ def test_default_config_overrides(policy: AllocationPolicy) -> None:
 
 @pytest.mark.redis_db
 def test_get_current_configs(policy: AllocationPolicy) -> None:
-    assert len(policy_configs := policy.get_current_configs()) == 3
+    assert len(policy_configs := policy.get_current_configs()) == 4
     assert all(
         config in policy_configs
         for config in [
@@ -339,6 +345,14 @@ def test_get_current_configs(policy: AllocationPolicy) -> None:
                 "params": {},
             },
             {
+                "name": "is_pardonable",
+                "type": "int",
+                "default": 1,
+                "description": "Toggles whether rejections from this policy can be pardoned when the cluster is idle.",
+                "value": 1,
+                "params": {},
+            },
+            {
                 "name": "max_threads",
                 "type": "int",
                 "default": 10,
@@ -355,7 +369,7 @@ def test_get_current_configs(policy: AllocationPolicy) -> None:
     )
     set_component_config(policy, config_key="is_enforced", value=0)
     set_component_config(policy, config_key="max_threads", value=4)
-    assert len(policy_configs := policy.get_current_configs()) == 4
+    assert len(policy_configs := policy.get_current_configs()) == 5
     assert {
         "name": "my_param_config",
         "type": "int",
