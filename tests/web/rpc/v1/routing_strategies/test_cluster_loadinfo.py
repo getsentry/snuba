@@ -101,4 +101,13 @@ def test_get_cluster_loadinfo_if_cache_fails() -> None:
 def test_get_cluster_load_error_handling() -> None:
     with patch("snuba.clickhouse.connect.ClickhouseConnectPool.execute") as mock_execute:
         mock_execute.side_effect = Exception("Test error")
-        _assert_probe_failed(get_cluster_loadinfo())
+        load_info = get_cluster_loadinfo()
+        _assert_probe_failed(load_info)
+        assert load_info.is_idle() is False
+
+
+def test_is_idle_reads_dynamic_allocation_policy_flag() -> None:
+    load_info = LoadInfo(cluster_load=1.0, concurrent_queries=1)
+    assert load_info.is_idle() is False
+    with override_options("snuba", {"storage_routing.enable_dynamic_allocation_policy": True}):
+        assert load_info.is_idle() is True

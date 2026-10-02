@@ -51,13 +51,7 @@ class LoadInfo:
     def is_idle(self) -> bool:
         if self.cluster_load == -1.0 or self.concurrent_queries == -1:
             return False
-        idle_load = self.cluster_load < get_option(
-            "storage_routing.idle_cluster_load_threshold", 0.0
-        )
-        idle_conc_queries = self.concurrent_queries < get_option(
-            "storage_routing.idle_concurrent_queries_threshold", 0
-        )
-        return idle_load and idle_conc_queries
+        return get_option("storage_routing.enable_dynamic_allocation_policy", False)
 
 
 def cache(
