@@ -5,7 +5,7 @@ import os
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 from enum import Enum, IntEnum
-from typing import Any, cast
+from typing import Any, assert_never, cast
 
 from redis.exceptions import TimeoutError as RedisTimeoutError
 from sentry_sdk import traces
@@ -491,16 +491,36 @@ class AllocationPolicy(ConfigurableComponent, ABC):
 
             decision = allowance.decision(self, load_info)
             referrer = str(tenant_ids.get("referrer", "no_referrer"))
-            if decision == QuotaAllowanceDecision.PARDONED:
-                self.metrics.increment("db_request_pardoned", tags={"referrer": referrer})
-            elif decision == QuotaAllowanceDecision.REJECTED:
-                self.metrics.increment("db_request_rejected", tags={"referrer": referrer})
-            elif decision == QuotaAllowanceDecision.THROTTLED:
-                self.metrics.increment(
-                    "db_request_throttled",
-                    tags={"referrer": referrer, "max_threads": str(allowance.max_threads)},
-                )
-                span.set_attribute("db_request_throttled", True)
+            match decision:
+                case QuotaAllowanceDecision.PARDONED:
+                    self.metrics.increment("db_request_pardoned", tags={"referrer": referrer})
+                    allowance = QuotaAllowance(
+                        can_run=True,
+                        max_threads=self.max_threads,
+                        explanation={
+                            **allowance.explanation,
+                            "idle_pardon": load_info.to_dict() if load_info is not None else {},
+                        },
+                        is_throttled=allowance.is_throttled,
+                        throttle_threshold=allowance.throttle_threshold,
+                        rejection_threshold=allowance.rejection_threshold,
+                        quota_used=allowance.quota_used,
+                        quota_unit=allowance.quota_unit,
+                        suggestion=allowance.suggestion,
+                        max_bytes_to_read=0,
+                    )
+                case QuotaAllowanceDecision.REJECTED:
+                    self.metrics.increment("db_request_rejected", tags={"referrer": referrer})
+                case QuotaAllowanceDecision.THROTTLED:
+                    self.metrics.increment(
+                        "db_request_throttled",
+                        tags={"referrer": referrer, "max_threads": str(allowance.max_threads)},
+                    )
+                    span.set_attribute("db_request_throttled", True)
+                case QuotaAllowanceDecision.ALLOWED:
+                    pass
+                case unreachable:
+                    assert_never(unreachable)
 
             if not self.is_enforced:
                 allowance = QuotaAllowance(
@@ -513,22 +533,6 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                     quota_used=allowance.quota_used,
                     quota_unit=allowance.quota_unit,
                     suggestion=allowance.suggestion,
-                )
-            elif decision == QuotaAllowanceDecision.PARDONED:
-                allowance = QuotaAllowance(
-                    can_run=True,
-                    max_threads=self.max_threads,
-                    explanation={
-                        **allowance.explanation,
-                        "idle_pardon": load_info.to_dict() if load_info is not None else {},
-                    },
-                    is_throttled=allowance.is_throttled,
-                    throttle_threshold=allowance.throttle_threshold,
-                    rejection_threshold=allowance.rejection_threshold,
-                    quota_used=allowance.quota_used,
-                    quota_unit=allowance.quota_unit,
-                    suggestion=allowance.suggestion,
-                    max_bytes_to_read=0,
                 )
 
             # make sure we always know which storage key we rejected a query from
