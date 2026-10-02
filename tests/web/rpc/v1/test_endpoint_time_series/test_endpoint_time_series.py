@@ -2441,78 +2441,6 @@ class TestTimeSeriesApi(BaseApiTest):
             == InterpolationMode.INTERPOLATION_MODE_LOCF
         )
 
-    def test_interpolate_group_by(self) -> None:
-        granularity_secs = 300
-        query_duration = 60 * 30
-        store_spans_timeseries(
-            BASE_TIME + timedelta(seconds=600),
-            600,
-            1200,
-            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
-            attributes={"customer": AnyValue(string_value="alice")},
-        )
-        store_spans_timeseries(
-            BASE_TIME + timedelta(seconds=1200),
-            600,
-            600,
-            metrics=[DummyMetric("test_metric", get_value=lambda x: 2)],
-            attributes={"customer": AnyValue(string_value="bob")},
-        )
-        message = TimeSeriesRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
-                debug=True,
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-            ),
-            aggregations=[
-                AttributeAggregation(
-                    aggregate=Function.FUNCTION_SUM,
-                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
-                    label="sum",
-                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-                    interpolation_mode=InterpolationMode.INTERPOLATION_MODE_LOCF,
-                ),
-            ],
-            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="customer")],
-            granularity_secs=granularity_secs,
-        )
-        response = EndpointTimeSeries().execute(message)
-        expected_buckets = [
-            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
-            for secs in range(0, query_duration, granularity_secs)
-        ]
-        empty = DataPoint(data=0, data_present=False)
-        locf = DataPoint(
-            data=1,
-            data_present=False,
-            interpolated=InterpolationMode.INTERPOLATION_MODE_LOCF,
-        )
-        alice_present = DataPoint(data=1, data_present=True, sample_count=1)
-        bob_present = DataPoint(data=2, data_present=True, sample_count=1)
-        bob_locf = DataPoint(
-            data=2,
-            data_present=False,
-            interpolated=InterpolationMode.INTERPOLATION_MODE_LOCF,
-        )
-        by_group = {ts.group_by_attributes["customer"]: ts for ts in response.result_timeseries}
-        assert by_group["alice"] == TimeSeries(
-            label="sum",
-            group_by_attributes={"customer": "alice"},
-            buckets=expected_buckets,
-            data_points=[empty, empty, alice_present, locf, alice_present, locf],
-        )
-        assert by_group["bob"] == TimeSeries(
-            label="sum",
-            group_by_attributes={"customer": "bob"},
-            buckets=expected_buckets,
-            data_points=[empty, empty, empty, empty, bob_present, bob_locf],
-        )
-
     def test_interpolate_with_sample_weighted(self) -> None:
         granularity_secs = 300
         query_duration = 60 * 30
@@ -2785,4 +2713,30 @@ class TestUtils:
             granularity_secs=15,
         )
         with pytest.raises(BadSnubaRPCRequestException, match="flextime"):
+            _validate_interpolation(message)
+
+    def test_interpolation_rejected_with_group_by(self) -> None:
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp()) + 60),
+                debug=True,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum",
+                    interpolation_mode=InterpolationMode.INTERPOLATION_MODE_LOCF,
+                ),
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="customer")],
+            granularity_secs=15,
+        )
+        with pytest.raises(BadSnubaRPCRequestException, match="group_by"):
             _validate_interpolation(message)

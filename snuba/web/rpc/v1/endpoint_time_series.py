@@ -576,11 +576,15 @@ def _validate_interpolation(request: TimeSeriesRequest) -> None:
         )
         for agg in request.aggregations
     )
-    if interpolating and (
+    if not interpolating:
+        return
+    if (
         request.meta.downsampled_storage_config.mode
         == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME
     ):
         raise BadSnubaRPCRequestException("interpolation is not supported with flextime routing")
+    if request.group_by:
+        raise BadSnubaRPCRequestException("interpolation is not supported with group_by")
 
 
 def _validate_time_buckets(request: TimeSeriesRequest) -> None:
