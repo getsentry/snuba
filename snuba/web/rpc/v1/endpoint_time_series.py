@@ -564,6 +564,17 @@ def _enforce_no_duplicate_labels(request: TimeSeriesRequest) -> None:
         labels.add(agg.label)
 
 
+def _has_nested_interpolation(expr: ProtoExpression) -> bool:
+    if not expr.HasField("formula"):
+        return False
+    for child in (expr.formula.left, expr.formula.right):
+        if _expr_interpolation_mode(child) != InterpolationMode.INTERPOLATION_MODE_NONE:
+            return True
+        if _has_nested_interpolation(child):
+            return True
+    return False
+
+
 def _validate_interpolation(request: TimeSeriesRequest) -> None:
     interpolating = any(
         _expr_interpolation_mode(expr) != InterpolationMode.INTERPOLATION_MODE_NONE
@@ -576,6 +587,10 @@ def _validate_interpolation(request: TimeSeriesRequest) -> None:
         )
         for agg in request.aggregations
     )
+    if any(_has_nested_interpolation(expr) for expr in request.expressions):
+        raise BadSnubaRPCRequestException(
+            "interpolation is not supported on non-aggregation expressions"
+        )
     if not interpolating:
         return
     if (

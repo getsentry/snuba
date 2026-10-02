@@ -2506,14 +2506,6 @@ class TestTimeSeriesApi(BaseApiTest):
         assert list(response.result_timeseries) == []
 
     def test_interpolate_non_aggregation_expr(self) -> None:
-        granularity_secs = 300
-        query_duration = 60 * 30
-        store_spans_timeseries(
-            BASE_TIME + timedelta(seconds=600),
-            600,
-            1200,
-            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
-        )
         message = TimeSeriesRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -2521,7 +2513,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + 60 * 30)),
                 debug=True,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
@@ -2534,7 +2526,7 @@ class TestTimeSeriesApi(BaseApiTest):
                                 aggregate=Function.FUNCTION_SUM,
                                 key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
                                 label="left",
-                                interpolation_mode=InterpolationMode.INTERPOLATION_MODE_NONE,
+                                interpolation_mode=InterpolationMode.INTERPOLATION_MODE_LOCF,
                             )
                         ),
                         right=Expression(literal=Literal(val_double=0)),
@@ -2542,11 +2534,10 @@ class TestTimeSeriesApi(BaseApiTest):
                     label="sum_plus_zero",
                 ),
             ],
-            granularity_secs=granularity_secs,
+            granularity_secs=300,
         )
-        response = EndpointTimeSeries().execute(message)
-        sql = response.meta.query_info[0].metadata.sql
-        assert "INTERPOLATE" not in sql
+        with pytest.raises(BadSnubaRPCRequestException, match="non-aggregation"):
+            EndpointTimeSeries().execute(message)
 
     def test_interpolate_aggregation_default_value(self) -> None:
         granularity_secs = 300
