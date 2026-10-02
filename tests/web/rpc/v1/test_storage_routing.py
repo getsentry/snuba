@@ -13,6 +13,7 @@ from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageCon
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
+from snuba.clusters.load_info import LoadInfo
 from snuba.configs.configuration import Configuration, ResourceIdentifier
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
@@ -551,6 +552,71 @@ def test_routing_strategy_with_rejecting_allocation_policy() -> None:
         assert update_called
         exc: RPCAllocationPolicyException = excinfo.value
         assert not exc.details["can_run"]
+
+
+@pytest.mark.redis_db
+def test_routing_strategy_idle_pardon_allows_rejected_query() -> None:
+    class IdlePardonRejectionPolicy(AllocationPolicy):
+        def _additional_config_definitions(self) -> list[Configuration]:
+            return []
+
+        def _get_quota_allowance(
+            self, tenant_ids: dict[str, str | int], query_id: str
+        ) -> QuotaAllowance:
+            return QuotaAllowance(
+                can_run=False,
+                max_threads=0,
+                explanation={"reason": "policy rejects all queries"},
+                is_throttled=False,
+                throttle_threshold=MAX_THRESHOLD,
+                rejection_threshold=MAX_THRESHOLD,
+                quota_used=0,
+                quota_unit=NO_UNITS,
+                suggestion=NO_SUGGESTION,
+            )
+
+        def _update_quota_balance(
+            self,
+            tenant_ids: dict[str, str | int],
+            query_id: str,
+            result_or_error: QueryResultOrError,
+        ) -> None:
+            return
+
+    with (
+        mock.patch.object(
+            BaseRoutingStrategy,
+            "get_allocation_policies",
+            return_value=[
+                IdlePardonRejectionPolicy(ResourceIdentifier(StorageKey("doesntmatter")))
+            ],
+        ),
+        override_options(
+            "snuba",
+            {"storage_routing.enable_get_cluster_loadinfo": True},
+        ),
+        mock.patch(
+            "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.get_cluster_loadinfo",
+            return_value=LoadInfo(cluster_load=1.0, concurrent_queries=1),
+        ),
+        mock.patch.object(LoadInfo, "is_idle", return_value=True),
+    ):
+        decision = OutcomesBasedRoutingStrategy().get_routing_decision(
+            RoutingContext(
+                in_msg=_get_in_msg(),
+                timer=Timer("test"),
+                query_id="abc",
+            )
+        )
+        assert decision.can_run is True
+        assert decision.clickhouse_settings["max_threads"] == 10
+        pardoned = decision.routing_context.allocation_policies_recommendations[
+            "IdlePardonRejectionPolicy"
+        ]
+        assert (
+            pardoned.explanation["idle_pardon"]
+            == LoadInfo(cluster_load=1.0, concurrent_queries=1).to_dict()
+        )
 
 
 @pytest.mark.redis_db

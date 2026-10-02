@@ -26,6 +26,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_sdk import traces
 
 from snuba import environment, settings
+from snuba.clusters.load_info import LoadInfo, get_cluster_loadinfo
 from snuba.configs.configuration import (
     ConfigurableComponent,
     ConfigurableComponentData,
@@ -54,7 +55,6 @@ from snuba.web import QueryException, QueryResult
 from snuba.web.rpc.common.exceptions import RPCAllocationPolicyException
 from snuba.web.rpc.common.query_info import extract_query_info, extract_query_info_tags
 from snuba.web.rpc.storage_routing.common import extract_message_meta
-from snuba.web.rpc.storage_routing.load_retriever import LoadInfo, get_cluster_loadinfo
 
 _SAMPLING_IN_STORAGE_PREFIX = "sampling_in_storage_"
 _START_ESTIMATION_MARK = "start_sampling_in_storage_estimation"
@@ -462,6 +462,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 recommendations[allocation_policy_name] = allocation_policy.get_quota_allowance(
                     routing_context.tenant_ids,
                     routing_context.query_id,
+                    routing_context.cluster_load_info,
                 )
                 # QuotaAllowance isn't a valid attribute value; serialize it.
                 span.set_attribute(
@@ -482,6 +483,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             try:
                 routing_context.timer.mark(_START_ESTIMATION_MARK)
 
+                routing_context.cluster_load_info = get_cluster_loadinfo()
                 routing_context.allocation_policies_recommendations = (
                     self._get_recommendations_from_allocation_policies(routing_context)
                 )
@@ -498,12 +500,6 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                     clickhouse_settings=combined_allocation_policies_recommendations["settings"],
                     can_run=combined_allocation_policies_recommendations["can_run"],
                     is_throttled=combined_allocation_policies_recommendations["is_throttled"],
-                )
-
-                routing_context.cluster_load_info = (
-                    get_cluster_loadinfo()
-                    if get_option("storage_routing.enable_get_cluster_loadinfo", False)
-                    else None
                 )
 
                 self._update_routing_decision(routing_decision)

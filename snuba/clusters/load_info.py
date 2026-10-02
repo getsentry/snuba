@@ -15,11 +15,12 @@ from snuba.clickhouse.errors import ClickhouseError
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.redis import RedisClientKey, get_redis_client
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(
     environment.metrics,
-    "snuba.web.rpc.storage_routing.load_retriever",
+    "snuba.clusters.load_info",
 )
 
 
@@ -46,6 +47,9 @@ class LoadInfo:
                 if (v := load_info_dict.get(f.name)) is not None and not math.isnan(v)
             }
         )
+
+    def is_idle(self) -> bool:
+        return get_option("storage_routing.enable_dynamic_allocation_policy", False)
 
 
 def cache(
@@ -86,8 +90,16 @@ def cache(
     return decorator
 
 
-@cache(ttl_secs=60)
 def get_cluster_loadinfo(
+    storage_set_key: StorageSetKey = StorageSetKey.EVENTS_ANALYTICS_PLATFORM,
+) -> LoadInfo | None:
+    if not get_option("storage_routing.enable_get_cluster_loadinfo", False):
+        return None
+    return _get_cluster_loadinfo(storage_set_key)
+
+
+@cache(ttl_secs=60)
+def _get_cluster_loadinfo(
     storage_set_key: StorageSetKey = StorageSetKey.EVENTS_ANALYTICS_PLATFORM,
 ) -> LoadInfo:
     cluster_name = None

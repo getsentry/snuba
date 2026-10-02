@@ -4,6 +4,7 @@ from unittest import TestCase, mock
 
 import pytest
 
+from snuba.clusters.load_info import LoadInfo
 from snuba.configs.configuration import Configuration, InvalidConfig
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
@@ -308,6 +309,12 @@ def test_default_config_overrides(policy: AllocationPolicy) -> None:
     set_component_config(policy, config_key="is_enforced", value=1)
     assert policy.is_enforced == 1
 
+    assert policy.is_pardonable == 1
+    set_component_config(policy, config_key="is_pardonable", value=0)
+    assert policy.is_pardonable == 0
+    set_component_config(policy, config_key="is_pardonable", value=1)
+    assert policy.is_pardonable == 1
+
     assert policy.max_threads == 10
     set_component_config(policy, config_key="max_threads", value=4)
     assert policy.max_threads == 4
@@ -317,7 +324,7 @@ def test_default_config_overrides(policy: AllocationPolicy) -> None:
 
 @pytest.mark.redis_db
 def test_get_current_configs(policy: AllocationPolicy) -> None:
-    assert len(policy_configs := policy.get_current_configs()) == 3
+    assert len(policy_configs := policy.get_current_configs()) == 4
     assert all(
         config in policy_configs
         for config in [
@@ -338,6 +345,14 @@ def test_get_current_configs(policy: AllocationPolicy) -> None:
                 "params": {},
             },
             {
+                "name": "is_pardonable",
+                "type": "int",
+                "default": 1,
+                "description": "Toggles whether rejections from this policy can be pardoned when the cluster is idle.",
+                "value": 1,
+                "params": {},
+            },
+            {
                 "name": "max_threads",
                 "type": "int",
                 "default": 10,
@@ -354,7 +369,7 @@ def test_get_current_configs(policy: AllocationPolicy) -> None:
     )
     set_component_config(policy, config_key="is_enforced", value=0)
     set_component_config(policy, config_key="max_threads", value=4)
-    assert len(policy_configs := policy.get_current_configs()) == 4
+    assert len(policy_configs := policy.get_current_configs()) == 5
     assert {
         "name": "my_param_config",
         "type": "int",
@@ -446,6 +461,37 @@ def test_is_not_enforced() -> None:
     assert throttled_metrics[0].tags["policy_class"] == "ThrottleEverythingAllocationPolicy"
     assert throttled_metrics[0].tags["is_enforced"] == "True"
     assert throttled_metrics[1].tags["is_enforced"] == "False"
+
+
+@pytest.mark.redis_db
+def test_is_pardonable_overrides_can_run_when_idle() -> None:
+    reject_policy = RejectingEverythingAllocationPolicy(
+        StorageKey("some_storage"),
+        is_enforced=1,
+    )
+    tenant_ids: dict[str, int | str] = {
+        "organization_id": 123,
+        "referrer": "some_referrer",
+    }
+    idle = LoadInfo(cluster_load=1.0, concurrent_queries=1)
+    with mock.patch.object(LoadInfo, "is_idle", return_value=True):
+        assert reject_policy.get_quota_allowance(tenant_ids, "deadbeef").can_run is False
+        pardoned = reject_policy.get_quota_allowance(tenant_ids, "deadbeef", idle)
+    assert pardoned.can_run is True
+    assert pardoned.max_threads == reject_policy.max_threads
+    assert pardoned.max_bytes_to_read == 0
+    assert pardoned.explanation["idle_pardon"] == idle.to_dict()
+
+    pardoned_metrics = get_recorded_metric_calls(
+        "increment", "allocation_policy.db_request_pardoned"
+    )
+    assert pardoned_metrics is not None
+    assert len(pardoned_metrics) == 1
+    rejected_metrics = get_recorded_metric_calls(
+        "increment", "allocation_policy.db_request_rejected"
+    )
+    assert rejected_metrics is not None
+    assert len(rejected_metrics) == 1
 
 
 class TestComponentNameBackwardsCompatibility:
