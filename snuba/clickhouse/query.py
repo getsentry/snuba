@@ -1,6 +1,6 @@
 from collections.abc import Callable, Iterable, Sequence
 
-from snuba.query import LimitBy, OrderBy, SelectedExpression
+from snuba.query import LimitBy, OrderBy, SelectedExpression, WithFill
 from snuba.query import ProcessableQuery as AbstractQuery
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Expression as SnubaExpression
@@ -23,6 +23,8 @@ class Query(AbstractQuery[Table]):
         groupby: Sequence[Expression] | None = None,
         having: Expression | None = None,
         order_by: Sequence[OrderBy] | None = None,
+        interpolate: Sequence[Expression] | None = None,
+        with_fill: WithFill | None = None,
         limitby: LimitBy | None = None,
         limit: int | None = None,
         offset: int = 0,
@@ -41,6 +43,8 @@ class Query(AbstractQuery[Table]):
             groupby=groupby,
             having=having,
             order_by=order_by,
+            interpolate=interpolate,
+            with_fill=with_fill,
             limitby=limitby,
             limit=limit,
             offset=offset,

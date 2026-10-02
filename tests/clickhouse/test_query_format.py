@@ -14,7 +14,7 @@ from snuba.clickhouse.formatter.query import (
 )
 from snuba.clickhouse.query import Query
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
+from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression, WithFill
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -783,3 +783,31 @@ def test_join_format(
 ) -> None:
     assert str(clause.accept(JoinFormatter(ClickhouseExpressionFormatter))) == formatted_str
     assert clause.accept(JoinFormatter(ClickhouseExpressionFormatter)) == formatted_seq
+
+
+@pytest.mark.parametrize(
+    "set_interpolate, set_fill, expected_tail",
+    [
+        (False, True, " WITH FILL FROM toDateTime(1) TO toDateTime(10) STEP 5"),
+        (True, False, " WITH FILL INTERPOLATE (sum)"),
+        (
+            True,
+            True,
+            " WITH FILL FROM toDateTime(1) TO toDateTime(10) STEP 5 INTERPOLATE (sum)",
+        ),
+    ],
+)
+def test_format_orderby_fill(set_interpolate: bool, set_fill: bool, expected_tail: str) -> None:
+    query = Query(
+        Table("my_table", ColumnSet([]), storage_key=StorageKey("dontmatter")),
+        selected_columns=[SelectedExpression("sum", Column(None, None, "sum"))],
+        order_by=[OrderBy(OrderByDirection.ASC, Column(None, None, "time"))],
+    )
+    if set_interpolate:
+        query.set_interpolate([Column(None, None, "sum")])
+    if set_fill:
+        query.set_with_fill(
+            WithFill(f.toDateTime(literal(1)), f.toDateTime(literal(10)), literal(5))
+        )
+    sql = format_query(query).get_sql()
+    assert sql.endswith("ORDER BY time ASC" + expected_tail)

@@ -8,6 +8,7 @@ from typing import Any
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     DataPoint,
     TimeSeries,
@@ -21,6 +22,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKey,
     ExtrapolationMode,
+    InterpolationMode,
 )
 
 from snuba.attribution.appid import AppID
@@ -29,7 +31,7 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.downsampled_storage_tiers import Tier
-from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query import OrderBy, OrderByDirection, SelectedExpression, WithFill
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal
@@ -88,6 +90,23 @@ def _get_attribute_key_to_expression_function(
     return attribute_key_to_expression
 
 
+_FILL_SENTINEL = "__snuba_fill"
+
+
+def _expr_interpolation_mode(expr: ProtoExpression) -> InterpolationMode.ValueType:
+    if expr.HasField("conditional_aggregation"):
+        mode = expr.conditional_aggregation.interpolation_mode
+    elif expr.HasField("aggregation"):
+        mode = expr.aggregation.interpolation_mode
+    else:
+        mode = InterpolationMode.INTERPOLATION_MODE_NONE
+
+    if mode == InterpolationMode.INTERPOLATION_MODE_UNSPECIFIED:
+        return InterpolationMode.INTERPOLATION_MODE_NONE
+
+    return mode
+
+
 def _convert_result_timeseries(
     request: TimeSeriesRequest, data: list[dict[str, Any]]
 ) -> Iterable[TimeSeries]:
@@ -133,6 +152,11 @@ def _convert_result_timeseries(
 
     # the aggregations that we will include in the result
     aggregation_labels = {expr.label for expr in request.expressions}
+    interpolated_labels = {
+        expr.label: mode
+        for expr in request.expressions
+        if (mode := _expr_interpolation_mode(expr)) != InterpolationMode.INTERPOLATION_MODE_NONE
+    }
 
     group_by_labels = {attr.name for attr in request.group_by}
 
@@ -178,7 +202,9 @@ def _convert_result_timeseries(
             ] = row
 
     # Go through every possible time bucket in the query, if there's row data for it, fill in its data
-    # otherwise put a dummy datapoint in
+    # otherwise put a dummy datapoint in.
+    # INTERPOLATE with no previous value uses the column type default (NULL or 0), which is not LOCF.
+    seen_real: set[tuple[str, str]] = set()
     for bucket in time_buckets:
         for timeseries_key, timeseries in result_timeseries.items():
             row_data = result_timeseries_timestamp_to_row.get(timeseries_key, {}).get(
@@ -186,20 +212,32 @@ def _convert_result_timeseries(
             )
             if not row_data:
                 timeseries.data_points.append(DataPoint(data=0, data_present=False))
-            else:
-                extrapolation_context = ExtrapolationContext.from_row(timeseries.label, row_data)
-                if row_data.get(timeseries.label, None) is not None:
-                    timeseries.data_points.append(
-                        DataPoint(
-                            data=row_data[timeseries.label],
-                            data_present=True,
-                            avg_sampling_rate=extrapolation_context.average_sample_rate,
-                            sample_count=extrapolation_context.sample_count,
-                            reliability=extrapolation_context.reliability,
-                        )
+                continue
+            extrapolation_context = ExtrapolationContext.from_row(timeseries.label, row_data)
+            value = row_data.get(timeseries.label, None)
+            is_fill_row = bool(interpolated_labels) and not row_data.get(_FILL_SENTINEL)
+            is_fill = timeseries.label in interpolated_labels and is_fill_row
+            if is_fill and value is not None and timeseries_key in seen_real:
+                timeseries.data_points.append(
+                    DataPoint(
+                        data=value,
+                        data_present=False,
+                        interpolated=interpolated_labels[timeseries.label],
                     )
-                else:
-                    timeseries.data_points.append(DataPoint(data=0, data_present=False))
+                )
+            elif value is None or is_fill_row:
+                timeseries.data_points.append(DataPoint(data=0, data_present=False))
+            else:
+                seen_real.add(timeseries_key)
+                timeseries.data_points.append(
+                    DataPoint(
+                        data=value,
+                        data_present=True,
+                        avg_sampling_rate=extrapolation_context.average_sample_rate,
+                        sample_count=extrapolation_context.sample_count,
+                        reliability=extrapolation_context.reliability,
+                    )
+                )
 
     frc = FormulaReliabilityCalculator(request, data, time_buckets)
     for timeseries in result_timeseries.values():
@@ -372,6 +410,11 @@ def build_query(
         )
         for attr_key in request.group_by
     ]
+    interpolated_exprs = [
+        expr
+        for expr in request.expressions
+        if _expr_interpolation_mode(expr) != InterpolationMode.INTERPOLATION_MODE_NONE
+    ]
     item_type_conds = [f.equals(column("item_type"), request.meta.trace_item_type)]
 
     # Handle cross item queries by first getting trace IDs
@@ -382,40 +425,46 @@ def build_query(
         )
         additional_conditions.append(trace_id_in_subquery_condition(trace_ids_sql))
 
-    res = Query(
-        from_clause=entity,
-        selected_columns=[
-            # buckets time by granularity according to the start time of the request.
-            # time_slot = start_time + (((timestamp - start_time) // granularity) * granularity)
-            # Example:
-            #   start_time = 1001
-            #   end_time = 1901
-            #   granularity = 300
-            #   timestamps = [1201, 1002, 1302, 1400, 1700]
-            #   buckets = [1001, 1301, 1601] # end time not included because it would be filtered out by the request
-            SelectedExpression(
-                name="time",
-                expression=f.toDateTime(
-                    f.plus(
-                        request.meta.start_timestamp.seconds,
-                        f.multiply(
-                            f.intDiv(
-                                f.minus(
-                                    f.toUnixTimestamp(column("timestamp")),
-                                    request.meta.start_timestamp.seconds,
-                                ),
-                                request.granularity_secs,
-                            ),
-                            request.granularity_secs,
+    # buckets time by granularity according to the start time of the request.
+    # time_slot = start_time + (((timestamp - start_time) // granularity) * granularity)
+    # Example:
+    #   start_time = 1001
+    #   end_time = 1901
+    #   granularity = 300
+    #   timestamps = [1201, 1002, 1302, 1400, 1700]
+    #   buckets = [1001, 1301, 1601] # end time not included because it would be filtered out by the request
+    time_column = SelectedExpression(
+        name="time",
+        expression=f.toDateTime(
+            f.plus(
+                request.meta.start_timestamp.seconds,
+                f.multiply(
+                    f.intDiv(
+                        f.minus(
+                            f.toUnixTimestamp(column("timestamp")),
+                            request.meta.start_timestamp.seconds,
                         ),
+                        request.granularity_secs,
                     ),
-                    alias="time_slot",
+                    request.granularity_secs,
                 ),
             ),
-            *aggregation_columns,
-            *groupby_columns,
-            *additional_context_columns,
-        ],
+            alias="time_slot",
+        ),
+    )
+    selected_columns = [
+        time_column,
+        *aggregation_columns,
+        *groupby_columns,
+        *additional_context_columns,
+    ]
+    if interpolated_exprs:
+        selected_columns.append(
+            SelectedExpression(name=_FILL_SENTINEL, expression=f.count(alias=_FILL_SENTINEL))
+        )
+    res = Query(
+        from_clause=entity,
+        selected_columns=selected_columns,
         granularity=request.granularity_secs,
         condition=base_conditions_and(
             request.meta,
@@ -438,6 +487,15 @@ def build_query(
         ],
         order_by=[OrderBy(expression=column("time_slot"), direction=OrderByDirection.ASC)],
     )
+    if interpolated_exprs:
+        res.set_interpolate([column(expr.label) for expr in interpolated_exprs])
+        res.set_with_fill(
+            WithFill(
+                f.toDateTime(literal(request.meta.start_timestamp.seconds)),
+                f.toDateTime(literal(request.meta.end_timestamp.seconds)),
+                literal(request.granularity_secs),
+            )
+        )
     treeify_or_and_conditions(res)
     add_existence_check_to_map_attribute_reads(res)
     return res
@@ -508,6 +566,38 @@ def _enforce_no_duplicate_labels(request: TimeSeriesRequest) -> None:
         labels.add(agg.label)
 
 
+def _has_nested_interpolation(expr: ProtoExpression) -> bool:
+    if not expr.HasField("formula"):
+        return False
+    for child in (expr.formula.left, expr.formula.right):
+        if _expr_interpolation_mode(child) != InterpolationMode.INTERPOLATION_MODE_NONE:
+            return True
+        if _has_nested_interpolation(child):
+            return True
+    return False
+
+
+def _validate_interpolation(request: TimeSeriesRequest) -> None:
+    request = _convert_aggregations_to_expressions(request)
+    interpolating = any(
+        _expr_interpolation_mode(expr) != InterpolationMode.INTERPOLATION_MODE_NONE
+        for expr in request.expressions
+    )
+    if any(_has_nested_interpolation(expr) for expr in request.expressions):
+        raise BadSnubaRPCRequestException(
+            "interpolation is not supported on non-aggregation expressions"
+        )
+    if not interpolating:
+        return
+    if (
+        request.meta.downsampled_storage_config.mode
+        == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME
+    ):
+        raise BadSnubaRPCRequestException("interpolation is not supported with flextime routing")
+    if request.group_by:
+        raise BadSnubaRPCRequestException("interpolation is not supported with group_by")
+
+
 def _validate_time_buckets(request: TimeSeriesRequest) -> None:
     if request.meta.start_timestamp.seconds > request.meta.end_timestamp.seconds:
         raise BadSnubaRPCRequestException("start timestamp is after end timestamp")
@@ -566,6 +656,7 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
     def _execute(self, in_msg: TimeSeriesRequest) -> TimeSeriesResponse:
         _enforce_no_duplicate_labels(in_msg)
         _validate_time_buckets(in_msg)
+        _validate_interpolation(in_msg)
 
         if in_msg.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
             raise BadSnubaRPCRequestException(

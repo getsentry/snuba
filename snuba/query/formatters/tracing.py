@@ -49,7 +49,21 @@ def format_query(
     orderbys = ",\n".join(
         [f"{e.expression.accept(eformatter)} {e.direction.value}" for e in query.get_orderby()]
     )
-    orderby_str = f"ORDER_BY\n{orderbys}" if orderbys else ""
+    extra = ""
+    interpolate = query.get_interpolate()
+    fill = query.get_with_fill()
+    if fill is not None or interpolate:
+        inline = StringifyVisitor(level=0, initial_indent=0)
+        extra = " WITH FILL"
+        if fill is not None:
+            extra += (
+                f" FROM {fill.from_expr.accept(inline)}"
+                f" TO {fill.to_expr.accept(inline)}"
+                f" STEP {fill.step.accept(inline)}"
+            )
+        if interpolate:
+            extra += f" INTERPOLATE ({', '.join(e.accept(inline) for e in interpolate)})"
+    orderby_str = f"ORDER_BY\n{orderbys}{extra}" if orderbys else ""
 
     str_list = [select_str, *from_strs, groupby_str, orderby_str]
 
