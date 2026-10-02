@@ -215,7 +215,8 @@ def _convert_result_timeseries(
                 continue
             extrapolation_context = ExtrapolationContext.from_row(timeseries.label, row_data)
             value = row_data.get(timeseries.label, None)
-            is_fill = timeseries.label in interpolated_labels and not row_data.get(_FILL_SENTINEL)
+            is_fill_row = bool(interpolated_labels) and not row_data.get(_FILL_SENTINEL)
+            is_fill = timeseries.label in interpolated_labels and is_fill_row
             if is_fill and value is not None and timeseries_key in seen_real:
                 timeseries.data_points.append(
                     DataPoint(
@@ -224,7 +225,7 @@ def _convert_result_timeseries(
                         interpolated=interpolated_labels[timeseries.label],
                     )
                 )
-            elif value is None or is_fill or extrapolation_context.sample_count == 0:
+            elif value is None or is_fill_row:
                 timeseries.data_points.append(DataPoint(data=0, data_present=False))
             else:
                 seen_real.add(timeseries_key)

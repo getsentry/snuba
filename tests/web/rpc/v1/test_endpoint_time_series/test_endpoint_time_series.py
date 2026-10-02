@@ -53,6 +53,7 @@ from snuba.web.rpc.proto_visitor import (
 )
 from snuba.web.rpc.v1.endpoint_time_series import (
     EndpointTimeSeries,
+    _convert_result_timeseries,
     _validate_interpolation,
     _validate_time_buckets,
 )
@@ -2731,3 +2732,42 @@ class TestUtils:
         )
         with pytest.raises(BadSnubaRPCRequestException, match="group_by"):
             _validate_interpolation(message)
+
+    def test_formula_datapoint_present_without_sample_count(self) -> None:
+        # formulas have no count column; sample_count is 0 until FRC runs
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp()) + 60),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            expressions=[
+                Expression(
+                    formula=Expression.BinaryFormula(
+                        op=Expression.BinaryFormula.OP_ADD,
+                        left=Expression(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_SUM,
+                                key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                                label="left",
+                            )
+                        ),
+                        right=Expression(literal=Literal(val_double=0)),
+                    ),
+                    label="sum_plus_zero",
+                ),
+            ],
+            granularity_secs=15,
+        )
+        series = list(
+            _convert_result_timeseries(
+                message,
+                [{"time": BASE_TIME, "sum_plus_zero": 42.0, "sum_plus_zero.left": 42.0}],
+            )
+        )
+        assert series[0].data_points[0].data_present
+        assert series[0].data_points[0].data == 42.0
