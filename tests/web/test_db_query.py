@@ -1420,10 +1420,7 @@ def test_idle_pardon_allows_rejected_query() -> None:
     details = stats["quota_allowance"]["details"]["_RejectAllPolicy"]
     assert details["can_run"] is True
     assert details["max_threads"] == 10
-    assert details["explanation"]["idle_pardon"] == {
-        "cluster_load": 1.0,
-        "concurrent_queries": 1,
-    }
+    assert details["explanation"]["idle_pardon"] == idle.to_dict()
     quota = query_settings.get_resource_quota()
     assert quota is not None
     assert quota.max_threads == 10

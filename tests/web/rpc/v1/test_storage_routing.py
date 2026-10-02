@@ -613,10 +613,10 @@ def test_routing_strategy_idle_pardon_allows_rejected_query() -> None:
         pardoned = decision.routing_context.allocation_policies_recommendations[
             "IdlePardonRejectionPolicy"
         ]
-        assert pardoned.explanation["idle_pardon"] == {
-            "cluster_load": 1.0,
-            "concurrent_queries": 1,
-        }
+        assert (
+            pardoned.explanation["idle_pardon"]
+            == LoadInfo(cluster_load=1.0, concurrent_queries=1).to_dict()
+        )
 
 
 @pytest.mark.redis_db

@@ -466,10 +466,7 @@ def test_is_pardonable_overrides_can_run_when_idle() -> None:
     assert pardoned.can_run is True
     assert pardoned.max_threads == reject_policy.max_threads
     assert pardoned.max_bytes_to_read == 0
-    assert pardoned.explanation["idle_pardon"] == {
-        "cluster_load": 1.0,
-        "concurrent_queries": 1,
-    }
+    assert pardoned.explanation["idle_pardon"] == idle.to_dict()
 
     pardoned_metrics = get_recorded_metric_calls(
         "increment", "allocation_policy.db_request_pardoned"
