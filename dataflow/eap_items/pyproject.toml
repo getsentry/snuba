@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eap-items-dataflow"
+version = "0.1.0"
+description = "Dataflow pipeline: Kafka snuba-items (TraceItem protobuf) -> BigQuery eap.items"
+requires-python = ">=3.11,<3.12"
+# Keep these in lockstep with requirements.txt and the Dockerfile base image tag.
+# apache-beam 2.76+ pulls protobuf>=6 (via google-cloud-bigtable) which conflicts
+# with sentry-protos (protobuf<6), so 2.75.0 is the newest usable release.
+dependencies = [
+  "apache-beam[gcp]==2.75.0",
+  "sentry-protos==0.76.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
