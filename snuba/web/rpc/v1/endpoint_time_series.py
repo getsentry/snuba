@@ -424,45 +424,46 @@ def build_query(
         )
         additional_conditions.append(trace_id_in_subquery_condition(trace_ids_sql))
 
-    res = Query(
-        from_clause=entity,
-        selected_columns=[
-            # buckets time by granularity according to the start time of the request.
-            # time_slot = start_time + (((timestamp - start_time) // granularity) * granularity)
-            # Example:
-            #   start_time = 1001
-            #   end_time = 1901
-            #   granularity = 300
-            #   timestamps = [1201, 1002, 1302, 1400, 1700]
-            #   buckets = [1001, 1301, 1601] # end time not included because it would be filtered out by the request
-            SelectedExpression(
-                name="time",
-                expression=f.toDateTime(
-                    f.plus(
-                        request.meta.start_timestamp.seconds,
-                        f.multiply(
-                            f.intDiv(
-                                f.minus(
-                                    f.toUnixTimestamp(column("timestamp")),
-                                    request.meta.start_timestamp.seconds,
-                                ),
-                                request.granularity_secs,
-                            ),
-                            request.granularity_secs,
+    # buckets time by granularity according to the start time of the request.
+    # time_slot = start_time + (((timestamp - start_time) // granularity) * granularity)
+    # Example:
+    #   start_time = 1001
+    #   end_time = 1901
+    #   granularity = 300
+    #   timestamps = [1201, 1002, 1302, 1400, 1700]
+    #   buckets = [1001, 1301, 1601] # end time not included because it would be filtered out by the request
+    time_column = SelectedExpression(
+        name="time",
+        expression=f.toDateTime(
+            f.plus(
+                request.meta.start_timestamp.seconds,
+                f.multiply(
+                    f.intDiv(
+                        f.minus(
+                            f.toUnixTimestamp(column("timestamp")),
+                            request.meta.start_timestamp.seconds,
                         ),
+                        request.granularity_secs,
                     ),
-                    alias="time_slot",
+                    request.granularity_secs,
                 ),
             ),
-            *aggregation_columns,
-            *groupby_columns,
-            *additional_context_columns,
-            *(
-                [SelectedExpression(name=_FILL_SENTINEL, expression=f.count(alias=_FILL_SENTINEL))]
-                if interpolated_exprs
-                else []
-            ),
-        ],
+            alias="time_slot",
+        ),
+    )
+    selected_columns = [
+        time_column,
+        *aggregation_columns,
+        *groupby_columns,
+        *additional_context_columns,
+    ]
+    if interpolated_exprs:
+        selected_columns.append(
+            SelectedExpression(name=_FILL_SENTINEL, expression=f.count(alias=_FILL_SENTINEL))
+        )
+    res = Query(
+        from_clause=entity,
+        selected_columns=selected_columns,
         granularity=request.granularity_secs,
         condition=base_conditions_and(
             request.meta,
@@ -576,16 +577,10 @@ def _has_nested_interpolation(expr: ProtoExpression) -> bool:
 
 
 def _validate_interpolation(request: TimeSeriesRequest) -> None:
+    request = _convert_aggregations_to_expressions(request)
     interpolating = any(
         _expr_interpolation_mode(expr) != InterpolationMode.INTERPOLATION_MODE_NONE
         for expr in request.expressions
-    ) or any(
-        agg.interpolation_mode
-        not in (
-            InterpolationMode.INTERPOLATION_MODE_UNSPECIFIED,
-            InterpolationMode.INTERPOLATION_MODE_NONE,
-        )
-        for agg in request.aggregations
     )
     if any(_has_nested_interpolation(expr) for expr in request.expressions):
         raise BadSnubaRPCRequestException(
