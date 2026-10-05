@@ -83,6 +83,15 @@ def _bucket(value: int, buckets: tuple[tuple[int, str], ...], overflow: str) -> 
     return overflow
 
 
+def _trace_item_type_name(meta: RequestMeta | None) -> str:
+    if meta is None:
+        return "none"
+    try:
+        return get_trace_item_type_name(meta.trace_item_type)
+    except ValueError:
+        return "unknown"
+
+
 def _bool_tag(value: bool) -> str:
     return "true" if value else "false"
 
@@ -410,10 +419,7 @@ def extract_query_info(
             tags = _default_shape_tags(query_type)
 
         meta: RequestMeta | None = getattr(in_msg, "meta", None)
-        if meta is None:
-            tags["trace_item_type"] = "none"
-        else:
-            tags["trace_item_type"] = get_trace_item_type_name(meta.trace_item_type)
+        tags["trace_item_type"] = _trace_item_type_name(meta)
         return tags
     except Exception:
         # Categorization must never break the request path.
