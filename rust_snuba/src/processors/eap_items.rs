@@ -147,6 +147,7 @@ fn process_eap_item(
         TraceItemType::Preprod => "preprod",
         TraceItemType::UserSession => "sessions",
         TraceItemType::ProcessingError => "processing_errors",
+        TraceItemType::WorkflowEngineEvaluation => "workflow_engine_evaluations",
         TraceItemType::Unspecified => "null",
     }
     .to_string();

@@ -1641,7 +1641,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.4.10",
+ "socket2 0.5.6",
  "tokio",
  "tower-service",
  "tracing",
@@ -3973,9 +3973,9 @@ dependencies = [
 
 [[package]]
 name = "sentry_protos"
-version = "0.60.0"
+version = "0.80.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83106924f9890f66ba0800e77323d0e04a108f16fdfc79480700abc6be1eb712"
+checksum = "34363839d2a495d3d21584efb5b02320bcefa0bbf32e2d5ac21a842a2030df3b"
 dependencies = [
  "prost",
  "prost-types",
@@ -4368,7 +4368,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand 2.3.0",
- "getrandom 0.3.4",
+ "getrandom 0.4.2",
  "once_cell",
  "rustix 1.1.4",
  "windows-sys 0.61.2",
