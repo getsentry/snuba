@@ -1,6 +1,6 @@
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
-from typing import Final, NamedTuple, cast
+from typing import Final, NamedTuple
 
 from sentry_conventions.attributes import ATTRIBUTE_METADATA
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
@@ -396,35 +396,16 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
     )
 
 
-def get_trace_item_type_name(item_type: int) -> str:
-    """
-    Get the string name for a TraceItemType enum value.
-
-    Uses the protobuf enum's Name() method and strips the "TRACE_ITEM_TYPE_" prefix,
-    then converts to lowercase to match storage configuration naming conventions.
-
-    Args:
-        item_type: The integer value of the TraceItemType enum
-
-    Returns:
-        The string name used in storage configurations (e.g., "occurrence", "span")
-
-    Raises:
-        ValueError: If the item_type is not a valid TraceItemType enum value
-    """
+def get_trace_item_type_name(item_type: TraceItemType.ValueType) -> str:
     try:
-        # Get the full protobuf enum name (e.g., "TRACE_ITEM_TYPE_SPAN")
-        # Cast to TraceItemType.ValueType to satisfy type checker
-        full_name = TraceItemType.Name(cast("TraceItemType.ValueType", item_type))
+        full_name = TraceItemType.Name(item_type)
 
-        # Strip the "TRACE_ITEM_TYPE_" prefix and convert to lowercase
         prefix = "TRACE_ITEM_TYPE_"
         if not full_name.startswith(prefix):
             raise ValueError(f"Unexpected TraceItemType name format: {full_name}")
 
         return full_name[len(prefix) :].lower()
     except ValueError as e:
-        # This happens when item_type is not a valid enum value
         raise ValueError(
             f"Unknown TraceItemType value: {item_type}. Must be a valid TraceItemType enum value."
         ) from e
