@@ -91,7 +91,11 @@ def _request() -> TimeSeriesRequest:
 
 def _indexed_columns(index_start: int) -> Any:
     return {
-        "metric": {"sentry.metric_name": {"index_name": "indexed_name", "index_start": index_start}}
+        "sentry.metric_name": {
+            "item_type": "metric",
+            "indexed_column_name": "indexed_name",
+            "indexed_start_timestamp": index_start,
+        }
     }
 
 

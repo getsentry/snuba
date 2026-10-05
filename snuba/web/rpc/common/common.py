@@ -1010,6 +1010,7 @@ def _any_attribute_filter_to_expression(
 
 
 class IndexedColumn(TypedDict):
+    item_type: str
     indexed_column_name: str
     indexed_start_timestamp: int
 
@@ -1017,21 +1018,34 @@ class IndexedColumn(TypedDict):
 IndexedColumns = dict[str, IndexedColumn]
 
 # Indexed columns can't be backfilled, so each one only holds data from its
-# indexed_start_timestamp onwards. Set per region in options-automator.
+# indexed_start_timestamp onwards. An indexed column can hold a different attribute
+# per item type (indexed_name is sentry.op for spans, sentry.metric_name for
+# metrics), so each entry only applies to its own item_type. Set per region in
+# options-automator.
 INDEXED_COLUMNS_OPTION = "indexed_columns"
 
 
+def _item_type_name(item_type: TraceItemType.ValueType) -> str:
+    """TRACE_ITEM_TYPE_SPAN -> span, matching the item_type names used in config."""
+    return TraceItemType.Name(item_type).removeprefix("TRACE_ITEM_TYPE_").lower()
+
+
 def indexed_column_for(
-    start_timestamp: ProtobufTimestamp | None, unindexed_column: str
+    start_timestamp: ProtobufTimestamp | None,
+    item_type: TraceItemType.ValueType,
+    unindexed_column: str,
 ) -> str | None:
-    """Indexed column to read instead of ``unindexed_column``, or None if it has no
-    index or the index isn't populated for the whole request time range."""
+    """Indexed column to read instead of ``unindexed_column`` for ``item_type``, or
+    None if it has no index or the index isn't populated for the whole request time
+    range."""
     if start_timestamp is None:
         return None
     indexed_columns = cast(
         IndexedColumns, get_option(INDEXED_COLUMNS_OPTION, cast(OptionValue, {}))
     )
     if (indexed_column := indexed_columns.get(unindexed_column)) is None:
+        return None
+    if indexed_column.get("item_type") != _item_type_name(item_type):
         return None
     if start_timestamp.seconds < indexed_column.get("indexed_start_timestamp", 2**63 - 1):
         return None
@@ -1172,7 +1186,7 @@ def trace_item_filters_to_expression(
             k.type == AttributeKey.Type.TYPE_STRING
             and not v.is_null
             and not item_filter.comparison_filter.ignore_case
-            and (index_name := indexed_column_for(start_timestamp, k.name)) is not None
+            and (index_name := indexed_column_for(start_timestamp, item_type, k.name)) is not None
         ):
             if op == ComparisonFilter.OP_EQUALS and v.val_str:
                 return f.equals(column(index_name), v_expression)

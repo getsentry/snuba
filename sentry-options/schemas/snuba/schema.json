@@ -843,6 +843,9 @@
       "additionalProperties": {
         "type": "object",
         "properties": {
+          "item_type": {
+            "type": "string"
+          },
           "indexed_column_name": {
             "type": "string"
           },
@@ -852,7 +855,7 @@
         }
       },
       "default": {},
-      "description": "Dict mapping an unindexed eap_items column or attribute (e.g. sentry.op) to the bloom-filter-indexed column holding a copy of it. Indexed columns can't be backfilled, so indexed_start_timestamp is the Unix timestamp from which the indexed column is fully populated. Equality and IN filters read indexed_column_name instead only for requests starting at or after it. Never set it before the column was fully populated, otherwise older rows are silently dropped. Empty (the default) disables the rewrite."
+      "description": "Dict mapping an unindexed eap_items column or attribute (e.g. sentry.op) to the bloom-filter-indexed column holding a copy of it for item_type (span, metric, log, ...). One indexed column can hold a different attribute per item type, so filters on the attribute for any other item type keep reading the attribute map. Indexed columns can't be backfilled, so indexed_start_timestamp is the Unix timestamp from which the indexed column is fully populated. Equality and IN filters read indexed_column_name instead only for requests starting at or after it. Never set it before the column was fully populated, otherwise older rows are silently dropped. Empty (the default) disables the rewrite."
     },
     "eap_items_indexed_name_start_timestamp": {
       "type": "integer",
