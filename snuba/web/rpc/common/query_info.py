@@ -30,11 +30,13 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     Column,
     TraceItemTableRequest,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ComparisonFilter,
     TraceItemFilter,
 )
+
+from snuba.protos.common import get_trace_item_type_name
 
 # Keep every tag value as a short, stable string. Prefer buckets over raw counts
 # so Datadog/Sentry metric cardinality stays bounded.
@@ -79,20 +81,6 @@ def _bucket(value: int, buckets: tuple[tuple[int, str], ...], overflow: str) -> 
         if value <= upper:
             return label
     return overflow
-
-
-def _trace_item_type_name(meta: RequestMeta | None) -> str:
-    if meta is None:
-        return "none"
-    try:
-        name = TraceItemType.Name(meta.trace_item_type)
-    except ValueError:
-        return "unknown"
-    # Strip the common prefix so tags stay short: TRACE_ITEM_TYPE_SPAN -> span
-    prefix = "TRACE_ITEM_TYPE_"
-    if name.startswith(prefix):
-        return name[len(prefix) :].lower()
-    return name.lower()
 
 
 def _bool_tag(value: bool) -> str:
@@ -422,7 +410,10 @@ def extract_query_info(
             tags = _default_shape_tags(query_type)
 
         meta: RequestMeta | None = getattr(in_msg, "meta", None)
-        tags["trace_item_type"] = _trace_item_type_name(meta)
+        if meta is None:
+            tags["trace_item_type"] = "none"
+        else:
+            tags["trace_item_type"] = get_trace_item_type_name(meta.trace_item_type)
         return tags
     except Exception:
         # Categorization must never break the request path.

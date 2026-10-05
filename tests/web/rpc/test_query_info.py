@@ -320,6 +320,14 @@ def test_metric_tags_are_low_cardinality_subset() -> None:
         assert full[key] == value
 
 
+def test_invalid_trace_item_type_is_unknown() -> None:
+    request = TraceItemTableRequest(
+        meta=_meta(item_type=999),  # type: ignore[arg-type]
+        columns=[Column(key=_attr())],
+    )
+    assert extract_query_info(request)["trace_item_type"] == "unknown"
+
+
 def test_unknown_endpoint_defaults() -> None:
     # A bare RequestMeta isn't a full request type; pass a message without shape.
     info = extract_query_info(_meta(), endpoint_name="EndpointGetTrace")
