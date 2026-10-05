@@ -2,9 +2,11 @@ import math
 from collections.abc import Callable, Iterable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
-from typing import Any, TypeVar
+from typing import Any, TypedDict, TypeVar, cast
 
 from google.protobuf.message import Message as ProtobufMessage
+from google.protobuf.timestamp_pb2 import Timestamp as ProtobufTimestamp
+from sentry_options import OptionValue
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
@@ -1007,22 +1009,33 @@ def _any_attribute_filter_to_expression(
     return positive_expr
 
 
-_INDEXED_NAME_KEY_BY_ITEM_TYPE: dict[TraceItemType.ValueType, str] = {
-    TraceItemType.TRACE_ITEM_TYPE_SPAN: "sentry.op",
-    TraceItemType.TRACE_ITEM_TYPE_METRIC: "sentry.metric_name",
-}
-
-# Rows written before this cutoff may have an empty indexed_name.
-INDEXED_NAME_START_TIMESTAMP_OPTION = "eap_items_indexed_name_start_timestamp"
-# Fail closed if the cutoff can't be read.
-_INDEXED_NAME_START_TIMESTAMP_FALLBACK = 2**63 - 1
+class IndexedColumn(TypedDict):
+    indexed_column_name: str
+    indexed_start_timestamp: int
 
 
-def use_indexed_name_for_request(meta: RequestMeta) -> bool:
-    start_timestamp = get_option(
-        INDEXED_NAME_START_TIMESTAMP_OPTION, _INDEXED_NAME_START_TIMESTAMP_FALLBACK
+IndexedColumns = dict[str, IndexedColumn]
+
+# Indexed columns can't be backfilled, so each one only holds data from its
+# indexed_start_timestamp onwards. Set per region in options-automator.
+INDEXED_COLUMNS_OPTION = "indexed_columns"
+
+
+def indexed_column_for(
+    start_timestamp: ProtobufTimestamp | None, unindexed_column: str
+) -> str | None:
+    """Indexed column to read instead of ``unindexed_column``, or None if it has no
+    index or the index isn't populated for the whole request time range."""
+    if start_timestamp is None:
+        return None
+    indexed_columns = cast(
+        IndexedColumns, get_option(INDEXED_COLUMNS_OPTION, cast(OptionValue, {}))
     )
-    return meta.HasField("start_timestamp") and meta.start_timestamp.seconds >= start_timestamp
+    if (indexed_column := indexed_columns.get(unindexed_column)) is None:
+        return None
+    if start_timestamp.seconds < indexed_column.get("indexed_start_timestamp", 2**63 - 1):
+        return None
+    return indexed_column.get("indexed_column_name")
 
 
 def trace_item_filters_to_expression(
@@ -1030,7 +1043,7 @@ def trace_item_filters_to_expression(
     item_filter: TraceItemFilter,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
     membership_as_has: bool = False,
-    use_indexed_name: bool = False,
+    start_timestamp: ProtobufTimestamp | None = None,
 ) -> Expression:
     """
     Trace Item Filters are things like (span.id=12345 AND start_timestamp >= "june 4th, 2024")
@@ -1044,7 +1057,8 @@ def trace_item_filters_to_expression(
         ``IN`` set leaks an unstable ``__set_*`` identifier into the result-block column
         name and breaks mixed-version distributed reads (see ``_in_or_has``). Leave the
         default for WHERE clauses, where the prepared ``IN`` set drives pruning.
-    :param use_indexed_name: see ``use_indexed_name_for_request``.
+    :param start_timestamp: request start; enables reading indexed columns, see
+        ``indexed_column_for``.
     :return:
 
     Array predicates always read the typed ``attributes_array_*`` map columns: an
@@ -1062,7 +1076,7 @@ def trace_item_filters_to_expression(
                 filters[0],
                 attribute_key_to_expression,
                 membership_as_has,
-                use_indexed_name,
+                start_timestamp,
             )
         return and_cond(
             *(
@@ -1071,7 +1085,7 @@ def trace_item_filters_to_expression(
                     x,
                     attribute_key_to_expression,
                     membership_as_has,
-                    use_indexed_name,
+                    start_timestamp,
                 )
                 for x in filters
             )
@@ -1087,7 +1101,7 @@ def trace_item_filters_to_expression(
                 filters[0],
                 attribute_key_to_expression,
                 membership_as_has,
-                use_indexed_name,
+                start_timestamp,
             )
         return or_cond(
             *(
@@ -1096,7 +1110,7 @@ def trace_item_filters_to_expression(
                     x,
                     attribute_key_to_expression,
                     membership_as_has,
-                    use_indexed_name,
+                    start_timestamp,
                 )
                 for x in filters
             )
@@ -1113,7 +1127,7 @@ def trace_item_filters_to_expression(
                     filters[0],
                     attribute_key_to_expression,
                     membership_as_has,
-                    use_indexed_name,
+                    start_timestamp,
                 )
             )
         return not_cond(
@@ -1124,7 +1138,7 @@ def trace_item_filters_to_expression(
                         x,
                         attribute_key_to_expression,
                         membership_as_has,
-                        use_indexed_name,
+                        start_timestamp,
                     )
                     for x in filters
                 )
@@ -1155,17 +1169,16 @@ def trace_item_filters_to_expression(
             v_expression = _attribute_value_to_expression(v)
 
         if (
-            use_indexed_name
-            and k.type == AttributeKey.Type.TYPE_STRING
-            and k.name == _INDEXED_NAME_KEY_BY_ITEM_TYPE.get(item_type)
+            k.type == AttributeKey.Type.TYPE_STRING
             and not v.is_null
             and not item_filter.comparison_filter.ignore_case
+            and (index_name := indexed_column_for(start_timestamp, k.name)) is not None
         ):
             if op == ComparisonFilter.OP_EQUALS and v.val_str:
-                return f.equals(column("indexed_name"), v_expression)
+                return f.equals(column(index_name), v_expression)
             values = v.val_str_array.values
             if op == ComparisonFilter.OP_IN and values and "" not in values:
-                return _in_or_has(column("indexed_name"), v_expression, as_has=membership_as_has)
+                return _in_or_has(column(index_name), v_expression, as_has=membership_as_has)
 
         # `sentry.timestamp` is a normalized column that `attribute_key_to_expression`
         # maps to `CAST(timestamp, 'Float64')`. Wrapping the primary-key/partition

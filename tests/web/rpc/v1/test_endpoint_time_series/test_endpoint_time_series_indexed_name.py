@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -23,7 +24,7 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.rpc.common.common import INDEXED_NAME_START_TIMESTAMP_OPTION
+from snuba.web.rpc.common.common import INDEXED_COLUMNS_OPTION
 from snuba.web.rpc.v1.endpoint_time_series import EndpointTimeSeries
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -88,6 +89,12 @@ def _request() -> TimeSeriesRequest:
     )
 
 
+def _indexed_columns(index_start: int) -> Any:
+    return {
+        "metric": {"sentry.metric_name": {"index_name": "indexed_name", "index_start": index_start}}
+    }
+
+
 def _total(response: TimeSeriesResponse) -> float:
     return float(sum(dp.data for ts in response.result_timeseries for dp in ts.data_points))
 
@@ -98,10 +105,10 @@ class TestTimeSeriesIndexedName(BaseApiTest):
     def test_indexed_name_rewrite_is_result_preserving(self) -> None:
         _store_metrics()
 
-        with override_options("snuba", {INDEXED_NAME_START_TIMESTAMP_OPTION: 2**62}):
+        with override_options("snuba", {INDEXED_COLUMNS_OPTION: _indexed_columns(2**62)}):
             disabled = EndpointTimeSeries().execute(_request())
 
-        with override_options("snuba", {INDEXED_NAME_START_TIMESTAMP_OPTION: 0}):
+        with override_options("snuba", {INDEXED_COLUMNS_OPTION: _indexed_columns(0)}):
             enabled = EndpointTimeSeries().execute(_request())
 
         assert _total(disabled) == float(MATCHING_COUNT)

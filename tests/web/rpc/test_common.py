@@ -1,5 +1,6 @@
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -57,18 +58,18 @@ from snuba.query.expressions import (
 from snuba.query.logical import Query
 from snuba.web import QueryException
 from snuba.web.rpc.common.common import (
-    INDEXED_NAME_START_TIMESTAMP_OPTION,
+    INDEXED_COLUMNS_OPTION,
     _any_attribute_filter_to_expression,
     _comparison_can_match_column_default,
     add_existence_check_to_map_attribute_reads,
     attribute_key_to_expression,
     dedupe_and_conditions,
+    indexed_column_for,
     next_monday,
     prev_monday,
     semver_sort_key,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
-    use_indexed_name_for_request,
     use_sampling_factor,
 )
 from snuba.web.rpc.common.exceptions import (
@@ -1990,36 +1991,48 @@ class TestAnyAttributeFilterOption:
         assert result.value is True
 
 
-class TestIndexedNameRedirect:
-    def test_requires_time_range(self) -> None:
-        with override_options("snuba", {INDEXED_NAME_START_TIMESTAMP_OPTION: 1000}):
-            for org_id in (42, 43):
-                assert use_indexed_name_for_request(
-                    RequestMeta(organization_id=org_id, start_timestamp=Timestamp(seconds=1000))
-                )
-                assert not use_indexed_name_for_request(
-                    RequestMeta(organization_id=org_id, start_timestamp=Timestamp(seconds=999))
-                )
-                assert not use_indexed_name_for_request(RequestMeta(organization_id=org_id))
+def _indexed_columns_config(op_start: int = 1000, metric_start: int = 1000) -> dict[str, Any]:
+    return {
+        "sentry.op": {"indexed_column_name": "indexed_name", "indexed_start_timestamp": op_start},
+        "sentry.metric_name": {
+            "indexed_column_name": "indexed_name",
+            "indexed_start_timestamp": metric_start,
+        },
+    }
 
-    def test_start_timestamp_uses_schema_default(self) -> None:
-        cutoff = 1790121600
-        assert use_indexed_name_for_request(
-            RequestMeta(organization_id=42, start_timestamp=Timestamp(seconds=cutoff))
-        )
-        assert not use_indexed_name_for_request(
-            RequestMeta(organization_id=42, start_timestamp=Timestamp(seconds=cutoff - 1))
-        )
 
-    def test_unreadable_start_timestamp_disables_rewrite(self) -> None:
+class TestIndexedColumnFor:
+    def test_requires_start_at_or_after_indexed_start_timestamp(self) -> None:
+        with override_options("snuba", {INDEXED_COLUMNS_OPTION: _indexed_columns_config()}):
+            assert indexed_column_for(Timestamp(seconds=1000), "sentry.op") == "indexed_name"
+            assert indexed_column_for(Timestamp(seconds=999), "sentry.op") is None
+            assert indexed_column_for(RequestMeta().start_timestamp, "sentry.op") is None
+
+    def test_each_column_has_its_own_start_timestamp(self) -> None:
+        config = _indexed_columns_config(op_start=1000, metric_start=2000)
+        with override_options("snuba", {INDEXED_COLUMNS_OPTION: config}):
+            assert indexed_column_for(Timestamp(seconds=1500), "sentry.op") == "indexed_name"
+            assert indexed_column_for(Timestamp(seconds=1500), "sentry.metric_name") is None
+            assert (
+                indexed_column_for(Timestamp(seconds=2000), "sentry.metric_name") == "indexed_name"
+            )
+
+    def test_unconfigured_column_not_indexed(self) -> None:
+        with override_options("snuba", {INDEXED_COLUMNS_OPTION: _indexed_columns_config()}):
+            assert indexed_column_for(Timestamp(seconds=1000), "sentry.name") is None
+
+    def test_schema_default_disables_rewrite(self) -> None:
+        assert indexed_column_for(Timestamp(seconds=2_000_000_000), "sentry.op") is None
+
+    def test_unreadable_option_disables_rewrite(self) -> None:
         def fake_get_option(key: str, default: object) -> object:
             return default
 
         with mock.patch("snuba.web.rpc.common.common.get_option", side_effect=fake_get_option):
-            assert not use_indexed_name_for_request(
-                RequestMeta(organization_id=42, start_timestamp=Timestamp(seconds=2_000_000_000))
-            )
+            assert indexed_column_for(Timestamp(seconds=2_000_000_000), "sentry.op") is None
 
+
+class TestIndexedColumnsRedirect:
     def _filter(
         self,
         name: str = "sentry.op",
@@ -2039,13 +2052,23 @@ class TestIndexedNameRedirect:
     def _reads_indexed_name(
         self,
         item_filter: TraceItemFilter,
-        use_indexed_name: bool = True,
+        config: Any = None,
         item_type: TraceItemType.ValueType = TraceItemType.TRACE_ITEM_TYPE_SPAN,
+        index_name: str = "indexed_name",
+        start_timestamp: Timestamp | None = None,
     ) -> bool:
-        expr = trace_item_filters_to_expression(
-            item_type, item_filter, attribute_key_to_expression, use_indexed_name=use_indexed_name
-        )
-        reads_column = "indexed_name" in _collect_column_names(expr)
+        if config is None:
+            config = _indexed_columns_config()
+        with override_options("snuba", {INDEXED_COLUMNS_OPTION: config}):
+            expr = trace_item_filters_to_expression(
+                item_type,
+                item_filter,
+                attribute_key_to_expression,
+                start_timestamp=start_timestamp
+                if start_timestamp is not None
+                else Timestamp(seconds=1000),
+            )
+        reads_column = index_name in _collect_column_names(expr)
         reads_bucket = "arrayElement" in _collect_function_names(expr)
         assert reads_column != reads_bucket, f"want exactly one read path, got {expr}"
         return reads_column
@@ -2068,7 +2091,20 @@ class TestIndexedNameRedirect:
         )
 
     def test_not_redirected_when_not_enabled(self) -> None:
-        assert not self._reads_indexed_name(self._filter(), use_indexed_name=False)
+        assert not self._reads_indexed_name(self._filter(), config={})
+
+    def test_not_redirected_before_index_start(self) -> None:
+        assert not self._reads_indexed_name(self._filter(), start_timestamp=Timestamp(seconds=999))
+
+    def test_redirected_to_configured_column(self) -> None:
+        assert self._reads_indexed_name(
+            self._filter(name="sentry.body"),
+            config={
+                "sentry.body": {"indexed_column_name": "indexed_body", "indexed_start_timestamp": 0}
+            },
+            item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+            index_name="indexed_body",
+        )
 
     def test_not_redirected_for_other_key(self) -> None:
         assert not self._reads_indexed_name(self._filter(name="sentry.metric_name"))

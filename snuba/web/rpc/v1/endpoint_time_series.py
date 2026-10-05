@@ -54,7 +54,6 @@ from snuba.web.rpc.common.common import (
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
-    use_indexed_name_for_request,
     use_sampling_factor,
     valid_sampling_factor_conditions,
 )
@@ -423,7 +422,7 @@ def build_query(
                 request.meta.trace_item_type,
                 request.filter,
                 _get_attribute_key_to_expression_function(request.meta),
-                use_indexed_name=use_indexed_name_for_request(request.meta),
+                start_timestamp=request.meta.start_timestamp,
             ),
             valid_sampling_factor_conditions(),
             *item_type_conds,
