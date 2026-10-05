@@ -1025,9 +1025,21 @@ IndexedColumns = dict[str, IndexedColumn]
 INDEXED_COLUMNS_OPTION = "indexed_columns"
 
 
-def _item_type_name(item_type: TraceItemType.ValueType) -> str:
-    """TRACE_ITEM_TYPE_SPAN -> span, matching the item_type names used in config."""
-    return TraceItemType.Name(item_type).removeprefix("TRACE_ITEM_TYPE_").lower()
+_ITEM_TYPE_NAMES: dict[TraceItemType.ValueType, str] = {
+    TraceItemType.TRACE_ITEM_TYPE_SPAN: "span",
+    TraceItemType.TRACE_ITEM_TYPE_ERROR: "error",
+    TraceItemType.TRACE_ITEM_TYPE_LOG: "log",
+    TraceItemType.TRACE_ITEM_TYPE_UPTIME_CHECK: "uptime_check",
+    TraceItemType.TRACE_ITEM_TYPE_UPTIME_RESULT: "uptime_result",
+    TraceItemType.TRACE_ITEM_TYPE_REPLAY: "replay",
+    TraceItemType.TRACE_ITEM_TYPE_OCCURRENCE: "occurrence",
+    TraceItemType.TRACE_ITEM_TYPE_METRIC: "metric",
+    TraceItemType.TRACE_ITEM_TYPE_PROFILE_FUNCTION: "profile_function",
+    TraceItemType.TRACE_ITEM_TYPE_ATTACHMENT: "attachment",
+    TraceItemType.TRACE_ITEM_TYPE_PREPROD: "preprod",
+    TraceItemType.TRACE_ITEM_TYPE_USER_SESSION: "user_session",
+    TraceItemType.TRACE_ITEM_TYPE_PROCESSING_ERROR: "processing_error",
+}
 
 
 def indexed_column_for(
@@ -1045,7 +1057,7 @@ def indexed_column_for(
     )
     if (indexed_column := indexed_columns.get(unindexed_column)) is None:
         return None
-    if indexed_column.get("item_type") != _item_type_name(item_type):
+    if indexed_column.get("item_type") != _ITEM_TYPE_NAMES.get(item_type):
         return None
     if start_timestamp.seconds < indexed_column.get("indexed_start_timestamp", 2**63 - 1):
         return None
