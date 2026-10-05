@@ -1,5 +1,3 @@
-from typing import cast
-
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     Expression as TimeSeriesExpression,
 )
@@ -324,7 +322,7 @@ def test_metric_tags_are_low_cardinality_subset() -> None:
 
 def test_invalid_trace_item_type_is_unknown() -> None:
     request = TraceItemTableRequest(
-        meta=_meta(item_type=cast("TraceItemType.ValueType", 999)),
+        meta=_meta(item_type=TraceItemType.ValueType(999)),
         columns=[Column(key=_attr())],
     )
     assert extract_query_info(request)["trace_item_type"] == "unknown"
