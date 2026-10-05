@@ -1993,43 +1993,61 @@ class TestAnyAttributeFilterOption:
 
 def _indexed_columns_config(op_start: int = 1000, metric_start: int = 1000) -> dict[str, Any]:
     return {
-        "sentry.op": {"indexed_column_name": "indexed_name", "indexed_start_timestamp": op_start},
+        "sentry.op": {
+            "item_type": "span",
+            "indexed_column_name": "indexed_name",
+            "indexed_start_timestamp": op_start,
+        },
         "sentry.metric_name": {
+            "item_type": "metric",
             "indexed_column_name": "indexed_name",
             "indexed_start_timestamp": metric_start,
         },
     }
 
 
+SPAN = TraceItemType.TRACE_ITEM_TYPE_SPAN
+METRIC = TraceItemType.TRACE_ITEM_TYPE_METRIC
+LOG = TraceItemType.TRACE_ITEM_TYPE_LOG
+
+
 class TestIndexedColumnFor:
     def test_requires_start_at_or_after_indexed_start_timestamp(self) -> None:
         with override_options("snuba", {INDEXED_COLUMNS_OPTION: _indexed_columns_config()}):
-            assert indexed_column_for(Timestamp(seconds=1000), "sentry.op") == "indexed_name"
-            assert indexed_column_for(Timestamp(seconds=999), "sentry.op") is None
-            assert indexed_column_for(RequestMeta().start_timestamp, "sentry.op") is None
+            assert indexed_column_for(Timestamp(seconds=1000), SPAN, "sentry.op") == "indexed_name"
+            assert indexed_column_for(Timestamp(seconds=999), SPAN, "sentry.op") is None
+            assert indexed_column_for(RequestMeta().start_timestamp, SPAN, "sentry.op") is None
+            assert indexed_column_for(None, SPAN, "sentry.op") is None
 
     def test_each_column_has_its_own_start_timestamp(self) -> None:
         config = _indexed_columns_config(op_start=1000, metric_start=2000)
         with override_options("snuba", {INDEXED_COLUMNS_OPTION: config}):
-            assert indexed_column_for(Timestamp(seconds=1500), "sentry.op") == "indexed_name"
-            assert indexed_column_for(Timestamp(seconds=1500), "sentry.metric_name") is None
+            assert indexed_column_for(Timestamp(seconds=1500), SPAN, "sentry.op") == "indexed_name"
+            assert indexed_column_for(Timestamp(seconds=1500), METRIC, "sentry.metric_name") is None
             assert (
-                indexed_column_for(Timestamp(seconds=2000), "sentry.metric_name") == "indexed_name"
+                indexed_column_for(Timestamp(seconds=2000), METRIC, "sentry.metric_name")
+                == "indexed_name"
             )
+
+    def test_only_applies_to_its_item_type(self) -> None:
+        with override_options("snuba", {INDEXED_COLUMNS_OPTION: _indexed_columns_config()}):
+            assert indexed_column_for(Timestamp(seconds=1000), METRIC, "sentry.op") is None
+            assert indexed_column_for(Timestamp(seconds=1000), LOG, "sentry.op") is None
+            assert indexed_column_for(Timestamp(seconds=1000), SPAN, "sentry.metric_name") is None
 
     def test_unconfigured_column_not_indexed(self) -> None:
         with override_options("snuba", {INDEXED_COLUMNS_OPTION: _indexed_columns_config()}):
-            assert indexed_column_for(Timestamp(seconds=1000), "sentry.name") is None
+            assert indexed_column_for(Timestamp(seconds=1000), SPAN, "sentry.name") is None
 
     def test_schema_default_disables_rewrite(self) -> None:
-        assert indexed_column_for(Timestamp(seconds=2_000_000_000), "sentry.op") is None
+        assert indexed_column_for(Timestamp(seconds=2_000_000_000), SPAN, "sentry.op") is None
 
     def test_unreadable_option_disables_rewrite(self) -> None:
         def fake_get_option(key: str, default: object) -> object:
             return default
 
         with mock.patch("snuba.web.rpc.common.common.get_option", side_effect=fake_get_option):
-            assert indexed_column_for(Timestamp(seconds=2_000_000_000), "sentry.op") is None
+            assert indexed_column_for(Timestamp(seconds=2_000_000_000), SPAN, "sentry.op") is None
 
 
 class TestIndexedColumnsRedirect:
@@ -2100,7 +2118,11 @@ class TestIndexedColumnsRedirect:
         assert self._reads_indexed_name(
             self._filter(name="sentry.body"),
             config={
-                "sentry.body": {"indexed_column_name": "indexed_body", "indexed_start_timestamp": 0}
+                "sentry.body": {
+                    "item_type": "log",
+                    "indexed_column_name": "indexed_body",
+                    "indexed_start_timestamp": 0,
+                }
             },
             item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
             index_name="indexed_body",
