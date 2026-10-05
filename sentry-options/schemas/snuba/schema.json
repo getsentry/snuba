@@ -833,6 +833,22 @@
       "default": 1785110400,
       "description": "Unix timestamp of the earliest weekly date bucket the v2 co-occurring-attributes tables hold data for; TraceItemAttributeNames only reads v2 for requests whose range starts at or after it, and reads v1 otherwise. Defaults to 2026-07-27 00:00 UTC, the Monday of the week the v2 tables and their materialized view were created. Must be a Monday: the date column is bucketed weekly with toMonday() and the query rounds its lower bound down to the previous Monday, so a mid-week value would let a request read a bucket v2 never populated. Lower it only to a bucket v2 has been backfilled to."
     },
+    "indexed_columns": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "indexed_column_name": {
+            "type": "string"
+          },
+          "indexed_start_timestamp": {
+            "type": "integer"
+          }
+        }
+      },
+      "default": {},
+      "description": "Dict mapping an unindexed eap_items column or attribute (e.g. sentry.op) to the bloom-filter-indexed column holding a copy of it. Indexed columns can't be backfilled, so indexed_start_timestamp is the Unix timestamp from which the indexed column is fully populated. Equality and IN filters read indexed_column_name instead only for requests starting at or after it. Never set it before the column was fully populated, otherwise older rows are silently dropped. Empty (the default) disables the rewrite."
+    },
     "eap_items_indexed_name_start_timestamp": {
       "type": "integer",
       "default": 1790121600,
