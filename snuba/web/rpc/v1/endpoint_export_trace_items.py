@@ -1,7 +1,7 @@
 import uuid
 from collections.abc import Iterable
 from datetime import datetime
-from typing import Any, Literal, NamedTuple, cast
+from typing import Any, Literal, NamedTuple
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -131,7 +131,7 @@ class KeysetCursor(NamedTuple):
         project_id, item_type, timestamp, trace_id, item_id = values
         return cls(
             last_seen_project_id=project_id,
-            last_seen_item_type=cast(TraceItemType.ValueType, item_type),
+            last_seen_item_type=TraceItemType.ValueType(item_type),
             last_seen_timestamp=timestamp,
             last_seen_trace_id=trace_id,
             last_seen_item_id=item_id,
