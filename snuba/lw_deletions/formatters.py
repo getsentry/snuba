@@ -85,7 +85,7 @@ def _deserialize_attribute_conditions(
         attributes[key] = (attr_key_enum, attr_values)
 
     return AttributeConditions(
-        item_type=item_type,
+        item_type=TraceItemType.ValueType(item_type),
         attributes=attributes,
     )
 
