@@ -229,7 +229,7 @@ class TestAllocationPolicyLogs(TestCase):
             configs = policy.get_current_configs()
 
         # the bad configs are not returned
-        assert len(configs) == 3
+        assert len(configs) == 4
 
         # the bad configs are logged
         assert len(captured.records) == 3

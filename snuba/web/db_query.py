@@ -880,11 +880,13 @@ def _apply_allocation_policies_quota(
     rejection_quota_and_policy = None
     throttle_quota_and_policy = None
     min_threads_across_policies = MAX_THRESHOLD
-    load_info = get_cluster_loadinfo(
-        get_storage(
-            StorageKey(allocation_policies[0].resource_identifier.value)
-        ).get_storage_set_key()
-    )
+    load_info = None
+    if get_option("storage_routing.enable_get_cluster_loadinfo", False):
+        load_info = get_cluster_loadinfo(
+            get_storage(
+                StorageKey(allocation_policies[0].resource_identifier.value)
+            ).get_storage_set_key()
+        )
     with traces.start_span(
         name="_apply_allocation_policies_quota",
         attributes={SENTRY_OP: "allocation_policy"},
