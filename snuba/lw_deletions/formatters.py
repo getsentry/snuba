@@ -67,7 +67,7 @@ class SearchIssuesFormatter(Formatter):
 
 def _deserialize_attribute_conditions(
     data: dict[str, WireAttributeCondition] | None,
-    item_type: int | None = None,
+    item_type: TraceItemType.ValueType | None = None,
 ) -> AttributeConditions | None:
     if data is None:
         return None
@@ -85,7 +85,7 @@ def _deserialize_attribute_conditions(
         attributes[key] = (attr_key_enum, attr_values)
 
     return AttributeConditions(
-        item_type=TraceItemType.ValueType(item_type),
+        item_type=item_type,
         attributes=attributes,
     )
 

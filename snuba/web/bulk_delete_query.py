@@ -7,6 +7,7 @@ from typing import Any, TypedDict
 import rapidjson
 from confluent_kafka import KafkaError, Producer
 from confluent_kafka import Message as KafkaMessage
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
 from snuba import environment, settings
 from snuba.attribution.attribution_info import AttributionInfo
@@ -57,7 +58,7 @@ class DeleteQueryMessage(TypedDict, total=False):
     conditions: ConditionsType
     tenant_ids: Mapping[str, str | int]
     attribute_conditions: dict[str, WireAttributeCondition] | None
-    attribute_conditions_item_type: int | None
+    attribute_conditions_item_type: TraceItemType.ValueType | None
 
 
 PRODUCER_MAP: MutableMapping[str, Producer] = {}
