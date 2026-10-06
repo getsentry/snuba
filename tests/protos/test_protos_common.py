@@ -178,14 +178,14 @@ def test_get_trace_item_type_name_valid() -> None:
 
 
 def test_get_trace_item_type_name_by_integer() -> None:
-    assert get_trace_item_type_name(0) == "unspecified"
-    assert get_trace_item_type_name(1) == "span"
-    assert get_trace_item_type_name(7) == "occurrence"
+    assert get_trace_item_type_name(TraceItemType.ValueType(0)) == "unspecified"
+    assert get_trace_item_type_name(TraceItemType.ValueType(1)) == "span"
+    assert get_trace_item_type_name(TraceItemType.ValueType(7)) == "occurrence"
 
 
 def test_get_trace_item_type_name_invalid() -> None:
     with pytest.raises(ValueError, match="Unknown TraceItemType value: 999"):
-        get_trace_item_type_name(999)
+        get_trace_item_type_name(TraceItemType.ValueType(999))
 
     with pytest.raises(ValueError, match="Unknown TraceItemType value: -1"):
-        get_trace_item_type_name(-1)
+        get_trace_item_type_name(TraceItemType.ValueType(-1))
