@@ -7,6 +7,7 @@ from typing import Any, TypedDict
 import rapidjson
 from confluent_kafka import KafkaError, Producer
 from confluent_kafka import Message as KafkaMessage
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
 from snuba import environment, settings
 from snuba.attribution.attribution_info import AttributionInfo
@@ -161,7 +162,9 @@ def _validate_attribute_conditions(
 
     # Map the integer item_type to its string name used in configuration
     try:
-        item_type_name = get_trace_item_type_name(attribute_conditions.item_type)
+        item_type_name = get_trace_item_type_name(
+            TraceItemType.ValueType(attribute_conditions.item_type)
+        )
     except ValueError as e:
         raise InvalidQueryException(str(e)) from e
 

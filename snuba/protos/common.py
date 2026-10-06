@@ -396,9 +396,9 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
     )
 
 
-def get_trace_item_type_name(item_type: int) -> str:
+def get_trace_item_type_name(item_type: TraceItemType.ValueType) -> str:
     try:
-        full_name = TraceItemType.Name(TraceItemType.ValueType(item_type))
+        full_name = TraceItemType.Name(item_type)
 
         prefix = "TRACE_ITEM_TYPE_"
         if not full_name.startswith(prefix):
