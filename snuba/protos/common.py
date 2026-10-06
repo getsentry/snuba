@@ -1,6 +1,6 @@
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
-from typing import Final, NamedTuple, cast
+from typing import Final, NamedTuple
 
 from sentry_conventions.attributes import ATTRIBUTE_METADATA
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
@@ -398,7 +398,7 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
 
 def get_trace_item_type_name(item_type: int) -> str:
     try:
-        full_name = TraceItemType.Name(cast("TraceItemType.ValueType", item_type))
+        full_name = TraceItemType.Name(TraceItemType.ValueType(item_type))
 
         prefix = "TRACE_ITEM_TYPE_"
         if not full_name.startswith(prefix):
