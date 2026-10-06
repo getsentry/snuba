@@ -5,6 +5,7 @@ from typing import (
     Any,
 )
 
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.datasets.storages.storage_key import StorageKey
@@ -84,7 +85,7 @@ def _deserialize_attribute_conditions(
         attributes[key] = (attr_key_enum, attr_values)
 
     return AttributeConditions(
-        item_type=item_type,
+        item_type=TraceItemType.ValueType(item_type),
         attributes=attributes,
     )
 
