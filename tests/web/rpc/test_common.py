@@ -1996,14 +1996,10 @@ def _indexed_columns_config(
 ) -> dict[str, Any]:
     return {
         "sentry.op": {
-            "item_type": "span",
-            "indexed_column_name": "indexed_name",
-            "indexed_start_date": op_start,
+            "span": {"indexed_column_name": "indexed_name", "indexed_start_date": op_start},
         },
         "sentry.metric_name": {
-            "item_type": "metric",
-            "indexed_column_name": "indexed_name",
-            "indexed_start_date": metric_start,
+            "metric": {"indexed_column_name": "indexed_name", "indexed_start_date": metric_start},
         },
     }
 
@@ -2036,11 +2032,26 @@ class TestIndexedColumnFor:
                 == "indexed_name"
             )
 
-    @pytest.mark.parametrize("start_date", ["23-09-2026", "20260923", "2026-09-23T00:00", ""])
-    def test_malformed_start_date_disables_rewrite(self, start_date: str) -> None:
+    @pytest.mark.parametrize("start_date", ["23-09-2026", ""])
+    def test_malformed_start_date_raises(self, start_date: str) -> None:
         config = _indexed_columns_config(op_start=start_date)
+        with (
+            override_options("snuba", {INDEXED_COLUMNS_OPTION: config}),
+            pytest.raises(ValueError),
+        ):
+            indexed_column_for(_ts("2030-01-01"), SPAN, "sentry.op")
+
+    def test_same_column_indexed_per_item_type(self) -> None:
+        config: Any = {
+            "sentry.op": {
+                "span": {"indexed_column_name": "indexed_name", "indexed_start_date": "2026-09-23"},
+                "log": {"indexed_column_name": "indexed_name", "indexed_start_date": "2026-11-01"},
+            }
+        }
         with override_options("snuba", {INDEXED_COLUMNS_OPTION: config}):
-            assert indexed_column_for(_ts("2030-01-01"), SPAN, "sentry.op") is None
+            assert indexed_column_for(_ts("2026-10-01"), SPAN, "sentry.op") == "indexed_name"
+            assert indexed_column_for(_ts("2026-10-01"), LOG, "sentry.op") is None
+            assert indexed_column_for(_ts("2026-11-01"), LOG, "sentry.op") == "indexed_name"
 
     def test_only_applies_to_its_item_type(self) -> None:
         with override_options("snuba", {INDEXED_COLUMNS_OPTION: _indexed_columns_config()}):
@@ -2132,9 +2143,10 @@ class TestIndexedColumnsRedirect:
             self._filter(name="sentry.body"),
             config={
                 "sentry.body": {
-                    "item_type": "log",
-                    "indexed_column_name": "indexed_body",
-                    "indexed_start_date": "1970-01-01",
+                    "log": {
+                        "indexed_column_name": "indexed_body",
+                        "indexed_start_date": "1970-01-01",
+                    }
                 }
             },
             item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,

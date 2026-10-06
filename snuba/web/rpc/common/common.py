@@ -1010,12 +1010,11 @@ def _any_attribute_filter_to_expression(
 
 
 class IndexedColumn(TypedDict):
-    item_type: str
     indexed_column_name: str
     indexed_start_date: str
 
 
-IndexedColumns = dict[str, IndexedColumn]
+IndexedColumns = dict[str, dict[str, IndexedColumn]]
 
 INDEXED_COLUMNS_OPTION = "indexed_columns"
 
@@ -1035,14 +1034,14 @@ def indexed_column_for(
     if start_timestamp is None:
         return None
     indexed_columns: IndexedColumns = get_option(INDEXED_COLUMNS_OPTION, {})
-    if (indexed_column := indexed_columns.get(unindexed_column)) is None:
+    if (option := indexed_columns.get(unindexed_column)) is None:
         return None
-    if indexed_column["item_type"] != get_trace_item_type_name(item_type):
+    if (column := option.get(get_trace_item_type_name(item_type))) is None:
         return None
-    indexed_start = datetime.fromisoformat(indexed_column["indexed_start_date"]).replace(tzinfo=UTC)
-    if indexed_start is None or start_timestamp.ToDatetime() < indexed_start:
+    indexed_start = datetime.fromisoformat(column["indexed_start_date"]).replace(tzinfo=UTC)
+    if start_timestamp.ToDatetime(tzinfo=UTC) < indexed_start:
         return None
-    return indexed_column["indexed_column_name"]
+    return column["indexed_column_name"]
 
 
 def trace_item_filters_to_expression(
