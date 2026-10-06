@@ -48,7 +48,7 @@ dependencies = [
     "structlog>=22.3.0",
     "structlog-sentry>=2.0.0",
     "urllib3>=2.8.0",
-    "werkzeug>=3.0.6",
+    "werkzeug>=3.1.9",
     "rust_snuba>=0.0.0",
 ]
 
