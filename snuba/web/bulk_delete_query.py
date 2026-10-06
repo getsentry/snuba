@@ -7,6 +7,7 @@ from typing import Any, TypedDict
 import rapidjson
 from confluent_kafka import KafkaError, Producer
 from confluent_kafka import Message as KafkaMessage
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
 from snuba import environment, settings
 from snuba.attribution.attribution_info import AttributionInfo
@@ -14,12 +15,13 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
 from snuba.clusters.cluster import UndefinedClickhouseCluster, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.deletion_settings import DeletionSettings, get_trace_item_type_name
+from snuba.datasets.deletion_settings import DeletionSettings
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_config_built_storages
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.lw_deletions.types import AttributeConditions, ConditionsBag, ConditionsType
+from snuba.protos.common import get_trace_item_type_name
 from snuba.query.conditions import combine_or_conditions
 from snuba.query.data_source.simple import Table
 from snuba.query.dsl import literal
@@ -160,7 +162,9 @@ def _validate_attribute_conditions(
 
     # Map the integer item_type to its string name used in configuration
     try:
-        item_type_name = get_trace_item_type_name(attribute_conditions.item_type)
+        item_type_name = get_trace_item_type_name(
+            TraceItemType.ValueType(attribute_conditions.item_type)
+        )
     except ValueError as e:
         raise InvalidQueryException(str(e)) from e
 

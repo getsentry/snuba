@@ -1,5 +1,6 @@
 import pytest
 from sentry_conventions.attributes import ATTRIBUTE_METADATA
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.protos.common import (
@@ -7,6 +8,7 @@ from snuba.protos.common import (
     MalformedAttributeException,
     _resolve_canonical,
     attribute_key_to_expression,
+    get_trace_item_type_name,
 )
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import arrayElement, column, literal, map_key_exists
@@ -157,3 +159,33 @@ class TestAttributeKeyToExpression:
                 AttributeKey(type=AttributeKey.TYPE_BOOLEAN, name="sentry.trace_id")
             )
         assert "must be one of" in str(exc_info.value)
+
+
+def test_get_trace_item_type_name_valid() -> None:
+    assert get_trace_item_type_name(TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED) == "unspecified"
+    assert get_trace_item_type_name(TraceItemType.TRACE_ITEM_TYPE_SPAN) == "span"
+    assert get_trace_item_type_name(TraceItemType.TRACE_ITEM_TYPE_ERROR) == "error"
+    assert get_trace_item_type_name(TraceItemType.TRACE_ITEM_TYPE_LOG) == "log"
+    assert get_trace_item_type_name(TraceItemType.TRACE_ITEM_TYPE_UPTIME_CHECK) == "uptime_check"
+    assert get_trace_item_type_name(TraceItemType.TRACE_ITEM_TYPE_UPTIME_RESULT) == "uptime_result"
+    assert get_trace_item_type_name(TraceItemType.TRACE_ITEM_TYPE_REPLAY) == "replay"
+    assert get_trace_item_type_name(TraceItemType.TRACE_ITEM_TYPE_OCCURRENCE) == "occurrence"
+    assert get_trace_item_type_name(TraceItemType.TRACE_ITEM_TYPE_METRIC) == "metric"
+    assert (
+        get_trace_item_type_name(TraceItemType.TRACE_ITEM_TYPE_PROFILE_FUNCTION)
+        == "profile_function"
+    )
+
+
+def test_get_trace_item_type_name_by_integer() -> None:
+    assert get_trace_item_type_name(TraceItemType.ValueType(0)) == "unspecified"
+    assert get_trace_item_type_name(TraceItemType.ValueType(1)) == "span"
+    assert get_trace_item_type_name(TraceItemType.ValueType(7)) == "occurrence"
+
+
+def test_get_trace_item_type_name_invalid() -> None:
+    with pytest.raises(ValueError, match="Unknown TraceItemType value: 999"):
+        get_trace_item_type_name(TraceItemType.ValueType(999))
+
+    with pytest.raises(ValueError, match="Unknown TraceItemType value: -1"):
+        get_trace_item_type_name(TraceItemType.ValueType(-1))

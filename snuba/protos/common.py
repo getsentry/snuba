@@ -3,6 +3,7 @@ from collections.abc import Mapping, Sequence
 from typing import Final, NamedTuple
 
 from sentry_conventions.attributes import ATTRIBUTE_METADATA
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.query.dsl import Functions as f
@@ -393,3 +394,18 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
     raise MalformedAttributeException(
         f"Attribute {attr_key.name} has an unknown type: {AttributeKey.Type.Name(attr_key.type)}"
     )
+
+
+def get_trace_item_type_name(item_type: TraceItemType.ValueType) -> str:
+    try:
+        full_name = TraceItemType.Name(item_type)
+
+        prefix = "TRACE_ITEM_TYPE_"
+        if not full_name.startswith(prefix):
+            raise ValueError(f"Unexpected TraceItemType name format: {full_name}")
+
+        return full_name[len(prefix) :].lower()
+    except ValueError as e:
+        raise ValueError(
+            f"Unknown TraceItemType value: {item_type}. Must be a valid TraceItemType enum value."
+        ) from e
