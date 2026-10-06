@@ -1991,19 +1991,26 @@ class TestAnyAttributeFilterOption:
         assert result.value is True
 
 
-def _indexed_columns_config(op_start: int = 1000, metric_start: int = 1000) -> dict[str, Any]:
+def _indexed_columns_config(
+    op_start: str = "2026-09-23", metric_start: str = "2026-09-23"
+) -> dict[str, Any]:
     return {
         "sentry.op": {
             "item_type": "span",
             "indexed_column_name": "indexed_name",
-            "indexed_start_timestamp": op_start,
+            "indexed_start_date": op_start,
         },
         "sentry.metric_name": {
             "item_type": "metric",
             "indexed_column_name": "indexed_name",
-            "indexed_start_timestamp": metric_start,
+            "indexed_start_date": metric_start,
         },
     }
+
+
+def _ts(date: str, offset_seconds: int = 0) -> Timestamp:
+    start = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=UTC)
+    return Timestamp(seconds=int(start.timestamp()) + offset_seconds)
 
 
 SPAN = TraceItemType.TRACE_ITEM_TYPE_SPAN
@@ -2012,42 +2019,48 @@ LOG = TraceItemType.TRACE_ITEM_TYPE_LOG
 
 
 class TestIndexedColumnFor:
-    def test_requires_start_at_or_after_indexed_start_timestamp(self) -> None:
+    def test_requires_start_at_or_after_indexed_start_date(self) -> None:
         with override_options("snuba", {INDEXED_COLUMNS_OPTION: _indexed_columns_config()}):
-            assert indexed_column_for(Timestamp(seconds=1000), SPAN, "sentry.op") == "indexed_name"
-            assert indexed_column_for(Timestamp(seconds=999), SPAN, "sentry.op") is None
+            assert indexed_column_for(_ts("2026-09-23"), SPAN, "sentry.op") == "indexed_name"
+            assert indexed_column_for(_ts("2026-09-23", -1), SPAN, "sentry.op") is None
             assert indexed_column_for(RequestMeta().start_timestamp, SPAN, "sentry.op") is None
             assert indexed_column_for(None, SPAN, "sentry.op") is None
 
-    def test_each_column_has_its_own_start_timestamp(self) -> None:
-        config = _indexed_columns_config(op_start=1000, metric_start=2000)
+    def test_each_column_has_its_own_start_date(self) -> None:
+        config = _indexed_columns_config(op_start="2026-09-23", metric_start="2026-09-25")
         with override_options("snuba", {INDEXED_COLUMNS_OPTION: config}):
-            assert indexed_column_for(Timestamp(seconds=1500), SPAN, "sentry.op") == "indexed_name"
-            assert indexed_column_for(Timestamp(seconds=1500), METRIC, "sentry.metric_name") is None
+            assert indexed_column_for(_ts("2026-09-24"), SPAN, "sentry.op") == "indexed_name"
+            assert indexed_column_for(_ts("2026-09-24"), METRIC, "sentry.metric_name") is None
             assert (
-                indexed_column_for(Timestamp(seconds=2000), METRIC, "sentry.metric_name")
+                indexed_column_for(_ts("2026-09-25"), METRIC, "sentry.metric_name")
                 == "indexed_name"
             )
 
+    @pytest.mark.parametrize("start_date", ["23-09-2026", "20260923", "2026-09-23T00:00", ""])
+    def test_malformed_start_date_disables_rewrite(self, start_date: str) -> None:
+        config = _indexed_columns_config(op_start=start_date)
+        with override_options("snuba", {INDEXED_COLUMNS_OPTION: config}):
+            assert indexed_column_for(_ts("2030-01-01"), SPAN, "sentry.op") is None
+
     def test_only_applies_to_its_item_type(self) -> None:
         with override_options("snuba", {INDEXED_COLUMNS_OPTION: _indexed_columns_config()}):
-            assert indexed_column_for(Timestamp(seconds=1000), METRIC, "sentry.op") is None
-            assert indexed_column_for(Timestamp(seconds=1000), LOG, "sentry.op") is None
-            assert indexed_column_for(Timestamp(seconds=1000), SPAN, "sentry.metric_name") is None
+            assert indexed_column_for(_ts("2026-09-23"), METRIC, "sentry.op") is None
+            assert indexed_column_for(_ts("2026-09-23"), LOG, "sentry.op") is None
+            assert indexed_column_for(_ts("2026-09-23"), SPAN, "sentry.metric_name") is None
 
     def test_unconfigured_column_not_indexed(self) -> None:
         with override_options("snuba", {INDEXED_COLUMNS_OPTION: _indexed_columns_config()}):
-            assert indexed_column_for(Timestamp(seconds=1000), SPAN, "sentry.name") is None
+            assert indexed_column_for(_ts("2026-09-23"), SPAN, "sentry.name") is None
 
     def test_schema_default_disables_rewrite(self) -> None:
-        assert indexed_column_for(Timestamp(seconds=2_000_000_000), SPAN, "sentry.op") is None
+        assert indexed_column_for(_ts("2030-01-01"), SPAN, "sentry.op") is None
 
     def test_unreadable_option_disables_rewrite(self) -> None:
         def fake_get_option(key: str, default: object) -> object:
             return default
 
         with mock.patch("snuba.web.rpc.common.common.get_option", side_effect=fake_get_option):
-            assert indexed_column_for(Timestamp(seconds=2_000_000_000), SPAN, "sentry.op") is None
+            assert indexed_column_for(_ts("2030-01-01"), SPAN, "sentry.op") is None
 
 
 class TestIndexedColumnsRedirect:
@@ -2084,7 +2097,7 @@ class TestIndexedColumnsRedirect:
                 attribute_key_to_expression,
                 start_timestamp=start_timestamp
                 if start_timestamp is not None
-                else Timestamp(seconds=1000),
+                else _ts("2026-09-23"),
             )
         reads_column = index_name in _collect_column_names(expr)
         reads_bucket = "arrayElement" in _collect_function_names(expr)
@@ -2112,7 +2125,7 @@ class TestIndexedColumnsRedirect:
         assert not self._reads_indexed_name(self._filter(), config={})
 
     def test_not_redirected_before_index_start(self) -> None:
-        assert not self._reads_indexed_name(self._filter(), start_timestamp=Timestamp(seconds=999))
+        assert not self._reads_indexed_name(self._filter(), start_timestamp=_ts("2026-09-23", -1))
 
     def test_redirected_to_configured_column(self) -> None:
         assert self._reads_indexed_name(
@@ -2121,7 +2134,7 @@ class TestIndexedColumnsRedirect:
                 "sentry.body": {
                     "item_type": "log",
                     "indexed_column_name": "indexed_body",
-                    "indexed_start_timestamp": 0,
+                    "indexed_start_date": "1970-01-01",
                 }
             },
             item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,

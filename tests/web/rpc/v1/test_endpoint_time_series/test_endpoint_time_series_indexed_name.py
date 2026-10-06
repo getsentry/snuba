@@ -89,12 +89,12 @@ def _request() -> TimeSeriesRequest:
     )
 
 
-def _indexed_columns(index_start: int) -> Any:
+def _indexed_columns(index_start: str) -> Any:
     return {
         "sentry.metric_name": {
             "item_type": "metric",
             "indexed_column_name": "indexed_name",
-            "indexed_start_timestamp": index_start,
+            "indexed_start_date": index_start,
         }
     }
 
@@ -109,10 +109,10 @@ class TestTimeSeriesIndexedName(BaseApiTest):
     def test_indexed_name_rewrite_is_result_preserving(self) -> None:
         _store_metrics()
 
-        with override_options("snuba", {INDEXED_COLUMNS_OPTION: _indexed_columns(2**62)}):
+        with override_options("snuba", {INDEXED_COLUMNS_OPTION: _indexed_columns("9999-12-31")}):
             disabled = EndpointTimeSeries().execute(_request())
 
-        with override_options("snuba", {INDEXED_COLUMNS_OPTION: _indexed_columns(0)}):
+        with override_options("snuba", {INDEXED_COLUMNS_OPTION: _indexed_columns("1970-01-01")}):
             enabled = EndpointTimeSeries().execute(_request())
 
         assert _total(disabled) == float(MATCHING_COUNT)

@@ -2,11 +2,10 @@ import math
 from collections.abc import Callable, Iterable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
-from typing import Any, TypedDict, TypeVar, cast
+from typing import Any, TypedDict, TypeVar
 
 from google.protobuf.message import Message as ProtobufMessage
 from google.protobuf.timestamp_pb2 import Timestamp as ProtobufTimestamp
-from sentry_options import OptionValue
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
@@ -28,6 +27,7 @@ from snuba.protos.common import (
     array_element_column,
     coalesced_attribute_names,
     first_present_value,
+    get_trace_item_type_name,
     key_existence_conditions,
     sentry_column,
     type_array_to_membership_array_expression_from_typed_columns,
@@ -1012,34 +1012,12 @@ def _any_attribute_filter_to_expression(
 class IndexedColumn(TypedDict):
     item_type: str
     indexed_column_name: str
-    indexed_start_timestamp: int
+    indexed_start_date: str
 
 
 IndexedColumns = dict[str, IndexedColumn]
 
-# Indexed columns can't be backfilled, so each one only holds data from its
-# indexed_start_timestamp onwards. An indexed column can hold a different attribute
-# per item type (indexed_name is sentry.op for spans, sentry.metric_name for
-# metrics), so each entry only applies to its own item_type. Set per region in
-# options-automator.
 INDEXED_COLUMNS_OPTION = "indexed_columns"
-
-
-_ITEM_TYPE_NAMES: dict[TraceItemType.ValueType, str] = {
-    TraceItemType.TRACE_ITEM_TYPE_SPAN: "span",
-    TraceItemType.TRACE_ITEM_TYPE_ERROR: "error",
-    TraceItemType.TRACE_ITEM_TYPE_LOG: "log",
-    TraceItemType.TRACE_ITEM_TYPE_UPTIME_CHECK: "uptime_check",
-    TraceItemType.TRACE_ITEM_TYPE_UPTIME_RESULT: "uptime_result",
-    TraceItemType.TRACE_ITEM_TYPE_REPLAY: "replay",
-    TraceItemType.TRACE_ITEM_TYPE_OCCURRENCE: "occurrence",
-    TraceItemType.TRACE_ITEM_TYPE_METRIC: "metric",
-    TraceItemType.TRACE_ITEM_TYPE_PROFILE_FUNCTION: "profile_function",
-    TraceItemType.TRACE_ITEM_TYPE_ATTACHMENT: "attachment",
-    TraceItemType.TRACE_ITEM_TYPE_PREPROD: "preprod",
-    TraceItemType.TRACE_ITEM_TYPE_USER_SESSION: "user_session",
-    TraceItemType.TRACE_ITEM_TYPE_PROCESSING_ERROR: "processing_error",
-}
 
 
 def indexed_column_for(
@@ -1047,21 +1025,24 @@ def indexed_column_for(
     item_type: TraceItemType.ValueType,
     unindexed_column: str,
 ) -> str | None:
-    """Indexed column to read instead of ``unindexed_column`` for ``item_type``, or
-    None if it has no index or the index isn't populated for the whole request time
-    range."""
+    """
+    Indexed columns can't be backfilled, so each one only holds data from its
+    indexed_start_date (YYYY-MM-DD) onwards. An indexed column can hold a
+    different attribute per item type (indexed_name is sentry.op for spans,
+    sentry.metric_name for metrics), so each entry only applies to its own item_type.
+    Set per region in options-automator.
+    """
     if start_timestamp is None:
         return None
-    indexed_columns = cast(
-        IndexedColumns, get_option(INDEXED_COLUMNS_OPTION, cast(OptionValue, {}))
-    )
+    indexed_columns: IndexedColumns = get_option(INDEXED_COLUMNS_OPTION, {})
     if (indexed_column := indexed_columns.get(unindexed_column)) is None:
         return None
-    if indexed_column.get("item_type") != _ITEM_TYPE_NAMES.get(item_type):
+    if indexed_column["item_type"] != get_trace_item_type_name(item_type):
         return None
-    if start_timestamp.seconds < indexed_column.get("indexed_start_timestamp", 2**63 - 1):
+    indexed_start = datetime.fromisoformat(indexed_column["indexed_start_date"]).replace(tzinfo=UTC)
+    if indexed_start is None or start_timestamp.ToDatetime() < indexed_start:
         return None
-    return indexed_column.get("indexed_column_name")
+    return indexed_column["indexed_column_name"]
 
 
 def trace_item_filters_to_expression(
