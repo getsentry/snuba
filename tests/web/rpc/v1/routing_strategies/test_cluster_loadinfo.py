@@ -111,8 +111,8 @@ def test_get_cluster_load_error_handling() -> None:
         _assert_probe_failed(load_info)
 
 
-def test_is_idle_reads_dynamic_allocation_policy_flag() -> None:
+def test_should_pardon_reads_dynamic_allocation_policy_flag() -> None:
     load_info = LoadInfo(cluster_load=1.0, concurrent_queries=1)
-    assert load_info.is_idle() is False
+    assert load_info.should_pardon() is False
     with override_options("snuba", {"storage_routing.enable_dynamic_allocation_policy": True}):
-        assert load_info.is_idle() is True
+        assert load_info.should_pardon() is True

@@ -474,7 +474,7 @@ def test_is_pardonable_overrides_can_run_when_idle() -> None:
         "referrer": "some_referrer",
     }
     idle = LoadInfo(cluster_load=1.0, concurrent_queries=1)
-    with mock.patch.object(LoadInfo, "is_idle", return_value=True):
+    with mock.patch.object(LoadInfo, "should_pardon", return_value=True):
         assert reject_policy.get_quota_allowance(tenant_ids, "deadbeef").can_run is False
         pardoned = reject_policy.get_quota_allowance(tenant_ids, "deadbeef", idle)
     assert pardoned.can_run is True

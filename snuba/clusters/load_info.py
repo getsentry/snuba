@@ -48,7 +48,7 @@ class LoadInfo:
             }
         )
 
-    def is_idle(self) -> bool:
+    def should_pardon(self) -> bool:
         return get_option("storage_routing.enable_dynamic_allocation_policy", False)
 
 

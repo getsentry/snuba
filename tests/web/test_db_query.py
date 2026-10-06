@@ -1405,7 +1405,7 @@ def test_idle_pardon_allows_rejected_query() -> None:
             "snuba.web.db_query.get_cluster_loadinfo",
             return_value=idle,
         ),
-        mock.patch.object(LoadInfo, "is_idle", return_value=True),
+        mock.patch.object(LoadInfo, "should_pardon", return_value=True),
     ):
         query_settings = HTTPQuerySettings()
         _apply_allocation_policies_quota(
@@ -1440,7 +1440,7 @@ def test_idle_pardon_still_rejects_when_not_idle() -> None:
             "snuba.web.db_query.get_cluster_loadinfo",
             return_value=busy,
         ),
-        mock.patch.object(LoadInfo, "is_idle", return_value=False),
+        mock.patch.object(LoadInfo, "should_pardon", return_value=False),
         pytest.raises(AllocationPolicyViolations),
     ):
         _apply_allocation_policies_quota(

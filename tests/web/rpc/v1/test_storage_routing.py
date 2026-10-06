@@ -599,7 +599,7 @@ def test_routing_strategy_idle_pardon_allows_rejected_query() -> None:
             "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.get_cluster_loadinfo",
             return_value=LoadInfo(cluster_load=1.0, concurrent_queries=1),
         ),
-        mock.patch.object(LoadInfo, "is_idle", return_value=True),
+        mock.patch.object(LoadInfo, "should_pardon", return_value=True),
     ):
         decision = OutcomesBasedRoutingStrategy().get_routing_decision(
             RoutingContext(
