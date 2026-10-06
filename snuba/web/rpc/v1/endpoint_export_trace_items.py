@@ -111,7 +111,7 @@ class FlexWindow(NamedTuple):
 
 class KeysetCursor(NamedTuple):
     last_seen_project_id: int
-    last_seen_item_type: TraceItemType.ValueType
+    last_seen_item_type: int
     last_seen_timestamp: int
     last_seen_trace_id: str
     last_seen_item_id: str
@@ -131,7 +131,7 @@ class KeysetCursor(NamedTuple):
         project_id, item_type, timestamp, trace_id, item_id = values
         return cls(
             last_seen_project_id=project_id,
-            last_seen_item_type=TraceItemType.ValueType(item_type),
+            last_seen_item_type=item_type,
             last_seen_timestamp=timestamp,
             last_seen_trace_id=trace_id,
             last_seen_item_id=item_id,
