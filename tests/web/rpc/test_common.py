@@ -2033,13 +2033,10 @@ class TestIndexedColumnFor:
             )
 
     @pytest.mark.parametrize("start_date", ["23-09-2026", ""])
-    def test_malformed_start_date_raises(self, start_date: str) -> None:
+    def test_malformed_start_date_disables_rewrite(self, start_date: str) -> None:
         config = _indexed_columns_config(op_start=start_date)
-        with (
-            override_options("snuba", {INDEXED_COLUMNS_OPTION: config}),
-            pytest.raises(ValueError),
-        ):
-            indexed_column_for(_ts("2030-01-01"), SPAN, "sentry.op")
+        with override_options("snuba", {INDEXED_COLUMNS_OPTION: config}):
+            assert indexed_column_for(_ts("2030-01-01"), SPAN, "sentry.op") is None
 
     def test_same_column_indexed_per_item_type(self) -> None:
         config: Any = {
