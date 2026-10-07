@@ -40,6 +40,7 @@ from snuba.query.allocation_policies import (
     PolicyData,
     QueryResultOrError,
     QuotaAllowance,
+    QuotaAllowanceDecision,
 )
 from snuba.query.allocation_policies.resolver import get_active_allocation_policies
 from snuba.query.allocation_policies.utils import get_max_bytes_to_read
@@ -429,21 +430,35 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         return overrides
 
     def _get_combined_allocation_policies_recommendations(
-        self, policy_recommendations: list[QuotaAllowance]
+        self,
+        recommendations: dict[str, QuotaAllowance],
+        policies: list[AllocationPolicy],
+        load_info: LoadInfo | None,
     ) -> CombinedAllocationPoliciesRecommendations:
         # decides how to combine the recommendations from the allocation policies
         settings = {}
+        policy_recommendations = list(recommendations.values())
 
         max_bytes_to_read = get_max_bytes_to_read(policy_recommendations)
         if max_bytes_to_read != 0:
             settings["max_bytes_to_read"] = max_bytes_to_read
 
-        settings["max_threads"] = min(
-            [qa.max_threads for qa in policy_recommendations],
-        )
+        can_run = True
+        thread_caps: list[int] = []
+        for policy in policies:
+            qa = recommendations[policy.class_name()]
+            decision = qa.decision(policy, load_info)
+            if decision == QuotaAllowanceDecision.REJECTED:
+                can_run = False
+            if decision == QuotaAllowanceDecision.PARDONED:
+                thread_caps.append(policy.max_threads)
+            else:
+                thread_caps.append(qa.max_threads)
+
+        settings["max_threads"] = min(thread_caps) if thread_caps else 10
 
         return CombinedAllocationPoliciesRecommendations(
-            can_run=all(qa.can_run for qa in policy_recommendations),
+            can_run=can_run,
             is_throttled=any(qa.is_throttled for qa in policy_recommendations),
             settings=settings,
         )
@@ -489,7 +504,9 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 )
                 combined_allocation_policies_recommendations = (
                     self._get_combined_allocation_policies_recommendations(
-                        list(routing_context.allocation_policies_recommendations.values())
+                        routing_context.allocation_policies_recommendations,
+                        self.get_allocation_policies(routing_context.tenant_ids),
+                        routing_context.cluster_load_info,
                     )
                 )
 

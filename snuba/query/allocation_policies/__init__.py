@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from enum import Enum, IntEnum
 from typing import Any, assert_never, cast
 
@@ -500,20 +500,12 @@ class AllocationPolicy(ConfigurableComponent, ABC):
             match decision:
                 case QuotaAllowanceDecision.PARDONED:
                     self.metrics.increment("db_request_pardoned", tags={"referrer": referrer})
-                    allowance = QuotaAllowance(
-                        can_run=True,
-                        max_threads=self.max_threads,
+                    allowance = replace(
+                        allowance,
                         explanation={
                             **allowance.explanation,
                             "idle_pardon": load_info.to_dict() if load_info is not None else {},
                         },
-                        is_throttled=allowance.is_throttled,
-                        throttle_threshold=allowance.throttle_threshold,
-                        rejection_threshold=allowance.rejection_threshold,
-                        quota_used=allowance.quota_used,
-                        quota_unit=allowance.quota_unit,
-                        suggestion=allowance.suggestion,
-                        max_bytes_to_read=0,
                     )
                 case QuotaAllowanceDecision.REJECTED:
                     self.metrics.increment("db_request_rejected", tags={"referrer": referrer})
@@ -528,7 +520,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                 case unreachable:
                     assert_never(unreachable)
 
-            if not self.is_enforced:
+            if decision != QuotaAllowanceDecision.PARDONED and not self.is_enforced:
                 allowance = QuotaAllowance(
                     can_run=True,
                     max_threads=self.max_threads,

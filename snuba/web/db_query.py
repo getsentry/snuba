@@ -39,6 +39,7 @@ from snuba.query.allocation_policies import (
     AllocationPolicyViolations,
     QueryResultOrError,
     QuotaAllowance,
+    QuotaAllowanceDecision,
 )
 from snuba.query.allocation_policies.resolver import get_active_allocation_policies
 from snuba.query.allocation_policies.utils import get_max_bytes_to_read
@@ -895,7 +896,7 @@ def _apply_allocation_policies_quota(
             allowance = allocation_policy.get_quota_allowance(
                 attribution_info.tenant_ids, query_id, load_info
             )
-            can_run &= allowance.can_run
+            decision = allowance.decision(allocation_policy, load_info)
             quota_allowances[allocation_policy.class_name()] = allowance
             span.set_attribute(
                 "quota_allowance",
@@ -903,13 +904,19 @@ def _apply_allocation_policies_quota(
                     quota_allowances[allocation_policy.class_name()].to_dict(), default=repr
                 ),
             )
+            if decision == QuotaAllowanceDecision.PARDONED:
+                min_threads_across_policies = min(
+                    min_threads_across_policies, allocation_policy.max_threads
+                )
+                continue
             if allowance.is_throttled and allowance.max_threads < min_threads_across_policies:
                 throttle_quota_and_policy = _QuotaAndPolicy(
                     quota_allowance=allowance,
                     policy=allocation_policy,
                 )
             min_threads_across_policies = min(min_threads_across_policies, allowance.max_threads)
-            if not can_run:
+            if decision == QuotaAllowanceDecision.REJECTED:
+                can_run = False
                 rejection_quota_and_policy = _QuotaAndPolicy(
                     quota_allowance=allowance,
                     policy=allocation_policy,
