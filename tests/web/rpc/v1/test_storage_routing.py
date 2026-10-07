@@ -677,7 +677,7 @@ def test_routing_strategy_with_throttling_allocation_policy() -> None:
         ]
     )
     routing_decision = test_strategy.get_routing_decision(deepcopy(ROUTING_CONTEXT))
-    assert routing_decision.clickhouse_settings["max_threads"] == POLICY_THREADS
+    assert routing_decision.clickhouse_settings["max_threads"] == 10
     assert routing_decision.is_throttled
 
 

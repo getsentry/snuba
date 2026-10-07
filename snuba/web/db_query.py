@@ -916,10 +916,9 @@ def _apply_allocation_policies_quota(
                     policy=allocation_policy,
                 )
                 break
-            thread_cap = (
-                abs(allowance.max_threads) if allowance.can_run else allocation_policy.max_threads
+            min_threads_across_policies = min(
+                min_threads_across_policies, allocation_policy.max_threads
             )
-            min_threads_across_policies = min(min_threads_across_policies, thread_cap)
 
         allowance_dicts = {
             key: quota_allowance.to_dict() for key, quota_allowance in quota_allowances.items()

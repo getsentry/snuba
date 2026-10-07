@@ -762,7 +762,7 @@ def test_apply_allocation_policies_quota_sets_throttle_policy() -> None:
                 },
             },
             "summary": {
-                "threads_used": 1,
+                "threads_used": 10,
                 "is_successful": False,
                 "is_rejected": False,
                 "is_throttled": True,
@@ -770,7 +770,7 @@ def test_apply_allocation_policies_quota_sets_throttle_policy() -> None:
                 "throttle_storage_key": "doesntmatter",
                 "rejected_by": {},
                 "throttled_by": {
-                    "policy": "ThrottleAllocationPolicy1",
+                    "policy": "ThrottleAllocationPolicy2",
                     "quota_used": 1000000000000,
                     "quota_unit": NO_UNITS,
                     "suggestion": NO_SUGGESTION,
@@ -784,7 +784,7 @@ def test_apply_allocation_policies_quota_sets_throttle_policy() -> None:
     assert throttled_metrics
     assert throttled_metrics[0].tags == {
         "storage_key": "doesntmatter",
-        "policy": "ThrottleAllocationPolicy1",
+        "policy": "ThrottleAllocationPolicy2",
     }
 
 
@@ -990,9 +990,9 @@ def test_allocation_policy_threads_applied_to_query() -> None:
         )
     resource_quota = settings.get_resource_quota()
     assert resource_quota is not None
-    assert resource_quota.max_threads == POLICY_THREADS
-    assert stats["max_threads"] == POLICY_THREADS
-    assert query_metadata_list[0].stats["max_threads"] == POLICY_THREADS
+    assert resource_quota.max_threads == 10
+    assert stats["max_threads"] == 10
+    assert query_metadata_list[0].stats["max_threads"] == 10
 
 
 @pytest.mark.events_db
