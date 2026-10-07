@@ -451,8 +451,10 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             can_run = can_run and not decision.is_rejected
             if decision.is_rejected:
                 thread_cap = 0
-            else:
+            elif qa.can_run:
                 thread_cap = min(thread_cap, abs(qa.max_threads))
+            else:
+                thread_cap = min(thread_cap, policy.max_threads)
 
         settings["max_threads"] = thread_cap
 

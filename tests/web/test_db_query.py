@@ -1456,7 +1456,7 @@ def test_idle_pardon_allows_rejected_query() -> None:
     assert details["explanation"]["idle_pardon"] == idle.to_dict()
     quota = query_settings.get_resource_quota()
     assert quota is not None
-    assert quota.max_threads == 0
+    assert quota.max_threads == 10
 
 
 def test_idle_pardon_still_rejects_when_not_idle() -> None:
