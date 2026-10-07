@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 
 import pytest
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.lw_deletions.formatters import (
@@ -15,7 +16,7 @@ from snuba.web.bulk_delete_query import DeleteQueryMessage, WireAttributeConditi
 def create_delete_query_message(
     conditions: ConditionsType,
     attribute_conditions: dict[str, WireAttributeCondition] | None = None,
-    attribute_conditions_item_type: int | None = None,
+    attribute_conditions_item_type: TraceItemType.ValueType | None = None,
 ) -> DeleteQueryMessage:
     msg = DeleteQueryMessage(
         rows_to_delete=1,
@@ -120,7 +121,7 @@ def test_eap_items_formatter_with_attribute_conditions() -> None:
                     "attr_values": [12345, 67890],
                 }
             },
-            attribute_conditions_item_type=1,
+            attribute_conditions_item_type=TraceItemType.ValueType(1),
         )
     ]
 
@@ -156,7 +157,7 @@ def test_eap_items_formatter_multiple_attributes() -> None:
                     "attr_values": ["test_transaction"],
                 },
             },
-            attribute_conditions_item_type=1,
+            attribute_conditions_item_type=TraceItemType.ValueType(1),
         )
     ]
 
@@ -190,7 +191,7 @@ def test_eap_items_formatter_with_float_attributes() -> None:
                     "attr_values": [123.45, 678.90],
                 }
             },
-            attribute_conditions_item_type=1,
+            attribute_conditions_item_type=TraceItemType.ValueType(1),
         )
     ]
 
@@ -218,7 +219,7 @@ def test_eap_items_formatter_with_bool_attributes() -> None:
                     "attr_values": [True, False],
                 }
             },
-            attribute_conditions_item_type=1,
+            attribute_conditions_item_type=TraceItemType.ValueType(1),
         )
     ]
 

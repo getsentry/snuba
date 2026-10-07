@@ -10,6 +10,7 @@ import rapidjson
 from confluent_kafka import Consumer
 from confluent_kafka.admin import AdminClient
 from sentry_options.testing import override_options
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba import settings
@@ -23,10 +24,6 @@ from snuba.utils.streams.configuration_builder import get_default_kafka_configur
 from snuba.utils.streams.topics import Topic
 from snuba.web.bulk_delete_query import delete_from_storage
 from snuba.web.delete_query import DeletesNotEnabledError
-
-# TraceItemType values from sentry_protos
-TRACE_ITEM_TYPE_SPAN = 1
-TRACE_ITEM_TYPE_OCCURRENCE = 7
 
 CONSUMER_CONFIG = {
     "bootstrap.servers": settings.BROKER_CONFIG["bootstrap.servers"],
@@ -167,10 +164,13 @@ def test_delete_invalid_column_name() -> None:
 def test_attribute_conditions_invalid_item_type() -> None:
     """Test that attribute_conditions with wrong item_type (span instead of occurrence) are rejected"""
     storage = get_writable_storage(StorageKey("eap_items"))
-    conditions = {"project_id": [1], "item_type": [TRACE_ITEM_TYPE_SPAN]}
+    conditions: dict[str, list[Any]] = {
+        "project_id": [1],
+        "item_type": [TraceItemType.TRACE_ITEM_TYPE_SPAN],
+    }
     # Using span (1) but config only allows occurrence (7)
     attribute_conditions = AttributeConditions(
-        item_type=TRACE_ITEM_TYPE_SPAN,
+        item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
         attributes={
             "group_id": (AttributeKey(type=AttributeKey.Type.TYPE_INT, name="group_id"), [12345])
         },
@@ -188,9 +188,12 @@ def test_attribute_conditions_invalid_item_type() -> None:
 def test_attribute_conditions_valid_occurrence() -> None:
     """Test that valid attribute_conditions are accepted for occurrence item_type"""
     storage = get_writable_storage(StorageKey("eap_items"))
-    conditions = {"project_id": [1], "item_type": [TRACE_ITEM_TYPE_OCCURRENCE]}
+    conditions: dict[str, list[Any]] = {
+        "project_id": [1],
+        "item_type": [TraceItemType.TRACE_ITEM_TYPE_OCCURRENCE],
+    }
     attribute_conditions = AttributeConditions(
-        item_type=TRACE_ITEM_TYPE_OCCURRENCE,
+        item_type=TraceItemType.TRACE_ITEM_TYPE_OCCURRENCE,
         attributes={
             "group_id": (AttributeKey(type=AttributeKey.Type.TYPE_INT, name="group_id"), [12345])
         },
@@ -216,10 +219,13 @@ def test_attribute_conditions_valid_occurrence() -> None:
 def test_attribute_conditions_invalid_attribute() -> None:
     """Test that invalid attribute names in attribute_conditions are rejected"""
     storage = get_writable_storage(StorageKey("eap_items"))
-    conditions = {"project_id": [1], "item_type": [TRACE_ITEM_TYPE_OCCURRENCE]}
+    conditions: dict[str, list[Any]] = {
+        "project_id": [1],
+        "item_type": [TraceItemType.TRACE_ITEM_TYPE_OCCURRENCE],
+    }
     # Using valid item_type (occurrence/7) but invalid attribute
     attribute_conditions = AttributeConditions(
-        item_type=TRACE_ITEM_TYPE_OCCURRENCE,
+        item_type=TraceItemType.TRACE_ITEM_TYPE_OCCURRENCE,
         attributes={
             "invalid_attr": (
                 AttributeKey(type=AttributeKey.Type.TYPE_INT, name="invalid_attr"),
@@ -239,7 +245,7 @@ def test_attribute_conditions_missing_item_type() -> None:
     storage = get_writable_storage(StorageKey("eap_items"))
     conditions = {"project_id": [1]}
     attribute_conditions = AttributeConditions(
-        item_type=TRACE_ITEM_TYPE_OCCURRENCE,
+        item_type=TraceItemType.TRACE_ITEM_TYPE_OCCURRENCE,
         attributes={
             "group_id": (AttributeKey(type=AttributeKey.Type.TYPE_INT, name="group_id"), [12345])
         },
@@ -262,7 +268,7 @@ def test_attribute_conditions_storage_not_configured() -> None:
     storage = get_writable_storage(StorageKey("search_issues"))
     conditions = {"project_id": [1], "group_id": [1]}  # Valid columns for search_issues
     attribute_conditions = AttributeConditions(
-        item_type=1,
+        item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
         attributes={
             "some_attr": (AttributeKey(type=AttributeKey.Type.TYPE_INT, name="some_attr"), [12345])
         },
@@ -279,9 +285,12 @@ def test_attribute_conditions_storage_not_configured() -> None:
 def test_attribute_conditions_feature_flag_enabled() -> None:
     """Test that attribute_conditions are processed when feature flag is enabled"""
     storage = get_writable_storage(StorageKey("eap_items"))
-    conditions = {"project_id": [1], "item_type": [TRACE_ITEM_TYPE_OCCURRENCE]}
+    conditions: dict[str, list[Any]] = {
+        "project_id": [1],
+        "item_type": [TraceItemType.TRACE_ITEM_TYPE_OCCURRENCE],
+    }
     attribute_conditions = AttributeConditions(
-        item_type=TRACE_ITEM_TYPE_OCCURRENCE,
+        item_type=TraceItemType.TRACE_ITEM_TYPE_OCCURRENCE,
         attributes={
             "group_id": (AttributeKey(type=AttributeKey.Type.TYPE_INT, name="group_id"), [12345])
         },
@@ -312,7 +321,9 @@ def test_attribute_conditions_feature_flag_enabled() -> None:
                 "attr_values": [12345],
             }
         }
-        assert call_args["attribute_conditions_item_type"] == TRACE_ITEM_TYPE_OCCURRENCE
+        assert (
+            call_args["attribute_conditions_item_type"] == TraceItemType.TRACE_ITEM_TYPE_OCCURRENCE
+        )
 
 
 @pytest.mark.redis_db
@@ -325,9 +336,12 @@ def test_eap_items_counts_each_table_against_its_readonly_replica() -> None:
     storage, keeping it off the read/write cluster.
     """
     storage = get_writable_storage(StorageKey("eap_items"))
-    conditions = {"project_id": [1], "item_type": [TRACE_ITEM_TYPE_OCCURRENCE]}
+    conditions: dict[str, list[Any]] = {
+        "project_id": [1],
+        "item_type": [TraceItemType.TRACE_ITEM_TYPE_OCCURRENCE],
+    }
     attribute_conditions = AttributeConditions(
-        item_type=TRACE_ITEM_TYPE_OCCURRENCE,
+        item_type=TraceItemType.TRACE_ITEM_TYPE_OCCURRENCE,
         attributes={
             "group_id": (AttributeKey(type=AttributeKey.Type.TYPE_INT, name="group_id"), [12345])
         },
