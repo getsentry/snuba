@@ -59,7 +59,7 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-from snuba.state.sentry_options import get_option
+from snuba.state.sentry_options import get_mapped_option, get_option
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
@@ -1031,17 +1031,29 @@ def indexed_column_for(
     sentry.metric_name for metrics), so each entry only applies to its own item_type.
     Set per region in options-automator.
     """
-    if start_timestamp is None:
+    try:
+        if start_timestamp is None:
+            return None
+
+        indexed_column: dict[str, IndexedColumn] = get_mapped_option(
+            INDEXED_COLUMNS_OPTION, unindexed_column, {}
+        )
+
+        type = get_trace_item_type_name(item_type)
+        indexed_type = indexed_column.get(type)
+        if indexed_type is None:
+            return None
+
+        indexed_start = datetime.fromisoformat(indexed_type["indexed_start_date"]).replace(
+            tzinfo=UTC
+        )
+        if start_timestamp.ToDatetime(tzinfo=UTC) < indexed_start:
+            return None
+
+        return indexed_type["indexed_column_name"]
+    except Exception:
+        # This is only helper function and should never break the request execution
         return None
-    indexed_columns: IndexedColumns = get_option(INDEXED_COLUMNS_OPTION, {})
-    if (option := indexed_columns.get(unindexed_column)) is None:
-        return None
-    if (column := option.get(get_trace_item_type_name(item_type))) is None:
-        return None
-    indexed_start = datetime.fromisoformat(column["indexed_start_date"]).replace(tzinfo=UTC)
-    if start_timestamp.ToDatetime(tzinfo=UTC) < indexed_start:
-        return None
-    return column["indexed_column_name"]
 
 
 def trace_item_filters_to_expression(
