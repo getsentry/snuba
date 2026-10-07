@@ -445,7 +445,7 @@ def test_is_not_enforced() -> None:
 
     assert throttle_policy.get_quota_allowance(tenant_ids, "deadbeef").max_threads == 1
     set_component_config(throttle_policy, config_key="is_enforced", value=0)
-    assert throttle_policy.get_quota_allowance(tenant_ids, "deadbeef").max_threads == MAX_THREADS
+    assert throttle_policy.get_quota_allowance(tenant_ids, "deadbeef").max_threads == 1
 
     rejected_metrics = get_recorded_metric_calls(
         "increment", "allocation_policy.db_request_rejected"

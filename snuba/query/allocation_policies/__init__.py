@@ -62,11 +62,9 @@ class QuotaAllowanceDecision(IntEnum):
     ALLOWED = 2
     THROTTLED = 3
 
-    def applies_unenforced_override(self) -> bool:
-        return self in (QuotaAllowanceDecision.REJECTED, QuotaAllowanceDecision.THROTTLED)
-
-    def constrains_threads(self) -> bool:
-        return self is not QuotaAllowanceDecision.REJECTED
+    @property
+    def is_rejected(self) -> bool:
+        return self is QuotaAllowanceDecision.REJECTED
 
 
 @dataclass(frozen=True)
@@ -522,7 +520,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                 case unreachable:
                     assert_never(unreachable)
 
-            if decision.applies_unenforced_override() and not self.is_enforced:
+            if decision.is_rejected and not self.is_enforced:
                 allowance = QuotaAllowance(
                     can_run=True,
                     max_threads=self.max_threads,

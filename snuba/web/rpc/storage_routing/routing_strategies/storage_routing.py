@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import math
 import os
 from abc import ABC
 from collections.abc import Callable
@@ -37,11 +36,11 @@ from snuba.configs.configuration import (
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
 from snuba.query.allocation_policies import (
+    MAX_THRESHOLD,
     AllocationPolicy,
     PolicyData,
     QueryResultOrError,
     QuotaAllowance,
-    QuotaAllowanceDecision,
 )
 from snuba.query.allocation_policies.resolver import get_active_allocation_policies
 from snuba.query.allocation_policies.utils import get_max_bytes_to_read
@@ -445,13 +444,14 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             settings["max_bytes_to_read"] = max_bytes_to_read
 
         can_run = True
-        thread_cap = math.inf
+        thread_cap = MAX_THRESHOLD
         for policy in policies:
             qa = recommendations[policy.class_name()]
             decision = qa.decision(policy, load_info)
-            if decision == QuotaAllowanceDecision.REJECTED:
-                can_run = False
-            if decision.constrains_threads():
+            can_run = can_run and not decision.is_rejected
+            if decision.is_rejected:
+                thread_cap = 0
+            else:
                 thread_cap = min(thread_cap, abs(qa.max_threads))
 
         settings["max_threads"] = thread_cap

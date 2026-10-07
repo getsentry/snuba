@@ -39,7 +39,6 @@ from snuba.query.allocation_policies import (
     AllocationPolicyViolations,
     QueryResultOrError,
     QuotaAllowance,
-    QuotaAllowanceDecision,
 )
 from snuba.query.allocation_policies.resolver import get_active_allocation_policies
 from snuba.query.allocation_policies.utils import get_max_bytes_to_read
@@ -909,17 +908,17 @@ def _apply_allocation_policies_quota(
                     quota_allowance=allowance,
                     policy=allocation_policy,
                 )
-            if decision.constrains_threads():
-                min_threads_across_policies = min(
-                    min_threads_across_policies, abs(allowance.max_threads)
-                )
-            if decision == QuotaAllowanceDecision.REJECTED:
+            if decision.is_rejected:
                 can_run = False
+                min_threads_across_policies = 0
                 rejection_quota_and_policy = _QuotaAndPolicy(
                     quota_allowance=allowance,
                     policy=allocation_policy,
                 )
                 break
+            min_threads_across_policies = min(
+                min_threads_across_policies, abs(allowance.max_threads)
+            )
 
         allowance_dicts = {
             key: quota_allowance.to_dict() for key, quota_allowance in quota_allowances.items()

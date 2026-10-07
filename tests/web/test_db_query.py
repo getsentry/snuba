@@ -848,7 +848,7 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
             )
         assert stats["quota_allowance"] == {
             "summary": {
-                "threads_used": MAX_THRESHOLD,
+                "threads_used": 0,
                 "is_successful": False,
                 "is_rejected": True,
                 "is_throttled": True,
@@ -1108,7 +1108,7 @@ def test_allocation_policy_updates_quota() -> None:
     assert isinstance(err, QueryException)
     assert err.extra["stats"]["quota_allowance"] == {
         "summary": {
-            "threads_used": MAX_THRESHOLD,
+            "threads_used": 0,
             "is_successful": False,
             "is_rejected": True,
             "is_throttled": False,
