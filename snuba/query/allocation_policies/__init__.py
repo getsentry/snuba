@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import asdict, dataclass, field
 from enum import Enum, IntEnum
 from typing import Any, assert_never, cast
 
@@ -61,6 +61,12 @@ class QuotaAllowanceDecision(IntEnum):
     PARDONED = 1
     ALLOWED = 2
     THROTTLED = 3
+
+    def applies_unenforced_override(self) -> bool:
+        return self in (QuotaAllowanceDecision.REJECTED, QuotaAllowanceDecision.THROTTLED)
+
+    def constrains_threads(self) -> bool:
+        return self is not QuotaAllowanceDecision.REJECTED
 
 
 @dataclass(frozen=True)
@@ -500,12 +506,8 @@ class AllocationPolicy(ConfigurableComponent, ABC):
             match decision:
                 case QuotaAllowanceDecision.PARDONED:
                     self.metrics.increment("db_request_pardoned", tags={"referrer": referrer})
-                    allowance = replace(
-                        allowance,
-                        explanation={
-                            **allowance.explanation,
-                            "idle_pardon": load_info.to_dict() if load_info is not None else {},
-                        },
+                    allowance.explanation["idle_pardon"] = (
+                        load_info.to_dict() if load_info is not None else {}
                     )
                 case QuotaAllowanceDecision.REJECTED:
                     self.metrics.increment("db_request_rejected", tags={"referrer": referrer})
@@ -520,7 +522,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                 case unreachable:
                     assert_never(unreachable)
 
-            if decision != QuotaAllowanceDecision.PARDONED and not self.is_enforced:
+            if decision.applies_unenforced_override() and not self.is_enforced:
                 allowance = QuotaAllowance(
                     can_run=True,
                     max_threads=self.max_threads,

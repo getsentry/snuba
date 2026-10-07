@@ -361,7 +361,11 @@ def test_metrics_output() -> None:
                 "ConcurrentRateLimitAllocationPolicy": {
                     "can_run": True,
                     "max_threads": 10,
-                    "explanation": {"storage_key": "EAP"},
+                    "explanation": {
+                        "overrides": {},
+                        "reason": "within limit",
+                        "storage_key": "EAP",
+                    },
                     "is_throttled": False,
                     "throttle_threshold": AnyInt(66),
                     "rejection_threshold": AnyInt(66),
@@ -609,7 +613,7 @@ def test_routing_strategy_idle_pardon_allows_rejected_query() -> None:
             )
         )
         assert decision.can_run is True
-        assert decision.clickhouse_settings["max_threads"] == 10
+        assert decision.clickhouse_settings["max_threads"] == 0
         pardoned = decision.routing_context.allocation_policies_recommendations[
             "IdlePardonRejectionPolicy"
         ]

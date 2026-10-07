@@ -904,17 +904,15 @@ def _apply_allocation_policies_quota(
                     quota_allowances[allocation_policy.class_name()].to_dict(), default=repr
                 ),
             )
-            if decision == QuotaAllowanceDecision.PARDONED:
-                min_threads_across_policies = min(
-                    min_threads_across_policies, allocation_policy.max_threads
-                )
-                continue
             if allowance.is_throttled and allowance.max_threads < min_threads_across_policies:
                 throttle_quota_and_policy = _QuotaAndPolicy(
                     quota_allowance=allowance,
                     policy=allocation_policy,
                 )
-            min_threads_across_policies = min(min_threads_across_policies, allowance.max_threads)
+            if decision.constrains_threads():
+                min_threads_across_policies = min(
+                    min_threads_across_policies, abs(allowance.max_threads)
+                )
             if decision == QuotaAllowanceDecision.REJECTED:
                 can_run = False
                 rejection_quota_and_policy = _QuotaAndPolicy(

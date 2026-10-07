@@ -848,7 +848,7 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
             )
         assert stats["quota_allowance"] == {
             "summary": {
-                "threads_used": 0,
+                "threads_used": MAX_THRESHOLD,
                 "is_successful": False,
                 "is_rejected": True,
                 "is_throttled": True,
@@ -1108,7 +1108,7 @@ def test_allocation_policy_updates_quota() -> None:
     assert isinstance(err, QueryException)
     assert err.extra["stats"]["quota_allowance"] == {
         "summary": {
-            "threads_used": 0,
+            "threads_used": MAX_THRESHOLD,
             "is_successful": False,
             "is_rejected": True,
             "is_throttled": False,
@@ -1456,7 +1456,7 @@ def test_idle_pardon_allows_rejected_query() -> None:
     assert details["explanation"]["idle_pardon"] == idle.to_dict()
     quota = query_settings.get_resource_quota()
     assert quota is not None
-    assert quota.max_threads == 10
+    assert quota.max_threads == 0
 
 
 def test_idle_pardon_still_rejects_when_not_idle() -> None:

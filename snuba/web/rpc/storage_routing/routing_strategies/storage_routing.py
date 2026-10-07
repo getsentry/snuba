@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 from abc import ABC
 from collections.abc import Callable
@@ -444,18 +445,16 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             settings["max_bytes_to_read"] = max_bytes_to_read
 
         can_run = True
-        thread_caps: list[int] = []
+        thread_cap = math.inf
         for policy in policies:
             qa = recommendations[policy.class_name()]
             decision = qa.decision(policy, load_info)
             if decision == QuotaAllowanceDecision.REJECTED:
                 can_run = False
-            if decision == QuotaAllowanceDecision.PARDONED:
-                thread_caps.append(policy.max_threads)
-            else:
-                thread_caps.append(qa.max_threads)
+            if decision.constrains_threads():
+                thread_cap = min(thread_cap, abs(qa.max_threads))
 
-        settings["max_threads"] = min(thread_caps) if thread_caps else 10
+        settings["max_threads"] = thread_cap
 
         return CombinedAllocationPoliciesRecommendations(
             can_run=can_run,
