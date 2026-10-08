@@ -562,6 +562,15 @@ def _is_valid_regexp_pattern(v: AttributeValue) -> None:
         raise BadSnubaRPCRequestException("REGEXP pattern must be a non-empty string")
 
 
+def _lowered_string_literals(v: AttributeValue) -> Expression:
+    """The string IN-set of an any-attribute filter, lowercased for ``ignore_case``."""
+    if v.WhichOneof("value") == "val_str_array":
+        strings = list(v.val_str_array.values)
+    else:
+        strings = [elem.val_str for elem in v.val_array.values]
+    return literals_array(None, [literal(s.lower()) for s in strings])
+
+
 def _any_attribute_op_expression(
     *,
     filter_: AnyAttributeFilter,
@@ -570,28 +579,21 @@ def _any_attribute_op_expression(
     value_expr: Expression,
     membership_as_has: bool,
 ) -> Expression:
+    ignore_case = filter_.ignore_case
     match op:
         case AnyAttributeFilter.OP_EQUALS:
-            if filter_.ignore_case:
+            if ignore_case:
                 return f.equals(f.lower(element), f.lower(value_expr))
             return f.equals(element, value_expr)
         case AnyAttributeFilter.OP_LIKE:
-            if filter_.ignore_case:
-                return f.ilike(element, value_expr)
-            return f.like(element, value_expr)
+            return f.ilike(element, value_expr) if ignore_case else f.like(element, value_expr)
         case AnyAttributeFilter.OP_REGEXP:
-            return _regexp_match(element, value_expr, filter_.ignore_case)
+            return _regexp_match(element, value_expr, ignore_case)
         case AnyAttributeFilter.OP_IN:
-            if filter_.ignore_case:
-                if filter_.value.WhichOneof("value") == "val_str_array":
-                    lowered = [literal(s.lower()) for s in filter_.value.val_str_array.values]
-                else:
-                    lowered = [
-                        literal(elem.val_str.lower()) for elem in filter_.value.val_array.values
-                    ]
+            if ignore_case:
                 return _in_or_has(
                     f.lower(element),
-                    literals_array(None, lowered),
+                    _lowered_string_literals(filter_.value),
                     as_has=membership_as_has,
                 )
             return _in_or_has(element, value_expr, as_has=membership_as_has)
@@ -601,15 +603,70 @@ def _any_attribute_op_expression(
             )
 
 
+def _validate_any_attribute_value(
+    filt: AnyAttributeFilter, op: AnyAttributeFilter.Op.ValueType
+) -> str:
+    """Checks the value's shape against the (positive) op and returns its value type:
+    OP_IN takes a non-empty array, every other op takes a scalar."""
+    v = filt.value
+    value_type = v.WhichOneof("value")
+    if value_type is None or value_type == "val_null":
+        raise BadSnubaRPCRequestException("any_attribute_filter does not have a value")
+
+    is_array = value_type in _ARRAY_VALUE_TYPES
+    if op == AnyAttributeFilter.OP_IN:
+        if not is_array:
+            raise BadSnubaRPCRequestException(
+                "IN/NOT_IN operations require an array value type (val_array)"
+            )
+        if _array_value_length(v, value_type) == 0:
+            raise BadSnubaRPCRequestException("IN/NOT_IN operations require a non-empty array")
+    elif is_array:
+        raise BadSnubaRPCRequestException(
+            f"{AnyAttributeFilter.Op.Name(filt.op)} does not support array values, use OP_IN/OP_NOT_IN"
+        )
+    return value_type
+
+
+def _any_attribute_search_column(v: AttributeValue, value_type: str) -> str:
+    """The attribute map column to search, derived from the value type so we never compare
+    e.g. a string against a Float64 column. A ``val_array`` uses its (uniform) element type."""
+    if value_type == "val_array":
+        elem_types = {elem.WhichOneof("value") for elem in v.val_array.values}
+        if len(elem_types) != 1:
+            raise BadSnubaRPCRequestException("val_array elements must all be the same type")
+        elem_type = elem_types.pop()
+        if elem_type not in _VALUE_TYPE_TO_COLUMN:
+            raise BadSnubaRPCRequestException(f"Unsupported array element type: {elem_type}")
+        return _VALUE_TYPE_TO_COLUMN[elem_type]
+
+    if value_type not in _VALUE_TYPE_TO_COLUMN:
+        raise BadSnubaRPCRequestException(
+            f"Unsupported value type for any_attribute_filter: {value_type}"
+        )
+    return _VALUE_TYPE_TO_COLUMN[value_type]
+
+
+def _validate_any_attribute_op_for_column(
+    filt: AnyAttributeFilter, op: AnyAttributeFilter.Op.ValueType, col_name: str
+) -> None:
+    is_string_column = col_name in _STRING_COLUMNS
+    if op in (AnyAttributeFilter.OP_LIKE, AnyAttributeFilter.OP_REGEXP) and not is_string_column:
+        label = "REGEXP" if op == AnyAttributeFilter.OP_REGEXP else "LIKE/NOT_LIKE"
+        raise BadSnubaRPCRequestException(f"{label} operations are only supported on string values")
+    if op == AnyAttributeFilter.OP_REGEXP:
+        _is_valid_regexp_pattern(filt.value)
+    # ignore_case is implemented with lower(), which only works on strings.
+    if filt.ignore_case and not is_string_column:
+        raise BadSnubaRPCRequestException("Cannot ignore case on non-string values")
+
+
 def _any_attribute_filter_to_expression(
     filt: AnyAttributeFilter,
     *,
     membership_as_has: bool = False,
 ) -> Expression:
     """Build an expression that searches across attribute values.
-
-    The column to search is derived from the value type to avoid
-    ClickHouse type mismatches (e.g. comparing a string against a Float64 column).
 
     Generates::
 
@@ -620,85 +677,22 @@ def _any_attribute_filter_to_expression(
     expression carries no ``__set_*`` prepared-set identifier — required when it lands
     in a SELECT-clause aggregate on a mixed-version distributed read (see ``_in_or_has``).
     """
-    # 1. Extract and validate the comparison value
-    v = filt.value
-    value_type = v.WhichOneof("value")
-    if value_type is None or value_type == "val_null":
-        raise BadSnubaRPCRequestException("any_attribute_filter does not have a value")
+    # Negative ops are built as their positive counterpart and wrapped in NOT at the end.
+    op = _POSITIVE_OP_FOR_NEGATIVE.get(filt.op, filt.op)
 
-    # Resolve the effective op for building the lambda (negation handled at the end)
-    is_negative = filt.op in _NEGATIVE_OPS
-    effective_op = _POSITIVE_OP_FOR_NEGATIVE.get(filt.op, filt.op)
+    value_type = _validate_any_attribute_value(filt, op)
+    col_name = _any_attribute_search_column(filt.value, value_type)
+    _validate_any_attribute_op_for_column(filt, op, col_name)
 
-    is_array = value_type in _ARRAY_VALUE_TYPES
-    if effective_op == AnyAttributeFilter.OP_IN and not is_array:
-        raise BadSnubaRPCRequestException(
-            "IN/NOT_IN operations require an array value type (val_array)"
-        )
-
-    if effective_op != AnyAttributeFilter.OP_IN and is_array:
-        raise BadSnubaRPCRequestException(
-            f"{AnyAttributeFilter.Op.Name(filt.op)} does not support array values, use OP_IN/OP_NOT_IN"
-        )
-
-    # Validate that IN/NOT_IN arrays are non-empty
-    if effective_op == AnyAttributeFilter.OP_IN:
-        arr_values = (
-            v.val_array.values if value_type == "val_array" else getattr(v, value_type).values
-        )
-        if len(arr_values) == 0:
-            raise BadSnubaRPCRequestException("IN/NOT_IN operations require a non-empty array")
-
-    # 2. Determine which column to search based on the value type
-    if value_type == "val_array":
-        elem_types = {elem.WhichOneof("value") for elem in v.val_array.values}
-        if len(elem_types) != 1:
-            raise BadSnubaRPCRequestException("val_array elements must all be the same type")
-        elem_type = elem_types.pop()
-        if elem_type not in _VALUE_TYPE_TO_COLUMN:
-            raise BadSnubaRPCRequestException(f"Unsupported array element type: {elem_type}")
-        col_name = _VALUE_TYPE_TO_COLUMN[elem_type]
-    else:
-        if value_type not in _VALUE_TYPE_TO_COLUMN:
-            raise BadSnubaRPCRequestException(
-                f"Unsupported value type for any_attribute_filter: {value_type}"
-            )
-        col_name = _VALUE_TYPE_TO_COLUMN[value_type]
-
-    # LIKE/NOT_LIKE/REGEXP only makes sense on string columns
-    if (
-        effective_op in (AnyAttributeFilter.OP_LIKE, AnyAttributeFilter.OP_REGEXP)
-        and col_name not in _STRING_COLUMNS
-    ):
-        label = "REGEXP" if effective_op == AnyAttributeFilter.OP_REGEXP else "LIKE/NOT_LIKE"
-        raise BadSnubaRPCRequestException(f"{label} operations are only supported on string values")
-
-    if effective_op == AnyAttributeFilter.OP_REGEXP:
-        _is_valid_regexp_pattern(v)
-
-    # ignore_case uses lower() which only works on string columns
-    if filt.ignore_case and col_name not in _STRING_COLUMNS:
-        raise BadSnubaRPCRequestException("Cannot ignore case on non-string values")
-
-    v_expression = _attribute_value_to_expression(v)
-
-    # 3. Build the lambda comparison
-    x = Argument(None, "x")
     comparison = _any_attribute_op_expression(
         filter_=filt,
-        op=effective_op,
-        element=x,
-        value_expr=v_expression,
+        op=op,
+        element=Argument(None, "x"),
+        value_expr=_attribute_value_to_expression(filt.value),
         membership_as_has=membership_as_has,
     )
-    lam = Lambda(None, ("x",), comparison)
-
-    # 4. Build the arrayExists expression for the single matching column.
-    positive_expr = f.arrayExists(lam, f.mapValues(column(col_name)))
-
-    if is_negative:
-        return not_cond(positive_expr)
-    return positive_expr
+    expr = f.arrayExists(Lambda(None, ("x",), comparison), f.mapValues(column(col_name)))
+    return not_cond(expr) if filt.op in _NEGATIVE_OPS else expr
 
 
 class IndexedColumn(TypedDict):
@@ -833,50 +827,9 @@ class TraceItemFilterConverter:
             else _attribute_value_to_expression(v)
         )
 
-        # `sentry.timestamp` is a normalized column that `attribute_key_to_expression`
-        # maps to `CAST(timestamp, 'Float64')`. Wrapping the primary-key/partition
-        # column in a CAST prevents ClickHouse from using it for granule and partition
-        # pruning, so range filters on it scan far more data than necessary. It also
-        # duplicates the mandatory time-range condition (timestamp_in_range_condition)
-        # that is already applied on the raw column. For range comparisons, compare
-        # against the raw DateTime `timestamp` column instead so the condition is
-        # index- and partition-prunable. We reuse timestamp_seconds_to_datetime_literal
-        # so a bound equal to the mandatory range is byte-identical to it and gets
-        # collapsed by dedupe_timestamp_conditions.
-        if k.name == sentry_column("timestamp") and value_type in (
-            "val_int",
-            "val_float",
-            "val_double",
-        ):
-            scalar_value = _scalar_value(v)
-            assert isinstance(scalar_value, (int, float))
-            raw_timestamp = column("timestamp")
-            # `timestamp` is a second-resolution DateTime, so a fractional bound must be
-            # rounded to the integer second that preserves the original
-            # `CAST(timestamp, 'Float64') OP value` result: `<`/`>=` round up (ceil) and
-            # `<=`/`>` round down (floor). Integer bounds are left unchanged, so the
-            # rewritten mandatory-range bounds stay byte-identical and
-            # dedupe_timestamp_conditions can still collapse them.
-            if op == ComparisonFilter.OP_LESS_THAN:
-                return f.less(
-                    raw_timestamp,
-                    timestamp_seconds_to_datetime_literal(math.ceil(scalar_value)),
-                )
-            if op == ComparisonFilter.OP_LESS_THAN_OR_EQUALS:
-                return f.lessOrEquals(
-                    raw_timestamp,
-                    timestamp_seconds_to_datetime_literal(math.floor(scalar_value)),
-                )
-            if op == ComparisonFilter.OP_GREATER_THAN:
-                return f.greater(
-                    raw_timestamp,
-                    timestamp_seconds_to_datetime_literal(math.floor(scalar_value)),
-                )
-            if op == ComparisonFilter.OP_GREATER_THAN_OR_EQUALS:
-                return f.greaterOrEquals(
-                    raw_timestamp,
-                    timestamp_seconds_to_datetime_literal(math.ceil(scalar_value)),
-                )
+        timestamp = self._raw_timestamp_comparison(comparison_filter)
+        if timestamp is not None:
+            return timestamp
 
         match op:
             case ComparisonFilter.OP_EQUALS:
@@ -918,6 +871,54 @@ class TraceItemFilterConverter:
         ):
             return None
         return indexed_column_for(self.start_timestamp, self.item_type, k.name)
+
+    def _raw_timestamp_comparison(self, comparison_filter: ComparisonFilter) -> Expression | None:
+        """Range comparison on the raw ``timestamp`` column, or None to take the normal path.
+
+        `sentry.timestamp` is a normalized column that `attribute_key_to_expression`
+        maps to `CAST(timestamp, 'Float64')`. Wrapping the primary-key/partition
+        column in a CAST prevents ClickHouse from using it for granule and partition
+        pruning, so range filters on it scan far more data than necessary. It also
+        duplicates the mandatory time-range condition (timestamp_in_range_condition)
+        that is already applied on the raw column. For range comparisons, compare
+        against the raw DateTime `timestamp` column instead so the condition is
+        index- and partition-prunable. We reuse timestamp_seconds_to_datetime_literal
+        so a bound equal to the mandatory range is byte-identical to it and gets
+        collapsed by dedupe_timestamp_conditions.
+        """
+        v = comparison_filter.value
+        if comparison_filter.key.name != sentry_column("timestamp") or v.WhichOneof(
+            "value"
+        ) not in ("val_int", "val_float", "val_double"):
+            return None
+        scalar_value = _scalar_value(v)
+        assert isinstance(scalar_value, (int, float))
+        raw_timestamp = column("timestamp")
+        # `timestamp` is a second-resolution DateTime, so a fractional bound must be
+        # rounded to the integer second that preserves the original
+        # `CAST(timestamp, 'Float64') OP value` result: `<`/`>=` round up (ceil) and
+        # `<=`/`>` round down (floor). Integer bounds are left unchanged, so the
+        # rewritten mandatory-range bounds stay byte-identical and
+        # dedupe_timestamp_conditions can still collapse them.
+        match comparison_filter.op:
+            case ComparisonFilter.OP_LESS_THAN:
+                return f.less(
+                    raw_timestamp, timestamp_seconds_to_datetime_literal(math.ceil(scalar_value))
+                )
+            case ComparisonFilter.OP_LESS_THAN_OR_EQUALS:
+                return f.lessOrEquals(
+                    raw_timestamp, timestamp_seconds_to_datetime_literal(math.floor(scalar_value))
+                )
+            case ComparisonFilter.OP_GREATER_THAN:
+                return f.greater(
+                    raw_timestamp, timestamp_seconds_to_datetime_literal(math.floor(scalar_value))
+                )
+            case ComparisonFilter.OP_GREATER_THAN_OR_EQUALS:
+                return f.greaterOrEquals(
+                    raw_timestamp, timestamp_seconds_to_datetime_literal(math.ceil(scalar_value))
+                )
+            case _:
+                return None
 
     def _equals(
         self,
