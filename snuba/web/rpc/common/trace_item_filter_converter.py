@@ -264,11 +264,6 @@ def _array_value_length(v: AttributeValue, value_type: str) -> int:
     return len(getattr(v, value_type).values)
 
 
-_ArrayComparisonValidator = Callable[
-    [ComparisonFilter.Op.ValueType, AttributeValue, AttributeKey], None
-]
-
-
 def _require_element_typed_array_key(key: AttributeKey, subject: str) -> None:
     """Exact equality and hasAny/hasAll compare against a single native typed column, which
     the deprecated untyped ``TYPE_ARRAY`` doesn't have."""
@@ -293,9 +288,7 @@ def _validate_array_pattern_match(
         )
 
 
-def _validate_array_equals(
-    op: ComparisonFilter.Op.ValueType, v: AttributeValue, key: AttributeKey
-) -> None:
+def _validate_array_equals(v: AttributeValue, key: AttributeKey) -> None:
     """Two modes, dispatched on the RHS type:
     - scalar value -> "any element equals scalar" (includes), for all array key types.
     - array value  -> exact ordered array equality, element-typed keys only.
@@ -319,9 +312,7 @@ def _validate_array_equals(
         )
 
 
-def _validate_array_has(
-    op: ComparisonFilter.Op.ValueType, v: AttributeValue, key: AttributeKey
-) -> None:
+def _validate_array_has(v: AttributeValue, key: AttributeKey) -> None:
     _require_element_typed_array_key(key, "OP_HAS_ANY/OP_HAS_ALL are")
     vt = v.WhichOneof("value")
     if vt not in _ARRAY_VALUE_TYPES:
@@ -332,41 +323,29 @@ def _validate_array_has(
         raise BadSnubaRPCRequestException("OP_HAS_ANY/OP_HAS_ALL require a non-empty array")
 
 
-def _reject_array_in(
-    op: ComparisonFilter.Op.ValueType, v: AttributeValue, key: AttributeKey
-) -> None:
-    # IN/NOT_IN on an array key is the same as "shares any element", which the
-    # dedicated array operators express directly, so point the user there.
-    raise BadSnubaRPCRequestException(
-        "OP_IN/OP_NOT_IN are not supported on array keys; use OP_HAS_ANY "
-        "(match any element) or OP_HAS_ALL (match all elements) instead"
-    )
-
-
-_ARRAY_COMPARISON_VALIDATORS: dict[ComparisonFilter.Op.ValueType, _ArrayComparisonValidator] = {
-    ComparisonFilter.OP_LIKE: _validate_array_pattern_match,
-    ComparisonFilter.OP_NOT_LIKE: _validate_array_pattern_match,
-    ComparisonFilter.OP_REGEXP: _validate_array_pattern_match,
-    ComparisonFilter.OP_EQUALS: _validate_array_equals,
-    ComparisonFilter.OP_NOT_EQUALS: _validate_array_equals,
-    ComparisonFilter.OP_HAS_ANY: _validate_array_has,
-    ComparisonFilter.OP_HAS_ALL: _validate_array_has,
-    ComparisonFilter.OP_IN: _reject_array_in,
-    ComparisonFilter.OP_NOT_IN: _reject_array_in,
-}
-
-
 def _validate_comparison_filter_type_array(
     op: ComparisonFilter.Op.ValueType, v: AttributeValue, key: AttributeKey
 ) -> None:
-    validator = _ARRAY_COMPARISON_VALIDATORS.get(op)
-    if validator is None:
-        raise BadSnubaRPCRequestException(
-            f"{ComparisonFilter.Op.Name(op)} is not supported on array keys "
-            "(supported: LIKE, NOT_LIKE, REGEXP, OP_EQUALS, OP_NOT_EQUALS, OP_HAS_ANY, "
-            "OP_HAS_ALL)"
-        )
-    validator(op, v, key)
+    match op:
+        case ComparisonFilter.OP_LIKE | ComparisonFilter.OP_NOT_LIKE | ComparisonFilter.OP_REGEXP:
+            _validate_array_pattern_match(op, v, key)
+        case ComparisonFilter.OP_EQUALS | ComparisonFilter.OP_NOT_EQUALS:
+            _validate_array_equals(v, key)
+        case ComparisonFilter.OP_HAS_ANY | ComparisonFilter.OP_HAS_ALL:
+            _validate_array_has(v, key)
+        case ComparisonFilter.OP_IN | ComparisonFilter.OP_NOT_IN:
+            # IN/NOT_IN on an array key is the same as "shares any element", which the
+            # dedicated array operators express directly, so point the user there.
+            raise BadSnubaRPCRequestException(
+                "OP_IN/OP_NOT_IN are not supported on array keys; use OP_HAS_ANY "
+                "(match any element) or OP_HAS_ALL (match all elements) instead"
+            )
+        case _:
+            raise BadSnubaRPCRequestException(
+                f"{ComparisonFilter.Op.Name(op)} is not supported on array keys "
+                "(supported: LIKE, NOT_LIKE, REGEXP, OP_EQUALS, OP_NOT_EQUALS, OP_HAS_ANY, "
+                "OP_HAS_ALL)"
+            )
 
 
 def _coerce_int(s: str) -> int | None:
