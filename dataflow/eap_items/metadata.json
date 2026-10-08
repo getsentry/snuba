@@ -1,0 +1,130 @@
+{
+  "name": "EAP items: Kafka snuba-items to BigQuery",
+  "description": "Reads sentry_protos.snuba.v1.TraceItem protobufs from Kafka and writes rows to BigQuery eap.items.",
+  "streaming": true,
+  "supportsAtLeastOnce": true,
+  "supportsExactlyOnce": true,
+  "defaultStreamingMode": "AT_LEAST_ONCE",
+  "parameters": [
+    {
+      "name": "bootstrap_servers",
+      "label": "Kafka bootstrap servers",
+      "helpText": "Comma-separated host:port list.",
+      "isOptional": false
+    },
+    {
+      "name": "topic",
+      "label": "Kafka topic",
+      "helpText": "Default: snuba-items.",
+      "isOptional": true
+    },
+    {
+      "name": "consumer_group_id",
+      "label": "Kafka consumer group id",
+      "helpText": "Default: eap-bigquery-items.",
+      "isOptional": true
+    },
+    {
+      "name": "output_table",
+      "label": "BigQuery output table",
+      "helpText": "PROJECT:DATASET.TABLE. Default: sentry-s4s2:eap.items.",
+      "isOptional": true,
+      "regexes": [
+        "^[^:]+:[^.]+\\.[^.]+$"
+      ]
+    },
+    {
+      "name": "sample_rate",
+      "label": "Pipeline sample rate",
+      "helpText": "Fraction of traces to keep, in (0, 1]. Default 1.0.",
+      "isOptional": true,
+      "regexes": [
+        "^(0?\\.[0-9]+|1(\\.0+)?)$"
+      ]
+    },
+    {
+      "name": "sample_seed",
+      "label": "Sampling seed",
+      "helpText": "Salt for the trace_id hash. Default empty.",
+      "isOptional": true
+    },
+    {
+      "name": "start_offset",
+      "label": "Start offset policy",
+      "helpText": "Kafka auto.offset.reset (latest | earliest), used only when the consumer group has no committed offset. Default latest.",
+      "isOptional": true,
+      "regexes": [
+        "^(latest|earliest)$"
+      ]
+    },
+    {
+      "name": "start_read_time_ms",
+      "label": "Force start time (epoch ms)",
+      "helpText": "If >= 0, ignore committed offsets and start all partitions at this broker timestamp. Default -1 (off).",
+      "isOptional": true,
+      "regexes": [
+        "^-?[0-9]+$"
+      ]
+    },
+    {
+      "name": "write_method",
+      "label": "BigQuery write method",
+      "helpText": "STORAGE_WRITE_API (at-least-once) | STORAGE_WRITE_API_EXACTLY_ONCE | STREAMING_INSERTS.",
+      "isOptional": true,
+      "regexes": [
+        "^(STORAGE_WRITE_API|STORAGE_WRITE_API_EXACTLY_ONCE|STREAMING_INSERTS)$"
+      ]
+    },
+    {
+      "name": "triggering_frequency_seconds",
+      "label": "Exactly-once commit interval",
+      "helpText": "Seconds. Only used with STORAGE_WRITE_API_EXACTLY_ONCE. Default 5.",
+      "isOptional": true,
+      "regexes": [
+        "^[0-9]+$"
+      ]
+    },
+    {
+      "name": "retention_default_days",
+      "label": "Default retention days",
+      "helpText": "Used when TraceItem.retention_days is 0. Default 30.",
+      "isOptional": true,
+      "regexes": [
+        "^[0-9]+$"
+      ]
+    },
+    {
+      "name": "retention_max_days",
+      "label": "Max retention days",
+      "helpText": "Cap for TraceItem.retention_days. Default 90.",
+      "isOptional": true,
+      "regexes": [
+        "^[0-9]+$"
+      ]
+    },
+    {
+      "name": "dead_letter_path",
+      "label": "Dead-letter GCS prefix",
+      "helpText": "gs://bucket/prefix for JSONL dead-letter files. Empty = log + counter only.",
+      "isOptional": true,
+      "regexes": [
+        "^(gs://.+)?$"
+      ]
+    },
+    {
+      "name": "dead_letter_window_seconds",
+      "label": "Dead-letter file window",
+      "helpText": "Seconds per dead-letter file window. Default 300.",
+      "isOptional": true,
+      "regexes": [
+        "^[0-9]+$"
+      ]
+    },
+    {
+      "name": "kafka_consumer_config",
+      "label": "Extra Kafka consumer config",
+      "helpText": "JSON object of extra consumer properties. Default {}.",
+      "isOptional": true
+    }
+  ]
+}

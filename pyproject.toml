@@ -126,7 +126,7 @@ dev = [
 [tool.pytest.ini_options]
 python_files = "test*.py"
 addopts = "--tb=native -p no:doctest -p no:warnings"
-norecursedirs = "bin dist docs htmlcov script hooks node_modules .*"
+norecursedirs = "bin dist docs htmlcov script hooks node_modules dataflow .*"
 looponfailroots = ["snuba", "tests"]
 markers = [
     "clickhouse_db: Use clickhouse",
@@ -178,6 +178,8 @@ exclude = [
     # docker-only distributed-migration scaffolding; its top-level conftest.py
     # collides with the repo-root conftest.py module name under `mypy .`
     "^test_distributed_migrations/",
+    # standalone Beam project with its own dependencies (see dataflow/eap_items)
+    "^dataflow/",
 ]
 
 [[tool.mypy.overrides]]
