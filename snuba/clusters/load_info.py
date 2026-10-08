@@ -20,7 +20,7 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(
     environment.metrics,
-    "snuba.clusters.load_info",
+    "clusters.load_info",
 )
 
 

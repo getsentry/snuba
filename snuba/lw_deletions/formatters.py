@@ -5,6 +5,7 @@ from typing import (
     Any,
 )
 
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.datasets.storages.storage_key import StorageKey
@@ -66,7 +67,7 @@ class SearchIssuesFormatter(Formatter):
 
 def _deserialize_attribute_conditions(
     data: dict[str, WireAttributeCondition] | None,
-    item_type: int | None = None,
+    item_type: TraceItemType.ValueType | None = None,
 ) -> AttributeConditions | None:
     if data is None:
         return None

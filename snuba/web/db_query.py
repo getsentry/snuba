@@ -895,7 +895,7 @@ def _apply_allocation_policies_quota(
             allowance = allocation_policy.get_quota_allowance(
                 attribution_info.tenant_ids, query_id, load_info
             )
-            can_run &= allowance.can_run
+            decision = allowance.decision(allocation_policy, load_info)
             quota_allowances[allocation_policy.class_name()] = allowance
             span.set_attribute(
                 "quota_allowance",
@@ -908,13 +908,17 @@ def _apply_allocation_policies_quota(
                     quota_allowance=allowance,
                     policy=allocation_policy,
                 )
-            min_threads_across_policies = min(min_threads_across_policies, allowance.max_threads)
-            if not can_run:
+            if decision.is_rejected:
+                can_run = False
+                min_threads_across_policies = 0
                 rejection_quota_and_policy = _QuotaAndPolicy(
                     quota_allowance=allowance,
                     policy=allocation_policy,
                 )
                 break
+            min_threads_across_policies = min(
+                min_threads_across_policies, allowance.threads_for(decision, allocation_policy)
+            )
 
         allowance_dicts = {
             key: quota_allowance.to_dict() for key, quota_allowance in quota_allowances.items()

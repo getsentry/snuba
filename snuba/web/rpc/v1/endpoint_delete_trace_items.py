@@ -5,7 +5,7 @@ from sentry_protos.snuba.v1.endpoint_delete_trace_items_pb2 import (
     DeleteTraceItemsRequest,
     DeleteTraceItemsResponse,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import TraceItemFilterWithType
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemFilterWithType, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import ComparisonFilter
 
@@ -39,7 +39,7 @@ def _extract_attribute_value(comparison_filter: ComparisonFilter) -> Any:
 
 
 def _trace_item_filters_to_attribute_conditions(
-    item_type: int,
+    item_type: TraceItemType.ValueType,
     filters: Sequence[TraceItemFilterWithType],
 ) -> AttributeConditions:
     """

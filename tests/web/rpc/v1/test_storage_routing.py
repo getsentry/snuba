@@ -361,7 +361,11 @@ def test_metrics_output() -> None:
                 "ConcurrentRateLimitAllocationPolicy": {
                     "can_run": True,
                     "max_threads": 10,
-                    "explanation": {"storage_key": "EAP"},
+                    "explanation": {
+                        "overrides": {},
+                        "reason": "within limit",
+                        "storage_key": "EAP",
+                    },
                     "is_throttled": False,
                     "throttle_threshold": AnyInt(66),
                     "rejection_threshold": AnyInt(66),

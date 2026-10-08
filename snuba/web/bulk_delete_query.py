@@ -58,7 +58,7 @@ class DeleteQueryMessage(TypedDict, total=False):
     conditions: ConditionsType
     tenant_ids: Mapping[str, str | int]
     attribute_conditions: dict[str, WireAttributeCondition] | None
-    attribute_conditions_item_type: int | None
+    attribute_conditions_item_type: TraceItemType.ValueType | None
 
 
 PRODUCER_MAP: MutableMapping[str, Producer] = {}
@@ -162,9 +162,7 @@ def _validate_attribute_conditions(
 
     # Map the integer item_type to its string name used in configuration
     try:
-        item_type_name = get_trace_item_type_name(
-            TraceItemType.ValueType(attribute_conditions.item_type)
-        )
+        item_type_name = get_trace_item_type_name(attribute_conditions.item_type)
     except ValueError as e:
         raise InvalidQueryException(str(e)) from e
 

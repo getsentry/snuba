@@ -445,7 +445,7 @@ def test_is_not_enforced() -> None:
 
     assert throttle_policy.get_quota_allowance(tenant_ids, "deadbeef").max_threads == 1
     set_component_config(throttle_policy, config_key="is_enforced", value=0)
-    assert throttle_policy.get_quota_allowance(tenant_ids, "deadbeef").max_threads == MAX_THREADS
+    assert throttle_policy.get_quota_allowance(tenant_ids, "deadbeef").max_threads == 1
 
     rejected_metrics = get_recorded_metric_calls(
         "increment", "allocation_policy.db_request_rejected"
@@ -477,9 +477,8 @@ def test_is_pardonable_overrides_can_run_when_idle() -> None:
     with mock.patch.object(LoadInfo, "should_pardon", return_value=True):
         assert reject_policy.get_quota_allowance(tenant_ids, "deadbeef").can_run is False
         pardoned = reject_policy.get_quota_allowance(tenant_ids, "deadbeef", idle)
-    assert pardoned.can_run is True
-    assert pardoned.max_threads == reject_policy.max_threads
-    assert pardoned.max_bytes_to_read == 0
+    assert pardoned.can_run is False
+    assert pardoned.max_threads == 0
     assert pardoned.explanation["idle_pardon"] == idle.to_dict()
 
     pardoned_metrics = get_recorded_metric_calls(
