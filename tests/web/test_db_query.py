@@ -1391,6 +1391,39 @@ class _RejectAllPolicy(AllocationPolicy):
         return
 
 
+class _RecordCallPolicy(AllocationPolicy):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.called = False
+
+    def _additional_config_definitions(self) -> list[Configuration]:
+        return []
+
+    def _get_quota_allowance(
+        self, tenant_ids: dict[str, str | int], query_id: str
+    ) -> QuotaAllowance:
+        self.called = True
+        return QuotaAllowance(
+            can_run=True,
+            max_threads=self.max_threads,
+            explanation={"reason": "allow"},
+            is_throttled=False,
+            throttle_threshold=MAX_THRESHOLD,
+            rejection_threshold=MAX_THRESHOLD,
+            quota_used=0,
+            quota_unit=NO_UNITS,
+            suggestion=NO_SUGGESTION,
+        )
+
+    def _update_quota_balance(
+        self,
+        tenant_ids: dict[str, str | int],
+        query_id: str,
+        result_or_error: QueryResultOrError,
+    ) -> None:
+        return
+
+
 def test_idle_pardon_allows_rejected_query() -> None:
     attribution_info = mock.Mock()
     attribution_info.tenant_ids = {"referrer": "test_referrer", "organization_id": 1}
@@ -1418,8 +1451,8 @@ def test_idle_pardon_allows_rejected_query() -> None:
         )
     assert stats["quota_allowance"]["summary"]["is_rejected"] is False
     details = stats["quota_allowance"]["details"]["_RejectAllPolicy"]
-    assert details["can_run"] is True
-    assert details["max_threads"] == 10
+    assert details["can_run"] is False
+    assert details["max_threads"] == 0
     assert details["explanation"]["idle_pardon"] == idle.to_dict()
     quota = query_settings.get_resource_quota()
     assert quota is not None
@@ -1452,3 +1485,37 @@ def test_idle_pardon_still_rejects_when_not_idle() -> None:
             query_id="no_pardon_query",
         )
     assert stats["quota_allowance"]["summary"]["is_rejected"] is True
+
+
+def test_idle_pardon_does_not_short_circuit_remaining_policies() -> None:
+    attribution_info = mock.Mock()
+    attribution_info.tenant_ids = {"referrer": "test_referrer", "organization_id": 1}
+    stats: MutableMapping[str, Any] = {}
+    idle = LoadInfo(cluster_load=1.0, concurrent_queries=1)
+    second = _RecordCallPolicy(ResourceIdentifier(StorageKey("errors_ro")))
+    with (
+        override_options(
+            "snuba",
+            {"storage_routing.enable_get_cluster_loadinfo": True},
+        ),
+        mock.patch(
+            "snuba.web.db_query.get_cluster_loadinfo",
+            return_value=idle,
+        ),
+        mock.patch.object(LoadInfo, "should_pardon", return_value=True),
+    ):
+        _apply_allocation_policies_quota(
+            query_settings=HTTPQuerySettings(),
+            attribution_info=attribution_info,
+            formatted_query=mock.Mock(),
+            stats=stats,
+            allocation_policies=[
+                _RejectAllPolicy(ResourceIdentifier(StorageKey("errors_ro"))),
+                second,
+            ],
+            query_id="pardon_no_short_circuit",
+        )
+    assert second.called
+    assert stats["quota_allowance"]["summary"]["is_rejected"] is False
+    assert stats["quota_allowance"]["details"]["_RejectAllPolicy"]["can_run"] is False
+    assert "_RecordCallPolicy" in stats["quota_allowance"]["details"]

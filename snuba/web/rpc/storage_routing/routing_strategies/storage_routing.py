@@ -36,6 +36,7 @@ from snuba.configs.configuration import (
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
 from snuba.query.allocation_policies import (
+    MAX_THRESHOLD,
     AllocationPolicy,
     PolicyData,
     QueryResultOrError,
@@ -429,21 +430,34 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         return overrides
 
     def _get_combined_allocation_policies_recommendations(
-        self, policy_recommendations: list[QuotaAllowance]
+        self,
+        recommendations: dict[str, QuotaAllowance],
+        policies: list[AllocationPolicy],
+        load_info: LoadInfo | None,
     ) -> CombinedAllocationPoliciesRecommendations:
         # decides how to combine the recommendations from the allocation policies
         settings = {}
+        policy_recommendations = list(recommendations.values())
 
         max_bytes_to_read = get_max_bytes_to_read(policy_recommendations)
         if max_bytes_to_read != 0:
             settings["max_bytes_to_read"] = max_bytes_to_read
 
-        settings["max_threads"] = min(
-            [qa.max_threads for qa in policy_recommendations],
-        )
+        can_run = True
+        thread_cap = MAX_THRESHOLD
+        for policy in policies:
+            qa = recommendations[policy.class_name()]
+            decision = qa.decision(policy, load_info)
+            can_run = can_run and not decision.is_rejected
+            if decision.is_rejected:
+                thread_cap = 0
+            else:
+                thread_cap = min(thread_cap, qa.threads_for(decision, policy))
+
+        settings["max_threads"] = thread_cap
 
         return CombinedAllocationPoliciesRecommendations(
-            can_run=all(qa.can_run for qa in policy_recommendations),
+            can_run=can_run,
             is_throttled=any(qa.is_throttled for qa in policy_recommendations),
             settings=settings,
         )
@@ -489,7 +503,9 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 )
                 combined_allocation_policies_recommendations = (
                     self._get_combined_allocation_policies_recommendations(
-                        list(routing_context.allocation_policies_recommendations.values())
+                        routing_context.allocation_policies_recommendations,
+                        self.get_allocation_policies(routing_context.tenant_ids),
+                        routing_context.cluster_load_info,
                     )
                 )
 

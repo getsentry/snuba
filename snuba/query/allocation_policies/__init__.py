@@ -62,6 +62,10 @@ class QuotaAllowanceDecision(IntEnum):
     ALLOWED = 2
     THROTTLED = 3
 
+    @property
+    def is_rejected(self) -> bool:
+        return self is QuotaAllowanceDecision.REJECTED
+
 
 @dataclass(frozen=True)
 class QuotaAllowance:
@@ -103,6 +107,19 @@ class QuotaAllowance:
             return QuotaAllowanceDecision.THROTTLED
 
         return QuotaAllowanceDecision.ALLOWED
+
+    def threads_for(
+        self,
+        decision: QuotaAllowanceDecision,
+        policy: AllocationPolicy,
+    ) -> int:
+        """Threads this allowance contributes to the combined cap. A pardoned
+        rejection contributes the policy's full budget instead of the rejection's 0,
+        every other decision contributes what the policy asked for (which is how
+        throttling reduces threads)."""
+        if decision is QuotaAllowanceDecision.PARDONED:
+            return policy.max_threads
+        return self.max_threads
 
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, QuotaAllowance):
@@ -500,20 +517,8 @@ class AllocationPolicy(ConfigurableComponent, ABC):
             match decision:
                 case QuotaAllowanceDecision.PARDONED:
                     self.metrics.increment("db_request_pardoned", tags={"referrer": referrer})
-                    allowance = QuotaAllowance(
-                        can_run=True,
-                        max_threads=self.max_threads,
-                        explanation={
-                            **allowance.explanation,
-                            "idle_pardon": load_info.to_dict() if load_info is not None else {},
-                        },
-                        is_throttled=allowance.is_throttled,
-                        throttle_threshold=allowance.throttle_threshold,
-                        rejection_threshold=allowance.rejection_threshold,
-                        quota_used=allowance.quota_used,
-                        quota_unit=allowance.quota_unit,
-                        suggestion=allowance.suggestion,
-                        max_bytes_to_read=0,
+                    allowance.explanation["idle_pardon"] = (
+                        load_info.to_dict() if load_info is not None else {}
                     )
                 case QuotaAllowanceDecision.REJECTED:
                     self.metrics.increment("db_request_rejected", tags={"referrer": referrer})
@@ -528,7 +533,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                 case unreachable:
                     assert_never(unreachable)
 
-            if not self.is_enforced:
+            if decision.is_rejected and not self.is_enforced:
                 allowance = QuotaAllowance(
                     can_run=True,
                     max_threads=self.max_threads,
