@@ -33,7 +33,6 @@ from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     base_conditions_and,
     merge_typed_array_maps,
-    trace_item_filters_to_expression,
     treeify_or_and_conditions,
     typed_array_map_selected_expressions,
 )
@@ -45,6 +44,7 @@ from snuba.web.rpc.common.exceptions import (
     BadSnubaRPCRequestException,
     RPCRequestException,
 )
+from snuba.web.rpc.common.trace_item_filter_converter import trace_item_filters_to_expression
 from snuba.web.rpc.storage_routing.common import decode_routing_hint
 from snuba.web.rpc.v1.endpoint_get_trace import convert_to_attribute_value
 

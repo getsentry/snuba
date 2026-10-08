@@ -75,7 +75,6 @@ from snuba.web.rpc.common.common import (
     get_field_existence_expression,
     semver_sort_key,
     timestamp_in_range_condition,
-    trace_item_filters_to_expression,
     treeify_or_and_conditions,
     typed_array_select_subcolumn_name,
     use_sampling_factor,
@@ -96,6 +95,9 @@ from snuba.web.rpc.common.formula_ops import (
     FORMULA_CONDITION_OP_TO_EXPR,
 )
 from snuba.web.rpc.common.pagination import FlexibleTimeWindowPageWithFilters
+from snuba.web.rpc.common.trace_item_filter_converter import (
+    trace_item_filters_to_expression,
+)
 from snuba.web.rpc.common.trace_item_table import convert_results
 from snuba.web.rpc.proto_visitor import (
     AggregationToConditionalAggregationVisitor,
