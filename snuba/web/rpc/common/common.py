@@ -1,6 +1,6 @@
 import math
 from collections.abc import Callable, Iterable
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from typing import Any, TypedDict, TypeVar
 
@@ -9,8 +9,12 @@ from google.protobuf.timestamp_pb2 import Timestamp as ProtobufTimestamp
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
+    AndFilter,
     AnyAttributeFilter,
     ComparisonFilter,
+    ExistsFilter,
+    NotFilter,
+    OrFilter,
     TraceItemFilter,
 )
 
@@ -1052,6 +1056,427 @@ def indexed_column_for(
         return None
 
 
+@dataclass(frozen=True)
+class _Comparison:
+    """A comparison filter's operands, resolved once and shared by every op method."""
+
+    filter: ComparisonFilter
+    k: AttributeKey
+    v: AttributeValue
+    value_type: str
+    v_is_null: bool
+    k_expression: Expression
+    v_expression: Expression
+
+    @classmethod
+    def from_filter(
+        cls,
+        comparison_filter: ComparisonFilter,
+        attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    ) -> "_Comparison":
+        k = comparison_filter.key
+        op = comparison_filter.op
+        v = comparison_filter.value
+
+        if k.type in ARRAY_TYPES:
+            _validate_comparison_filter_type_array(op, v, k)
+
+        k_expression = _trace_item_filter_key_expression(
+            attr_to_key_expression_callable=attribute_key_to_expression,
+            key=k,
+        )
+
+        value_type = v.WhichOneof("value")
+        if value_type is None:
+            raise BadSnubaRPCRequestException("comparison does not have a right hand side")
+
+        v_is_null = v.is_null or value_type == "val_null"
+        v_expression: Expression = literal(None) if v_is_null else _attribute_value_to_expression(v)
+
+        return cls(
+            filter=comparison_filter,
+            k=k,
+            v=v,
+            value_type=value_type,
+            v_is_null=v_is_null,
+            k_expression=k_expression,
+            v_expression=v_expression,
+        )
+
+
+@dataclass(frozen=True)
+class TraceItemFilterConverter:
+    """Converts a ``TraceItemFilter`` tree into an expression. Holds the settings
+    every nested filter needs unchanged; see ``trace_item_filters_to_expression``
+    for what each one does."""
+
+    item_type: TraceItemType.ValueType
+    attribute_key_to_expression: Callable[[AttributeKey], Expression]
+    membership_as_has: bool = False
+    start_timestamp: ProtobufTimestamp | None = None
+
+    def to_expression(self, item_filter: TraceItemFilter) -> Expression:
+        match item_filter.WhichOneof("value"):
+            case "and_filter":
+                return self._and(item_filter.and_filter)
+            case "or_filter":
+                return self._or(item_filter.or_filter)
+            case "not_filter":
+                return self._not(item_filter.not_filter)
+            case "comparison_filter":
+                return self._comparison(item_filter.comparison_filter)
+            case "exists_filter":
+                return self._exists(item_filter.exists_filter)
+            case "any_attribute_filter":
+                return self._any_attribute(item_filter.any_attribute_filter)
+            case _:
+                return literal(True)
+
+    def _and(self, and_filter: AndFilter) -> Expression:
+        filters = and_filter.filters
+        if len(filters) == 0:
+            return literal(True)
+        if len(filters) == 1:
+            return self.to_expression(filters[0])
+        return and_cond(*(self.to_expression(x) for x in filters))
+
+    def _or(self, or_filter: OrFilter) -> Expression:
+        filters = or_filter.filters
+        if len(filters) == 0:
+            raise BadSnubaRPCRequestException("Invalid trace item filter, empty 'or' clause")
+        if len(filters) == 1:
+            return self.to_expression(filters[0])
+        return or_cond(*(self.to_expression(x) for x in filters))
+
+    def _not(self, not_filter: NotFilter) -> Expression:
+        filters = not_filter.filters
+        if len(filters) == 0:
+            raise BadSnubaRPCRequestException("Invalid trace item filter, empty 'not' clause")
+        if len(filters) == 1:
+            return not_cond(self.to_expression(filters[0]))
+        return not_cond(and_cond(*(self.to_expression(x) for x in filters)))
+
+    def _exists(self, exists_filter: ExistsFilter) -> Expression:
+        return get_field_existence_expression(
+            _trace_item_filter_key_expression(
+                attr_to_key_expression_callable=self.attribute_key_to_expression,
+                key=exists_filter.key,
+            )
+        )
+
+    def _any_attribute(self, any_attribute_filter: AnyAttributeFilter) -> Expression:
+        if not get_option("enable_any_attribute_filter", True):
+            return literal(True)
+        return _any_attribute_filter_to_expression(
+            any_attribute_filter, membership_as_has=self.membership_as_has
+        )
+
+    def _comparison(self, comparison_filter: ComparisonFilter) -> Expression:
+        c = _Comparison.from_filter(comparison_filter, self.attribute_key_to_expression)
+
+        indexed = self._indexed_column_comparison(c)
+        if indexed is not None:
+            return indexed
+        timestamp = self._raw_timestamp_comparison(c)
+        if timestamp is not None:
+            return timestamp
+
+        match c.filter.op:
+            case ComparisonFilter.OP_EQUALS:
+                return self._equals(c)
+            case ComparisonFilter.OP_NOT_EQUALS:
+                return self._not_equals(c)
+            case ComparisonFilter.OP_LIKE:
+                return self._like(c)
+            case ComparisonFilter.OP_REGEXP:
+                return self._regexp(c)
+            case ComparisonFilter.OP_NOT_LIKE:
+                return self._not_like(c)
+            case ComparisonFilter.OP_LESS_THAN:
+                return f.less(c.k_expression, c.v_expression)
+            case ComparisonFilter.OP_LESS_THAN_OR_EQUALS:
+                return f.lessOrEquals(c.k_expression, c.v_expression)
+            case ComparisonFilter.OP_GREATER_THAN:
+                return f.greater(c.k_expression, c.v_expression)
+            case ComparisonFilter.OP_GREATER_THAN_OR_EQUALS:
+                return f.greaterOrEquals(c.k_expression, c.v_expression)
+            case ComparisonFilter.OP_IN:
+                return self._in(c)
+            case ComparisonFilter.OP_NOT_IN:
+                return self._not_in(c)
+            case ComparisonFilter.OP_HAS_ANY | ComparisonFilter.OP_HAS_ALL:
+                return self._has_any_or_all(c)
+            case _:
+                raise BadSnubaRPCRequestException(
+                    f"Invalid string comparison, unknown op: {comparison_filter}"
+                )
+
+    def _indexed_column_comparison(self, c: _Comparison) -> Expression | None:
+        """Equality / IN against the bloom-filter-indexed column, or None to take the
+        normal path."""
+        k, v, op = c.k, c.v, c.filter.op
+        if k.type != AttributeKey.Type.TYPE_STRING or v.is_null or c.filter.ignore_case:
+            return None
+        index_name = indexed_column_for(self.start_timestamp, self.item_type, k.name)
+        if index_name is None:
+            return None
+        if op == ComparisonFilter.OP_EQUALS and v.val_str:
+            return f.equals(column(index_name), c.v_expression)
+        values = v.val_str_array.values
+        if op == ComparisonFilter.OP_IN and values and "" not in values:
+            return _in_or_has(column(index_name), c.v_expression, as_has=self.membership_as_has)
+        return None
+
+    def _raw_timestamp_comparison(self, c: _Comparison) -> Expression | None:
+        """Range comparison on the raw ``timestamp`` column, or None to take the normal path.
+
+        `sentry.timestamp` is a normalized column that `attribute_key_to_expression`
+        maps to `CAST(timestamp, 'Float64')`. Wrapping the primary-key/partition
+        column in a CAST prevents ClickHouse from using it for granule and partition
+        pruning, so range filters on it scan far more data than necessary. It also
+        duplicates the mandatory time-range condition (timestamp_in_range_condition)
+        that is already applied on the raw column. For range comparisons, compare
+        against the raw DateTime `timestamp` column instead so the condition is
+        index- and partition-prunable. We reuse timestamp_seconds_to_datetime_literal
+        so a bound equal to the mandatory range is byte-identical to it and gets
+        collapsed by dedupe_timestamp_conditions.
+        """
+        if c.k.name != sentry_column("timestamp") or c.value_type not in (
+            "val_int",
+            "val_float",
+            "val_double",
+        ):
+            return None
+        scalar_value = _scalar_value(c.v)
+        assert isinstance(scalar_value, (int, float))
+        raw_timestamp = column("timestamp")
+        # `timestamp` is a second-resolution DateTime, so a fractional bound must be
+        # rounded to the integer second that preserves the original
+        # `CAST(timestamp, 'Float64') OP value` result: `<`/`>=` round up (ceil) and
+        # `<=`/`>` round down (floor). Integer bounds are left unchanged, so the
+        # rewritten mandatory-range bounds stay byte-identical and
+        # dedupe_timestamp_conditions can still collapse them.
+        match c.filter.op:
+            case ComparisonFilter.OP_LESS_THAN:
+                return f.less(
+                    raw_timestamp, timestamp_seconds_to_datetime_literal(math.ceil(scalar_value))
+                )
+            case ComparisonFilter.OP_LESS_THAN_OR_EQUALS:
+                return f.lessOrEquals(
+                    raw_timestamp, timestamp_seconds_to_datetime_literal(math.floor(scalar_value))
+                )
+            case ComparisonFilter.OP_GREATER_THAN:
+                return f.greater(
+                    raw_timestamp, timestamp_seconds_to_datetime_literal(math.floor(scalar_value))
+                )
+            case ComparisonFilter.OP_GREATER_THAN_OR_EQUALS:
+                return f.greaterOrEquals(
+                    raw_timestamp, timestamp_seconds_to_datetime_literal(math.ceil(scalar_value))
+                )
+            case _:
+                return None
+
+    def _equals(self, c: _Comparison) -> Expression:
+        k, v, ignore_case = c.k, c.v, c.filter.ignore_case
+        _check_non_string_values_cannot_ignore_case(c.filter)
+
+        if k.type in ARRAY_TYPES:
+            # Array value -> exact ordered array equality (element-typed keys only);
+            # scalar value -> "any element equals scalar" (includes).
+            if c.value_type in _ARRAY_VALUE_TYPES:
+                if ignore_case:
+                    raise BadSnubaRPCRequestException(
+                        "ignore_case is not supported for exact array equality"
+                    )
+                return _typed_array_exact_equals_expression(k, v)
+            return _typed_array_includes_scalar_expression(k, v, ignore_case)
+        if _is_map_backed_key(k):
+            # Map-backed: NULL-free (exists, value) form (see _map_backed_operands).
+            value, exists = _map_backed_operands(k)
+            if c.v_is_null:  # `attr = null` <=> key absent
+                return not_cond(exists)
+            lhs, rhs = (
+                (f.lower(value), f.lower(c.v_expression))
+                if ignore_case
+                else (value, c.v_expression)
+            )
+            cmp = f.equals(lhs, rhs)
+            # existence guard only needed when '' / 0 could match an absent key.
+            if _comparison_can_match_column_default(v, c.value_type):
+                return and_cond(exists, cmp)
+            return cmp
+        expr = (
+            f.equals(f.lower(c.k_expression), f.lower(c.v_expression))
+            if ignore_case
+            else f.equals(c.k_expression, c.v_expression)
+        )
+        # we redefine the way equals works for nulls
+        # now null=null is true
+        return or_cond(expr, and_cond(f.isNull(c.k_expression), f.isNull(c.v_expression)))
+
+    def _not_equals(self, c: _Comparison) -> Expression:
+        k, v, ignore_case = c.k, c.v, c.filter.ignore_case
+        _check_non_string_values_cannot_ignore_case(c.filter)
+        if k.type in ARRAY_TYPES:
+            if c.value_type in _ARRAY_VALUE_TYPES:
+                if ignore_case:
+                    raise BadSnubaRPCRequestException(
+                        "ignore_case is not supported for exact array equality"
+                    )
+                return not_cond(_typed_array_exact_equals_expression(k, v))
+            return not_cond(_typed_array_includes_scalar_expression(k, v, ignore_case))
+        if _is_map_backed_key(k):
+            # Negation of OP_EQUALS; an absent key is "not equal".
+            value, exists = _map_backed_operands(k)
+            if c.v_is_null:  # `attr != null` <=> key present
+                return exists
+            lhs, rhs = (
+                (f.lower(value), f.lower(c.v_expression))
+                if ignore_case
+                else (value, c.v_expression)
+            )
+            if _comparison_can_match_column_default(v, c.value_type):
+                return not_cond(and_cond(exists, f.equals(lhs, rhs)))
+            return f.notEquals(lhs, rhs)
+        expr = (
+            f.notEquals(f.lower(c.k_expression), f.lower(c.v_expression))
+            if ignore_case
+            else f.notEquals(c.k_expression, c.v_expression)
+        )
+        # we redefine the way not equals works for nulls
+        # now null!=null is true
+        return or_cond(expr, f.xor(f.isNull(c.k_expression), f.isNull(c.v_expression)))
+
+    def _like(self, c: _Comparison) -> Expression:
+        k, ignore_case = c.k, c.filter.ignore_case
+        if k.type in ARRAY_TYPES:
+            return _typed_array_like_expression(k, c.v_expression, ignore_case)
+        if k.type != AttributeKey.Type.TYPE_STRING:
+            raise BadSnubaRPCRequestException(
+                "the LIKE comparison is only supported on string and array keys"
+            )
+        comparison_function = f.ilike if ignore_case else f.like
+        if _is_map_backed_key(k):
+            value, exists = _map_backed_operands(k)
+            return and_cond(exists, comparison_function(value, c.v_expression))
+        return comparison_function(c.k_expression, c.v_expression)
+
+    def _regexp(self, c: _Comparison) -> Expression:
+        k, ignore_case = c.k, c.filter.ignore_case
+        _is_valid_regexp_pattern(c.v)
+        if k.type in ARRAY_TYPES:
+            return f.arrayExists(
+                Lambda(
+                    None,
+                    ("x",),
+                    _regexp_match(Argument(None, "x"), c.v_expression, ignore_case),
+                ),
+                type_array_typed_column_native_array(k, "attributes_array_string"),
+            )
+        if k.type != AttributeKey.Type.TYPE_STRING:
+            raise BadSnubaRPCRequestException(
+                "the REGEXP comparison is only supported on string and array keys"
+            )
+        if _is_map_backed_key(k):
+            value, exists = _map_backed_operands(k)
+            return and_cond(exists, _regexp_match(value, c.v_expression, ignore_case))
+        return _regexp_match(c.k_expression, c.v_expression, ignore_case)
+
+    def _not_like(self, c: _Comparison) -> Expression:
+        k, ignore_case = c.k, c.filter.ignore_case
+        if k.type in ARRAY_TYPES:
+            return not_cond(_typed_array_like_expression(k, c.v_expression, ignore_case))
+        if k.type != AttributeKey.Type.TYPE_STRING:
+            raise BadSnubaRPCRequestException(
+                "the NOT LIKE comparison is only supported on string and array keys"
+            )
+        if _is_map_backed_key(k):
+            # Negation of OP_LIKE; an absent key is "not like".
+            like_fn = f.ilike if ignore_case else f.like
+            value, exists = _map_backed_operands(k)
+            return not_cond(and_cond(exists, like_fn(value, c.v_expression)))
+        comparison_function = f.notILike if ignore_case else f.notLike
+        expr = comparison_function(c.k_expression, c.v_expression)
+        # we redefine the way not like works for nulls
+        # now null not like "%anything%" is true
+        return or_cond(expr, f.isNull(c.k_expression))
+
+    def _membership_values(self, c: _Comparison) -> Expression:
+        """The IN / NOT IN right-hand array, lowercased for ignore_case."""
+        if not c.filter.ignore_case:
+            return c.v_expression
+        if c.value_type == "val_str_array":
+            return literals_array(None, [literal(s.lower()) for s in c.v.val_str_array.values])
+        return literals_array(
+            None, [literal(elem.val_str.lower()) for elem in c.v.val_array.values]
+        )
+
+    def _in(self, c: _Comparison) -> Expression:
+        _check_non_string_values_cannot_ignore_case(c.filter)
+        ignore_case = c.filter.ignore_case
+        v_expression = self._membership_values(c)
+        # note: v_expression must be an array
+        # we redefine the way in works for nulls
+        # now null in ['hi', null] is true
+        if _is_map_backed_key(c.k):
+            # Map-backed: keep the existence if(...) out of in() (see helper).
+            return _analyzer_safe_in_expression(
+                c.k,
+                v_expression,
+                negated=False,
+                ignore_case=ignore_case,
+                guard=_comparison_can_match_column_default(c.v, c.value_type),
+                membership_as_has=self.membership_as_has,
+            )
+        k_expression = f.lower(c.k_expression) if ignore_case else c.k_expression
+        expr = _in_or_has(k_expression, v_expression, as_has=self.membership_as_has)
+        return or_cond(
+            expr,
+            and_cond(f.isNull(k_expression), f.has(v_expression, literal(None))),
+        )
+
+    def _not_in(self, c: _Comparison) -> Expression:
+        _check_non_string_values_cannot_ignore_case(c.filter)
+        ignore_case = c.filter.ignore_case
+        v_expression = self._membership_values(c)
+        # note: v_expression must be an array
+        # we redefine the way not in works for nulls
+        # now null not in ['hi'] is true
+        if _is_map_backed_key(c.k):
+            # Map-backed: keep the existence if(...) out of in() (see helper).
+            return _analyzer_safe_in_expression(
+                c.k,
+                v_expression,
+                negated=True,
+                ignore_case=ignore_case,
+                guard=_comparison_can_match_column_default(c.v, c.value_type),
+                membership_as_has=self.membership_as_has,
+            )
+        k_expression = f.lower(c.k_expression) if ignore_case else c.k_expression
+        expr = not_cond(_in_or_has(k_expression, v_expression, as_has=self.membership_as_has))
+        return or_cond(
+            expr,
+            and_cond(
+                f.isNull(k_expression),
+                not_cond(f.has(v_expression, literal(None))),
+            ),
+        )
+
+    def _has_any_or_all(self, c: _Comparison) -> Expression:
+        # "array attribute_key type only" per the proto: reject non-array keys here;
+        # array-typed keys are validated above by _validate_comparison_filter_type_array.
+        if c.k.type not in ARRAY_TYPES:
+            raise BadSnubaRPCRequestException(
+                "OP_HAS_ANY/OP_HAS_ALL are only supported on array keys"
+            )
+        if c.filter.ignore_case:
+            raise BadSnubaRPCRequestException(
+                "ignore_case is not supported for OP_HAS_ANY/OP_HAS_ALL"
+            )
+        function_name = "hasAny" if c.filter.op == ComparisonFilter.OP_HAS_ANY else "hasAll"
+        return _typed_array_has_expression(c.k, c.v, function_name)
+
+
 def trace_item_filters_to_expression(
     item_type: TraceItemType.ValueType,
     item_filter: TraceItemFilter,
@@ -1079,414 +1504,12 @@ def trace_item_filters_to_expression(
     element-typed array key (TYPE_ARRAY_STRING/INT/DOUBLE/BOOL) hits its single column
     natively, the deprecated untyped ``TYPE_ARRAY`` searches all four.
     """
-
-    if item_filter.HasField("and_filter"):
-        filters = item_filter.and_filter.filters
-        if len(filters) == 0:
-            return literal(True)
-        if len(filters) == 1:
-            return trace_item_filters_to_expression(
-                item_type,
-                filters[0],
-                attribute_key_to_expression,
-                membership_as_has,
-                start_timestamp,
-            )
-        return and_cond(
-            *(
-                trace_item_filters_to_expression(
-                    item_type,
-                    x,
-                    attribute_key_to_expression,
-                    membership_as_has,
-                    start_timestamp,
-                )
-                for x in filters
-            )
-        )
-
-    if item_filter.HasField("or_filter"):
-        filters = item_filter.or_filter.filters
-        if len(filters) == 0:
-            raise BadSnubaRPCRequestException("Invalid trace item filter, empty 'or' clause")
-        if len(filters) == 1:
-            return trace_item_filters_to_expression(
-                item_type,
-                filters[0],
-                attribute_key_to_expression,
-                membership_as_has,
-                start_timestamp,
-            )
-        return or_cond(
-            *(
-                trace_item_filters_to_expression(
-                    item_type,
-                    x,
-                    attribute_key_to_expression,
-                    membership_as_has,
-                    start_timestamp,
-                )
-                for x in filters
-            )
-        )
-
-    if item_filter.HasField("not_filter"):
-        filters = item_filter.not_filter.filters
-        if len(filters) == 0:
-            raise BadSnubaRPCRequestException("Invalid trace item filter, empty 'not' clause")
-        if len(filters) == 1:
-            return not_cond(
-                trace_item_filters_to_expression(
-                    item_type,
-                    filters[0],
-                    attribute_key_to_expression,
-                    membership_as_has,
-                    start_timestamp,
-                )
-            )
-        return not_cond(
-            and_cond(
-                *(
-                    trace_item_filters_to_expression(
-                        item_type,
-                        x,
-                        attribute_key_to_expression,
-                        membership_as_has,
-                        start_timestamp,
-                    )
-                    for x in filters
-                )
-            )
-        )
-
-    if item_filter.HasField("comparison_filter"):
-        k = item_filter.comparison_filter.key
-        op = item_filter.comparison_filter.op
-        v = item_filter.comparison_filter.value
-
-        if k.type in ARRAY_TYPES:
-            _validate_comparison_filter_type_array(op, v, k)
-
-        k_expression = _trace_item_filter_key_expression(
-            attr_to_key_expression_callable=attribute_key_to_expression,
-            key=k,
-        )
-
-        value_type = v.WhichOneof("value")
-        if value_type is None:
-            raise BadSnubaRPCRequestException("comparison does not have a right hand side")
-
-        v_is_null = v.is_null or value_type == "val_null"
-        if v_is_null:
-            v_expression: Expression = literal(None)
-        else:
-            v_expression = _attribute_value_to_expression(v)
-
-        if (
-            k.type == AttributeKey.Type.TYPE_STRING
-            and not v.is_null
-            and not item_filter.comparison_filter.ignore_case
-            and (index_name := indexed_column_for(start_timestamp, item_type, k.name)) is not None
-        ):
-            if op == ComparisonFilter.OP_EQUALS and v.val_str:
-                return f.equals(column(index_name), v_expression)
-            values = v.val_str_array.values
-            if op == ComparisonFilter.OP_IN and values and "" not in values:
-                return _in_or_has(column(index_name), v_expression, as_has=membership_as_has)
-
-        # `sentry.timestamp` is a normalized column that `attribute_key_to_expression`
-        # maps to `CAST(timestamp, 'Float64')`. Wrapping the primary-key/partition
-        # column in a CAST prevents ClickHouse from using it for granule and partition
-        # pruning, so range filters on it scan far more data than necessary. It also
-        # duplicates the mandatory time-range condition (timestamp_in_range_condition)
-        # that is already applied on the raw column. For range comparisons, compare
-        # against the raw DateTime `timestamp` column instead so the condition is
-        # index- and partition-prunable. We reuse timestamp_seconds_to_datetime_literal
-        # so a bound equal to the mandatory range is byte-identical to it and gets
-        # collapsed by dedupe_timestamp_conditions.
-        if k.name == sentry_column("timestamp") and value_type in (
-            "val_int",
-            "val_float",
-            "val_double",
-        ):
-            scalar_value = _scalar_value(v)
-            assert isinstance(scalar_value, (int, float))
-            raw_timestamp = column("timestamp")
-            # `timestamp` is a second-resolution DateTime, so a fractional bound must be
-            # rounded to the integer second that preserves the original
-            # `CAST(timestamp, 'Float64') OP value` result: `<`/`>=` round up (ceil) and
-            # `<=`/`>` round down (floor). Integer bounds are left unchanged, so the
-            # rewritten mandatory-range bounds stay byte-identical and
-            # dedupe_timestamp_conditions can still collapse them.
-            if op == ComparisonFilter.OP_LESS_THAN:
-                return f.less(
-                    raw_timestamp,
-                    timestamp_seconds_to_datetime_literal(math.ceil(scalar_value)),
-                )
-            if op == ComparisonFilter.OP_LESS_THAN_OR_EQUALS:
-                return f.lessOrEquals(
-                    raw_timestamp,
-                    timestamp_seconds_to_datetime_literal(math.floor(scalar_value)),
-                )
-            if op == ComparisonFilter.OP_GREATER_THAN:
-                return f.greater(
-                    raw_timestamp,
-                    timestamp_seconds_to_datetime_literal(math.floor(scalar_value)),
-                )
-            if op == ComparisonFilter.OP_GREATER_THAN_OR_EQUALS:
-                return f.greaterOrEquals(
-                    raw_timestamp,
-                    timestamp_seconds_to_datetime_literal(math.ceil(scalar_value)),
-                )
-
-        if op == ComparisonFilter.OP_EQUALS:
-            _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
-
-            if k.type in ARRAY_TYPES:
-                # Array value -> exact ordered array equality (element-typed keys only);
-                # scalar value -> "any element equals scalar" (includes).
-                if value_type in _ARRAY_VALUE_TYPES:
-                    if item_filter.comparison_filter.ignore_case:
-                        raise BadSnubaRPCRequestException(
-                            "ignore_case is not supported for exact array equality"
-                        )
-                    return _typed_array_exact_equals_expression(k, v)
-                return _typed_array_includes_scalar_expression(
-                    k, v, item_filter.comparison_filter.ignore_case
-                )
-            if _is_map_backed_key(k):
-                # Map-backed: NULL-free (exists, value) form (see _map_backed_operands).
-                value, exists = _map_backed_operands(k)
-                if v_is_null:  # `attr = null` <=> key absent
-                    return not_cond(exists)
-                lhs, rhs = (
-                    (f.lower(value), f.lower(v_expression))
-                    if item_filter.comparison_filter.ignore_case
-                    else (value, v_expression)
-                )
-                cmp = f.equals(lhs, rhs)
-                # existence guard only needed when '' / 0 could match an absent key.
-                if _comparison_can_match_column_default(v, value_type):
-                    return and_cond(exists, cmp)
-                return cmp
-            expr = (
-                f.equals(f.lower(k_expression), f.lower(v_expression))
-                if item_filter.comparison_filter.ignore_case
-                else f.equals(k_expression, v_expression)
-            )
-            # we redefine the way equals works for nulls
-            # now null=null is true
-            expr_with_null = or_cond(expr, and_cond(f.isNull(k_expression), f.isNull(v_expression)))
-            return expr_with_null
-        if op == ComparisonFilter.OP_NOT_EQUALS:
-            _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
-            if k.type in ARRAY_TYPES:
-                if value_type in _ARRAY_VALUE_TYPES:
-                    if item_filter.comparison_filter.ignore_case:
-                        raise BadSnubaRPCRequestException(
-                            "ignore_case is not supported for exact array equality"
-                        )
-                    return not_cond(_typed_array_exact_equals_expression(k, v))
-                return not_cond(
-                    _typed_array_includes_scalar_expression(
-                        k, v, item_filter.comparison_filter.ignore_case
-                    )
-                )
-            if _is_map_backed_key(k):
-                # Negation of OP_EQUALS; an absent key is "not equal".
-                value, exists = _map_backed_operands(k)
-                if v_is_null:  # `attr != null` <=> key present
-                    return exists
-                lhs, rhs = (
-                    (f.lower(value), f.lower(v_expression))
-                    if item_filter.comparison_filter.ignore_case
-                    else (value, v_expression)
-                )
-                if _comparison_can_match_column_default(v, value_type):
-                    return not_cond(and_cond(exists, f.equals(lhs, rhs)))
-                return f.notEquals(lhs, rhs)
-            expr = (
-                f.notEquals(f.lower(k_expression), f.lower(v_expression))
-                if item_filter.comparison_filter.ignore_case
-                else f.notEquals(k_expression, v_expression)
-            )
-            # we redefine the way not equals works for nulls
-            # now null!=null is true
-            expr_with_null = or_cond(expr, f.xor(f.isNull(k_expression), f.isNull(v_expression)))
-            return expr_with_null
-        if op == ComparisonFilter.OP_LIKE:
-            if k.type in ARRAY_TYPES:
-                return _typed_array_like_expression(
-                    k, v_expression, item_filter.comparison_filter.ignore_case
-                )
-            if k.type != AttributeKey.Type.TYPE_STRING:
-                raise BadSnubaRPCRequestException(
-                    "the LIKE comparison is only supported on string and array keys"
-                )
-            comparison_function = f.ilike if item_filter.comparison_filter.ignore_case else f.like
-            if _is_map_backed_key(k):
-                value, exists = _map_backed_operands(k)
-                return and_cond(exists, comparison_function(value, v_expression))
-            return comparison_function(k_expression, v_expression)
-        if op == ComparisonFilter.OP_REGEXP:
-            _is_valid_regexp_pattern(v)
-            ignore_case = item_filter.comparison_filter.ignore_case
-            if k.type in ARRAY_TYPES:
-                return f.arrayExists(
-                    Lambda(
-                        None,
-                        ("x",),
-                        _regexp_match(Argument(None, "x"), v_expression, ignore_case),
-                    ),
-                    type_array_typed_column_native_array(k, "attributes_array_string"),
-                )
-            if k.type != AttributeKey.Type.TYPE_STRING:
-                raise BadSnubaRPCRequestException(
-                    "the REGEXP comparison is only supported on string and array keys"
-                )
-            if _is_map_backed_key(k):
-                value, exists = _map_backed_operands(k)
-                return and_cond(exists, _regexp_match(value, v_expression, ignore_case))
-            return _regexp_match(k_expression, v_expression, ignore_case)
-        if op == ComparisonFilter.OP_NOT_LIKE:
-            if k.type in ARRAY_TYPES:
-                return not_cond(
-                    _typed_array_like_expression(
-                        k, v_expression, item_filter.comparison_filter.ignore_case
-                    )
-                )
-            if k.type != AttributeKey.Type.TYPE_STRING:
-                raise BadSnubaRPCRequestException(
-                    "the NOT LIKE comparison is only supported on string and array keys"
-                )
-            if _is_map_backed_key(k):
-                # Negation of OP_LIKE; an absent key is "not like".
-                like_fn = f.ilike if item_filter.comparison_filter.ignore_case else f.like
-                value, exists = _map_backed_operands(k)
-                return not_cond(and_cond(exists, like_fn(value, v_expression)))
-            comparison_function = (
-                f.notILike if item_filter.comparison_filter.ignore_case else f.notLike
-            )
-            expr = comparison_function(k_expression, v_expression)
-            # we redefine the way not like works for nulls
-            # now null not like "%anything%" is true
-            expr_with_null = or_cond(expr, f.isNull(k_expression))
-            return expr_with_null
-        if op == ComparisonFilter.OP_LESS_THAN:
-            return f.less(k_expression, v_expression)
-        if op == ComparisonFilter.OP_LESS_THAN_OR_EQUALS:
-            return f.lessOrEquals(k_expression, v_expression)
-        if op == ComparisonFilter.OP_GREATER_THAN:
-            return f.greater(k_expression, v_expression)
-        if op == ComparisonFilter.OP_GREATER_THAN_OR_EQUALS:
-            return f.greaterOrEquals(k_expression, v_expression)
-        if op == ComparisonFilter.OP_IN:
-            _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
-            ignore_case = item_filter.comparison_filter.ignore_case
-            if ignore_case:
-                if value_type == "val_str_array":
-                    v_expression = literals_array(
-                        None,
-                        [literal(s.lower()) for s in v.val_str_array.values],
-                    )
-                else:
-                    v_expression = literals_array(
-                        None,
-                        [literal(elem.val_str.lower()) for elem in v.val_array.values],
-                    )
-            # note: v_expression must be an array
-            # we redefine the way in works for nulls
-            # now null in ['hi', null] is true
-            if _is_map_backed_key(k):
-                # Map-backed: keep the existence if(...) out of in() (see helper).
-                return _analyzer_safe_in_expression(
-                    k,
-                    v_expression,
-                    negated=False,
-                    ignore_case=ignore_case,
-                    guard=_comparison_can_match_column_default(v, value_type),
-                    membership_as_has=membership_as_has,
-                )
-            if ignore_case:
-                k_expression = f.lower(k_expression)
-            expr = _in_or_has(k_expression, v_expression, as_has=membership_as_has)
-            expr_with_null = or_cond(
-                expr,
-                and_cond(f.isNull(k_expression), f.has(v_expression, literal(None))),
-            )
-            return expr_with_null
-        if op == ComparisonFilter.OP_NOT_IN:
-            _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
-            ignore_case = item_filter.comparison_filter.ignore_case
-            if ignore_case:
-                if value_type == "val_str_array":
-                    v_expression = literals_array(
-                        None,
-                        [literal(s.lower()) for s in v.val_str_array.values],
-                    )
-                else:
-                    v_expression = literals_array(
-                        None,
-                        [literal(elem.val_str.lower()) for elem in v.val_array.values],
-                    )
-            # note: v_expression must be an array
-            # we redefine the way not in works for nulls
-            # now null not in ['hi'] is true
-            if _is_map_backed_key(k):
-                # Map-backed: keep the existence if(...) out of in() (see helper).
-                return _analyzer_safe_in_expression(
-                    k,
-                    v_expression,
-                    negated=True,
-                    ignore_case=ignore_case,
-                    guard=_comparison_can_match_column_default(v, value_type),
-                    membership_as_has=membership_as_has,
-                )
-            if ignore_case:
-                k_expression = f.lower(k_expression)
-            expr = not_cond(_in_or_has(k_expression, v_expression, as_has=membership_as_has))
-            expr_with_null = or_cond(
-                expr,
-                and_cond(
-                    f.isNull(k_expression),
-                    not_cond(f.has(v_expression, literal(None))),
-                ),
-            )
-            return expr_with_null
-        if op in (ComparisonFilter.OP_HAS_ANY, ComparisonFilter.OP_HAS_ALL):
-            # "array attribute_key type only" per the proto: reject non-array keys here;
-            # array-typed keys are validated above by _validate_comparison_filter_type_array.
-            if k.type not in ARRAY_TYPES:
-                raise BadSnubaRPCRequestException(
-                    "OP_HAS_ANY/OP_HAS_ALL are only supported on array keys"
-                )
-            if item_filter.comparison_filter.ignore_case:
-                raise BadSnubaRPCRequestException(
-                    "ignore_case is not supported for OP_HAS_ANY/OP_HAS_ALL"
-                )
-            function_name = "hasAny" if op == ComparisonFilter.OP_HAS_ANY else "hasAll"
-            return _typed_array_has_expression(k, v, function_name)
-
-        raise BadSnubaRPCRequestException(
-            f"Invalid string comparison, unknown op: {item_filter.comparison_filter}"
-        )
-
-    if item_filter.HasField("exists_filter"):
-        return get_field_existence_expression(
-            _trace_item_filter_key_expression(
-                attr_to_key_expression_callable=attribute_key_to_expression,
-                key=item_filter.exists_filter.key,
-            )
-        )
-
-    if item_filter.HasField("any_attribute_filter"):
-        if not get_option("enable_any_attribute_filter", True):
-            return literal(True)
-        return _any_attribute_filter_to_expression(
-            item_filter.any_attribute_filter, membership_as_has=membership_as_has
-        )
-
-    return literal(True)
+    return TraceItemFilterConverter(
+        item_type=item_type,
+        attribute_key_to_expression=attribute_key_to_expression,
+        membership_as_has=membership_as_has,
+        start_timestamp=start_timestamp,
+    ).to_expression(item_filter)
 
 
 def project_id_and_org_conditions(meta: RequestMeta) -> Expression:
