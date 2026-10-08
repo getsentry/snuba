@@ -91,9 +91,10 @@ def prune_partitions(
 ) -> None:
     """Forget block_numbers znodes of dead partitions on one storage node.
 
-    A partition is forgotten only when it is past retention plus the margin and
-    no replica of the node's shard has parts, detached parts, replication queue
-    entries, unfinished mutations or block locks for it. Tables that are not
+    A partition is forgotten only when it is past retention plus the margin, no
+    replica in the cluster has parts, detached parts, replication queue entries
+    or unfinished mutations for it, and the node's shard has no block locks for
+    it. Run once per shard to prune every shard's znodes. Tables that are not
     replicated, or do not have both enable_block_number_column and
     enable_block_offset_column set, are skipped.
     """

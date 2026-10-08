@@ -82,6 +82,7 @@ class FakeClickhouse:
         blockers: Mapping[str, Sequence[str]] | None = None,
         block_locks: Sequence[str] = (),
         forget_fails: Sequence[str] = (),
+        parts_by_replica: Mapping[tuple[int, int], Sequence[str]] | None = None,
     ) -> None:
         self.znodes = znodes
         self.replicated = replicated
@@ -91,6 +92,8 @@ class FakeClickhouse:
         self.blockers = dict(blockers or {})
         self.block_locks = set(block_locks)
         self.forget_fails = set(forget_fails)
+        # (shard_num, replica_num) -> partition IDs with parts on that replica
+        self.parts_by_replica = dict(parts_by_replica or {})
         self.mock = Mock(spec=ClickhousePool)
         self.mock.execute.side_effect = self.execute
 
@@ -112,11 +115,23 @@ class FakeClickhouse:
         if "FROM system.zookeeper" in query:
             assert params["path"] == f"{ZK_PATH}/block_numbers"
             return ClickhouseResult([(z,) for z in self.znodes])
+        if "system.parts)" in query and self.parts_by_replica:
+            return ClickhouseResult(
+                [(p,) for p in params["partition_ids"] if p in self._replica_parts(query, params)]
+            )
         for check in ("detached_parts", "parts", "replication_queue", "mutations"):
             if f"system.{check})" in query or f"system.{check} " in query:
                 failing = self.blockers.get(check, ())
                 return ClickhouseResult([(p,) for p in params["partition_ids"] if p in failing])
         raise AssertionError(f"unexpected query: {query}")
+
+    def _replica_parts(self, query: str, params: Mapping[str, Any]) -> set[str]:
+        # clusterAllReplicas renumbers every replica as its own shard, so a
+        # shardNum() filter selects one replica by its position, not a shard.
+        replicas = sorted(self.parts_by_replica)
+        if "shardNum()" in query:
+            replicas = replicas[params["shard"] - 1 : params["shard"]]
+        return {p for r in replicas for p in self.parts_by_replica[r]}
 
     def forgets(self) -> list[str]:
         return [
@@ -204,7 +219,7 @@ def test_block_locks_block_forget() -> None:
     assert clickhouse.forgets() == [DEAD_2]
 
 
-def test_checks_scope_to_local_shard() -> None:
+def test_checks_read_every_replica_of_the_cluster() -> None:
     clickhouse = FakeClickhouse([DEAD])
 
     run(clickhouse)
@@ -213,10 +228,31 @@ def test_checks_scope_to_local_shard() -> None:
         c for c in clickhouse.mock.execute.call_args_list if "system.parts)" in c.args[0]
     )
     assert "clusterAllReplicas(%(cluster)s, system.parts)" in parts_query.args[0]
-    assert "shardNum() = %(shard)s" in parts_query.args[0]
+    assert "shardNum()" not in parts_query.args[0]
     assert "active" not in parts_query.args[0]
     assert parts_query.args[1]["cluster"] == "eap"
-    assert parts_query.args[1]["shard"] == 2
+
+
+@pytest.mark.parametrize(
+    "replica",
+    [
+        pytest.param((2, 2), id="sibling replica"),
+        pytest.param((1, 1), id="other shard"),
+        pytest.param((3, 2), id="last replica"),
+    ],
+)
+def test_parts_on_any_replica_block_forget(replica: tuple[int, int]) -> None:
+    # Local node is on shard 2 of a 3 shard x 2 replica cluster.
+    parts_by_replica: dict[tuple[int, int], Sequence[str]] = {
+        (s, r): [] for s in (1, 2, 3) for r in (1, 2)
+    }
+    parts_by_replica[replica] = [DEAD]
+    clickhouse = FakeClickhouse([DEAD, DEAD_2], parts_by_replica=parts_by_replica)
+
+    result = run(clickhouse)
+
+    assert clickhouse.forgets() == [DEAD_2]
+    assert next(p for p in result.partitions if p.partition_id == DEAD).blockers == ["parts"]
 
 
 def test_single_node_reads_local_system_tables() -> None:

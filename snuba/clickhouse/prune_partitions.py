@@ -8,8 +8,15 @@ after a partition is dropped or expires, so the scan grows with every partition
 a table has ever had. ``ALTER TABLE ... FORGET PARTITION`` removes them.
 
 A partition is only forgotten when it is past retention (with a margin) and
-nothing on any replica of the shard still references it. Every check fails
+nothing on any replica of any shard still references it. Every check fails
 closed: an error while checking skips the table.
+
+Replica state is checked across the whole cluster rather than only the local
+shard, because clusterAllReplicas renumbers every replica as its own shard, so
+shardNum() can't identify the replicas of the local shard. Requiring a
+partition to be empty everywhere is stricter, and dead partitions expire on
+every shard at about the same time. FORGET itself still runs locally, against
+the znodes of the local shard.
 """
 
 import logging
@@ -134,10 +141,6 @@ def _system_table(cluster_name: str | None, table: str) -> str:
     return f"clusterAllReplicas(%(cluster)s, system.{table})"
 
 
-def _shard_filter(cluster_name: str | None) -> str:
-    return "" if cluster_name is None else "AND shardNum() = %(shard)s"
-
-
 def get_zookeeper_path(clickhouse: ClickhousePool, database: str, table: str) -> str:
     result = clickhouse.execute(
         "SELECT zookeeper_path FROM system.replicas "
@@ -190,13 +193,13 @@ def find_blockers(
     table: str,
     zookeeper_path: str,
     cluster_name: str | None,
-    shard: int | None,
     partition_ids: Sequence[str],
 ) -> dict[str, list[str]]:
     """
     Return the checks each partition fails. Partitions passing every check are
-    absent. Replica state is read from every replica of the shard, and an
-    unreachable replica raises rather than being skipped.
+    absent. Replica state is read from every replica of every shard, and an
+    unreachable replica raises rather than being skipped. Block locks are read
+    from the local shard's znodes, which are the ones FORGET removes.
     """
     blockers: dict[str, list[str]] = {}
     if not partition_ids:
@@ -206,11 +209,9 @@ def find_blockers(
         "database": database,
         "table": table,
         "cluster": cluster_name,
-        "shard": shard,
         "partition_ids": list(partition_ids),
     }
-    shard_filter = _shard_filter(cluster_name)
-    scope = f"database = %(database)s AND table = %(table)s {shard_filter}"
+    scope = "database = %(database)s AND table = %(table)s"
 
     checks = {
         # Parts in any state, not only active ones.
@@ -290,6 +291,7 @@ def prune_table(
         zookeeper_path = get_zookeeper_path(clickhouse, database, table)
         check_table_settings(clickhouse, database, table)
         if cluster_name is not None:
+            # Only used to label the report.
             result.shard = get_local_shard(clickhouse, cluster_name)
 
         def blockers_for(partition_ids: Sequence[str]) -> dict[str, list[str]]:
@@ -299,7 +301,6 @@ def prune_table(
                 table=table,
                 zookeeper_path=zookeeper_path,
                 cluster_name=cluster_name,
-                shard=result.shard,
                 partition_ids=partition_ids,
             )
 
