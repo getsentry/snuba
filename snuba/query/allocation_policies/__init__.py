@@ -97,8 +97,13 @@ class QuotaAllowance:
         load_info: LoadInfo | None,
     ) -> QuotaAllowanceDecision:
         if not self.can_run:
-            should_pardon = getattr(load_info, "should_pardon", lambda: False)
-            idle_pardon = policy.is_pardonable and should_pardon()
+            # Pardon a rejection only when the policy opts in, we have load info,
+            # the block configured reject thresholds, and the cluster is below all
+            # of them. No thresholds or missing load info => keep rejecting.
+            reject_thresholds = policy.thresholds.get("reject") or {}
+            idle_pardon = (
+                policy.is_pardonable and load_info and not load_info.exceeds(reject_thresholds)
+            )
             return (
                 QuotaAllowanceDecision.PARDONED if idle_pardon else QuotaAllowanceDecision.REJECTED
             )
@@ -380,6 +385,11 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         **kwargs: Any,
     ) -> None:
         self._resource_identifier = storage_key
+        thresholds = kwargs.get("thresholds") or {}
+        self._thresholds: dict[str, dict[str, float]] = {
+            action: {k: float(v) for k, v in ceilings.items()}
+            for action, ceilings in thresholds.items()
+        }
         self._default_config_definitions = [
             AllocationPolicyConfig(
                 name=IS_ENFORCED,
@@ -429,6 +439,10 @@ class AllocationPolicy(ConfigurableComponent, ABC):
     @property
     def is_pardonable(self) -> bool:
         return bool(self.get_config_value(IS_PARDONABLE))
+
+    @property
+    def thresholds(self) -> dict[str, dict[str, float]]:
+        return self._thresholds
 
     @property
     def max_threads(self) -> int:

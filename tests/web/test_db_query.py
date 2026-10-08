@@ -1429,16 +1429,13 @@ def test_idle_pardon_allows_rejected_query() -> None:
     attribution_info.tenant_ids = {"referrer": "test_referrer", "organization_id": 1}
     stats: MutableMapping[str, Any] = {}
     idle = LoadInfo(cluster_load=1.0, concurrent_queries=1)
+    reject_thresholds = {"reject": {"cluster_load": 90.0, "concurrent_queries": 100.0}}
     with (
-        override_options(
-            "snuba",
-            {"storage_routing.enable_get_cluster_loadinfo": True},
-        ),
+        override_options("snuba", {"storage_routing.enable_get_cluster_loadinfo": True}),
         mock.patch(
             "snuba.web.db_query.get_cluster_loadinfo",
             return_value=idle,
         ),
-        mock.patch.object(LoadInfo, "should_pardon", return_value=True),
     ):
         query_settings = HTTPQuerySettings()
         _apply_allocation_policies_quota(
@@ -1446,7 +1443,12 @@ def test_idle_pardon_allows_rejected_query() -> None:
             attribution_info=attribution_info,
             formatted_query=mock.Mock(),
             stats=stats,
-            allocation_policies=[_RejectAllPolicy(ResourceIdentifier(StorageKey("errors_ro")))],
+            allocation_policies=[
+                _RejectAllPolicy(
+                    ResourceIdentifier(StorageKey("errors_ro")),
+                    thresholds=reject_thresholds,
+                )
+            ],
             query_id="pardon_query",
         )
     assert stats["quota_allowance"]["summary"]["is_rejected"] is False
@@ -1464,16 +1466,14 @@ def test_idle_pardon_still_rejects_when_not_idle() -> None:
     attribution_info.tenant_ids = {"referrer": "test_referrer", "organization_id": 1}
     stats: MutableMapping[str, Any] = {}
     busy = LoadInfo(cluster_load=50.0, concurrent_queries=1)
+    # cluster_load 50 exceeds the 40 reject ceiling, so the query keeps rejecting.
+    reject_thresholds = {"reject": {"cluster_load": 40.0, "concurrent_queries": 100.0}}
     with (
-        override_options(
-            "snuba",
-            {"storage_routing.enable_get_cluster_loadinfo": True},
-        ),
+        override_options("snuba", {"storage_routing.enable_get_cluster_loadinfo": True}),
         mock.patch(
             "snuba.web.db_query.get_cluster_loadinfo",
             return_value=busy,
         ),
-        mock.patch.object(LoadInfo, "should_pardon", return_value=False),
         pytest.raises(AllocationPolicyViolations),
     ):
         _apply_allocation_policies_quota(
@@ -1481,7 +1481,12 @@ def test_idle_pardon_still_rejects_when_not_idle() -> None:
             attribution_info=attribution_info,
             formatted_query=mock.Mock(),
             stats=stats,
-            allocation_policies=[_RejectAllPolicy(ResourceIdentifier(StorageKey("errors_ro")))],
+            allocation_policies=[
+                _RejectAllPolicy(
+                    ResourceIdentifier(StorageKey("errors_ro")),
+                    thresholds=reject_thresholds,
+                )
+            ],
             query_id="no_pardon_query",
         )
     assert stats["quota_allowance"]["summary"]["is_rejected"] is True
@@ -1492,17 +1497,14 @@ def test_idle_pardon_does_not_short_circuit_remaining_policies() -> None:
     attribution_info.tenant_ids = {"referrer": "test_referrer", "organization_id": 1}
     stats: MutableMapping[str, Any] = {}
     idle = LoadInfo(cluster_load=1.0, concurrent_queries=1)
+    reject_thresholds = {"reject": {"cluster_load": 90.0, "concurrent_queries": 100.0}}
     second = _RecordCallPolicy(ResourceIdentifier(StorageKey("errors_ro")))
     with (
-        override_options(
-            "snuba",
-            {"storage_routing.enable_get_cluster_loadinfo": True},
-        ),
+        override_options("snuba", {"storage_routing.enable_get_cluster_loadinfo": True}),
         mock.patch(
             "snuba.web.db_query.get_cluster_loadinfo",
             return_value=idle,
         ),
-        mock.patch.object(LoadInfo, "should_pardon", return_value=True),
     ):
         _apply_allocation_policies_quota(
             query_settings=HTTPQuerySettings(),
@@ -1510,7 +1512,10 @@ def test_idle_pardon_does_not_short_circuit_remaining_policies() -> None:
             formatted_query=mock.Mock(),
             stats=stats,
             allocation_policies=[
-                _RejectAllPolicy(ResourceIdentifier(StorageKey("errors_ro"))),
+                _RejectAllPolicy(
+                    ResourceIdentifier(StorageKey("errors_ro")),
+                    thresholds=reject_thresholds,
+                ),
                 second,
             ],
             query_id="pardon_no_short_circuit",

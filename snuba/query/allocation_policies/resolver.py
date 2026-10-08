@@ -50,6 +50,8 @@ def _apply_block(
                 spec,
             )
             continue
+        if thresholds := block.get("thresholds", {}):
+            spec["thresholds"] = thresholds
         specs_by_name[name] = spec
 
 

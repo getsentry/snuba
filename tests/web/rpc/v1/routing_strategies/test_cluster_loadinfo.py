@@ -2,10 +2,16 @@ from collections.abc import Generator
 from unittest.mock import Mock, patch
 
 import pytest
-from sentry_options import OptionValue
 from sentry_options.testing import override_options
 
 from snuba.clusters.load_info import LoadInfo, get_cluster_loadinfo
+
+
+@pytest.fixture(autouse=True)
+def enable_get_cluster_loadinfo() -> Generator[None]:
+    with override_options("snuba", {"storage_routing.enable_get_cluster_loadinfo": True}):
+        yield
+
 
 # Always present on CH. CGroupUserTimeNormalized / disk_inflight_ops are
 # host-dependent and may be -1 without failing the probe.
@@ -49,22 +55,11 @@ def test_from_dict_ignores_unknown_keys() -> None:
     assert load_info.concurrent_queries == -1
 
 
-ENABLE_LOADINFO: dict[str, OptionValue] = {"storage_routing.enable_get_cluster_loadinfo": True}
-
-
-@pytest.fixture(autouse=True)
-def enable_get_cluster_loadinfo() -> Generator[None]:
-    with override_options("snuba", ENABLE_LOADINFO):
-        yield
-
-
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
 def test_get_cluster_loadinfo_disabled() -> None:
     with override_options("snuba", {"storage_routing.enable_get_cluster_loadinfo": False}):
         assert get_cluster_loadinfo() is None
-    with override_options("snuba", {"storage_routing.enable_get_cluster_loadinfo": True}):
-        assert get_cluster_loadinfo() is not None
 
 
 @pytest.mark.redis_db
@@ -111,8 +106,25 @@ def test_get_cluster_load_error_handling() -> None:
         _assert_probe_failed(load_info)
 
 
-def test_should_pardon_reads_dynamic_allocation_policy_flag() -> None:
-    load_info = LoadInfo(cluster_load=1.0, concurrent_queries=1)
-    assert load_info.should_pardon() is False
-    with override_options("snuba", {"storage_routing.enable_dynamic_allocation_policy": True}):
-        assert load_info.should_pardon() is True
+def test_exceeds_true_when_any_field_over_ceiling() -> None:
+    load_info = LoadInfo(cluster_load=95.0, concurrent_queries=1.0)
+    assert load_info.exceeds({"cluster_load": 90.0}) is True
+    # only one field needs to exceed
+    assert load_info.exceeds({"cluster_load": 90.0, "concurrent_queries": 100.0}) is True
+
+
+def test_exceeds_false_when_all_within() -> None:
+    load_info = LoadInfo(cluster_load=50.0, concurrent_queries=10.0)
+    assert load_info.exceeds({"cluster_load": 90.0, "concurrent_queries": 100.0}) is False
+
+
+def test_exceeds_empty_thresholds_is_true() -> None:
+    # No thresholds configured => keep enforcing, so an idle cluster still "exceeds".
+    assert LoadInfo(cluster_load=1.0).exceeds({}) is True
+
+
+def test_exceeds_true_when_field_negative() -> None:
+    # A -1 (missing/unreadable metric, or unknown key) is out of [0, ceiling] =>
+    # keep enforcing rather than pardon on blind telemetry.
+    assert LoadInfo(cluster_load=-1.0).exceeds({"cluster_load": 90.0}) is True
+    assert LoadInfo(cluster_load=1.0).exceeds({"not_a_field": 0.0}) is True

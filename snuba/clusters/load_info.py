@@ -48,8 +48,12 @@ class LoadInfo:
             }
         )
 
-    def should_pardon(self) -> bool:
-        return get_option("storage_routing.enable_dynamic_allocation_policy", False)
+    def exceeds(self, thresholds: dict[str, float]) -> bool:
+        if not thresholds:
+            return True
+        return not all(
+            0 <= getattr(self, name, -1) <= ceiling for name, ceiling in thresholds.items()
+        )
 
 
 def cache(
