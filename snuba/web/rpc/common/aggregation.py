@@ -35,9 +35,9 @@ from snuba.state.sentry_options import get_option
 from snuba.web.rpc.common.common import (
     get_field_existence_expression,
     semver_sort_key,
+    trace_item_filters_to_expression,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.common.trace_item_filter_converter import trace_item_filters_to_expression
 
 sampling_factor_column = column("sampling_factor")
 client_sample_rate_column = column("client_sample_rate")

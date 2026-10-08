@@ -45,6 +45,7 @@ from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     base_conditions_and,
+    trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
 from snuba.web.rpc.common.cross_item_queries import (
@@ -59,9 +60,6 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.common.trace_item_filter_converter import (
-    trace_item_filters_to_expression,
-)
 
 _DEFAULT_ROW_LIMIT = 10_000
 _BUFFER_WINDOW = 2 * 3600  # 2 hours

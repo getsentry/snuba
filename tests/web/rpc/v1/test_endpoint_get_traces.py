@@ -39,9 +39,9 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.expressions import FunctionCall, Literal
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
+    trace_item_filters_to_expression,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.common.trace_item_filter_converter import trace_item_filters_to_expression
 from snuba.web.rpc.v1.endpoint_get_traces import EndpointGetTraces
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events

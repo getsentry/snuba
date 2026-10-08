@@ -52,6 +52,7 @@ from snuba.web.rpc.common.common import (
     add_existence_check_to_map_attribute_reads,
     attribute_key_to_expression,
     base_conditions_and,
+    trace_item_filters_to_expression,
     treeify_or_and_conditions,
     use_sampling_factor,
     valid_sampling_factor_conditions,
@@ -71,7 +72,6 @@ from snuba.web.rpc.common.formula_reliability import (
     FormulaReliabilityCalculator,
     _unix_seconds,
 )
-from snuba.web.rpc.common.trace_item_filter_converter import trace_item_filters_to_expression
 from snuba.web.rpc.proto_visitor import (
     AggregationToConditionalAggregationVisitor,
     TimeSeriesRequestWrapper,

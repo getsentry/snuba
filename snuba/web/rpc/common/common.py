@@ -1,10 +1,11 @@
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from typing import Any, TypeVar
 
 from google.protobuf.message import Message as ProtobufMessage
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from google.protobuf.timestamp_pb2 import Timestamp as ProtobufTimestamp
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ComparisonFilter,
@@ -513,3 +514,41 @@ def get_field_existence_expression(field: Expression) -> Expression:
             return f.notEmpty(field)
 
     return f.isNotNull(field)
+
+
+def trace_item_filters_to_expression(
+    item_type: TraceItemType.ValueType,
+    item_filter: TraceItemFilter,
+    attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    membership_as_has: bool = False,
+    start_timestamp: ProtobufTimestamp | None = None,
+) -> Expression:
+    """
+    Trace Item Filters are things like (span.id=12345 AND start_timestamp >= "june 4th, 2024")
+    This maps those filters into an expression which can be used in a WHERE clause
+    :param item_type: build one call per item type, each AND-ed with its own
+        ``item_type =`` condition (see ``cross_item_queries``).
+    :param item_filter:
+    :param membership_as_has: build ``IN``/``NOT IN`` membership as ``has(array, x)``
+        rather than ``x IN (array)``. Pass ``True`` only when the result lands in a
+        SELECT clause / projection / aggregate condition / ``HAVING`` — there a constant
+        ``IN`` set leaks an unstable ``__set_*`` identifier into the result-block column
+        name and breaks mixed-version distributed reads (see ``_in_or_has``). Leave the
+        default for WHERE clauses, where the prepared ``IN`` set drives pruning.
+    :param start_timestamp: request start; enables reading indexed columns, see
+        ``indexed_column_for``.
+    :return:
+
+    Array predicates always read the typed ``attributes_array_*`` map columns: an
+    element-typed array key (TYPE_ARRAY_STRING/INT/DOUBLE/BOOL) hits its single column
+    natively, the deprecated untyped ``TYPE_ARRAY`` searches all four.
+    """
+    # The converter imports helpers from this module, so it can't be imported at the top.
+    from snuba.web.rpc.common.trace_item_filter_converter import TraceItemFilterConverter
+
+    return TraceItemFilterConverter(
+        item_type=item_type,
+        attribute_key_to_expression=attribute_key_to_expression,
+        membership_as_has=membership_as_has,
+        start_timestamp=start_timestamp,
+    ).to_expression(item_filter)

@@ -64,6 +64,7 @@ from snuba.web.rpc.common.common import (
     next_monday,
     prev_monday,
     semver_sort_key,
+    trace_item_filters_to_expression,
     treeify_or_and_conditions,
     use_sampling_factor,
 )
@@ -78,7 +79,6 @@ from snuba.web.rpc.common.trace_item_filter_converter import (
     _any_attribute_filter_to_expression,
     _comparison_can_match_column_default,
     indexed_column_for,
-    trace_item_filters_to_expression,
 )
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.helpers import write_raw_unprocessed_events

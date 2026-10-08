@@ -29,9 +29,9 @@ from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     base_conditions_and,
+    trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
-from snuba.web.rpc.common.trace_item_filter_converter import trace_item_filters_to_expression
 
 # 50 million trace ids * 16 bytes per id = a limit of 1gigabyte memory usage per cross item query
 # most queries do not hit this number this is just an upper bound
