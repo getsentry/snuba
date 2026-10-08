@@ -380,6 +380,11 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         **kwargs: Any,
     ) -> None:
         self._resource_identifier = storage_key
+        thresholds = kwargs.get("thresholds") or {}
+        self._thresholds: dict[str, dict[str, float]] = {
+            action: {k: float(v) for k, v in ceilings.items()}
+            for action, ceilings in thresholds.items()
+        }
         self._default_config_definitions = [
             AllocationPolicyConfig(
                 name=IS_ENFORCED,
@@ -429,6 +434,10 @@ class AllocationPolicy(ConfigurableComponent, ABC):
     @property
     def is_pardonable(self) -> bool:
         return bool(self.get_config_value(IS_PARDONABLE))
+
+    @property
+    def thresholds(self) -> dict[str, dict[str, float]]:
+        return self._thresholds
 
     @property
     def max_threads(self) -> int:
