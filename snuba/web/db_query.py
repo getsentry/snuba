@@ -917,7 +917,7 @@ def _apply_allocation_policies_quota(
                 )
                 break
             min_threads_across_policies = min(
-                min_threads_across_policies, allocation_policy.max_threads
+                min_threads_across_policies, allowance.threads_for(decision, allocation_policy)
             )
 
         allowance_dicts = {

@@ -108,6 +108,19 @@ class QuotaAllowance:
 
         return QuotaAllowanceDecision.ALLOWED
 
+    def threads_for(
+        self,
+        decision: QuotaAllowanceDecision,
+        policy: AllocationPolicy,
+    ) -> int:
+        """Threads this allowance contributes to the combined cap. A pardoned
+        rejection contributes the policy's full budget instead of the rejection's 0,
+        every other decision contributes what the policy asked for (which is how
+        throttling reduces threads)."""
+        if decision is QuotaAllowanceDecision.PARDONED:
+            return policy.max_threads
+        return self.max_threads
+
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, QuotaAllowance):
             return False

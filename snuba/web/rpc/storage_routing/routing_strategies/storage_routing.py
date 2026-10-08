@@ -452,7 +452,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             if decision.is_rejected:
                 thread_cap = 0
             else:
-                thread_cap = min(thread_cap, policy.max_threads)
+                thread_cap = min(thread_cap, qa.threads_for(decision, policy))
 
         settings["max_threads"] = thread_cap
 
