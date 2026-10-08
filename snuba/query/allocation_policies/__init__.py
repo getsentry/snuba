@@ -97,8 +97,13 @@ class QuotaAllowance:
         load_info: LoadInfo | None,
     ) -> QuotaAllowanceDecision:
         if not self.can_run:
-            should_pardon = getattr(load_info, "should_pardon", lambda: False)
-            idle_pardon = policy.is_pardonable and should_pardon()
+            # Pardon a rejection only when the policy opts in, we have load info,
+            # the block configured reject thresholds, and the cluster is below all
+            # of them. No thresholds or missing load info => keep rejecting.
+            reject_thresholds = policy.thresholds.get("reject") or {}
+            idle_pardon = (
+                policy.is_pardonable and load_info and not load_info.exceeds(reject_thresholds)
+            )
             return (
                 QuotaAllowanceDecision.PARDONED if idle_pardon else QuotaAllowanceDecision.REJECTED
             )

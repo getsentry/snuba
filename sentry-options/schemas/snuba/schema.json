@@ -274,11 +274,6 @@
       "default": false,
       "description": "When true, the storage routing strategy fetches ClickHouse cluster load info to inform routing decisions."
     },
-    "storage_routing.enable_dynamic_allocation_policy": {
-      "type": "boolean",
-      "default": false,
-      "description": "When true, allocation-policy rejections are pardoned. Load thresholds are not applied yet."
-    },
     "retention_days": {
       "type": "object",
       "properties": {

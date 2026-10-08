@@ -468,15 +468,18 @@ def test_is_pardonable_overrides_can_run_when_idle() -> None:
     reject_policy = RejectingEverythingAllocationPolicy(
         StorageKey("some_storage"),
         is_enforced=1,
+        thresholds={"reject": {"cluster_load": 0.0, "concurrent_queries": 0.0}},
     )
     tenant_ids: dict[str, int | str] = {
         "organization_id": 123,
         "referrer": "some_referrer",
     }
-    idle = LoadInfo(cluster_load=1.0, concurrent_queries=1)
-    with mock.patch.object(LoadInfo, "should_pardon", return_value=True):
-        assert reject_policy.get_quota_allowance(tenant_ids, "deadbeef").can_run is False
-        pardoned = reject_policy.get_quota_allowance(tenant_ids, "deadbeef", idle)
+    idle = LoadInfo(cluster_load=0.0, concurrent_queries=0)
+    # No load info => rejected; idle load within thresholds => pardoned. Pardon is
+    # observable via the idle_pardon explanation + db_request_pardoned metric, not
+    # a flipped can_run (the caller honours the decision).
+    assert reject_policy.get_quota_allowance(tenant_ids, "deadbeef").can_run is False
+    pardoned = reject_policy.get_quota_allowance(tenant_ids, "deadbeef", idle)
     assert pardoned.can_run is False
     assert pardoned.max_threads == 0
     assert pardoned.explanation["idle_pardon"] == idle.to_dict()

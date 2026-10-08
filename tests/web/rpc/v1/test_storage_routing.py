@@ -592,18 +592,16 @@ def test_routing_strategy_idle_pardon_allows_rejected_query() -> None:
             BaseRoutingStrategy,
             "get_allocation_policies",
             return_value=[
-                IdlePardonRejectionPolicy(ResourceIdentifier(StorageKey("doesntmatter")))
+                IdlePardonRejectionPolicy(
+                    ResourceIdentifier(StorageKey("doesntmatter")),
+                    thresholds={"reject": {"cluster_load": 90.0, "concurrent_queries": 100.0}},
+                )
             ],
-        ),
-        override_options(
-            "snuba",
-            {"storage_routing.enable_get_cluster_loadinfo": True},
         ),
         mock.patch(
             "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.get_cluster_loadinfo",
             return_value=LoadInfo(cluster_load=1.0, concurrent_queries=1),
         ),
-        mock.patch.object(LoadInfo, "should_pardon", return_value=True),
     ):
         decision = OutcomesBasedRoutingStrategy().get_routing_decision(
             RoutingContext(
