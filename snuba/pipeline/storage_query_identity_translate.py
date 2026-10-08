@@ -57,6 +57,8 @@ def _translate_storage_query(
         groupby=query.get_groupby(),
         having=query.get_having(),
         order_by=query.get_orderby(),
+        interpolate=query.get_interpolate(),
+        with_fill=query.get_with_fill(),
         limitby=query.get_limitby(),
         offset=query.get_offset(),
         totals=query.has_totals(),

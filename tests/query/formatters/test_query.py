@@ -11,6 +11,7 @@ from snuba.query import (
     OrderByDirection,
     ProcessableQuery,
     SelectedExpression,
+    WithFill,
 )
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import binary_condition
@@ -254,3 +255,18 @@ def test_query_formatter(
     assert formatted_query == formatted
     # make sure there are no empty lines
     assert [line for line in formatted_query if not line] == []
+
+
+def test_query_formatter_with_fill() -> None:
+    query = ClickhouseQuery(
+        Table("events", columns, storage_key=StorageKey("doesntmatter")),
+        selected_columns=[SelectedExpression("sum", Column(None, None, "sum"))],
+        order_by=[OrderBy(OrderByDirection.ASC, Column(None, None, "time"))],
+    )
+    query.set_interpolate([Column(None, None, "sum")])
+    query.set_with_fill(WithFill(Literal(None, 1), Literal(None, 10), Literal(None, 5)))
+    formatted_query = format_query(query)
+    assert formatted_query[-2:] == [
+        "ORDER_BY",
+        "  time ASC WITH FILL FROM 1 TO 10 STEP 5 INTERPOLATE (sum)",
+    ]

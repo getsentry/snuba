@@ -10,6 +10,7 @@ from snuba.query import (
     Query,
     SelectedExpression,
     TSimpleDataSource,
+    WithFill,
 )
 from snuba.query.data_source.join import JoinClause
 from snuba.query.data_source.simple import SimpleDataSource
@@ -40,6 +41,8 @@ class CompositeQuery(Query, Generic[TSimpleDataSource]):
         groupby: Sequence[Expression] | None = None,
         having: Expression | None = None,
         order_by: Sequence[OrderBy] | None = None,
+        interpolate: Sequence[Expression] | None = None,
+        with_fill: WithFill | None = None,
         limitby: LimitBy | None = None,
         limit: int | None = None,
         offset: int = 0,
@@ -53,6 +56,8 @@ class CompositeQuery(Query, Generic[TSimpleDataSource]):
             groupby=groupby,
             having=having,
             order_by=order_by,
+            interpolate=interpolate,
+            with_fill=with_fill,
             limitby=limitby,
             limit=limit,
             offset=offset,

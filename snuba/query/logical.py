@@ -4,7 +4,7 @@ from abc import ABCMeta
 from collections.abc import Callable, Iterable, Sequence
 from typing import Any, cast
 
-from snuba.query import LimitBy, OrderBy, ProcessableQuery, SelectedExpression
+from snuba.query import LimitBy, OrderBy, ProcessableQuery, SelectedExpression, WithFill
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause
 from snuba.query.data_source.simple import Entity, LogicalDataSource, Storage
@@ -33,6 +33,8 @@ class Query(ProcessableQuery[LogicalDataSource]):
         groupby: Sequence[Expression] | None = None,
         having: Expression | None = None,
         order_by: Sequence[OrderBy] | None = None,
+        interpolate: Sequence[Expression] | None = None,
+        with_fill: WithFill | None = None,
         limitby: LimitBy | None = None,
         sample: float | None = None,
         limit: int | None = None,
@@ -56,6 +58,8 @@ class Query(ProcessableQuery[LogicalDataSource]):
             groupby=groupby,
             having=having,
             order_by=order_by,
+            interpolate=interpolate,
+            with_fill=with_fill,
             limitby=limitby,
             limit=limit,
             offset=offset,
