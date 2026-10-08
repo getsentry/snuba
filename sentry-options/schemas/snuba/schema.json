@@ -856,11 +856,6 @@
       },
       "default": {},
       "description": "Nested dict: unindexed eap_items column or attribute (e.g. sentry.op) -> item type (span, metric, log, ...) -> the bloom-filter-indexed column holding a copy of it for that item type. One indexed column can hold a different attribute per item type (indexed_name is sentry.op for spans, sentry.metric_name for metrics), so filters on the attribute for any item type without an entry keep reading the attribute map. Indexed columns can't be backfilled, so indexed_start_date is the date (YYYY-MM-DD, from 00:00 UTC) from which the indexed column is fully populated for that item type. Equality and IN filters read indexed_column_name instead only for requests starting at or after it. Never set it before the column was fully populated, otherwise older rows are silently dropped. Empty (the default) disables the rewrite."
-    },
-    "eap_items_indexed_name_start_timestamp": {
-      "type": "integer",
-      "default": 1790121600,
-      "description": "Unix timestamp from which indexed_name is fully populated (default 2026-09-23 00:00 UTC, after #8488). Equality and IN filters on sentry.op / sentry.metric_name read the bloom-filter-indexed indexed_name column instead of the attributes_string bucket lookup only for requests starting at or after it. Never lower it below a point where indexed_name was fully populated, otherwise older rows are silently dropped."
     }
   }
 }
