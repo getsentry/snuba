@@ -27,7 +27,11 @@ function Header() {
   return (
     <header style={headerStyle}>
       <a href="#overview" style={{ height: "100%" }}>
-        <img style={logoStyle} src="./static/snuba.svg" alt="Snuba admin" />
+        <img
+          style={{ height: "100%" }}
+          src="./static/snuba.svg"
+          alt="Snuba admin"
+        />
       </a>
       <div
         style={{
@@ -50,12 +54,6 @@ const headerStyle = {
   padding: "10px 20px",
   justifyContent: "space-between",
   borderBottom: `1px solid ${COLORS.NAV_BORDER}`,
-};
-
-// The logo is drawn in black; lighten it to sit on the dark header.
-const logoStyle = {
-  height: "100%",
-  filter: "invert(0.7)",
 };
 
 const adminTextStyle = {

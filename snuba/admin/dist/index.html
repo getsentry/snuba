@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-bs-theme="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -14,31 +14,6 @@
         -webkit-font-smoothing: antialiased;
       }
 
-      /* Solarized dark for bootstrap components. Declared after bundle.css so
-         it takes precedence over bootstrap's own dark theme variables. */
-      [data-bs-theme=dark] {
-        --bs-body-bg: #002b36;
-        --bs-body-color: #93a1a1;
-        --bs-emphasis-color: #eee8d5;
-        --bs-secondary-color: #839496;
-        --bs-secondary-bg: #073642;
-        --bs-tertiary-bg: #073642;
-        --bs-border-color: #586e75;
-        --bs-link-color: #268bd2;
-        --bs-link-color-rgb: 38, 139, 210;
-        --bs-link-hover-color: #2aa198;
-        --bs-link-hover-color-rgb: 42, 161, 152;
-        --bs-heading-color: #eee8d5;
-      }
-
-      /* Default for bare form controls; :where() keeps specificity at zero so
-         mantine and bootstrap styles still win. */
-      :where(input:not([type=checkbox]):not([type=radio]), textarea, select) {
-        background-color: #073642;
-        color: #93a1a1;
-        border-color: #586e75;
-      }
-
       fieldset {
         border: none;
         padding: 0;
@@ -47,29 +22,29 @@
 
       /* Hack since we can't put hover/active pseudo selectors in inline styles */
       .nav-link:hover {
-        background-color: rgba(147, 161, 161, 0.08);
+        background-color: #e6e6e6;
       }
       .nav-link:active {
-        background-color: rgba(147, 161, 161, 0.16);
+        background-color: #d6d6d6;
       }
 
       .nav-link-active:hover {
-        background-color: rgba(38, 139, 210, 0.22);
+        background-color: rgba(31, 111, 235, 0.18);
       }
 
       .tool-tile {
-        background-color: rgba(7, 54, 66, 0.85);
-        border: 1px solid #0e4553;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        background-color: #ffffff;
+        border: 1px solid #d4d4d4;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
         transition: transform 150ms ease, box-shadow 150ms ease,
           border-color 150ms ease, background-color 150ms ease;
       }
       .tool-tile:hover {
         transform: translateY(-3px);
-        background-color: rgba(14, 69, 83, 0.95);
-        border-color: #268bd2;
-        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35),
-          0 0 0 1px rgba(38, 139, 210, 0.4);
+        background-color: #ffffff;
+        border-color: #1f6feb;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12),
+          0 0 0 1px rgba(31, 111, 235, 0.35);
       }
       .tool-tile:active {
         transform: translateY(-1px);
@@ -81,7 +56,7 @@
       .region-button:hover {
         transform: translateY(-2px);
         filter: brightness(1.08);
-        box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+        box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18);
       }
 
     </style>

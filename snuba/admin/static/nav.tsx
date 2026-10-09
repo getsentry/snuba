@@ -79,7 +79,7 @@ const linkStyle = {
 
 const activeLinkStyle = {
   color: COLORS.TEXT_DEFAULT,
-  backgroundColor: "rgba(38, 139, 210, 0.15)",
+  backgroundColor: "rgba(31, 111, 235, 0.12)",
   borderLeft: `3px solid ${COLORS.SNUBA_BLUE}`,
   fontWeight: "bold" as const,
 };

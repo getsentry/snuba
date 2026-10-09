@@ -8,7 +8,7 @@ import Body from "SnubaAdmin/body";
 import { NAV_ITEMS } from "SnubaAdmin/data";
 import Client from "SnubaAdmin/api_client";
 import { MantineProvider } from "@mantine/core";
-import { COLORS, MANTINE_DARK_SHADES, sloganTiling } from "SnubaAdmin/theme";
+import { COLORS, sloganTiling } from "SnubaAdmin/theme";
 import { ShellStateProvider } from "SnubaAdmin/sql_shell/shell_context";
 
 import 'bootstrap/dist/css/bootstrap.min.css';
@@ -18,13 +18,7 @@ const containerStyle = {
   flexDirection: "column" as const,
   height: "100%",
   backgroundColor: COLORS.PAGE_BG,
-  backgroundImage: sloganTiling(),
   color: COLORS.TEXT_DEFAULT,
-};
-
-const mantineTheme = {
-  colorScheme: "dark" as const,
-  colors: { dark: MANTINE_DARK_SHADES },
 };
 
 const bodyStyle = {
@@ -93,9 +87,16 @@ function App() {
   }
 
   return (
-    <MantineProvider theme={mantineTheme} withGlobalStyles withNormalizeCSS>
+    <MantineProvider withGlobalStyles withNormalizeCSS>
       <ShellStateProvider>
-        <div style={containerStyle}>
+        <div
+          style={{
+            ...containerStyle,
+            // The slogan tiling is only shown on the home page.
+            backgroundImage:
+              activeTab === "overview" ? sloganTiling() : undefined,
+          }}
+        >
           <Header />
           <div style={bodyStyle}>
             {activeTab !== "overview" && (
