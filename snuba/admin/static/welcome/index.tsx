@@ -8,14 +8,23 @@ import { regionColor } from "SnubaAdmin/utils/region_color";
 function Welcome(props: { api: Client }) {
   const [adminRegions, setAdminRegions] = useState<AdminRegion[]>([]);
   const [allowedTools, setAllowedTools] = useState<string[] | null>(null);
+  const [toolsError, setToolsError] = useState<string | null>(null);
 
   useEffect(() => {
     props.api.getAdminRegions().then((res) => {
       setAdminRegions(res);
     });
-    props.api.getAllowedTools().then((res) => {
-      setAllowedTools(res.tools);
-    });
+    props.api
+      .getAllowedTools()
+      .then((res) => {
+        if (!Array.isArray(res?.tools)) {
+          throw new Error("unexpected response from /tools");
+        }
+        setAllowedTools(res.tools);
+      })
+      .catch((err) => {
+        setToolsError(err?.message ?? String(err));
+      });
   }, []);
 
   const tools = NAV_ITEMS.filter(
@@ -50,6 +59,11 @@ function Welcome(props: { api: Client }) {
       )}
       <section style={sectionStyle}>
         <h2 style={headingStyle}>Tools</h2>
+        {toolsError && (
+          <p style={errorStyle}>
+            Couldn't load the tools you have access to: {toolsError}
+          </p>
+        )}
         <div style={tileGridStyle}>
           {tools.map((item) => {
             const [icon, ...title] = item.display.split(" ");
@@ -138,6 +152,11 @@ const tileDescriptionStyle = {
   fontSize: 14,
   lineHeight: 1.4,
   color: COLORS.TEXT_LIGHTER,
+};
+
+const errorStyle = {
+  fontSize: 14,
+  color: COLORS.ERROR,
 };
 
 export default Welcome;
