@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { COLORS } from "SnubaAdmin/theme";
-import { NAV_ITEMS } from "SnubaAdmin/data";
+import { NAV_ITEMS, isToolAllowed } from "SnubaAdmin/data";
 import Client from "SnubaAdmin/api_client";
 
 type NavProps = {
@@ -29,11 +29,7 @@ function Nav(props: NavProps) {
     <nav style={navStyle}>
       <ul style={ulStyle}>
         {NAV_ITEMS.map((item) => {
-          // Shell pages inherit permissions from their parent pages
-          const permissionId = item.id === "tracing-shell" ? "tracing"
-            : item.id === "system-shell" ? "system-queries"
-            : item.id;
-          return allowedTools?.includes(permissionId) || allowedTools?.includes("all") ? (
+          return isToolAllowed(item.id, allowedTools) ? (
             item.id === active ? (
               <li key={item.id} >
                 <a style={{ ...linkStyle, ...activeLinkStyle }} className="nav-link-active">
@@ -61,6 +57,7 @@ function Nav(props: NavProps) {
 }
 
 const navStyle: React.CSSProperties = {
+  backgroundColor: COLORS.NAV_BG,
   borderRight: `1px solid ${COLORS.NAV_BORDER}`,
   width: 250,
   overflowY: "auto",
@@ -82,8 +79,8 @@ const linkStyle = {
 
 const activeLinkStyle = {
   color: COLORS.TEXT_DEFAULT,
-  backgroundColor: "rgba(59, 130, 246, 0.15)",
-  borderLeft: "3px solid #3b82f6",
+  backgroundColor: "rgba(38, 139, 210, 0.15)",
+  borderLeft: `3px solid ${COLORS.SNUBA_BLUE}`,
   fontWeight: "bold" as const,
 };
 

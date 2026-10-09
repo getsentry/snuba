@@ -300,7 +300,7 @@ const copyTableResultStyle = {
 
 const sectionContainerStyle = {
   padding: 15,
-  backgroundColor: COLORS.WHITE,
+  backgroundColor: COLORS.PANEL_BG,
   border: `1px solid ${COLORS.BORDER_GRAY}`,
   borderRadius: 5,
   marginTop: 0,

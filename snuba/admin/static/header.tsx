@@ -26,11 +26,9 @@ function Header() {
 
   return (
     <header style={headerStyle}>
-      <img
-        style={{ height: "100%" }}
-        src="./static/snuba.svg"
-        alt="Snuba admin"
-      />
+      <a href="#overview" style={{ height: "100%" }}>
+        <img style={logoStyle} src="./static/snuba.svg" alt="Snuba admin" />
+      </a>
       <div
         style={{
           ...regionBarStyle,
@@ -51,6 +49,13 @@ const headerStyle = {
   alignItems: "center",
   padding: "10px 20px",
   justifyContent: "space-between",
+  borderBottom: `1px solid ${COLORS.NAV_BORDER}`,
+};
+
+// The logo is drawn in black; lighten it to sit on the dark header.
+const logoStyle = {
+  height: "100%",
+  filter: "invert(0.7)",
 };
 
 const adminTextStyle = {
