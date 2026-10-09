@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { Button } from "@mantine/core";
 import Client from "SnubaAdmin/api_client";
 import { NAV_ITEMS, isToolAllowed } from "SnubaAdmin/data";
 import { COLORS } from "SnubaAdmin/theme";
@@ -26,6 +27,32 @@ function Welcome(props: { api: Client }) {
         setToolsError(err?.message ?? String(err));
       });
   }, []);
+
+  async function clearSiteData() {
+    if (!window.confirm("Clear all site data for Snuba Admin?")) return;
+    localStorage.clear();
+    sessionStorage.clear();
+    document.cookie.split(";").forEach((cookie) => {
+      const name = cookie.split("=")[0].trim();
+      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+    });
+    const [cacheNames, databases] = await Promise.all([
+      caches.keys(),
+      indexedDB.databases(),
+    ]);
+    await Promise.all(cacheNames.map((name) => caches.delete(name)));
+    await Promise.all(
+      databases.map(
+        (db) =>
+          new Promise((resolve) => {
+            if (!db.name) return resolve(null);
+            const request = indexedDB.deleteDatabase(db.name);
+            request.onsuccess = request.onerror = request.onblocked = resolve;
+          })
+      )
+    );
+    window.location.reload();
+  }
 
   const tools = NAV_ITEMS.filter(
     (item) => item.id !== "overview" && isToolAllowed(item.id, allowedTools)
@@ -81,6 +108,11 @@ function Welcome(props: { api: Client }) {
             );
           })}
         </div>
+      </section>
+      <section style={sectionStyle}>
+        <Button color="red" onClick={clearSiteData}>
+          Clear site data
+        </Button>
       </section>
     </div>
   );

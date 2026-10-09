@@ -568,48 +568,54 @@ def get_extrapolated_function(
         f.round(f.multiply(sampling_weight, PERCENTILE_CORRECTION_FACTOR)),
         "UInt64",
     )
-    function_map_sample_weighted: dict[Function.ValueType, CurriedFunctionCall | FunctionCall] = {
-        Function.FUNCTION_SUM: _get_extrapolated_sum(
-            aggregation,
-            field,
-            field_exists,
-            condition_in_aggregation,
-            sampling_weight,
-            alias,
-        ),
-        Function.FUNCTION_AVERAGE: f.divide(
-            f.sumIfOrNull(f.multiply(field, sampling_weight), condition),
-            f.sumIfOrNull(sampling_weight, condition),
-            **alias_dict,
-        ),
-        Function.FUNCTION_AVG: f.divide(
-            f.sumIfOrNull(f.multiply(field, sampling_weight), condition),
-            f.sumIfOrNull(sampling_weight, condition),
-            **alias_dict,
-        ),
-        Function.FUNCTION_COUNT: f.round(f.sumIfOrNull(sampling_weight, condition), **alias_dict),
-        Function.FUNCTION_P50: cf.quantileTDigestWeightedIfOrNull(0.5)(
-            field, rounded_sampling_weight, condition, **alias_dict
-        ),
-        Function.FUNCTION_P75: cf.quantileTDigestWeightedIfOrNull(0.75)(
-            field, rounded_sampling_weight, condition, **alias_dict
-        ),
-        Function.FUNCTION_P90: cf.quantileTDigestWeightedIfOrNull(0.9)(
-            field, rounded_sampling_weight, condition, **alias_dict
-        ),
-        Function.FUNCTION_P95: cf.quantileTDigestWeightedIfOrNull(0.95)(
-            field, rounded_sampling_weight, condition, **alias_dict
-        ),
-        Function.FUNCTION_P99: cf.quantileTDigestWeightedIfOrNull(0.99)(
-            field, rounded_sampling_weight, condition, **alias_dict
-        ),
-        Function.FUNCTION_MAX: f.maxIfOrNull(field, condition, **alias_dict),
-        Function.FUNCTION_MIN: f.minIfOrNull(field, condition, **alias_dict),
-        Function.FUNCTION_UNIQ: f.uniqIfOrNull(field, condition, **alias_dict),
-        Function.FUNCTION_ANY: f.anyIfOrNull(field, condition, **alias_dict),
-    }
-
-    return function_map_sample_weighted.get(aggregation.aggregate)
+    match aggregation.aggregate:
+        case Function.FUNCTION_SUM:
+            return _get_extrapolated_sum(
+                aggregation,
+                field,
+                field_exists,
+                condition_in_aggregation,
+                sampling_weight,
+                alias,
+            )
+        case Function.FUNCTION_AVERAGE | Function.FUNCTION_AVG:
+            return f.divide(
+                f.sumIfOrNull(f.multiply(field, sampling_weight), condition),
+                f.sumIfOrNull(sampling_weight, condition),
+                **alias_dict,
+            )
+        case Function.FUNCTION_COUNT:
+            return f.round(f.sumIfOrNull(sampling_weight, condition), **alias_dict)
+        case Function.FUNCTION_P50:
+            return cf.quantileTDigestWeightedIfOrNull(0.5)(
+                field, rounded_sampling_weight, condition, **alias_dict
+            )
+        case Function.FUNCTION_P75:
+            return cf.quantileTDigestWeightedIfOrNull(0.75)(
+                field, rounded_sampling_weight, condition, **alias_dict
+            )
+        case Function.FUNCTION_P90:
+            return cf.quantileTDigestWeightedIfOrNull(0.9)(
+                field, rounded_sampling_weight, condition, **alias_dict
+            )
+        case Function.FUNCTION_P95:
+            return cf.quantileTDigestWeightedIfOrNull(0.95)(
+                field, rounded_sampling_weight, condition, **alias_dict
+            )
+        case Function.FUNCTION_P99:
+            return cf.quantileTDigestWeightedIfOrNull(0.99)(
+                field, rounded_sampling_weight, condition, **alias_dict
+            )
+        case Function.FUNCTION_MAX:
+            return f.maxIfOrNull(field, condition, **alias_dict)
+        case Function.FUNCTION_MIN:
+            return f.minIfOrNull(field, condition, **alias_dict)
+        case Function.FUNCTION_UNIQ:
+            return f.uniqIfOrNull(field, condition, **alias_dict)
+        case Function.FUNCTION_ANY:
+            return f.anyIfOrNull(field, condition, **alias_dict)
+        case _:
+            return None
 
 
 def get_non_extrapolated_function(
@@ -851,43 +857,50 @@ def get_confidence_interval_column(
     """
     alias = get_attribute_confidence_interval_alias(aggregation)
 
-    function_map_confidence_interval = {
-        Function.FUNCTION_COUNT: _get_ci_count(
-            aggregation,
-            attribute_key_to_expression,
-            alias,
-            use_sampling_factor=use_sampling_factor,
-        ),
-        Function.FUNCTION_SUM: _get_ci_sum(
-            aggregation,
-            attribute_key_to_expression,
-            alias,
-            use_sampling_factor=use_sampling_factor,
-        ),
-        Function.FUNCTION_AVG: _get_ci_avg(
-            aggregation,
-            attribute_key_to_expression,
-            alias,
-            use_sampling_factor,
-        ),
-        Function.FUNCTION_P50: _get_possible_percentiles_expression(
-            aggregation, 0.5, attribute_key_to_expression, use_sampling_factor
-        ),
-        Function.FUNCTION_P75: _get_possible_percentiles_expression(
-            aggregation, 0.75, attribute_key_to_expression, use_sampling_factor
-        ),
-        Function.FUNCTION_P90: _get_possible_percentiles_expression(
-            aggregation, 0.9, attribute_key_to_expression, use_sampling_factor
-        ),
-        Function.FUNCTION_P95: _get_possible_percentiles_expression(
-            aggregation, 0.95, attribute_key_to_expression, use_sampling_factor
-        ),
-        Function.FUNCTION_P99: _get_possible_percentiles_expression(
-            aggregation, 0.99, attribute_key_to_expression, use_sampling_factor
-        ),
-    }
-
-    return function_map_confidence_interval.get(aggregation.aggregate)
+    match aggregation.aggregate:
+        case Function.FUNCTION_COUNT:
+            return _get_ci_count(
+                aggregation,
+                attribute_key_to_expression,
+                alias,
+                use_sampling_factor=use_sampling_factor,
+            )
+        case Function.FUNCTION_SUM:
+            return _get_ci_sum(
+                aggregation,
+                attribute_key_to_expression,
+                alias,
+                use_sampling_factor=use_sampling_factor,
+            )
+        case Function.FUNCTION_AVG:
+            return _get_ci_avg(
+                aggregation,
+                attribute_key_to_expression,
+                alias,
+                use_sampling_factor,
+            )
+        case Function.FUNCTION_P50:
+            return _get_possible_percentiles_expression(
+                aggregation, 0.5, attribute_key_to_expression, use_sampling_factor
+            )
+        case Function.FUNCTION_P75:
+            return _get_possible_percentiles_expression(
+                aggregation, 0.75, attribute_key_to_expression, use_sampling_factor
+            )
+        case Function.FUNCTION_P90:
+            return _get_possible_percentiles_expression(
+                aggregation, 0.9, attribute_key_to_expression, use_sampling_factor
+            )
+        case Function.FUNCTION_P95:
+            return _get_possible_percentiles_expression(
+                aggregation, 0.95, attribute_key_to_expression, use_sampling_factor
+            )
+        case Function.FUNCTION_P99:
+            return _get_possible_percentiles_expression(
+                aggregation, 0.99, attribute_key_to_expression, use_sampling_factor
+            )
+        case _:
+            return None
 
 
 def _get_closest_percentile_index(

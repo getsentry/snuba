@@ -1,4 +1,5 @@
 from typing import Any
+from unittest.mock import Mock, patch
 
 import pytest
 from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
@@ -98,19 +99,47 @@ def test_get_custom_column_information() -> None:
     )
 
 
-def test_get_confidence_interval_column_for_non_extrapolatable_column() -> None:
-    assert (
-        get_confidence_interval_column(
-            AttributeConditionalAggregation(
-                aggregate=Function.FUNCTION_MIN,
-                key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test"),
-                label="min(test)",
-                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
-            ),
-            attribute_key_to_expression,
-        )
-        is None
+@pytest.mark.parametrize(
+    ("function", "expected_field_resolutions"),
+    [
+        (Function.FUNCTION_COUNT, 1),
+        (Function.FUNCTION_P95, 1),
+        (Function.FUNCTION_MIN, 0),
+    ],
+)
+def test_confidence_interval_only_builds_requested_aggregation(
+    function: Function.ValueType, expected_field_resolutions: int
+) -> None:
+    resolve_field = Mock(wraps=attribute_key_to_expression)
+    result = get_confidence_interval_column(
+        AttributeConditionalAggregation(
+            aggregate=function,
+            key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test"),
+            label="result",
+            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+        ),
+        resolve_field,
     )
+    assert resolve_field.call_count == expected_field_resolutions
+    assert (result is not None) == (expected_field_resolutions > 0)
+
+
+def test_extrapolated_count_does_not_build_sum() -> None:
+    aggregation = AttributeConditionalAggregation(
+        aggregate=Function.FUNCTION_COUNT,
+        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="test"),
+        label="count(test)",
+        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+    )
+    with patch("snuba.web.rpc.common.aggregation._get_extrapolated_sum") as build_sum:
+        result = aggregation_to_expression(aggregation, attribute_key_to_expression)
+
+    build_sum.assert_not_called()
+    assert isinstance(result, FunctionCall)
+    assert result.function_name == "round"
+    assert result.alias == "count(test)"
+    assert isinstance(result.parameters[0], FunctionCall)
+    assert result.parameters[0].function_name == "sumIfOrNull"
 
 
 @pytest.mark.parametrize(
