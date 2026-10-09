@@ -27,23 +27,14 @@ const COLORS = {
 // the page background so the pattern stays visible without competing with text.
 function sloganTiling(): string {
   const fill = "#ececec";
-  const angle = -55;
-  const width = 340;
-  const height = 340;
   const text = (x: number, y: number) =>
     `<text x='${x}' y='${y}' text-anchor='middle' dominant-baseline='middle' ` +
-    `transform='rotate(${angle} ${x} ${y})' font-family='-apple-system,sans-serif' ` +
+    `transform='rotate(-30 ${x} ${y})' font-family='-apple-system,sans-serif' ` +
     `font-size='22' font-weight='800' letter-spacing='2' fill='${fill}'>MEREDITH IS #1</text>`;
-  // Steep text overflows the tile, so repeat each copy one tile over in every
-  // direction; the overflow then lines up with the neighbouring tiles.
-  const wrapped = (x: number, y: number) =>
-    [-1, 0, 1]
-      .flatMap((dx) => [-1, 0, 1].map((dy) => text(x + dx * width, y + dy * height)))
-      .join("");
   const svg =
-    `<svg xmlns='http://www.w3.org/2000/svg' width='${width}' height='${height}'>` +
-    wrapped(width / 4, height / 4) +
-    wrapped((3 * width) / 4, (3 * height) / 4) +
+    `<svg xmlns='http://www.w3.org/2000/svg' width='360' height='220'>` +
+    text(90, 55) +
+    text(270, 165) +
     `</svg>`;
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }
