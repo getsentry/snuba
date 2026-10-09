@@ -1,0 +1,58 @@
+html, body, #root {margin: 0; height: 100%}
+body {
+  font-family: -apple-system,BlinkMacSystemFont,sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+fieldset {
+  border: none;
+  padding: 0;
+  margin: 0 0 10px 0;
+}
+
+/* Hack since we can't put hover/active pseudo selectors in inline styles */
+.nav-link:hover {
+  background-color: #e6e6e6;
+}
+.nav-link:active {
+  background-color: #d6d6d6;
+}
+
+.nav-link-active:hover {
+  background-color: rgba(31, 111, 235, 0.18);
+}
+
+.tool-tile {
+  background-color: #ffffff;
+  border: 1px solid #d4d4d4;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  transition: transform 150ms ease, box-shadow 150ms ease,
+    border-color 150ms ease, background-color 150ms ease;
+}
+.tool-tile:hover {
+  transform: translateY(-3px);
+  background-color: #ffffff;
+  border-color: #1f6feb;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12),
+    0 0 0 1px rgba(31, 111, 235, 0.35);
+}
+.tool-tile:active {
+  transform: translateY(-1px);
+}
+
+.danger-button {
+  background-color: #ffffff;
+  transition: background-color 150ms ease;
+}
+.danger-button:hover {
+  background-color: #fbeceb;
+}
+
+.region-button {
+  transition: transform 150ms ease, filter 150ms ease, box-shadow 150ms ease;
+}
+.region-button:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.08);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18);
+}
