@@ -22,7 +22,16 @@ function Welcome(props: { api: Client }) {
     const cacheNames = await caches.keys();
     await Promise.all(cacheNames.map((name) => caches.delete(name)));
     const databases = await indexedDB.databases();
-    databases.forEach((db) => db.name && indexedDB.deleteDatabase(db.name));
+    await Promise.all(
+      databases.map(
+        (db) =>
+          new Promise((resolve) => {
+            if (!db.name) return resolve(null);
+            const request = indexedDB.deleteDatabase(db.name);
+            request.onsuccess = request.onerror = request.onblocked = resolve;
+          })
+      )
+    );
     window.location.reload();
   }
 
