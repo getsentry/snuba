@@ -1,7 +1,5 @@
 ARG PYTHON_VERSION=3.13.12
 
-# Mirrored from Docker Hub via getsentry/image-mirror to avoid anonymous pull
-# rate limits. Bumping PYTHON_VERSION requires mirroring the new tag first.
 FROM ghcr.io/getsentry/image-mirror-library-python:${PYTHON_VERSION}-slim-trixie AS build_base
 
 WORKDIR /usr/src/snuba
