@@ -34,8 +34,8 @@ function Welcome(props: { api: Client }) {
   return (
     <div style={containerStyle}>
       {adminRegions.length > 0 && (
-        <section style={sectionStyle}>
-          <h2 style={headingStyle}>Regions</h2>
+        <section style={{ ...sectionStyle, ...regionSectionStyle }}>
+          <h2 style={{ ...headingStyle, margin: 0 }}>Regions</h2>
           <div style={regionRowStyle}>
             {adminRegions.map((region) => (
               <a
@@ -101,6 +101,13 @@ const headingStyle = {
   textTransform: "uppercase" as const,
   color: COLORS.TEXT_LIGHTER,
   margin: "0 0 12px 0",
+};
+
+// Heading and pills share one line.
+const regionSectionStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: 16,
 };
 
 const regionRowStyle = {
