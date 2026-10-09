@@ -19,9 +19,11 @@ function Welcome(props: { api: Client }) {
       const name = cookie.split("=")[0].trim();
       document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
     });
-    const cacheNames = await caches.keys();
+    const [cacheNames, databases] = await Promise.all([
+      caches.keys(),
+      indexedDB.databases(),
+    ]);
     await Promise.all(cacheNames.map((name) => caches.delete(name)));
-    const databases = await indexedDB.databases();
     await Promise.all(
       databases.map(
         (db) =>
