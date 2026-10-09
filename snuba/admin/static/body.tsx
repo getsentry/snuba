@@ -20,8 +20,8 @@ function Body(props: Props) {
 }
 
 const bodyStyle = {
-  width: "100%",
-  maxWidth: "calc(100% - 260px)",
+  flex: 1,
+  minWidth: 0,
   margin: 10,
   fontSize: 20,
 };

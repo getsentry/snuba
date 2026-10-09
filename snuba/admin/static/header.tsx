@@ -26,11 +26,13 @@ function Header() {
 
   return (
     <header style={headerStyle}>
-      <img
-        style={{ height: "100%" }}
-        src="./static/snuba.svg"
-        alt="Snuba admin"
-      />
+      <a href="#overview" style={{ height: "100%" }}>
+        <img
+          style={{ height: "100%" }}
+          src="./static/snuba.svg"
+          alt="Snuba admin"
+        />
+      </a>
       <div
         style={{
           ...regionBarStyle,
@@ -51,6 +53,7 @@ const headerStyle = {
   alignItems: "center",
   padding: "10px 20px",
   justifyContent: "space-between",
+  borderBottom: `1px solid ${COLORS.NAV_BORDER}`,
 };
 
 const adminTextStyle = {

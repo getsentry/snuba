@@ -5,33 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Snuba admin</title>
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-    <style>
-      html, body, #root {margin: 0; height: 100%}
-      body {
-        font-family: -apple-system,BlinkMacSystemFont,sans-serif;
-        -webkit-font-smoothing: antialiased;
-      }
-
-      fieldset {
-        border: none;
-        padding: 0;
-        margin: 0 0 10px 0;
-      }
-
-      /* Hack since we can't put hover/active pseudo selectors in inline styles */
-      .nav-link:hover {
-        background-color: #efefef;
-      }
-      .nav-link:active {
-        background-color: #cfcfcf;
-      }
-
-      .nav-link-active:hover {
-        background-color: #efefef;
-      }
-
-    </style>
-    <!-- imported css in index.tsx, so esbuild builds a bundle.css next to bundle.js -->
+    <!-- css imported in index.tsx (bootstrap and static/styles.css) is bundled by esbuild into bundle.css -->
     <link rel="stylesheet" href="./static/bundle.css" />
   </head>
   <body>

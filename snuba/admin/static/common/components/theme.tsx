@@ -1,10 +1,14 @@
 import { EditorView } from "@codemirror/view";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
+import { COLORS } from "SnubaAdmin/theme";
 
 export const theme = EditorView.theme({
   "&": {
     fontSize: "14px",
+    backgroundColor: COLORS.PANEL_BG,
+    border: `1px solid ${COLORS.BORDER_GRAY}`,
+    borderRadius: "4px",
   },
 });
 
