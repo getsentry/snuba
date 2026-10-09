@@ -132,7 +132,7 @@ class ClickhouseClientSettings(Enum):
             "readonly": 2,
             # Allow more threads for faster processing since outcomes analyzer queries
             # need more resources.
-            "max_threads": 10,
+            "max_threads": 16,
             # Don't use up production cache for outcomes analyzer queries.
             "use_uncompressed_cache": 0,
             # Allow longer running queries.
