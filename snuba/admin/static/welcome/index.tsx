@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { Button } from "@mantine/core";
 import Client from "SnubaAdmin/api_client";
 import { AdminRegion } from "SnubaAdmin/types";
 
@@ -10,6 +11,20 @@ function Welcome(props: { api: Client }) {
       setAdminRegions(res);
     });
   }, []);
+
+  async function clearSiteData() {
+    localStorage.clear();
+    sessionStorage.clear();
+    document.cookie.split(";").forEach((cookie) => {
+      const name = cookie.split("=")[0].trim();
+      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+    });
+    const cacheNames = await caches.keys();
+    await Promise.all(cacheNames.map((name) => caches.delete(name)));
+    const databases = await indexedDB.databases();
+    databases.forEach((db) => db.name && indexedDB.deleteDatabase(db.name));
+    window.location.reload();
+  }
 
   function urls() {
     return (
@@ -25,6 +40,9 @@ function Welcome(props: { api: Client }) {
             </li>
           ))}
         </ul>
+        <Button color="red" onClick={clearSiteData}>
+          Clear site data
+        </Button>
       </div>
     );
   }
