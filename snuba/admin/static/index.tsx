@@ -3,7 +3,6 @@ import ReactDOM from "react-dom/client";
 
 import * as Sentry from "@sentry/react";
 import Header from "SnubaAdmin/header";
-import Nav from "SnubaAdmin/nav";
 import Body from "SnubaAdmin/body";
 import { NAV_ITEMS } from "SnubaAdmin/data";
 import Client from "SnubaAdmin/api_client";
@@ -97,11 +96,8 @@ function App() {
               activeTab === "overview" ? sloganTiling() : undefined,
           }}
         >
-          <Header />
+          <Header api={client} active={activeTab} />
           <div style={bodyStyle}>
-            {activeTab !== "overview" && (
-              <Nav active={activeTab} navigate={navigate} api={client} />
-            )}
             {activeTab && <Body active={activeTab} api={client} />}
           </div>
         </div>
