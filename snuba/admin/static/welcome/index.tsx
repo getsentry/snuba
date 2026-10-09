@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import { Button } from "@mantine/core";
 import Client from "SnubaAdmin/api_client";
 import { NAV_ITEMS, isToolAllowed } from "SnubaAdmin/data";
 import { COLORS } from "SnubaAdmin/theme";
@@ -60,30 +59,39 @@ function Welcome(props: { api: Client }) {
 
   return (
     <div style={containerStyle}>
-      {adminRegions.length > 0 && (
-        <section style={{ ...sectionStyle, ...regionSectionStyle }}>
-          <h2 style={{ ...headingStyle, margin: 0 }}>Regions</h2>
-          <div style={regionRowStyle}>
-            {adminRegions.map((region) => (
-              <a
-                key={region.name}
-                href={region.url}
-                target="_blank"
-                className="region-button"
-                style={{
-                  ...regionButtonStyle,
-                  // Match the header banner, which calls the main region "SaaS".
-                  backgroundColor: regionColor(
-                    region.is_main ? "SaaS" : region.name
-                  ),
-                }}
-              >
-                {region.is_main ? `SaaS (${region.name})` : region.name}
-              </a>
-            ))}
-          </div>
-        </section>
-      )}
+      <section style={{ ...sectionStyle, ...regionSectionStyle }}>
+        {adminRegions.length > 0 && (
+          <>
+            <h2 style={{ ...headingStyle, margin: 0 }}>Regions</h2>
+            <div style={regionRowStyle}>
+              {adminRegions.map((region) => (
+                <a
+                  key={region.name}
+                  href={region.url}
+                  target="_blank"
+                  className="region-button"
+                  style={{
+                    ...regionButtonStyle,
+                    // Match the header banner, which calls the main region "SaaS".
+                    backgroundColor: regionColor(
+                      region.is_main ? "SaaS" : region.name
+                    ),
+                  }}
+                >
+                  {region.is_main ? `SaaS (${region.name})` : region.name}
+                </a>
+              ))}
+            </div>
+          </>
+        )}
+        <button
+          className="danger-button"
+          onClick={clearSiteData}
+          style={clearSiteDataStyle}
+        >
+          Clear site data
+        </button>
+      </section>
       <section style={sectionStyle}>
         <h2 style={headingStyle}>Tools</h2>
         {toolsError && (
@@ -108,11 +116,6 @@ function Welcome(props: { api: Client }) {
             );
           })}
         </div>
-      </section>
-      <section style={sectionStyle}>
-        <Button color="red" onClick={clearSiteData}>
-          Clear site data
-        </Button>
       </section>
     </div>
   );
@@ -159,6 +162,19 @@ const regionButtonStyle = {
   padding: "6px 16px",
   borderRadius: 4,
   whiteSpace: "nowrap" as const,
+};
+
+// Same type as the region pills, but outlined so it doesn't read as a region.
+const clearSiteDataStyle = {
+  ...regionButtonStyle,
+  marginLeft: "auto",
+  color: COLORS.DANGER,
+  border: `1px solid ${COLORS.DANGER}`,
+  // Buttons don't inherit line height, and the border adds 2px, so match the
+  // pills' height explicitly.
+  lineHeight: "inherit",
+  padding: "5px 16px",
+  cursor: "pointer",
 };
 
 const tileGridStyle = {

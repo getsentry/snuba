@@ -25,6 +25,7 @@ const COLORS = {
   BORDER_GRAY: "#c8c8c8",
   BORDER_GRAY_LIGHT: "#dddddd",
   ERROR: "#c62828",
+  DANGER: "#a8322d",
   SUCCESS: "#1b5e20",
 };
 
