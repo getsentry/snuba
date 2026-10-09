@@ -19,10 +19,8 @@ rds = get_redis_client(RedisClientKey.RATE_LIMITER)
 
 logger = logging.getLogger("snuba.query.allocation_policy_per_referrer")
 
-_DEFAULT_MAX_THREADS = 10
 _DEFAULT_CONCURRENT_REQUEST_PER_REFERRER = 100
 _REFERRER_CONCURRENT_OVERRIDE = -1
-_REFERRER_MAX_THREADS_OVERRIDE = -1
 _REQUESTS_THROTTLE_DIVIDER = 1.5
 _THREADS_THROTTLE_DIVIDER = 2
 
@@ -68,13 +66,6 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
                 default=_REFERRER_CONCURRENT_OVERRIDE,
             ),
             Configuration(
-                name="referrer_max_threads_override",
-                description="""override the max_threads for a referrer, applies to every query made by that referrer""",
-                param_types={"referrer": str},
-                value_type=int,
-                default=_REFERRER_MAX_THREADS_OVERRIDE,
-            ),
-            Configuration(
                 name="requests_throttle_divider",
                 description="default_concurrent_request_per_referrer divided by this value will be the threshold at which we will decrease the number of threads (THROTTLED_THREADS) used to execute queries",
                 value_type=float,
@@ -87,12 +78,6 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
                 default=_THREADS_THROTTLE_DIVIDER,
             ),
         ]
-
-    def _get_max_threads(self, referrer: str) -> int:
-        thread_override = int(
-            self.get_config_value("referrer_max_threads_override", {"referrer": referrer})
-        )
-        return thread_override if thread_override != -1 else _DEFAULT_MAX_THREADS
 
     def _get_concurrent_limit(self, referrer: str) -> int:
         concurrent_override = int(
@@ -116,7 +101,7 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
             rate_limit_params,
         )
         assert rate_limit_params.concurrent_limit is not None, "concurrent_limit must be set"
-        num_threads = self._get_max_threads(referrer)
+        num_threads = self.max_threads
         requests_throttle_threshold = max(
             1,
             int(

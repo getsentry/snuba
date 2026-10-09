@@ -102,23 +102,6 @@ class TestCrossOrgQueryAllocationPolicy:
         )
         set_component_config(
             policy,
-            "referrer_max_threads_override",
-            2,
-            {"referrer": "statistical_detectors"},
-        )
-        assert (
-            policy.get_quota_allowance(
-                tenant_ids={"referrer": "statistical_detectors"}, query_id="1"
-            ).max_threads
-            == 2
-        )
-        policy.update_quota_balance(
-            tenant_ids={"referrer": "statistical_detectors"},
-            query_id="1",
-            result_or_error=_RESULT_SUCCESS,
-        )
-        set_component_config(
-            policy,
             "referrer_concurrent_override",
             0,
             {"referrer": "statistical_detectors"},
