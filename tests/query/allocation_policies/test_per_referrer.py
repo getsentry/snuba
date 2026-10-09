@@ -93,3 +93,18 @@ class TestPerReferrerPolicy:
             tenant_ids={"referrer": "statistical_detectors"}, query_id="2"
         )
         assert not quota_allowance.can_run and quota_allowance.max_threads == 0
+
+    @pytest.mark.redis_db
+    def test_respects_max_threads_config(self) -> None:
+        policy = ReferrerGuardRailPolicy.from_kwargs(
+            **{
+                "storage_key": "metrics_counters",
+            }
+        )
+        set_component_config(policy, "max_threads", 4)
+        assert (
+            policy.get_quota_allowance(
+                tenant_ids={"referrer": "statistical_detectors"}, query_id="1"
+            ).max_threads
+            == 4
+        )
