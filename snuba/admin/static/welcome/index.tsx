@@ -13,6 +13,7 @@ function Welcome(props: { api: Client }) {
   }, []);
 
   async function clearSiteData() {
+    if (!window.confirm("Clear all site data for Snuba Admin?")) return;
     localStorage.clear();
     sessionStorage.clear();
     document.cookie.split(";").forEach((cookie) => {
