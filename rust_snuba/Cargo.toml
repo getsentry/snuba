@@ -28,7 +28,7 @@ chrono = { version = "0.4.26", features = ["serde"] }
 cityhash-rs = "1.0.1"
 ctrlc = { version = "3.2.5", features = ["termination"] }
 data-encoding = "2.5.0"
-futures = "0.3.21"
+futures = "0.3.31"
 hyper = "1.2.0"
 json-schema-diff = "0.1.7"
 lz4_flex = "0.11"
@@ -51,6 +51,7 @@ reqwest = { version = "0.13", default-features = false, features = [
     "http2",
     "native-tls",
     "query",
+    "stream",
     "system-proxy",
 ] }
 schemars = { version = "0.8.16", features = ["uuid1"] }
