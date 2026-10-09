@@ -7,7 +7,12 @@ const COLORS = {
   PANEL_BG: "#ffffff",
   REGION_TEXT: "black",
   NAV_BORDER: "#d4d4d4",
-  TABLE_BORDER: "#cbcbcb",
+  // Slightly darker than TABLE_HEADER_BG so it shows on the header and body.
+  TABLE_BORDER: "#b9c6d6",
+  TABLE_BG: "#ffffff",
+  // Light slate blue, calmer than SNUBA_BLUE.
+  TABLE_HEADER_BG: "#cfdbea",
+  TABLE_HEADER_TEXT: "#111111",
   SNUBA_BLUE: "#1f6feb",
   TEXT_DEFAULT: "#111111",
   TEXT_LIGHTER: "#3d3d3d",
