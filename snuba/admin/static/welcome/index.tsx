@@ -27,32 +27,67 @@ function Welcome(props: { api: Client }) {
       });
   }, []);
 
+  async function clearSiteData() {
+    if (!window.confirm("Clear all site data for Snuba Admin?")) return;
+    localStorage.clear();
+    sessionStorage.clear();
+    document.cookie.split(";").forEach((cookie) => {
+      const name = cookie.split("=")[0].trim();
+      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+    });
+    const [cacheNames, databases] = await Promise.all([
+      caches.keys(),
+      indexedDB.databases(),
+    ]);
+    await Promise.all(cacheNames.map((name) => caches.delete(name)));
+    await Promise.all(
+      databases.map(
+        (db) =>
+          new Promise((resolve) => {
+            if (!db.name) return resolve(null);
+            const request = indexedDB.deleteDatabase(db.name);
+            request.onsuccess = request.onerror = request.onblocked = resolve;
+          })
+      )
+    );
+    window.location.reload();
+  }
+
   return (
     <div>
-      {adminRegions.length > 0 && (
-        <section style={{ ...sectionStyle, ...regionSectionStyle }}>
-          <h2 style={{ ...headingStyle, margin: 0 }}>Regions</h2>
-          <div style={regionRowStyle}>
-            {adminRegions.map((region) => (
-              <a
-                key={region.name}
-                href={region.url}
-                target="_blank"
-                className="region-button"
-                style={{
-                  ...regionButtonStyle,
-                  // Match the header banner, which calls the main region "SaaS".
-                  backgroundColor: regionColor(
-                    region.is_main ? "SaaS" : region.name
-                  ),
-                }}
-              >
-                {region.is_main ? `SaaS (${region.name})` : region.name}
-              </a>
-            ))}
-          </div>
-        </section>
-      )}
+      <section style={{ ...sectionStyle, ...regionSectionStyle }}>
+        {adminRegions.length > 0 && (
+          <>
+            <h2 style={{ ...headingStyle, margin: 0 }}>Regions</h2>
+            <div style={regionRowStyle}>
+              {adminRegions.map((region) => (
+                <a
+                  key={region.name}
+                  href={region.url}
+                  target="_blank"
+                  className="region-button"
+                  style={{
+                    ...regionButtonStyle,
+                    // Match the header banner, which calls the main region "SaaS".
+                    backgroundColor: regionColor(
+                      region.is_main ? "SaaS" : region.name
+                    ),
+                  }}
+                >
+                  {region.is_main ? `SaaS (${region.name})` : region.name}
+                </a>
+              ))}
+            </div>
+          </>
+        )}
+        <button
+          className="danger-button"
+          onClick={clearSiteData}
+          style={clearSiteDataStyle}
+        >
+          Clear site data
+        </button>
+      </section>
       <section style={sectionStyle}>
         <h2 style={headingStyle}>Tools</h2>
         {toolsError && (
@@ -103,6 +138,19 @@ const regionButtonStyle = {
   padding: "6px 16px",
   borderRadius: 4,
   whiteSpace: "nowrap" as const,
+};
+
+// Same type as the region pills, but outlined so it doesn't read as a region.
+const clearSiteDataStyle = {
+  ...regionButtonStyle,
+  marginLeft: "auto",
+  color: COLORS.DANGER,
+  border: `1px solid ${COLORS.DANGER}`,
+  // Buttons don't inherit line height, and the border adds 2px, so match the
+  // pills' height explicitly.
+  lineHeight: "inherit",
+  padding: "5px 16px",
+  cursor: "pointer",
 };
 
 const errorStyle = {
