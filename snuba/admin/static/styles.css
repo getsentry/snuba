@@ -37,6 +37,15 @@ fieldset {
   background-color: #fbeceb;
 }
 
+.page-menu-trigger {
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+.page-menu-trigger:hover,
+.page-menu-trigger[aria-expanded="true"] {
+  background-color: #f2f2f2;
+  border-color: #b5b5b5;
+}
+
 .region-button {
   transition: transform 150ms ease, filter 150ms ease, box-shadow 150ms ease;
 }

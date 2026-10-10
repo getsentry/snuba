@@ -6,11 +6,13 @@ type ToolGridProps = {
   allowedTools: string[] | null;
   // Compact tiles drop the description so more fit in a small space.
   compact?: boolean;
+  // Highlights the current page's tile.
+  activeId?: string | null;
   onSelect?: () => void;
 };
 
 function ToolGrid(props: ToolGridProps) {
-  const { allowedTools, compact = false, onSelect } = props;
+  const { allowedTools, compact = false, activeId, onSelect } = props;
 
   const tools = NAV_ITEMS.filter(
     (item) => item.id !== "overview" && isToolAllowed(item.id, allowedTools)
@@ -25,7 +27,11 @@ function ToolGrid(props: ToolGridProps) {
             key={item.id}
             href={`#${item.id}`}
             className="tool-tile"
-            style={compact ? compactTileStyle : tileStyle}
+            aria-current={item.id === activeId ? "page" : undefined}
+            style={{
+              ...(compact ? compactTileStyle : tileStyle),
+              ...(item.id === activeId ? activeTileStyle : {}),
+            }}
             onClick={onSelect}
           >
             <span style={compact ? compactIconStyle : iconStyle}>{icon}</span>
@@ -72,6 +78,11 @@ const compactTileStyle = {
   borderRadius: 6,
   textDecoration: "none",
   color: COLORS.TEXT_DEFAULT,
+};
+
+const activeTileStyle = {
+  borderColor: COLORS.SNUBA_BLUE,
+  backgroundColor: "rgba(31, 111, 235, 0.08)",
 };
 
 const iconStyle = {
