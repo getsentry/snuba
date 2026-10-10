@@ -11,6 +11,8 @@ import { COLORS, sloganTiling } from "SnubaAdmin/theme";
 import { ShellStateProvider } from "SnubaAdmin/sql_shell/shell_context";
 
 import 'bootstrap/dist/css/bootstrap.min.css';
+// Imported after bootstrap so these rules take precedence.
+import './styles.css';
 
 const containerStyle = {
   display: "flex",
