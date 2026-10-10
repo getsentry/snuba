@@ -267,12 +267,12 @@ function Header(props: { api: Client; active: string | null }) {
           </>
         )}
       </div>
-      <span style={adminTextStyle}>ADMIN</span>
     </header>
   );
 }
 
-// Equal outer columns keep the breadcrumb centered whatever its width.
+// Equal outer columns keep the breadcrumb centered whatever its width; the
+// right one is empty.
 const headerStyle = {
   backgroundColor: COLORS.HEADER_BG,
   height: "45px",
@@ -323,11 +323,6 @@ const pageTitleStyle = {
 const separatorStyle = {
   color: COLORS.TEXT_LIGHTER,
   fontWeight: 400,
-};
-
-const adminTextStyle = {
-  color: COLORS.HEADER_TEXT,
-  justifySelf: "end" as const,
 };
 
 const regionBarStyle = {
