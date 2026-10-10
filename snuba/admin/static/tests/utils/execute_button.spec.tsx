@@ -1,4 +1,3 @@
-import Nav from "SnubaAdmin/nav";
 import Client from "SnubaAdmin/api_client";
 import React from "react";
 import { it, expect, jest, afterEach } from "@jest/globals";

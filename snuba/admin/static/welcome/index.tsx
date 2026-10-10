@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Client from "SnubaAdmin/api_client";
-import { NAV_ITEMS, isToolAllowed } from "SnubaAdmin/data";
 import { COLORS } from "SnubaAdmin/theme";
+import ToolGrid from "SnubaAdmin/tool_grid";
 import { AdminRegion } from "SnubaAdmin/types";
 import { regionColor } from "SnubaAdmin/utils/region_color";
 
@@ -53,12 +53,8 @@ function Welcome(props: { api: Client }) {
     window.location.reload();
   }
 
-  const tools = NAV_ITEMS.filter(
-    (item) => item.id !== "overview" && isToolAllowed(item.id, allowedTools)
-  );
-
   return (
-    <div style={containerStyle}>
+    <div>
       <section style={{ ...sectionStyle, ...regionSectionStyle }}>
         {adminRegions.length > 0 && (
           <>
@@ -99,31 +95,11 @@ function Welcome(props: { api: Client }) {
             Couldn't load the tools you have access to: {toolsError}
           </p>
         )}
-        <div style={tileGridStyle}>
-          {tools.map((item) => {
-            const [icon, ...title] = item.display.split(" ");
-            return (
-              <a
-                key={item.id}
-                href={`#${item.id}`}
-                className="tool-tile"
-                style={tileStyle}
-              >
-                <span style={tileIconStyle}>{icon}</span>
-                <span style={tileTitleStyle}>{title.join(" ")}</span>
-                <span style={tileDescriptionStyle}>{item.description}</span>
-              </a>
-            );
-          })}
-        </div>
+        <ToolGrid allowedTools={allowedTools} />
       </section>
     </div>
   );
 }
-
-const containerStyle = {
-  padding: "10px 20px",
-};
 
 const sectionStyle = {
   marginBottom: 30,
@@ -175,38 +151,6 @@ const clearSiteDataStyle = {
   lineHeight: "inherit",
   padding: "5px 16px",
   cursor: "pointer",
-};
-
-const tileGridStyle = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
-  gap: 16,
-};
-
-const tileStyle = {
-  display: "flex",
-  flexDirection: "column" as const,
-  gap: 6,
-  padding: 18,
-  borderRadius: 8,
-  textDecoration: "none",
-  color: COLORS.TEXT_DEFAULT,
-};
-
-const tileIconStyle = {
-  fontSize: 28,
-  lineHeight: 1,
-};
-
-const tileTitleStyle = {
-  fontSize: 18,
-  fontWeight: 700,
-};
-
-const tileDescriptionStyle = {
-  fontSize: 14,
-  lineHeight: 1.4,
-  color: COLORS.TEXT_LIGHTER,
 };
 
 const errorStyle = {
