@@ -53,15 +53,24 @@ function HoverMenu(props: {
 
 // Minimum gap between a menu and the edge of the window.
 const MENU_EDGE_MARGIN_PX = 20;
+// Space between the trigger and the menu card; it's transparent padding, so
+// the pointer stays inside the hover area while crossing it.
+const MENU_GAP_PX = 16;
+// The caret is a rotated square straddling the card's top edge.
+const CARET_SIZE_PX = 14;
+// Keeps the caret clear of the card's rounded corners.
+const CARET_INSET_PX = 20;
 
 // A dropdown panel centered under its parent (the menu's trigger wrapper),
-// nudged sideways only as far as needed to stay inside the window.
+// nudged sideways only as far as needed to stay inside the window. A caret on
+// top points back at the trigger, wherever the panel ends up.
 function MenuPanel(props: {
   style?: React.CSSProperties;
   children: React.ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [shift, setShift] = useState(0);
+  const [caretX, setCaretX] = useState<number | null>(null);
 
   useLayoutEffect(() => {
     function place() {
@@ -77,6 +86,13 @@ function MenuPanel(props: {
         Math.min(centeredLeft, maxLeft),
       );
       setShift(left - centeredLeft);
+      const triggerCenter = anchor.left + anchor.width / 2 - left;
+      setCaretX(
+        Math.max(
+          CARET_INSET_PX,
+          Math.min(triggerCenter, width - CARET_INSET_PX),
+        ),
+      );
     }
     place();
     window.addEventListener("resize", place);
@@ -92,6 +108,12 @@ function MenuPanel(props: {
         transform: `translateX(calc(-50% + ${shift}px))`,
       }}
     >
+      {caretX !== null && (
+        <div
+          aria-hidden="true"
+          style={{ ...caretStyle, left: caretX - CARET_SIZE_PX / 2 }}
+        />
+      )}
       {props.children}
     </div>
   );
@@ -353,8 +375,20 @@ const menuPanelStyle = {
   // header's bottom edge, so moving onto the menu never leaves the hover area.
   top: "100%",
   left: "50%",
-  paddingTop: 10,
+  paddingTop: MENU_GAP_PX,
   zIndex: 1000,
+};
+
+// Positioned, so it paints over the card's border where the two overlap.
+const caretStyle = {
+  position: "absolute" as const,
+  top: MENU_GAP_PX - CARET_SIZE_PX / 2,
+  width: CARET_SIZE_PX,
+  height: CARET_SIZE_PX,
+  backgroundColor: COLORS.PANEL_BG,
+  borderTop: `1px solid ${COLORS.NAV_BORDER}`,
+  borderLeft: `1px solid ${COLORS.NAV_BORDER}`,
+  transform: "rotate(45deg)",
 };
 
 const toolPanelStyle = {
