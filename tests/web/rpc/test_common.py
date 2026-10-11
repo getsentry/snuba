@@ -58,13 +58,9 @@ from snuba.query.expressions import (
 from snuba.query.logical import Query
 from snuba.web import QueryException
 from snuba.web.rpc.common.common import (
-    INDEXED_COLUMNS_OPTION,
-    _any_attribute_filter_to_expression,
-    _comparison_can_match_column_default,
     add_existence_check_to_map_attribute_reads,
     attribute_key_to_expression,
     dedupe_and_conditions,
-    indexed_column_for,
     next_monday,
     prev_monday,
     semver_sort_key,
@@ -78,6 +74,12 @@ from snuba.web.rpc.common.exceptions import (
     convert_rpc_exception_to_proto,
 )
 from snuba.web.rpc.common.pagination import FlexibleTimeWindowPageWithFilters
+from snuba.web.rpc.common.trace_item_filter_converter import (
+    INDEXED_COLUMNS_OPTION,
+    _any_attribute_filter_to_expression,
+    _comparison_can_match_column_default,
+    indexed_column_for,
+)
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import gen_item_message
@@ -2067,7 +2069,10 @@ class TestIndexedColumnFor:
         def fake_get_option(key: str, default: object) -> object:
             return default
 
-        with mock.patch("snuba.web.rpc.common.common.get_option", side_effect=fake_get_option):
+        with mock.patch(
+            "snuba.web.rpc.common.trace_item_filter_converter.get_option",
+            side_effect=fake_get_option,
+        ):
             assert indexed_column_for(_ts("2030-01-01"), SPAN, "sentry.op") is None
 
 

@@ -24,7 +24,9 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.rpc.common.common import INDEXED_COLUMNS_OPTION
+from snuba.web.rpc.common.trace_item_filter_converter import (
+    INDEXED_COLUMNS_OPTION,
+)
 from snuba.web.rpc.v1.endpoint_time_series import EndpointTimeSeries
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
