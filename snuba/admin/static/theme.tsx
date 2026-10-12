@@ -3,7 +3,6 @@ const COLORS = {
   PAGE_BG: "#fafafa",
   HEADER_BG: "#ffffff",
   HEADER_TEXT: "#111111",
-  NAV_BG: "#f2f2f2",
   PANEL_BG: "#ffffff",
   REGION_TEXT: "black",
   NAV_BORDER: "#d4d4d4",

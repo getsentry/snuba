@@ -22,7 +22,7 @@ function Body(props: Props) {
 const bodyStyle = {
   flex: 1,
   minWidth: 0,
-  margin: 10,
+  padding: "20px 24px",
   fontSize: 20,
 };
 

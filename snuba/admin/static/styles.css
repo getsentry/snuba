@@ -11,17 +11,6 @@ fieldset {
 }
 
 /* Hack since we can't put hover/active pseudo selectors in inline styles */
-.nav-link:hover {
-  background-color: #e6e6e6;
-}
-.nav-link:active {
-  background-color: #d6d6d6;
-}
-
-.nav-link-active:hover {
-  background-color: rgba(31, 111, 235, 0.18);
-}
-
 .tool-tile {
   background-color: #ffffff;
   border: 1px solid #d4d4d4;
@@ -46,6 +35,15 @@ fieldset {
 }
 .danger-button:hover {
   background-color: #fbeceb;
+}
+
+.page-menu-trigger {
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+.page-menu-trigger:hover,
+.page-menu-trigger[aria-expanded="true"] {
+  background-color: #f2f2f2;
+  border-color: #b5b5b5;
 }
 
 .region-button {
