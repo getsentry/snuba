@@ -1,13 +1,12 @@
 import React, { useEffect, useState } from "react";
 import Client from "SnubaAdmin/api_client";
-import { Collapse } from "SnubaAdmin/collapse";
 import QueryEditor from "SnubaAdmin/query_editor";
 import ExecuteButton from "SnubaAdmin/utils/execute_button";
-import QueryResultCopier from "SnubaAdmin/utils/query_result_copier";
 import { Switch } from "@mantine/core";
 import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";
 import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
 import { getHostsForStorage, getErrorDomElement } from "SnubaAdmin/utils/clickhouse_node_utils";
+import { QueryHistoryEntry } from "SnubaAdmin/clickhouse_queries/query_history_entry";
 
 import {
   ClickhouseNodeData,
@@ -122,6 +121,8 @@ function QueryDisplay(props: {
       .then((result) => {
         setQueryError(null);  // clear any previous error
         result.input_query = `${query.sql} (${query.storage},${query.host}:${query.port})`;
+        // The server doesn't timestamp results; record when this one ran.
+        result.timestamp = Math.floor(Date.now() / 1000);
         setRecentHistory(HISTORY_KEY, result);
         setQueryResultHistory((prevHistory) => [result, ...prevHistory]);
       });
@@ -231,32 +232,18 @@ function QueryDisplay(props: {
       </div>
       <div>
         <h2>Query results</h2>
-        {queryResultHistory.map((queryResult, idx) => {
-          if (idx === 0) {
-            return (
-              <div key={idx}>
-                <p>{queryResult.input_query}</p>
-                <QueryResultCopier
-                  rawInput={queryResult.trace_output || ""}
-                  jsonInput={JSON.stringify(queryResult)}
-                  csvInput={convertResultsToCSV(queryResult)}
-                />
-                {props.resultDataPopulator(queryResult)}
-              </div>
-            );
-          }
-
-          return (
-            <Collapse key={idx} text={queryResult.input_query}>
-              <QueryResultCopier
-                rawInput={queryResult.trace_output || ""}
-                jsonInput={JSON.stringify(queryResult)}
-                csvInput={convertResultsToCSV(queryResult)}
-              />
-              {props.resultDataPopulator(queryResult)}
-            </Collapse>
-          );
-        })}
+        {queryResultHistory.map((queryResult, idx) => (
+          <QueryHistoryEntry
+            // Entries shift down as new results arrive, so key on when they
+            // ran; older saved entries have no timestamp, so fall back to the
+            // position for those.
+            key={`${queryResult.timestamp ?? `#${idx}`}-${queryResult.input_query}`}
+            queryResult={queryResult}
+            isLatest={idx === 0}
+            csv={convertResultsToCSV(queryResult)}
+            resultDataPopulator={props.resultDataPopulator}
+          />
+        ))}
       </div>
     </div>
   );
