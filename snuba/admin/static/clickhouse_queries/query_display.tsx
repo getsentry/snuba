@@ -31,6 +31,9 @@ function QueryDisplay(props: {
   const [queryResultHistory, setQueryResultHistory] = useState<QueryResult[]>(
     getRecentHistory(HISTORY_KEY)
   );
+  // Only a result the user just ran opens automatically; saved history loads
+  // collapsed.
+  const [justRan, setJustRan] = useState<QueryResult | null>(null);
 
   const [queryError, setQueryError] = useState<Error | null>(null);
 
@@ -125,6 +128,7 @@ function QueryDisplay(props: {
         result.timestamp = Math.floor(Date.now() / 1000);
         setRecentHistory(HISTORY_KEY, result);
         setQueryResultHistory((prevHistory) => [result, ...prevHistory]);
+        setJustRan(result);
       });
   }
 
@@ -240,6 +244,7 @@ function QueryDisplay(props: {
             key={`${queryResult.timestamp ?? `#${idx}`}-${queryResult.input_query}`}
             queryResult={queryResult}
             isLatest={idx === 0}
+            defaultExpanded={queryResult === justRan}
             csv={convertResultsToCSV(queryResult)}
             resultDataPopulator={props.resultDataPopulator}
           />

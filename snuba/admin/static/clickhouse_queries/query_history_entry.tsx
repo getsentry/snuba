@@ -16,11 +16,12 @@ function parseInputQuery(inputQuery: string) {
 function QueryHistoryEntry(props: {
   queryResult: QueryResult;
   isLatest: boolean;
+  defaultExpanded: boolean;
   csv: string;
   resultDataPopulator: (queryResult: QueryResult) => JSX.Element;
 }) {
   const { queryResult, isLatest } = props;
-  const [expanded, setExpanded] = useState(isLatest);
+  const [expanded, setExpanded] = useState(props.defaultExpanded);
   const { sql, storage, host } = parseInputQuery(queryResult.input_query);
   const rowCount = queryResult.rows.length;
 
