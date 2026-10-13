@@ -176,7 +176,7 @@ SYSTEM_COMMAND_RE = re.compile(
         (SYSTEM)
         \s
         (?!SHUTDOWN\b)(?!KILL\b)
-        [\w\s'\-_]+
+        [\w\s'\-_\.`]+ # dots and backticks allow db-qualified table names
         ;? # Optional semicolon
         $
     """,
