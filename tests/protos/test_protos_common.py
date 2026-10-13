@@ -73,6 +73,32 @@ class TestAttributeKeyToExpression:
             alias="derp_TYPE_BOOLEAN",
         )
 
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "sentry.timestamp_precise",
+            "sentry.start_timestamp_precise",
+            "sentry.end_timestamp_precise",
+        ],
+    )
+    def test_precise_timestamps_prefer_int_map(self, name: str) -> None:
+        assert attribute_key_to_expression(
+            AttributeKey(type=AttributeKey.TYPE_INT, name=name),
+        ) == f.multiIf(
+            map_key_exists(column("attributes_int"), literal(name)),
+            f.cast(
+                arrayElement(None, column("attributes_int"), literal(name)),
+                "Nullable(Int64)",
+            ),
+            f.cast(
+                SubscriptableReference(
+                    alias=None, column=column("attributes_float"), key=literal(name)
+                ),
+                "Nullable(Int64)",
+            ),
+            alias=f"{name}_TYPE_INT",
+        )
+
     def test_coalesce(self) -> None:
         new_attribute = list(ATTRIBUTES_TO_COALESCE.keys())[0]
         old_attributes = ATTRIBUTES_TO_COALESCE[new_attribute]

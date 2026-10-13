@@ -28,7 +28,9 @@ from snuba.protos.common import (
     coalesced_attribute_names,
     first_present_value,
     get_trace_item_type_name,
+    is_precise_int_read,
     key_existence_conditions,
+    precise_int_read,
     sentry_column,
     type_array_to_membership_array_expression_from_typed_columns,
     type_array_typed_column_native_array,
@@ -478,8 +480,12 @@ def _map_backed_operands(k: AttributeKey) -> tuple[Expression, Expression]:
     values = [_value(name) for name in names]
     existences = key_existence_conditions(col_name, names)
 
-    exists = combine_or_conditions(existences) if len(existences) > 1 else existences[0]
     value = first_present_value(values, existences)
+    if is_precise_int_read(k):
+        value = precise_int_read(k.name, value)
+        existences = key_existence_conditions("attributes_int", [k.name]) + existences
+
+    exists = combine_or_conditions(existences) if len(existences) > 1 else existences[0]
     return value, exists
 
 
