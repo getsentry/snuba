@@ -81,6 +81,37 @@ PROTO_TYPE_TO_ATTRIBUTE_COLUMN: Final[Mapping[AttributeKey.Type.ValueType, str]]
     AttributeKey.Type.TYPE_BOOLEAN: "attributes_bool",
 }
 
+# Nanosecond timestamps lose their last digits in Float64, so TYPE_INT reads of these keys
+# prefer the unbucketed attributes_int map and fall back to the float bucket (same
+# precedence as the details endpoint).
+PRECISE_INT_ATTRIBUTES: Final[frozenset[str]] = frozenset(
+    {
+        sentry_column("timestamp_precise"),
+        sentry_column("start_timestamp_precise"),
+        sentry_column("end_timestamp_precise"),
+    }
+)
+
+
+def is_precise_int_read(attr_key: AttributeKey) -> bool:
+    return attr_key.type == AttributeKey.Type.TYPE_INT and attr_key.name in PRECISE_INT_ATTRIBUTES
+
+
+def precise_int_read(
+    attribute_name: str, float_value: Expression, alias: str | None = None
+) -> Expression:
+    """``multiIf(has(mapKeys(attributes_int), name), attributes_int[name], float_value)``.
+    attributes_int is an unbucketed Map, so arrayElement, not SubscriptableReference."""
+    int_value = f.cast(
+        arrayElement(None, column("attributes_int"), literal(attribute_name)),
+        f"Nullable({PROTO_TYPE_TO_CLICKHOUSE_TYPE[AttributeKey.Type.TYPE_INT]})",
+    )
+    int_exists = map_key_exists(column("attributes_int"), literal(attribute_name))
+    if alias:
+        return f.multiIf(int_exists, int_value, float_value, alias=alias)
+    return f.multiIf(int_exists, int_value, float_value)
+
+
 # Element-typed array attribute types map 1:1 to a single typed array map column, so a
 # query on one of these reads exactly that column natively (no cross-column OR/merge).
 PROTO_ARRAY_TYPE_TO_COLUMN: Final[Mapping[AttributeKey.Type.ValueType, str]] = {
@@ -366,6 +397,13 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
         return f.cast(
             column(normalized_column.column_name),
             PROTO_TYPE_TO_CLICKHOUSE_TYPE[attr_key.type],
+            alias=alias,
+        )
+
+    if is_precise_int_read(attr_key):
+        return precise_int_read(
+            attr_key.name,
+            _generate_subscriptable_reference(attr_key.name, attr_key.type),
             alias=alias,
         )
 

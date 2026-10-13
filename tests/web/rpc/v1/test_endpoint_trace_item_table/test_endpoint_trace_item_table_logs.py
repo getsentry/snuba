@@ -138,6 +138,63 @@ class TestTraceItemTableForLogs(BaseApiTest):
         assert MessageToDict(response) == MessageToDict(expected_response)
 
 
+@pytest.mark.eap
+@pytest.mark.redis_db
+class TestPreciseTimestampForLogs(BaseApiTest):
+    def test_timestamp_precise_as_int_keeps_nanos(self, eap: None, redis_db: None) -> None:
+        # Last digits don't survive a Float64 round-trip; must come from attributes_int.
+        nanos = int(BASE_TIME.timestamp() * 1e9) + 64
+        assert int(float(nanos)) != nanos
+        # Float-only write (no attributes_int entry) must still be readable as TYPE_INT.
+        float_only = float(nanos)
+        write_raw_unprocessed_events(
+            get_writable_storage(StorageKey("eap_items")),
+            [
+                gen_item_message(
+                    start_timestamp=BASE_TIME,
+                    remove_default_attributes=True,
+                    type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+                    attributes={"sentry.timestamp_precise": AnyValue(int_value=nanos)},
+                ),
+                gen_item_message(
+                    start_timestamp=BASE_TIME,
+                    remove_default_attributes=True,
+                    type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+                    attributes={"sentry.timestamp_precise": AnyValue(double_value=float_only)},
+                ),
+            ],
+        )
+        key = AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.timestamp_precise")
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+            ),
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=key,
+                    value=AttributeValue(val_int=nanos - 10_000),
+                    op=ComparisonFilter.OP_GREATER_THAN,
+                ),
+            ),
+            columns=[Column(key=key)],
+            order_by=[TraceItemTableRequest.OrderBy(column=Column(key=key))],
+            limit=10,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        (values,) = response.column_values
+        float_row, int_row = values.results
+        assert int_row.val_int == nanos
+        # Float64 → Int64 cast of the float-only row is lossy; it just has to be close.
+        assert abs(float_row.val_int - nanos) < 1_000
+
+
 @pytest.fixture(autouse=False)
 def setup_bool_logs_in_db(eap: None, redis_db: None) -> None:
     """Three log groups: ``hasCodeTag`` false, true, and absent (getsentry/sentry#119735)."""
