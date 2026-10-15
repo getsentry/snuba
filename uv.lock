@@ -1177,7 +1177,7 @@ wheels = [
 
 [[package]]
 name = "snuba"
-version = "26.10.0.dev0"
+version = "26.11.0.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "blinker" },
