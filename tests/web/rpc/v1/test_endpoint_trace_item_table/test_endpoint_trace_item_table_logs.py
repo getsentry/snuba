@@ -189,10 +189,13 @@ class TestPreciseTimestampForLogs(BaseApiTest):
         )
         response = EndpointTraceItemTable().execute(message)
         (values,) = response.column_values
-        float_row, int_row = values.results
-        assert int_row.val_int == nanos
+        # The float-only row can round to either side of nanos, so don't rely on ORDER BY position.
+        vals = [r.val_int for r in values.results]
+        assert nanos in vals
+        vals.remove(nanos)
+        (float_val,) = vals
         # Float64 → Int64 cast of the float-only row is lossy; it just has to be close.
-        assert abs(float_row.val_int - nanos) < 1_000
+        assert abs(float_val - nanos) < 1_000
 
 
 @pytest.fixture(autouse=False)
