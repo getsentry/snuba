@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import Client from "SnubaAdmin/api_client";
 import QueryEditor from "SnubaAdmin/query_editor";
 import ExecuteButton from "SnubaAdmin/utils/execute_button";
-import { Alert, Switch } from "@mantine/core";
+import { Alert, Box, SegmentedControl, Text } from "@mantine/core";
 import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";
 import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
 import { getHostsForStorage, getErrorDomElement } from "SnubaAdmin/utils/clickhouse_node_utils";
@@ -201,65 +201,51 @@ function QueryDisplay(props: {
             </p>
           </Alert>
         )}
-        <div style={switchStyle}>
-          <Switch
-            checked={query.sudo}
-            onChange={(evt: React.ChangeEvent<HTMLInputElement>) =>
-              setSudo(evt.currentTarget.checked)
-            }
-            onLabel="Sudo mode"
-            offLabel="User mode"
-            size="xl"
+        <Section title="Where">
+          <SegmentedControl
+            aria-label="Host entry"
+            value={query.clusterless ? "manual" : "pick"}
+            onChange={(value) => setClusterlessHost(value === "manual")}
+            data={[
+              { label: "Pick a node", value: "pick" },
+              { label: "Enter host manually", value: "manual" },
+            ]}
+            style={segmentedStyle}
           />
-        </div>
-        <div style={switchStyle}>
-          <Switch
-            checked={query.clusterless}
-            onChange={(evt: React.ChangeEvent<HTMLInputElement>) =>
-              setClusterlessHost(evt.currentTarget.checked)
-            }
-            onLabel="Manual Host Entry"
-            offLabel="Auto Populate Nodes"
-            size="xl"
-          />
-        </div>
-        <QueryEditor
-          onQueryUpdate={(sql) => {
-            updateQuerySql(sql);
-          }}
-          predefinedQueryOptions={props.predefinedQueryOptions}
-          initialQuery={prefill?.sql}
-        />
-        <div style={executeActionsStyle}>
-          {query.clusterless ?
-            (<div style={hostSelectStyle}>
+          <div style={targetRowStyle}>
+            <div style={targetFieldStyle}>
+              <Text size="sm" fw={600}>
+                Storage
+              </Text>
               <CustomSelect
                 value={query.storage || ""}
                 onChange={selectStorage}
                 name="storage"
                 options={nodeData.map((storage) => storage.storage_name)}
               />
-              <input
-                style={inputStyle}
-                id="clusterless"
-                value={manualHostInput}
-                onChange={(evt) => selectHostIp(evt.target.value)}
-                name="host"
-                placeholder="enter host or host:port..."
-                type="text"
-              />
-              <p style={hostHelpTextStyle}>
-                Must be a known cluster node or listed in
-                admin.copy_tables_allowed_target_hosts. Defaults to port 8123.
-              </p>
-            </div>) : (
-              <div style={hostSelectStyle}>
-                <CustomSelect
-                  value={query.storage || ""}
-                  onChange={selectStorage}
-                  name="storage"
-                  options={nodeData.map((storage) => storage.storage_name)}
-                />
+            </div>
+            <div style={targetFieldStyle}>
+              <Text size="sm" fw={600}>
+                Host
+              </Text>
+              {query.clusterless ? (
+                <>
+                  <input
+                    style={inputStyle}
+                    id="clusterless"
+                    value={manualHostInput}
+                    onChange={(evt) => selectHostIp(evt.target.value)}
+                    name="host"
+                    placeholder="enter host or host:port..."
+                    type="text"
+                  />
+                  <p style={hostHelpTextStyle}>
+                    Must be a known cluster node or listed in
+                    admin.copy_tables_allowed_target_hosts. Defaults to port
+                    8123.
+                  </p>
+                </>
+              ) : (
                 <CustomSelect
                   disabled={!query.storage}
                   value={
@@ -269,9 +255,39 @@ function QueryDisplay(props: {
                   name="Host"
                   options={getHostsForStorage(nodeData, query.storage)}
                 />
-              </div>
-            )}
-          <div>
+              )}
+            </div>
+          </div>
+        </Section>
+        <Section title="What">
+          <QueryEditor
+            onQueryUpdate={(sql) => {
+              updateQuerySql(sql);
+            }}
+            predefinedQueryOptions={props.predefinedQueryOptions}
+            initialQuery={prefill?.sql}
+          />
+        </Section>
+        <Section title="How">
+          <div style={executeActionsStyle}>
+            <div>
+              <SegmentedControl
+                aria-label="Mode"
+                value={query.sudo ? "sudo" : "user"}
+                onChange={(value) => setSudo(value === "sudo")}
+                color={query.sudo ? "red" : undefined}
+                data={[
+                  { label: "User mode", value: "user" },
+                  { label: "Sudo mode", value: "sudo" },
+                ]}
+                style={segmentedStyle}
+              />
+              <p style={modeHelpTextStyle}>
+                {query.sudo
+                  ? "Sudo only runs SYSTEM, ALTER, OPTIMIZE and DROP statements. It needs the sudo role, and every sudo query is audit-logged with a notification."
+                  : "SELECT, SHOW and DESCRIBE. SELECTs may only read system tables."}
+              </p>
+            </div>
             <ExecuteButton
               onError={handleQueryError}
               onClick={executeQuery}
@@ -280,7 +296,7 @@ function QueryDisplay(props: {
               }
             />
           </div>
-        </div>
+        </Section>
       </form>
       <div>
         {getErrorDomElement(queryError, collapseOpened, setCollapseOpened)}
@@ -305,6 +321,44 @@ function QueryDisplay(props: {
   );
 }
 
+function Section(props: { title: string; children: React.ReactNode }) {
+  return (
+    <Box component="fieldset" p="md" mb="md" style={sectionStyle}>
+      <Text component="legend" fw={600} px={4}>
+        {props.title}
+      </Text>
+      {props.children}
+    </Box>
+  );
+}
+
+const sectionStyle = {
+  border: "1px solid #ced4da",
+  borderRadius: 4,
+};
+
+const segmentedStyle = {
+  marginBottom: 8,
+};
+
+const targetRowStyle = {
+  display: "flex",
+  flexWrap: "wrap" as const,
+  gap: 16,
+};
+
+const targetFieldStyle = {
+  width: "20em",
+  display: "flex",
+  flexDirection: "column" as const,
+  gap: 4,
+};
+
+const modeHelpTextStyle = {
+  fontSize: "0.85em",
+  margin: 0,
+};
+
 const sudoForm = {
   border: "8px solid red",
 };
@@ -320,20 +374,6 @@ const prefillAlertTextStyle = {
   margin: "4px 0px",
 };
 
-const switchStyle = {
-  margin: '8px 0px',
-};
-
-const hostSelectStyle = {
-  width: '20em',
-  minHeight: '4em',
-  margin: '8px 0px',
-  display: 'flex',
-  flexDirection: 'column' as const,
-  justifyContent: 'space-between',
-  // padding: "4px 20px",
-}
-
 const inputStyle = {
   fontSize: 16,
   minHeight: '2.25rem',
@@ -348,18 +388,8 @@ const hostHelpTextStyle = {
 const executeActionsStyle = {
   display: "flex",
   justifyContent: "space-between",
-  marginTop: 8,
-};
-
-const executeButtonStyle = {
-  height: 30,
-  border: 0,
-  padding: "4px 20px",
-};
-
-const selectStyle = {
-  marginRight: 8,
-  height: 30,
+  alignItems: "flex-start",
+  gap: 16,
 };
 
 export default QueryDisplay;
