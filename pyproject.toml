@@ -1,6 +1,6 @@
 [project]
 name = "snuba"
-version = "26.10.0.dev0"
+version = "26.11.0.dev0"
 # CPython 3.13 only (.python-version / prod image). Cap the upper bound so uv
 # does not resolve future Python versions that our pinned wheels do not support.
 requires-python = ">=3.13,<3.14"
