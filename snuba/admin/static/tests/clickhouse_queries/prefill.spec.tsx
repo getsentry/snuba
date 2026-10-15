@@ -8,10 +8,12 @@ import {
   waitFor,
 } from "@testing-library/react";
 import Client from "SnubaAdmin/api_client";
+import ClickhouseQueries from "SnubaAdmin/clickhouse_queries";
 import QueryDisplay from "SnubaAdmin/clickhouse_queries/query_display";
 import { QueryHistoryEntry } from "SnubaAdmin/clickhouse_queries/query_history_entry";
 import {
   ClickhouseNodeData,
+  PredefinedQuery,
   QueryRequest,
   QueryResult,
 } from "SnubaAdmin/clickhouse_queries/types";
@@ -143,6 +145,28 @@ describe("QueryDisplay opened from a link", () => {
       expect(screen.getByPlaceholderText("enter host or host:port...")).toBeTruthy()
     );
     expect(screen.getByDisplayValue("other-host:8123")).toBeTruthy();
+  });
+
+  it("picks up a link pasted while already on the page", async () => {
+    window.location.hash = "#system-queries";
+    const api = {
+      ...Client(),
+      getPredefinedQueryOptions: jest
+        .fn<() => Promise<[PredefinedQuery]>>()
+        .mockResolvedValue([{ name: "q", sql: "SELECT 1", description: "" }]),
+      getClickhouseNodes: jest
+        .fn<() => Promise<[ClickhouseNodeData]>>()
+        .mockResolvedValue(nodes),
+    };
+    render(<ClickhouseQueries api={api} />);
+    await waitFor(() => expect(api.getClickhouseNodes).toBeCalled());
+    expect(screen.queryByTestId("prefill-warning")).toBeNull();
+
+    window.location.hash = "#system-queries?query=SELECT%202&storage=errors";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+
+    expect(await screen.findByTestId("prefill-warning")).toBeTruthy();
+    expect(screen.getByRole("textbox").textContent).toBe("SELECT 2");
   });
 
   it("shows no warning without params", async () => {
