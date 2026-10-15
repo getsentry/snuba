@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import QueryResultCopier from "SnubaAdmin/utils/query_result_copier";
 import { COLORS } from "SnubaAdmin/theme";
 import { QueryResult } from "SnubaAdmin/clickhouse_queries/types";
+import { buildSystemQueryUrl } from "SnubaAdmin/clickhouse_queries/prefill";
 
 // History entries store the query and its target together as
 // "<sql> (<storage>,<host>:<port>)"; split them back apart for display.
@@ -63,6 +64,7 @@ function QueryHistoryEntry(props: {
             rawInput={queryResult.trace_output || ""}
             jsonInput={JSON.stringify(queryResult)}
             csvInput={props.csv}
+            linkInput={buildSystemQueryUrl({ sql, storage, host })}
             compact
           />
         </div>

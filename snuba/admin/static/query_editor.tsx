@@ -13,6 +13,7 @@ import { DateTimePicker } from "@mantine/dates";
 import { SQLEditor } from "SnubaAdmin/common/components/sql_editor";
 import { useLocalStorage } from "@mantine/hooks";
 import { CustomSelect } from "SnubaAdmin/select";
+import { splitHash } from "SnubaAdmin/clickhouse_queries/prefill";
 
 type PredefinedQuery = {
   name: string;
@@ -107,9 +108,11 @@ function QueryEditor(props: {
   predefinedQueryOptions?: Array<PredefinedQuery>;
   categoryOptions?: Array<EnumOption>;
   outcomeOptions?: Array<EnumOption>;
+  // Replaces the saved query on mount, e.g. when opened from a link.
+  initialQuery?: string;
 }) {
   const [query, setQuery] = useState<string>("");
-  const hash = window.location.hash;
+  const hash = splitHash(window.location.hash).route;
 
   // Namespace the storage by the hash, which corresponds to the screen
   const [queryTemplate, setQueryTemplate] = useLocalStorage<string>({
@@ -130,6 +133,12 @@ function QueryEditor(props: {
     useState<RelativeTimeUnit>("HOUR");
   const [absoluteStartTime, setAbsoluteStartTime] = useState<Date | null>(null);
   const [absoluteEndTime, setAbsoluteEndTime] = useState<Date | null>(null);
+
+  useEffect(() => {
+    if (props.initialQuery !== undefined) {
+      setQueryTemplate(props.initialQuery);
+    }
+  }, []);
 
   const variableRegex = /{{([a-zA-Z0-9_]+)}}/;
   const hasTimeRangeParams =
