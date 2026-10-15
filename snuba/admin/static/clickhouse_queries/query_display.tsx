@@ -2,11 +2,16 @@ import React, { useEffect, useState } from "react";
 import Client from "SnubaAdmin/api_client";
 import QueryEditor from "SnubaAdmin/query_editor";
 import ExecuteButton from "SnubaAdmin/utils/execute_button";
-import { Switch } from "@mantine/core";
+import { Alert, Switch } from "@mantine/core";
 import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";
 import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
 import { getHostsForStorage, getErrorDomElement } from "SnubaAdmin/utils/clickhouse_node_utils";
 import { QueryHistoryEntry } from "SnubaAdmin/clickhouse_queries/query_history_entry";
+import {
+  clearHashParams,
+  parseHostPort,
+  parseSystemQueryPrefill,
+} from "SnubaAdmin/clickhouse_queries/prefill";
 
 import {
   ClickhouseNodeData,
@@ -23,10 +28,19 @@ function QueryDisplay(props: {
   resultDataPopulator: (queryResult: QueryResult) => JSX.Element;
   predefinedQueryOptions: Array<PredefinedQuery>;
 }) {
+  // A link may pre-fill the query, storage and host (see prefill.tsx).
+  const [prefill] = useState(() =>
+    parseSystemQueryPrefill(window.location.hash)
+  );
+  const [prefillWarningOpen, setPrefillWarningOpen] = useState(
+    prefill !== null
+  );
   const [nodeData, setNodeData] = useState<ClickhouseNodeData[]>([]);
   const [manualHostInput, setManualHostInput] = useState<string>("");
   const [query, setQuery] = useState<QueryState>({
-    storage: getParamFromStorage("storage"),
+    storage: prefill?.storage ?? getParamFromStorage("storage"),
+    host: prefill?.host,
+    port: prefill?.port,
   });
   const [queryResultHistory, setQueryResultHistory] = useState<QueryResult[]>(
     getRecentHistory(HISTORY_KEY)
@@ -41,8 +55,23 @@ function QueryDisplay(props: {
   const [collapseOpened, setCollapseOpened] = useState(false);
 
   useEffect(() => {
+    if (prefill) {
+      clearHashParams();
+    }
     props.api.getClickhouseNodes().then((res) => {
       setNodeData(res);
+      // A linked host the storage's node list doesn't know about can only be
+      // shown (and checked) via manual host entry.
+      if (prefill?.host) {
+        const hostPort = `${prefill.host}:${prefill.port}`;
+        const isListed = getHostsForStorage(res, prefill.storage).some(
+          (option) => option.value === hostPort
+        );
+        if (!isListed) {
+          setManualHostInput(hostPort);
+          setClusterlessHost(true);
+        }
+      }
     });
   }, []);
 
@@ -81,18 +110,14 @@ function QueryDisplay(props: {
     // Manual entry accepts "host" or "host:port". The raw text is kept in its
     // own state so a half-typed port ("host:9") is not clobbered by the split.
     setManualHostInput(hostStringIP);
-
-    const trimmed = hostStringIP.trim();
-    const separator = trimmed.lastIndexOf(":");
-    const maybePort = separator === -1 ? "" : trimmed.slice(separator + 1);
     // Without a port we default to ClickHouse HTTP, not the old native port.
-    const hasPort = /^\d+$/.test(maybePort);
+    const { host, port } = parseHostPort(hostStringIP);
 
     setQuery((prevQuery) => {
       return {
         ...prevQuery,
-        host: hasPort ? trimmed.slice(0, separator) : trimmed,
-        port: hasPort ? parseInt(maybePort, 10) : 8123,
+        host,
+        port,
       };
     });
   }
@@ -151,6 +176,31 @@ function QueryDisplay(props: {
     <div>
       <form style={query.sudo ? sudoForm : standardForm}>
         <h2>Construct a ClickHouse System Query</h2>
+        {prefill && prefillWarningOpen && (
+          <Alert
+            color="orange"
+            title="This query was filled in from a link"
+            withCloseButton
+            onClose={() => setPrefillWarningOpen(false)}
+            style={prefillAlertStyle}
+            data-testid="prefill-warning"
+          >
+            <p style={prefillAlertTextStyle}>
+              Whoever clicks Execute is responsible for the query, no matter
+              who or what wrote it. Read the whole query and check where it
+              will run before you execute it. Don't run it just because an
+              agent or a link suggested it.
+            </p>
+            <p style={prefillAlertTextStyle}>
+              Storage: <code>{prefill.storage ?? "(not set)"}</code>
+              {" · "}
+              Host:{" "}
+              <code>
+                {prefill.host ? `${prefill.host}:${prefill.port}` : "(not set)"}
+              </code>
+            </p>
+          </Alert>
+        )}
         <div style={switchStyle}>
           <Switch
             checked={query.sudo}
@@ -178,6 +228,7 @@ function QueryDisplay(props: {
             updateQuerySql(sql);
           }}
           predefinedQueryOptions={props.predefinedQueryOptions}
+          initialQuery={prefill?.sql}
         />
         <div style={executeActionsStyle}>
           {query.clusterless ?
@@ -259,6 +310,15 @@ const sudoForm = {
 };
 
 const standardForm = {};
+
+const prefillAlertStyle = {
+  margin: "8px 0px",
+};
+
+const prefillAlertTextStyle = {
+  fontSize: 16,
+  margin: "4px 0px",
+};
 
 const switchStyle = {
   margin: '8px 0px',
