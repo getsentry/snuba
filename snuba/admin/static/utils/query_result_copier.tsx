@@ -5,6 +5,7 @@ function QueryResultCopier(props: {
   rawInput?: string;
   jsonInput?: string;
   csvInput?: string;
+  linkInput?: string;
   // Small, quiet buttons with short labels, for tight spaces.
   compact?: boolean;
 }) {
@@ -35,6 +36,11 @@ function QueryResultCopier(props: {
     {props.csvInput && (
       <Button {...buttonProps} onClick={() => copyText(props.csvInput || "")}>
         {label("CSV")}
+      </Button>
+    )}
+    {props.linkInput && (
+      <Button {...buttonProps} onClick={() => copyText(props.linkInput || "")}>
+        Share query
       </Button>
     )}
   </Group>;

@@ -113,7 +113,8 @@ function getTab(locationHash: string): string {
     throw new Error("invalid hash");
   }
 
-  const hash = locationHash.split("/")[0];
+  // Pages may carry params after the id, e.g. "#system-queries?query=...".
+  const hash = locationHash.split(/[/?]/)[0];
 
   const navItem = NAV_ITEMS.find((item) => "#" + item.id === hash);
 
