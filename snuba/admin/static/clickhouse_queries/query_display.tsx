@@ -2,8 +2,9 @@ import React, { useEffect, useState } from "react";
 import Client from "SnubaAdmin/api_client";
 import QueryEditor from "SnubaAdmin/query_editor";
 import ExecuteButton from "SnubaAdmin/utils/execute_button";
-import { Alert, Switch } from "@mantine/core";
+import { Alert, Box, SegmentedControl, Text, Tooltip } from "@mantine/core";
 import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";
+import { COLORS, SECTION_HEADING_STYLE } from "SnubaAdmin/theme";
 import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
 import { getHostsForStorage, getErrorDomElement } from "SnubaAdmin/utils/clickhouse_node_utils";
 import { QueryHistoryEntry } from "SnubaAdmin/clickhouse_queries/query_history_entry";
@@ -172,10 +173,24 @@ function QueryDisplay(props: {
     return output;
   }
 
+  // The first thing still needed before the query can run, if any. It's
+  // flagged on its field and explains why Execute is disabled.
+  const missing = !query.storage
+    ? "storage"
+    : !query.host || !query.port
+    ? "host"
+    : !query.sql
+    ? "query"
+    : null;
+  const missingHint = {
+    storage: "Select a storage to run the query.",
+    host: "Select a host to run the query.",
+    query: "Write or pick a query to run.",
+  };
+
   return (
     <div>
-      <form style={query.sudo ? sudoForm : standardForm}>
-        <h2>Construct a ClickHouse System Query</h2>
+      <form>
         {prefill && prefillWarningOpen && (
           <Alert
             color="orange"
@@ -201,92 +216,144 @@ function QueryDisplay(props: {
             </p>
           </Alert>
         )}
-        <div style={switchStyle}>
-          <Switch
-            checked={query.sudo}
-            onChange={(evt: React.ChangeEvent<HTMLInputElement>) =>
-              setSudo(evt.currentTarget.checked)
-            }
-            onLabel="Sudo mode"
-            offLabel="User mode"
-            size="xl"
-          />
-        </div>
-        <div style={switchStyle}>
-          <Switch
-            checked={query.clusterless}
-            onChange={(evt: React.ChangeEvent<HTMLInputElement>) =>
-              setClusterlessHost(evt.currentTarget.checked)
-            }
-            onLabel="Manual Host Entry"
-            offLabel="Auto Populate Nodes"
-            size="xl"
-          />
-        </div>
-        <QueryEditor
-          onQueryUpdate={(sql) => {
-            updateQuerySql(sql);
-          }}
-          predefinedQueryOptions={props.predefinedQueryOptions}
-          initialQuery={prefill?.sql}
-        />
-        <div style={executeActionsStyle}>
-          {query.clusterless ?
-            (<div style={hostSelectStyle}>
-              <CustomSelect
-                value={query.storage || ""}
-                onChange={selectStorage}
-                name="storage"
-                options={nodeData.map((storage) => storage.storage_name)}
+        <h2 style={SECTION_HEADING_STYLE}>Construct a ClickHouse System Query</h2>
+        <Section title="Where">
+          <div style={targetRowStyle}>
+            <div style={{ ...targetFieldStyle, width: "auto" }}>
+              <Text size="sm" fw={600}>
+                Host entry
+              </Text>
+              <SegmentedControl
+                aria-label="Host entry"
+                value={query.clusterless ? "manual" : "pick"}
+                onChange={(value) => setClusterlessHost(value === "manual")}
+                data={[
+                  { label: "Pick a node", value: "pick" },
+                  { label: "Enter host manually", value: "manual" },
+                ]}
               />
-              <input
-                style={inputStyle}
-                id="clusterless"
-                value={manualHostInput}
-                onChange={(evt) => selectHostIp(evt.target.value)}
-                name="host"
-                placeholder="enter host or host:port..."
-                type="text"
-              />
-              <p style={hostHelpTextStyle}>
-                Must be a known cluster node or listed in
-                admin.copy_tables_allowed_target_hosts. Defaults to port 8123.
-              </p>
-            </div>) : (
-              <div style={hostSelectStyle}>
+            </div>
+            <div style={targetFieldStyle}>
+              <Text size="sm" fw={600}>
+                Storage
+              </Text>
+              <div style={missing === "storage" ? needsInputStyle : undefined}>
                 <CustomSelect
                   value={query.storage || ""}
                   onChange={selectStorage}
                   name="storage"
                   options={nodeData.map((storage) => storage.storage_name)}
                 />
-                <CustomSelect
-                  disabled={!query.storage}
-                  value={
-                    query.host && query.port ? `${query.host}:${query.port}` : ""
-                  }
-                  onChange={selectHost}
-                  name="Host"
-                  options={getHostsForStorage(nodeData, query.storage)}
+              </div>
+              {missing === "storage" && (
+                <p style={needsInputHintStyle}>{missingHint.storage}</p>
+              )}
+            </div>
+            <div style={targetFieldStyle}>
+              <Text size="sm" fw={600}>
+                Host
+              </Text>
+              {query.clusterless ? (
+                <>
+                  <input
+                    style={
+                      missing === "host"
+                        ? { ...inputStyle, ...needsInputStyle }
+                        : inputStyle
+                    }
+                    id="clusterless"
+                    value={manualHostInput}
+                    onChange={(evt) => selectHostIp(evt.target.value)}
+                    name="host"
+                    placeholder="enter host or host:port..."
+                    type="text"
+                  />
+                  {missing === "host" && (
+                    <p style={needsInputHintStyle}>{missingHint.host}</p>
+                  )}
+                  <p style={hostHelpTextStyle}>
+                    Must be a known cluster node or listed in
+                    admin.copy_tables_allowed_target_hosts. Defaults to port
+                    8123.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div style={missing === "host" ? needsInputStyle : undefined}>
+                    <CustomSelect
+                      disabled={!query.storage}
+                      value={
+                        query.host && query.port
+                          ? `${query.host}:${query.port}`
+                          : ""
+                      }
+                      onChange={selectHost}
+                      name="Host"
+                      options={getHostsForStorage(nodeData, query.storage)}
+                    />
+                  </div>
+                  {missing === "host" && (
+                    <p style={needsInputHintStyle}>{missingHint.host}</p>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </Section>
+        <Section title="What">
+          <QueryEditor
+            onQueryUpdate={(sql) => {
+              updateQuerySql(sql);
+            }}
+            predefinedQueryOptions={props.predefinedQueryOptions}
+            initialQuery={prefill?.sql}
+          />
+        </Section>
+        <Section title="How" danger={query.sudo}>
+          <div style={executeActionsStyle}>
+            <div>
+              <SegmentedControl
+                aria-label="Mode"
+                value={query.sudo ? "sudo" : "user"}
+                onChange={(value) => setSudo(value === "sudo")}
+                color={query.sudo ? "red" : undefined}
+                data={[
+                  { label: "User mode", value: "user" },
+                  { label: "Sudo mode", value: "sudo" },
+                ]}
+                style={segmentedStyle}
+              />
+              <p style={modeHelpTextStyle}>
+                {query.sudo
+                  ? "Sudo only runs SYSTEM, ALTER, OPTIMIZE and DROP statements. It needs the sudo role, and every sudo query is audit-logged with a notification."
+                  : "SELECT, SHOW and DESCRIBE. SELECTs may only read system tables."}
+              </p>
+            </div>
+            {/* A disabled button gets no hover events, so the tooltip
+                hangs off a wrapper. */}
+            <Tooltip
+              label={missing ? missingHint[missing] : ""}
+              disabled={!missing}
+              withArrow
+            >
+              <div data-testid="execute-wrapper">
+                <ExecuteButton
+                  label={query.sudo ? "Execute Sudo Query" : undefined}
+                  color={query.sudo ? "red" : undefined}
+                  onError={handleQueryError}
+                  onClick={executeQuery}
+                  disabled={missing !== null}
                 />
               </div>
-            )}
-          <div>
-            <ExecuteButton
-              onError={handleQueryError}
-              onClick={executeQuery}
-              disabled={
-                !query.storage || !query.host || !query.port || !query.sql
-              }
-            />
+            </Tooltip>
           </div>
-        </div>
+        </Section>
       </form>
       <div>
         {getErrorDomElement(queryError, collapseOpened, setCollapseOpened)}
       </div>
       <div>
-        <h2>Query results</h2>
+        <h2 style={SECTION_HEADING_STYLE}>Query results</h2>
         {queryResultHistory.map((queryResult, idx) => (
           <QueryHistoryEntry
             // Entries shift down as new results arrive, so key on when they
@@ -305,34 +372,99 @@ function QueryDisplay(props: {
   );
 }
 
-const sudoForm = {
-  border: "8px solid red",
+function Section(props: {
+  title: string;
+  // Highlights the section in red, e.g. for sudo mode.
+  danger?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Box
+      component="fieldset"
+      p="md"
+      mb="md"
+      style={props.danger ? dangerSectionStyle : sectionStyle}
+    >
+      <legend
+        style={
+          props.danger
+            ? { ...sectionLegendStyle, color: COLORS.DANGER }
+            : sectionLegendStyle
+        }
+      >
+        {props.title}
+      </legend>
+      {props.children}
+    </Box>
+  );
+}
+
+const sectionStyle = {
+  border: "1px solid #ced4da",
+  borderRadius: 4,
 };
 
-const standardForm = {};
+const dangerSectionStyle = {
+  ...sectionStyle,
+  border: `2px solid ${COLORS.DANGER}`,
+  backgroundColor: "rgba(168, 50, 45, 0.06)",
+};
+
+// A step smaller than the page headings, so sections read as nested.
+// Bootstrap makes legends large, full-width and floated; undo that so the
+// label sits in the border.
+const sectionLegendStyle = {
+  ...SECTION_HEADING_STYLE,
+  fontSize: 12,
+  float: "none" as const,
+  width: "auto",
+  padding: "0 4px",
+  margin: 0,
+};
+
+const segmentedStyle = {
+  marginBottom: 8,
+};
+
+const targetRowStyle = {
+  display: "flex",
+  flexWrap: "wrap" as const,
+  gap: 16,
+};
+
+const targetFieldStyle = {
+  width: "20em",
+  display: "flex",
+  flexDirection: "column" as const,
+  gap: 4,
+};
+
+// Marks the field the user needs to fill in next.
+const needsInputStyle = {
+  outline: `2px solid ${COLORS.WARNING}`,
+  outlineOffset: 1,
+  borderRadius: 4,
+};
+
+const needsInputHintStyle = {
+  fontSize: "0.85em",
+  color: COLORS.WARNING,
+  margin: 0,
+};
+
+const modeHelpTextStyle = {
+  fontSize: "0.85em",
+  margin: 0,
+};
 
 const prefillAlertStyle = {
-  margin: "8px 0px",
+  margin: "0 0 16px 0",
 };
 
 const prefillAlertTextStyle = {
   fontSize: 16,
   margin: "4px 0px",
 };
-
-const switchStyle = {
-  margin: '8px 0px',
-};
-
-const hostSelectStyle = {
-  width: '20em',
-  minHeight: '4em',
-  margin: '8px 0px',
-  display: 'flex',
-  flexDirection: 'column' as const,
-  justifyContent: 'space-between',
-  // padding: "4px 20px",
-}
 
 const inputStyle = {
   fontSize: 16,
@@ -348,18 +480,8 @@ const hostHelpTextStyle = {
 const executeActionsStyle = {
   display: "flex",
   justifyContent: "space-between",
-  marginTop: 8,
-};
-
-const executeButtonStyle = {
-  height: 30,
-  border: 0,
-  padding: "4px 20px",
-};
-
-const selectStyle = {
-  marginRight: 8,
-  height: 30,
+  alignItems: "flex-start",
+  gap: 16,
 };
 
 export default QueryDisplay;

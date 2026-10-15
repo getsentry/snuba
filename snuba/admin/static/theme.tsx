@@ -25,7 +25,19 @@ const COLORS = {
   BORDER_GRAY_LIGHT: "#dddddd",
   ERROR: "#c62828",
   DANGER: "#a8322d",
+  // Dark enough orange to read as text on white.
+  WARNING: "#b35c00",
   SUCCESS: "#1b5e20",
+};
+
+// Small uppercase label used for page section headings, e.g. on the home page.
+const SECTION_HEADING_STYLE = {
+  fontSize: 14,
+  fontWeight: 700,
+  letterSpacing: "0.1em",
+  textTransform: "uppercase" as const,
+  color: COLORS.TEXT_LIGHTER,
+  margin: "0 0 12px 0",
 };
 
 // Diagonal, staggered tiling of the slogan. The fill is only a few shades off
@@ -44,4 +56,4 @@ function sloganTiling(): string {
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }
 
-export { COLORS, sloganTiling };
+export { COLORS, SECTION_HEADING_STYLE, sloganTiling };

@@ -169,6 +169,29 @@ describe("QueryDisplay opened from a link", () => {
     expect(screen.getByRole("textbox").textContent).toBe("SELECT 2");
   });
 
+  it("flags a missing host and explains the disabled Execute", async () => {
+    const api = renderWithHash("#system-queries?query=SELECT%201&storage=errors");
+    await waitFor(() => expect(api.getClickhouseNodes).toBeCalled());
+
+    const hint = "Select a host to run the query.";
+    expect(screen.getAllByText(hint)).toHaveLength(1);
+    expect(
+      screen.getByText("Execute Query").closest("button")?.disabled
+    ).toBe(true);
+
+    fireEvent.mouseEnter(screen.getByTestId("execute-wrapper"));
+    // The field hint plus the tooltip.
+    await waitFor(() => expect(screen.getAllByText(hint)).toHaveLength(2));
+  });
+
+  it("drops the host cue once a host is set", async () => {
+    const api = renderWithHash(
+      "#system-queries?query=SELECT%201&storage=errors&host=clickhouse-01%3A9000"
+    );
+    await waitFor(() => expect(api.getClickhouseNodes).toBeCalled());
+    expect(screen.queryByText("Select a host to run the query.")).toBeNull();
+  });
+
   it("shows no warning without params", async () => {
     const api = renderWithHash("#system-queries");
     await waitFor(() => expect(api.getClickhouseNodes).toBeCalled());

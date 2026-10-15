@@ -6,6 +6,8 @@ function ExecuteButton(props: {
   onClick: () => Promise<any>;
   onError?: (error: Error) => any;
   label?: string;
+  // Mantine color, e.g. "red" for actions that need extra care.
+  color?: string;
 }) {
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
 
@@ -53,6 +55,7 @@ function ExecuteButton(props: {
           evt.preventDefault();
           executeQuery();
         }}
+        color={props.color}
         loading={isExecuting}
         disabled={isExecuting || props.disabled}
         aria-busy={isExecuting}
