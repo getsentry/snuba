@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Client from "SnubaAdmin/api_client";
-import { COLORS } from "SnubaAdmin/theme";
+import { COLORS, SECTION_HEADING_STYLE } from "SnubaAdmin/theme";
 import ToolGrid from "SnubaAdmin/tool_grid";
 import { AdminRegion } from "SnubaAdmin/types";
 import { regionColor } from "SnubaAdmin/utils/region_color";
@@ -105,14 +105,7 @@ const sectionStyle = {
   marginBottom: 30,
 };
 
-const headingStyle = {
-  fontSize: 14,
-  fontWeight: 700,
-  letterSpacing: "0.1em",
-  textTransform: "uppercase" as const,
-  color: COLORS.TEXT_LIGHTER,
-  margin: "0 0 12px 0",
-};
+const headingStyle = SECTION_HEADING_STYLE;
 
 // Heading and pills share one line.
 const regionSectionStyle = {

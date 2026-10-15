@@ -4,6 +4,7 @@ import QueryEditor from "SnubaAdmin/query_editor";
 import ExecuteButton from "SnubaAdmin/utils/execute_button";
 import { Alert, Box, SegmentedControl, Text } from "@mantine/core";
 import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";
+import { COLORS, SECTION_HEADING_STYLE } from "SnubaAdmin/theme";
 import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
 import { getHostsForStorage, getErrorDomElement } from "SnubaAdmin/utils/clickhouse_node_utils";
 import { QueryHistoryEntry } from "SnubaAdmin/clickhouse_queries/query_history_entry";
@@ -174,8 +175,8 @@ function QueryDisplay(props: {
 
   return (
     <div>
-      <form style={query.sudo ? sudoForm : standardForm}>
-        <h2>Construct a ClickHouse System Query</h2>
+      <form>
+        <h2 style={SECTION_HEADING_STYLE}>Construct a ClickHouse System Query</h2>
         {prefill && prefillWarningOpen && (
           <Alert
             color="orange"
@@ -268,7 +269,7 @@ function QueryDisplay(props: {
             initialQuery={prefill?.sql}
           />
         </Section>
-        <Section title="How">
+        <Section title="How" danger={query.sudo}>
           <div style={executeActionsStyle}>
             <div>
               <SegmentedControl
@@ -289,6 +290,8 @@ function QueryDisplay(props: {
               </p>
             </div>
             <ExecuteButton
+              label={query.sudo ? "Execute Sudo Query" : undefined}
+              color={query.sudo ? "red" : undefined}
               onError={handleQueryError}
               onClick={executeQuery}
               disabled={
@@ -302,7 +305,7 @@ function QueryDisplay(props: {
         {getErrorDomElement(queryError, collapseOpened, setCollapseOpened)}
       </div>
       <div>
-        <h2>Query results</h2>
+        <h2 style={SECTION_HEADING_STYLE}>Query results</h2>
         {queryResultHistory.map((queryResult, idx) => (
           <QueryHistoryEntry
             // Entries shift down as new results arrive, so key on when they
@@ -321,12 +324,28 @@ function QueryDisplay(props: {
   );
 }
 
-function Section(props: { title: string; children: React.ReactNode }) {
+function Section(props: {
+  title: string;
+  // Highlights the section in red, e.g. for sudo mode.
+  danger?: boolean;
+  children: React.ReactNode;
+}) {
   return (
-    <Box component="fieldset" p="md" mb="md" style={sectionStyle}>
-      <Text component="legend" fw={600} px={4}>
+    <Box
+      component="fieldset"
+      p="md"
+      mb="md"
+      style={props.danger ? dangerSectionStyle : sectionStyle}
+    >
+      <legend
+        style={
+          props.danger
+            ? { ...sectionLegendStyle, color: COLORS.DANGER }
+            : sectionLegendStyle
+        }
+      >
         {props.title}
-      </Text>
+      </legend>
       {props.children}
     </Box>
   );
@@ -335,6 +354,24 @@ function Section(props: { title: string; children: React.ReactNode }) {
 const sectionStyle = {
   border: "1px solid #ced4da",
   borderRadius: 4,
+};
+
+const dangerSectionStyle = {
+  ...sectionStyle,
+  border: `2px solid ${COLORS.DANGER}`,
+  backgroundColor: "rgba(168, 50, 45, 0.06)",
+};
+
+// A step smaller than the page headings, so sections read as nested.
+// Bootstrap makes legends large, full-width and floated; undo that so the
+// label sits in the border.
+const sectionLegendStyle = {
+  ...SECTION_HEADING_STYLE,
+  fontSize: 12,
+  float: "none" as const,
+  width: "auto",
+  padding: "0 4px",
+  margin: 0,
 };
 
 const segmentedStyle = {
@@ -358,12 +395,6 @@ const modeHelpTextStyle = {
   fontSize: "0.85em",
   margin: 0,
 };
-
-const sudoForm = {
-  border: "8px solid red",
-};
-
-const standardForm = {};
 
 const prefillAlertStyle = {
   margin: "8px 0px",

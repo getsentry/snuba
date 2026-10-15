@@ -28,6 +28,16 @@ const COLORS = {
   SUCCESS: "#1b5e20",
 };
 
+// Small uppercase label used for page section headings, e.g. on the home page.
+const SECTION_HEADING_STYLE = {
+  fontSize: 14,
+  fontWeight: 700,
+  letterSpacing: "0.1em",
+  textTransform: "uppercase" as const,
+  color: COLORS.TEXT_LIGHTER,
+  margin: "0 0 12px 0",
+};
+
 // Diagonal, staggered tiling of the slogan. The fill is only a few shades off
 // the page background so the pattern stays visible without competing with text.
 function sloganTiling(): string {
@@ -44,4 +54,4 @@ function sloganTiling(): string {
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }
 
-export { COLORS, sloganTiling };
+export { COLORS, SECTION_HEADING_STYLE, sloganTiling };
