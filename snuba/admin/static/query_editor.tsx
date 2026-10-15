@@ -209,9 +209,11 @@ function QueryEditor(props: {
 
   function renderPredefinedQueriesSelectors() {
     return (
-      <div>
-        <label>Predefined query: </label>
-        <div style={predefinedQueryStyle}>
+      <div style={predefinedQueryStyle}>
+        <Text size="sm" fw={600}>
+          Predefined query
+        </Text>
+        <div>
           <CustomSelect
             value={selectedPredefinedQuery?.name ?? "undefined"}
             onChange={(value) => {
@@ -452,7 +454,9 @@ function QueryEditor(props: {
       {props.predefinedQueryOptions != null &&
         renderPredefinedQueriesSelectors()}
       {selectedPredefinedQuery?.description ? (
-        <p>{selectedPredefinedQuery?.description}</p>
+        <Text size="sm" color="dimmed" mt={4}>
+          {selectedPredefinedQuery?.description}
+        </Text>
       ) : null}
 
       <Box my="md">
@@ -472,7 +476,10 @@ function QueryEditor(props: {
 }
 
 const predefinedQueryStyle = {
-  display: "inline-block",
+  width: "20em",
+  display: "flex",
+  flexDirection: "column" as const,
+  gap: 4,
 };
 
 const timeRangeStyle = {

@@ -25,6 +25,8 @@ const COLORS = {
   BORDER_GRAY_LIGHT: "#dddddd",
   ERROR: "#c62828",
   DANGER: "#a8322d",
+  // Dark enough orange to read as text on white.
+  WARNING: "#b35c00",
   SUCCESS: "#1b5e20",
 };
 

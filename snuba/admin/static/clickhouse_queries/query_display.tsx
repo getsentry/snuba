@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import Client from "SnubaAdmin/api_client";
 import QueryEditor from "SnubaAdmin/query_editor";
 import ExecuteButton from "SnubaAdmin/utils/execute_button";
-import { Alert, Box, SegmentedControl, Text } from "@mantine/core";
+import { Alert, Box, SegmentedControl, Text, Tooltip } from "@mantine/core";
 import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";
 import { COLORS, SECTION_HEADING_STYLE } from "SnubaAdmin/theme";
 import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
@@ -173,10 +173,24 @@ function QueryDisplay(props: {
     return output;
   }
 
+  // The first thing still needed before the query can run, if any. It's
+  // flagged on its field and explains why Execute is disabled.
+  const missing = !query.storage
+    ? "storage"
+    : !query.host || !query.port
+    ? "host"
+    : !query.sql
+    ? "query"
+    : null;
+  const missingHint = {
+    storage: "Select a storage to run the query.",
+    host: "Select a host to run the query.",
+    query: "Write or pick a query to run.",
+  };
+
   return (
     <div>
       <form>
-        <h2 style={SECTION_HEADING_STYLE}>Construct a ClickHouse System Query</h2>
         {prefill && prefillWarningOpen && (
           <Alert
             color="orange"
@@ -202,28 +216,38 @@ function QueryDisplay(props: {
             </p>
           </Alert>
         )}
+        <h2 style={SECTION_HEADING_STYLE}>Construct a ClickHouse System Query</h2>
         <Section title="Where">
-          <SegmentedControl
-            aria-label="Host entry"
-            value={query.clusterless ? "manual" : "pick"}
-            onChange={(value) => setClusterlessHost(value === "manual")}
-            data={[
-              { label: "Pick a node", value: "pick" },
-              { label: "Enter host manually", value: "manual" },
-            ]}
-            style={segmentedStyle}
-          />
           <div style={targetRowStyle}>
+            <div style={{ ...targetFieldStyle, width: "auto" }}>
+              <Text size="sm" fw={600}>
+                Host entry
+              </Text>
+              <SegmentedControl
+                aria-label="Host entry"
+                value={query.clusterless ? "manual" : "pick"}
+                onChange={(value) => setClusterlessHost(value === "manual")}
+                data={[
+                  { label: "Pick a node", value: "pick" },
+                  { label: "Enter host manually", value: "manual" },
+                ]}
+              />
+            </div>
             <div style={targetFieldStyle}>
               <Text size="sm" fw={600}>
                 Storage
               </Text>
-              <CustomSelect
-                value={query.storage || ""}
-                onChange={selectStorage}
-                name="storage"
-                options={nodeData.map((storage) => storage.storage_name)}
-              />
+              <div style={missing === "storage" ? needsInputStyle : undefined}>
+                <CustomSelect
+                  value={query.storage || ""}
+                  onChange={selectStorage}
+                  name="storage"
+                  options={nodeData.map((storage) => storage.storage_name)}
+                />
+              </div>
+              {missing === "storage" && (
+                <p style={needsInputHintStyle}>{missingHint.storage}</p>
+              )}
             </div>
             <div style={targetFieldStyle}>
               <Text size="sm" fw={600}>
@@ -232,7 +256,11 @@ function QueryDisplay(props: {
               {query.clusterless ? (
                 <>
                   <input
-                    style={inputStyle}
+                    style={
+                      missing === "host"
+                        ? { ...inputStyle, ...needsInputStyle }
+                        : inputStyle
+                    }
                     id="clusterless"
                     value={manualHostInput}
                     onChange={(evt) => selectHostIp(evt.target.value)}
@@ -240,6 +268,9 @@ function QueryDisplay(props: {
                     placeholder="enter host or host:port..."
                     type="text"
                   />
+                  {missing === "host" && (
+                    <p style={needsInputHintStyle}>{missingHint.host}</p>
+                  )}
                   <p style={hostHelpTextStyle}>
                     Must be a known cluster node or listed in
                     admin.copy_tables_allowed_target_hosts. Defaults to port
@@ -247,15 +278,24 @@ function QueryDisplay(props: {
                   </p>
                 </>
               ) : (
-                <CustomSelect
-                  disabled={!query.storage}
-                  value={
-                    query.host && query.port ? `${query.host}:${query.port}` : ""
-                  }
-                  onChange={selectHost}
-                  name="Host"
-                  options={getHostsForStorage(nodeData, query.storage)}
-                />
+                <>
+                  <div style={missing === "host" ? needsInputStyle : undefined}>
+                    <CustomSelect
+                      disabled={!query.storage}
+                      value={
+                        query.host && query.port
+                          ? `${query.host}:${query.port}`
+                          : ""
+                      }
+                      onChange={selectHost}
+                      name="Host"
+                      options={getHostsForStorage(nodeData, query.storage)}
+                    />
+                  </div>
+                  {missing === "host" && (
+                    <p style={needsInputHintStyle}>{missingHint.host}</p>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -289,15 +329,23 @@ function QueryDisplay(props: {
                   : "SELECT, SHOW and DESCRIBE. SELECTs may only read system tables."}
               </p>
             </div>
-            <ExecuteButton
-              label={query.sudo ? "Execute Sudo Query" : undefined}
-              color={query.sudo ? "red" : undefined}
-              onError={handleQueryError}
-              onClick={executeQuery}
-              disabled={
-                !query.storage || !query.host || !query.port || !query.sql
-              }
-            />
+            {/* A disabled button gets no hover events, so the tooltip
+                hangs off a wrapper. */}
+            <Tooltip
+              label={missing ? missingHint[missing] : ""}
+              disabled={!missing}
+              withArrow
+            >
+              <div data-testid="execute-wrapper">
+                <ExecuteButton
+                  label={query.sudo ? "Execute Sudo Query" : undefined}
+                  color={query.sudo ? "red" : undefined}
+                  onError={handleQueryError}
+                  onClick={executeQuery}
+                  disabled={missing !== null}
+                />
+              </div>
+            </Tooltip>
           </div>
         </Section>
       </form>
@@ -391,13 +439,26 @@ const targetFieldStyle = {
   gap: 4,
 };
 
+// Marks the field the user needs to fill in next.
+const needsInputStyle = {
+  outline: `2px solid ${COLORS.WARNING}`,
+  outlineOffset: 1,
+  borderRadius: 4,
+};
+
+const needsInputHintStyle = {
+  fontSize: "0.85em",
+  color: COLORS.WARNING,
+  margin: 0,
+};
+
 const modeHelpTextStyle = {
   fontSize: "0.85em",
   margin: 0,
 };
 
 const prefillAlertStyle = {
-  margin: "8px 0px",
+  margin: "0 0 16px 0",
 };
 
 const prefillAlertTextStyle = {
