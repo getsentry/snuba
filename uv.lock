@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = "==3.13.*"
 resolution-markers = [
     "platform_python_implementation == 'CPython' and sys_platform == 'darwin'",
@@ -1022,13 +1022,13 @@ source = { editable = "rust_snuba" }
 
 [[package]]
 name = "sentry-arroyo"
-version = "2.43.1"
+version = "2.46.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 dependencies = [
     { name = "confluent-kafka" },
 ]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_arroyo-2.43.1-py3-none-any.whl", hash = "sha256:6195bbdca5a2149e2af524821549305c51988f5c3c6e3d69237a62c431b5bda0" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_arroyo-2.46.0-py3-none-any.whl", hash = "sha256:27e0a075a08082ae4bdfa0c11106582da404071127b670f6347ace4aabdb2ddd" },
 ]
 
 [[package]]
@@ -1284,7 +1284,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "redis", specifier = ">=4.5.4" },
     { name = "rust-snuba", editable = "rust_snuba" },
-    { name = "sentry-arroyo", specifier = ">=2.39.2" },
+    { name = "sentry-arroyo", specifier = ">=2.46.0" },
     { name = "sentry-conventions", specifier = ">=0.27.0" },
     { name = "sentry-kafka-schemas", specifier = ">=2.1.39" },
     { name = "sentry-options", specifier = ">=1.2.1" },
