@@ -4,15 +4,13 @@ import QueryEditor from "SnubaAdmin/query_editor";
 import ExecuteButton from "SnubaAdmin/utils/execute_button";
 import {
   Alert,
-  Box,
   Button,
-  CloseButton,
   SegmentedControl,
   Text,
   Tooltip,
   UnstyledButton,
 } from "@mantine/core";
-import { IconChevronDown } from "@tabler/icons-react";
+import { IconChevronDown, IconX } from "@tabler/icons-react";
 import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";
 import { COLORS, SECTION_HEADING_STYLE } from "SnubaAdmin/theme";
 import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
@@ -276,13 +274,18 @@ function QueryDisplay(props: {
             <h2 style={{ ...SECTION_HEADING_STYLE, margin: 0 }}>
               Construct a ClickHouse System Query
             </h2>
-            <CloseButton
+            <Button
+              size="xs"
+              variant="light"
+              color="red"
+              leftIcon={<IconX size={14} />}
               aria-label="Close editor"
-              title="Close editor"
               onClick={() => setEditorOpen(false)}
-            />
+            >
+              Close
+            </Button>
           </div>
-          <Section title="Where">
+          <div style={blockStyle}>
             <div style={targetRowStyle}>
               <div style={{ ...targetFieldStyle, width: "auto" }}>
                 <Text size="sm" fw={600}>
@@ -364,8 +367,8 @@ function QueryDisplay(props: {
                 )}
               </div>
             </div>
-          </Section>
-          <Section title="What">
+          </div>
+          <div style={blockStyle}>
             <QueryEditor
               onQueryUpdate={(sql) => {
                 updateQuerySql(sql);
@@ -373,27 +376,26 @@ function QueryDisplay(props: {
               predefinedQueryOptions={props.predefinedQueryOptions}
               initialQuery={prefill?.sql}
             />
-          </Section>
-          <Section title="How" danger={query.sudo}>
+          </div>
+          {/* Sudo can change data, so it gets a red frame. */}
+          <div style={query.sudo ? sudoBlockStyle : blockStyle}>
             <div style={executeActionsStyle}>
-              <div>
-                <SegmentedControl
-                  aria-label="Mode"
-                  value={query.sudo ? "sudo" : "user"}
-                  onChange={(value) => setSudo(value === "sudo")}
-                  color={query.sudo ? "red" : undefined}
-                  data={[
-                    { label: "User mode", value: "user" },
-                    { label: "Sudo mode", value: "sudo" },
-                  ]}
-                  style={segmentedStyle}
-                />
-                <p style={modeHelpTextStyle}>
-                  {query.sudo
-                    ? "Sudo only runs SYSTEM, ALTER, OPTIMIZE and DROP statements. It needs the sudo role, and every sudo query is audit-logged with a notification."
-                    : "SELECT, SHOW and DESCRIBE. SELECTs may only read system tables."}
-                </p>
-              </div>
+              <SegmentedControl
+                aria-label="Mode"
+                value={query.sudo ? "sudo" : "user"}
+                onChange={(value) => setSudo(value === "sudo")}
+                color={query.sudo ? "red" : undefined}
+                data={[
+                  { label: "User mode", value: "user" },
+                  { label: "Sudo mode", value: "sudo" },
+                ]}
+                style={{ flexShrink: 0 }}
+              />
+              <p style={modeHelpTextStyle}>
+                {query.sudo
+                  ? "Sudo only runs SYSTEM, ALTER, OPTIMIZE and DROP statements. It needs the sudo role, and every sudo query is audit-logged with a notification."
+                  : "SELECT, SHOW and DESCRIBE. SELECTs may only read system tables."}
+              </p>
               {/* A disabled button gets no hover events, so the tooltip
                   hangs off a wrapper. */}
               <Tooltip
@@ -412,7 +414,7 @@ function QueryDisplay(props: {
                 </div>
               </Tooltip>
             </div>
-          </Section>
+          </div>
         </form>
       </div>
       <div>
@@ -440,58 +442,17 @@ function QueryDisplay(props: {
   );
 }
 
-function Section(props: {
-  title: string;
-  // Highlights the section in red, e.g. for sudo mode.
-  danger?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <Box
-      component="fieldset"
-      p="md"
-      mb="md"
-      style={props.danger ? dangerSectionStyle : sectionStyle}
-    >
-      <legend
-        style={
-          props.danger
-            ? { ...sectionLegendStyle, color: COLORS.DANGER }
-            : sectionLegendStyle
-        }
-      >
-        {props.title}
-      </legend>
-      {props.children}
-    </Box>
-  );
-}
-
-const sectionStyle = {
-  border: "1px solid #ced4da",
-  borderRadius: 4,
+// Spaces out the target, query and execute rows.
+const blockStyle = {
+  marginBottom: 16,
 };
 
-const dangerSectionStyle = {
-  ...sectionStyle,
+const sudoBlockStyle = {
+  ...blockStyle,
+  padding: 12,
   border: `2px solid ${COLORS.DANGER}`,
+  borderRadius: 4,
   backgroundColor: "rgba(168, 50, 45, 0.06)",
-};
-
-// A step smaller than the page headings, so sections read as nested.
-// Bootstrap makes legends large, full-width and floated; undo that so the
-// label sits in the border.
-const sectionLegendStyle = {
-  ...SECTION_HEADING_STYLE,
-  fontSize: 12,
-  float: "none" as const,
-  width: "auto",
-  padding: "0 4px",
-  margin: 0,
-};
-
-const segmentedStyle = {
-  marginBottom: 8,
 };
 
 const targetRowStyle = {
@@ -571,7 +532,10 @@ const editorSummaryStyle = {
   color: COLORS.TEXT_LIGHTER,
 };
 
+// Takes the space between the mode toggle and Execute.
 const modeHelpTextStyle = {
+  flex: 1,
+  minWidth: 0,
   fontSize: "0.85em",
   margin: 0,
 };
@@ -598,8 +562,7 @@ const hostHelpTextStyle = {
 
 const executeActionsStyle = {
   display: "flex",
-  justifyContent: "space-between",
-  alignItems: "flex-start",
+  alignItems: "center",
   gap: 16,
 };
 

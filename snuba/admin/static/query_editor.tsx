@@ -210,10 +210,10 @@ function QueryEditor(props: {
   function renderPredefinedQueriesSelectors() {
     return (
       <div style={predefinedQueryStyle}>
-        <Text size="sm" fw={600}>
+        <Text size="sm" fw={600} style={{ whiteSpace: "nowrap" }}>
           Predefined query
         </Text>
-        <div>
+        <div style={predefinedQuerySelectStyle}>
           <CustomSelect
             value={selectedPredefinedQuery?.name ?? "undefined"}
             onChange={(value) => {
@@ -475,11 +475,15 @@ function QueryEditor(props: {
   );
 }
 
+// Label and picker on one line.
 const predefinedQueryStyle = {
-  width: "20em",
   display: "flex",
-  flexDirection: "column" as const,
-  gap: 4,
+  alignItems: "center",
+  gap: 8,
+};
+
+const predefinedQuerySelectStyle = {
+  width: "20em",
 };
 
 const timeRangeStyle = {
