@@ -90,7 +90,9 @@ const cardStyle = {
   border: `1px solid ${COLORS.BORDER_GRAY_LIGHT}`,
   borderRadius: 8,
   marginBottom: 12,
-  overflow: "hidden",
+  // Clips to the rounded corners. Unlike "hidden", "clip" doesn't stop the
+  // result table's header from sticking.
+  overflow: "clip",
 };
 
 const headerStyle = {

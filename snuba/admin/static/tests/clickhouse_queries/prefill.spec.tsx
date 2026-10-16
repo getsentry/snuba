@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import Client from "SnubaAdmin/api_client";
 import ClickhouseQueries from "SnubaAdmin/clickhouse_queries";
@@ -190,6 +191,41 @@ describe("QueryDisplay opened from a link", () => {
     );
     await waitFor(() => expect(api.getClickhouseNodes).toBeCalled());
     expect(screen.queryByText("Select a host to run the query.")).toBeNull();
+  });
+
+  it("closes the editor after a run and reopens it with the query kept", async () => {
+    const api = renderWithHash(
+      "#system-queries?query=SELECT%201&storage=errors&host=clickhouse-01%3A9000"
+    );
+    await waitFor(() => expect(api.getClickhouseNodes).toBeCalled());
+    await screen.findAllByDisplayValue("clickhouse-01:9000");
+
+    fireEvent.click(screen.getByText("Execute Query"));
+    await screen.findByText("Open Editor");
+    expect(api.executeSystemQuery).toBeCalled();
+    expect(screen.queryByRole("textbox")).toBeNull();
+    // The closed bar says what will run.
+    expect(screen.getByTestId("editor-panel").textContent).toContain(
+      "errors · clickhouse-01:9000 · SELECT 1"
+    );
+
+    // Anywhere on the bar opens it, not just the button.
+    fireEvent.click(
+      within(screen.getByTestId("editor-panel")).getByText("SELECT 1", {
+        selector: "code",
+      })
+    );
+    expect(screen.getByRole("textbox").textContent).toBe("SELECT 1");
+    expect(screen.queryByText("Open Editor")).toBeNull();
+  });
+
+  it("closes the editor with the X", async () => {
+    const api = renderWithHash("#system-queries");
+    await waitFor(() => expect(api.getClickhouseNodes).toBeCalled());
+
+    fireEvent.click(screen.getByLabelText("Close editor"));
+    expect(screen.getByText("Open Editor")).toBeTruthy();
+    expect(api.executeSystemQuery).not.toBeCalled();
   });
 
   it("shows no warning without params", async () => {
