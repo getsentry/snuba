@@ -1,10 +1,18 @@
-# Rust impl of consumers (Experimental)
+# rust_snuba
 
-Rust consumers are an experimental project in Snuba. Most users should not be running this code!
+`rust_snuba` is the Rust implementation of Snuba's Kafka consumers. It is compiled with PyO3 and maturin into a Python wheel, and `snuba rust-consumer` launches it from the Python CLI.
 
-The goal of this project is to provide a feature complete Rust equivalent to the `snuba consumer` and `snuba multistorage-consumer` functionality that is currently written in Python code.
+For the processing pipeline and batching, see [ARCHITECTURE.md](ARCHITECTURE.md). For how the Rust and Python consumers relate, see [Snuba consumers](../docs/source/architecture/consumer.rst).
 
-## How to run
+## Build
 
-1. Run `make watch-rust-snuba`.
-2. `snuba rust-consumer` can now be used to run a simple Rust consumer that currently does not insert into clickhouse.
+Run these from the repository root after `devenv sync`:
+
+- `make install-rs-dev` builds `rust_snuba` into `.venv` once.
+- `make watch-rust-snuba` rebuilds it on every change.
+
+## Test and lint
+
+- `make test-rust` runs `cargo test --workspace`.
+- `make lint-rust` runs clippy with warnings as errors.
+- `make format-rust` runs `cargo fmt --all`.

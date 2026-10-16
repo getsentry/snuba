@@ -16,6 +16,7 @@ Contents:
    query/overview
    language/snql
    language/mql
+   migrations/overview
    migrations/modes
    contributing/environment
    clickhouse/topology
