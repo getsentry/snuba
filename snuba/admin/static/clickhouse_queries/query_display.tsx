@@ -32,6 +32,10 @@ import {
 type QueryState = Partial<QueryRequest>;
 
 const HISTORY_KEY = "clickhouse_queries";
+// Set on the page to the editor pane's height; see STICKY_HEADER_TOP.
+const EDITOR_PANEL_HEIGHT_VAR = "--system-queries-editor-height";
+// Where content stuck to the top of the results sits: just below the pane.
+const STICKY_HEADER_TOP = `var(${EDITOR_PANEL_HEIGHT_VAR}, 0px)`;
 function QueryDisplay(props: {
   api: Client;
   resultDataPopulator: (queryResult: QueryResult) => JSX.Element;
@@ -61,6 +65,22 @@ function QueryDisplay(props: {
   // the results. It closes after a successful run to make room for them.
   const [editorOpen, setEditorOpen] = useState(true);
   const resultsHeadingRef = useRef<HTMLHeadingElement>(null);
+  // Result tables pin their headers just below the pane, so they need its
+  // height, which changes as it opens, closes and the query grows.
+  const editorPanelRef = useRef<HTMLDivElement>(null);
+  const [editorPanelHeight, setEditorPanelHeight] = useState(0);
+
+  useEffect(() => {
+    const panel = editorPanelRef.current;
+    if (!panel || typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const observer = new ResizeObserver(() =>
+      setEditorPanelHeight(panel.offsetHeight)
+    );
+    observer.observe(panel);
+    return () => observer.disconnect();
+  }, []);
 
   const [queryError, setQueryError] = useState<Error | null>(null);
 
@@ -210,8 +230,18 @@ function QueryDisplay(props: {
   };
 
   return (
-    <div>
-      <div style={editorPanelStyle} data-testid="editor-panel">
+    <div
+      style={
+        {
+          [EDITOR_PANEL_HEIGHT_VAR]: `${editorPanelHeight}px`,
+        } as React.CSSProperties
+      }
+    >
+      <div
+        ref={editorPanelRef}
+        style={editorPanelStyle}
+        data-testid="editor-panel"
+      >
         {!editorOpen && (
           // The whole bar opens the editor. The "button" inside is only a
           // span, since a real button can't be nested in another.
@@ -566,4 +596,5 @@ const executeActionsStyle = {
   gap: 16,
 };
 
+export { STICKY_HEADER_TOP };
 export default QueryDisplay;
