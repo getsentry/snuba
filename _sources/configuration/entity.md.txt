@@ -1,0 +1,48 @@
+# Entity Schema
+
+## Properties
+
+- **version**: Version of schema.
+- **kind**: Component kind.
+- **schema** *(array)*: Objects (or nested objects) representing columns containg a name, type and args.
+- **name** *(string)*: Name of the entity.
+- **storages** *(array)*: An array of storages and their associated translation mappers.
+    - **storage** *(string)*: Name of a readable or writable storage class which provides an abstraction to read from a table or a view in ClickHouse.
+    - **is_writable** *(boolean)*: Marks the storage is a writable one.
+    - **translation_mappers** *(object)*: Represents the set of rules used to translates different expression types.
+      - **columns** *(array)*
+          - **mapper** *(string)*: Mapper class name.
+          - **args** *(object)*: Key/value mappings required to instantiate Mapper class.
+      - **functions** *(array)*
+          - **mapper** *(string)*: Mapper class name.
+          - **args** *(object)*: Key/value mappings required to instantiate Mapper class.
+      - **curried_functions** *(array)*
+          - **mapper** *(string)*: Mapper class name.
+          - **args** *(object)*: Key/value mappings required to instantiate Mapper class.
+      - **subscriptables** *(array)*
+          - **mapper** *(string)*: Mapper class name.
+          - **args** *(object)*: Key/value mappings required to instantiate Mapper class.
+- **join_relationships** *(object)*
+  - **^.*$** *(object)*: The join relationship. The key for this relationship is how the relationship is specified in queries (MATCH x -[key]-> y).
+    - **rhs_entity** *(string)*: The entity key of the rhs entity to join with.
+    - **columns** *(array)*: A sequence of tuples of columns to join on, in the form (left, right).
+    - **join_type** *(string)*: The type of join that can be performed (either 'left' or 'inner'.
+    - **equivalences** *(array)*: Tracking columns in the two entities that are not part of the join key but are still equivalent.
+- **storage_selector** *(object)*:
+  - **selector** *(string)*: QueryStorageSelector class name.
+  - **args** *(object)*: Key/value mappings required to instantiate QueryStorageSelector class.
+- **query_processors** *(array)*: Represents a transformation applied to the ClickHouse query.
+    - **processor** *(string)*: Name of LogicalQueryProcessor class config key. Responsible for the transformation applied to a query.
+    - **args** *(object)*: Key/value mappings required to instantiate QueryProcessor class.
+- **validators** *(array)*: The validation logic used on the ClickHouse query.
+    - **validator** *(string)*: Validator class name.
+    - **args** *(object)*: Key/value mappings required to instantiate Validator class.
+- **validate_data_model** *(['string', 'null'])*: The level at which mismatched functions and columns when querying the entity should be logged.
+- **required_time_column** *(['string', 'null'])*: The name of the required time column specifed in schema.
+- **partition_key_column_name** *(['string', 'null'])*: The column name, if this entity is partitioned, to select slice.
+- **subscription_processors** *(array)*
+    - **processor** *(string)*: Entity Subscription Processor class name.
+    - **args** *(object)*: Key/value mappings required to instantiate Entity Subscription Processor class.
+- **subscription_validators** *(array)*
+    - **validator** *(string)*: Entity Subscription Validator class name.
+    - **args** *(object)*: Key/value mappings required to instantiate Entity Subscription Validator class.
