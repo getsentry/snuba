@@ -1,6 +1,6 @@
 import logging
 from collections.abc import Sequence
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import click
 
@@ -10,10 +10,12 @@ from snuba.clickhouse.partition_management import (
     attach_partition_from_table,
     attach_partitions_from_table,
     build_health_check,
+    filter_expired_partitions,
     get_partition_boundaries,
     is_partition_too_far_in_future,
 )
 from snuba.clickhouse.pool import ClickhousePool
+from snuba.clickhouse.prune_partitions import DEFAULT_RETENTION_MARGIN
 from snuba.clusters.cluster import (
     ClickhouseClientSettings,
     ClickhouseNode,
@@ -82,6 +84,24 @@ logger = logging.getLogger("snuba.attach_partitions")
         "cutoff is kept. Pass 0 to attach future-dated partitions regardless."
     ),
 )
+@click.option(
+    "--retention-margin-days",
+    type=click.IntRange(min=0),
+    default=DEFAULT_RETENTION_MARGIN.days,
+    show_default=True,
+    help=(
+        "Skip partitions past retention by more than this many days, using the "
+        "same rule as prune-partitions. Only applies to tables partitioned by "
+        "(retention_days, toMonday(timestamp)). TTL would delete their rows "
+        "anyway, and attaching them recreates block_numbers znodes that "
+        "prune-partitions forgets."
+    ),
+)
+@click.option(
+    "--include-expired/--skip-expired",
+    default=False,
+    help="Attach partitions past retention instead of skipping them.",
+)
 @click.option("--log-level", help="Logging level to use.")
 def attach_partitions(
     source_table: str,
@@ -97,14 +117,17 @@ def attach_partitions(
     partition_id: str | None,
     health_check_query: str | None,
     max_future_days: int,
+    retention_margin_days: int,
+    include_expired: bool,
     log_level: str | None,
 ) -> None:
     """Attach SOURCE_TABLE partitions to DESTINATION_TABLE one at a time.
 
     Table names are unqualified and must be in the database used by STORAGE.
-    In discovery mode, existing destination partitions and partitions dated too
-    far in the future are skipped. A specific partition ID is attached directly.
-    The source data is not removed.
+    In discovery mode, existing destination partitions, partitions dated too
+    far in the future and partitions past retention are skipped. A specific
+    partition ID is attached directly, unless it is too far in the future or
+    past retention. The source data is not removed.
     """
     setup_logging(log_level)
     setup_sentry()
@@ -116,6 +139,7 @@ def attach_partitions(
         raise click.UsageError("--max-future-days must not be negative")
 
     max_future_age = timedelta(days=max_future_days) if max_future_days > 0 else None
+    retention_margin = None if include_expired else timedelta(days=retention_margin_days)
 
     try:
         storage = get_storage(StorageKey(storage_name))
@@ -174,6 +198,18 @@ def attach_partitions(
                     f"Partition {partition_id} begins more than {max_future_days} day(s) "
                     "in the future. Pass --max-future-days 0 to attach it anyway."
                 )
+            if retention_margin is not None and not filter_expired_partitions(
+                connection,
+                database,
+                source_table,
+                [partition_id],
+                today=datetime.now(UTC).date(),
+                retention_margin=retention_margin,
+            ):
+                raise click.UsageError(
+                    f"Partition {partition_id} is past retention by more than "
+                    f"{retention_margin_days} day(s). Pass --include-expired to attach it anyway."
+                )
             if execute:
                 build_health_check(
                     connection,
@@ -198,6 +234,7 @@ def attach_partitions(
                 destination_table,
                 health_check_query=health_check_query,
                 max_future_age=max_future_age,
+                retention_margin=retention_margin,
                 dry_run=not execute,
                 on_partition_attached=lambda attached_partition_id: logger.info(
                     "Attached partition %s from %s to %s",
@@ -210,6 +247,11 @@ def attach_partitions(
                     skipped_partition_id,
                     boundary,
                     max_future_days,
+                ),
+                on_partition_expired=lambda expired_partition_id: logger.info(
+                    "Skipping partition %s past retention by more than %d day(s)",
+                    expired_partition_id,
+                    retention_margin_days,
                 ),
             )
     except PartitionBoundaryError as error:

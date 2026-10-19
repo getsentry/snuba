@@ -116,6 +116,15 @@ def parse_partition_id(partition_id: str) -> tuple[int, date] | None:
     return int(match.group(1)), week_start
 
 
+def is_weekly_retention_partition_key(partition_key: str) -> bool:
+    """
+    Report whether a ``system.tables`` ``partition_key`` is
+    ``(<retention column>, toMonday(<column>))``, the only key whose partition
+    IDs ``classify_partition`` can read as a retention and a week.
+    """
+    return _PARTITION_KEY.match(partition_key) is not None
+
+
 def classify_partition(
     partition_id: str,
     today: date,
@@ -163,7 +172,7 @@ def check_table_settings(clickhouse: ClickhousePool, database: str, table: str) 
     engine_full, partition_key = result.results[0]
     if not all(flag in engine_full for flag in _BLOCK_FLAGS):
         raise SkipTable("block number and offset columns are not both enabled")
-    if not _PARTITION_KEY.match(partition_key):
+    if not is_weekly_retention_partition_key(partition_key):
         raise SkipTable(f"unsupported partition key {partition_key!r}")
 
 
