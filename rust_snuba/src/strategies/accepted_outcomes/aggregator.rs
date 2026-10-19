@@ -14,7 +14,7 @@ use sentry_arroyo::utils::timing::Deadline;
 use sentry_protos::snuba::v1::{TraceItem, TraceItemType};
 
 use crate::processors::utils::{
-    enforce_retentions, get_drop_invalid_timestamps_enabled, out_of_valid_interval_secs,
+    enforce_standard_retention, get_drop_invalid_timestamps_enabled, out_of_valid_interval_secs,
 };
 use crate::types::{item_type_name, AggregatedOutcomesBatch, BucketKey, ItemDedupKey};
 
@@ -263,11 +263,7 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
                 && out_of_valid_interval_secs(
                     event_ts,
                     now,
-                    enforce_retentions(
-                        Some(trace_item.retention_days as u16),
-                        Some(trace_item.downsampled_retention_days as u16),
-                    )
-                    .1,
+                    enforce_standard_retention(Some(trace_item.retention_days as u16)),
                 )
             {
                 let item_type = TraceItemType::try_from(trace_item.item_type)
@@ -275,7 +271,7 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
                 counter!(
                     "accepted_outcomes.dropped_out_of_range_timestamp",
                     1,
-                    "is_future" => (event_ts > now).to_string(),
+                    "reason" => if event_ts > now { "future_ts" } else { "past_ts" },
                     "item_type" => item_type_name(item_type)
                 );
                 return Ok(());

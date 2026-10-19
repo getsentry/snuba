@@ -95,16 +95,13 @@ fn process_eap_item(
     let now = Utc::now();
 
     if let Some(event_ts) = event_timestamp {
-        // Drop items no table would keep (downsampled_retention_days is always
-        // >= retention_days) or too far in the future. Checked before the DLQ so
-        // there's nothing to replay.
         if get_drop_invalid_timestamps_enabled()
-            && out_of_valid_interval_secs(event_ts, now, downsampled_retention_days)
+            && out_of_valid_interval_secs(event_ts, now, retention_days)
         {
             counter!(
                 "eap_items.messages.dropped_out_of_range_timestamp",
                 1,
-                "is_future" => (event_ts > now).to_string(),
+                "reason" => if event_ts > now { "future_ts" } else { "past_ts" },
                 "item_type" => item_type_name(item_type)
             );
             return Ok(None);
@@ -1462,8 +1459,9 @@ mod tests {
         let now = Utc::now().timestamp();
         let past_90_days = encode_with_timestamp(now - 120 * 86_400, 90, 90);
         let within_90_days = encode_with_timestamp(now - 60 * 86_400, 90, 90);
-        // 120 days old on 30 day standard retention, but kept 396 days downsampled.
-        let downsampled_only = encode_with_timestamp(now - 120 * 86_400, 30, 396);
+        // NOTE: 60 days old on 30 day standard retention: dropped even though the
+        // downsample tiers would keep it for 396 days.
+        let past_standard_retention = encode_with_timestamp(now - 60 * 86_400, 30, 396);
         let far_future = encode_with_timestamp(now + 8 * 86_400, 90, 90);
 
         // Option off: everything is inserted.
@@ -1475,7 +1473,7 @@ mod tests {
         assert_eq!(rows_inserted(&past_90_days), (0, 0, 0));
         assert_eq!(rows_inserted(&far_future), (0, 0, 0));
         assert_eq!(rows_inserted(&within_90_days), (1, 1, 1));
-        assert_eq!(rows_inserted(&downsampled_only), (1, 1, 1));
+        assert_eq!(rows_inserted(&past_standard_retention), (0, 0, 0));
     }
 
     #[test]
