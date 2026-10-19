@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::time::{Duration, Instant};
 
+use chrono::{DateTime, Utc};
 use prost::Message as ProstMessage;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::counter;
@@ -12,6 +13,9 @@ use sentry_arroyo::types::{InnerMessage, Message, Partition};
 use sentry_arroyo::utils::timing::Deadline;
 use sentry_protos::snuba::v1::{TraceItem, TraceItemType};
 
+use crate::processors::utils::{
+    enforce_retentions, get_drop_invalid_timestamps_enabled, out_of_valid_interval_secs,
+};
 use crate::types::{item_type_name, AggregatedOutcomesBatch, BucketKey, ItemDedupKey};
 
 #[derive(Debug, Default)]
@@ -247,6 +251,36 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
                 )));
             }
         };
+
+        let event_timestamp = trace_item
+            .timestamp
+            .as_ref()
+            .and_then(|ts| DateTime::from_timestamp(ts.seconds, 0));
+        if let Some(event_ts) = event_timestamp {
+            let now = Utc::now();
+            // Match the eap-items consumer so we don't bill for items it drops.
+            if get_drop_invalid_timestamps_enabled()
+                && out_of_valid_interval_secs(
+                    event_ts,
+                    now,
+                    enforce_retentions(
+                        Some(trace_item.retention_days as u16),
+                        Some(trace_item.downsampled_retention_days as u16),
+                    )
+                    .1,
+                )
+            {
+                let item_type = TraceItemType::try_from(trace_item.item_type)
+                    .unwrap_or(TraceItemType::Unspecified);
+                counter!(
+                    "accepted_outcomes.dropped_out_of_range_timestamp",
+                    1,
+                    "is_future" => (event_ts > now).to_string(),
+                    "item_type" => item_type_name(item_type)
+                );
+                return Ok(());
+            }
+        }
 
         let ts_secs = trace_item
             .received
@@ -765,6 +799,95 @@ mod tests {
             aggregator.batch.buckets.get(&key_org99).map(|s| s.quantity),
             Some(5)
         );
+    }
+
+    fn make_payload_with_timestamp(
+        event_ts: i64,
+        retention_days: u32,
+        quantity: u64,
+    ) -> KafkaPayload {
+        let trace_item = TraceItem {
+            organization_id: 1,
+            project_id: 2,
+            item_id: uuid::Uuid::new_v4().as_bytes().to_vec(),
+            item_type: TraceItemType::Span.into(),
+            retention_days,
+            downsampled_retention_days: retention_days,
+            timestamp: Some(Timestamp {
+                seconds: event_ts,
+                nanos: 0,
+            }),
+            received: Some(Timestamp {
+                seconds: 1_700_000_000,
+                nanos: 0,
+            }),
+            outcomes: Some(Outcomes {
+                key_id: 3,
+                category_count: vec![CategoryCount {
+                    data_category: 4,
+                    quantity,
+                }],
+            }),
+            ..Default::default()
+        };
+        let mut buf = Vec::new();
+        trace_item.encode(&mut buf).unwrap();
+        KafkaPayload::new(None, None, Some(buf))
+    }
+
+    #[test]
+    fn submit_drops_outcomes_for_items_past_retention() {
+        static INIT: std::sync::Once = std::sync::Once::new();
+        INIT.call_once(|| crate::init_sentry_options().unwrap());
+        let _guard = sentry_options::testing::override_options(&[(
+            "snuba",
+            crate::processors::utils::DROP_INVALID_TIMESTAMPS_KEY,
+            serde_json::json!(true),
+        )])
+        .unwrap();
+
+        let mut aggregator = OutcomesAggregator::new(
+            Noop { last_message: None },
+            500,
+            Duration::from_millis(5_000),
+            60,
+        );
+        let partition = Partition::new(Topic::new("snuba-items"), 0);
+        let now = Utc::now().timestamp();
+
+        // Past 90 day retention: not billed.
+        aggregator
+            .submit(Message::new_broker_message(
+                make_payload_with_timestamp(now - 120 * 86_400, 90, 7),
+                partition,
+                0,
+                Utc::now(),
+            ))
+            .unwrap();
+        // More than a week in the future: not billed.
+        aggregator
+            .submit(Message::new_broker_message(
+                make_payload_with_timestamp(now + 8 * 86_400, 90, 11),
+                partition,
+                1,
+                Utc::now(),
+            ))
+            .unwrap();
+        // Within retention: billed.
+        aggregator
+            .submit(Message::new_broker_message(
+                make_payload_with_timestamp(now - 60 * 86_400, 90, 5),
+                partition,
+                2,
+                Utc::now(),
+            ))
+            .unwrap();
+
+        assert_eq!(aggregator.batch.num_buckets(), 1);
+        let total: u64 = aggregator.batch.buckets.values().map(|s| s.quantity).sum();
+        assert_eq!(total, 5);
+        // Dropped messages still advance the committed offset.
+        assert_eq!(aggregator.latest_offsets.get(&partition), Some(&2));
     }
 
     #[test]

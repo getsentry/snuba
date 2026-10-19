@@ -30,6 +30,11 @@
       "default": 300,
       "description": "Timeout in seconds for --health-check partition-stall. A partition with in-flight work and no commit progress for this long is unhealthy (the health file is not touched). 0 disables stall detection (file is touched on every poll). Ignored for other --health-check values."
     },
+    "eap_items_drop_invalid_timestamps": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, the eap-items consumer and the accepted outcomes consumer skip messages whose event timestamp is more than one week in the future or older than the item's retention (downsampled_retention_days, which is always >= retention_days)."
+    },
     "clickhouse_load_balancing": {
       "type": "object",
       "additionalProperties": {
