@@ -42,7 +42,7 @@ from snuba.web.delete_query import (
     deletes_are_enabled,
 )
 
-metrics = MetricsWrapper(environment.metrics, "snuba.delete")
+metrics = MetricsWrapper(environment.metrics, "delete")
 logger = logging.getLogger(__name__)
 
 
