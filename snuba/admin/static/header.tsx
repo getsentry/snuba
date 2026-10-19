@@ -271,11 +271,14 @@ function Header(props: { api: Client; active: string | null }) {
   );
 }
 
+// Including padding, since Mantine's global styles use border-box.
+const HEADER_HEIGHT_PX = 45;
+
 // Equal outer columns keep the breadcrumb centered whatever its width; the
 // right one is empty.
 const headerStyle = {
   backgroundColor: COLORS.HEADER_BG,
-  height: "45px",
+  height: `${HEADER_HEIGHT_PX}px`,
   display: "grid",
   gridTemplateColumns: "1fr auto 1fr",
   // A definite row height lets the logo size itself to the header.
@@ -398,4 +401,5 @@ const menuCardStyle = {
   padding: 12,
 };
 
+export { HEADER_HEIGHT_PX };
 export default Header;

@@ -2,17 +2,14 @@ import React, { useEffect, useRef, useState } from "react";
 import Client from "SnubaAdmin/api_client";
 import QueryEditor from "SnubaAdmin/query_editor";
 import ExecuteButton from "SnubaAdmin/utils/execute_button";
-import {
-  Alert,
-  Button,
-  SegmentedControl,
-  Text,
-  Tooltip,
-  UnstyledButton,
-} from "@mantine/core";
-import { IconChevronDown, IconX } from "@tabler/icons-react";
+import { SegmentedControl, Text, Tooltip } from "@mantine/core";
 import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";
-import { COLORS, SECTION_HEADING_STYLE } from "SnubaAdmin/theme";
+import { COLORS } from "SnubaAdmin/theme";
+import {
+  EditorPanelLayout,
+  PrefillWarning,
+  resultsHeadingStyle,
+} from "SnubaAdmin/editor_panel";
 import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
 import { getHostsForStorage, getErrorDomElement } from "SnubaAdmin/utils/clickhouse_node_utils";
 import { QueryHistoryEntry } from "SnubaAdmin/clickhouse_queries/query_history_entry";
@@ -32,10 +29,7 @@ import {
 type QueryState = Partial<QueryRequest>;
 
 const HISTORY_KEY = "clickhouse_queries";
-// Set on the page to the editor pane's height; see STICKY_HEADER_TOP.
-const EDITOR_PANEL_HEIGHT_VAR = "--system-queries-editor-height";
-// Where content stuck to the top of the results sits: just below the pane.
-const STICKY_HEADER_TOP = `var(${EDITOR_PANEL_HEIGHT_VAR}, 0px)`;
+
 function QueryDisplay(props: {
   api: Client;
   resultDataPopulator: (queryResult: QueryResult) => JSX.Element;
@@ -65,22 +59,6 @@ function QueryDisplay(props: {
   // the results. It closes after a successful run to make room for them.
   const [editorOpen, setEditorOpen] = useState(true);
   const resultsHeadingRef = useRef<HTMLHeadingElement>(null);
-  // Result tables pin their headers just below the pane, so they need its
-  // height, which changes as it opens, closes and the query grows.
-  const editorPanelRef = useRef<HTMLDivElement>(null);
-  const [editorPanelHeight, setEditorPanelHeight] = useState(0);
-
-  useEffect(() => {
-    const panel = editorPanelRef.current;
-    if (!panel || typeof ResizeObserver === "undefined") {
-      return;
-    }
-    const observer = new ResizeObserver(() =>
-      setEditorPanelHeight(panel.offsetHeight)
-    );
-    observer.observe(panel);
-    return () => observer.disconnect();
-  }, []);
 
   const [queryError, setQueryError] = useState<Error | null>(null);
 
@@ -230,91 +208,39 @@ function QueryDisplay(props: {
   };
 
   return (
-    <div
-      style={
-        {
-          [EDITOR_PANEL_HEIGHT_VAR]: `${editorPanelHeight}px`,
-        } as React.CSSProperties
-      }
-    >
-      <div
-        ref={editorPanelRef}
-        style={editorPanelStyle}
-        data-testid="editor-panel"
-      >
-        {!editorOpen && (
-          // The whole bar opens the editor. The "button" inside is only a
-          // span, since a real button can't be nested in another.
-          <UnstyledButton
-            onClick={() => setEditorOpen(true)}
-            aria-label="Open editor"
-            style={editorClosedBarStyle}
-            sx={{ "&:hover": { backgroundColor: COLORS.BG_GRAY_LIGHTER } }}
-          >
-            <Button
-              component="span"
-              size="xs"
-              rightIcon={<IconChevronDown size={14} />}
-              style={{ flexShrink: 0 }}
-            >
-              Open Editor
-            </Button>
-            <Text size="sm" style={editorSummaryStyle}>
-              {query.sudo && (
-                <span style={{ color: COLORS.DANGER, fontWeight: 700 }}>
-                  SUDO{" "}
-                </span>
-              )}
-              {query.storage ?? "(no storage)"}
-              {" · "}
-              {query.host ? `${query.host}:${query.port}` : "(no host)"}
-              {" · "}
-              <code>{query.sql || "(no query)"}</code>
-            </Text>
-          </UnstyledButton>
-        )}
-        {/* Hidden rather than unmounted, so the editor keeps its state. */}
-        <form style={editorOpen ? editorFormStyle : { display: "none" }}>
-          {prefill && prefillWarningOpen && (
-            <Alert
-              color="orange"
-              title="This query was filled in from a link"
-              withCloseButton
-              onClose={() => setPrefillWarningOpen(false)}
-              style={prefillAlertStyle}
-              data-testid="prefill-warning"
-            >
-              <p style={prefillAlertTextStyle}>
-                Whoever clicks Execute is responsible for the query, no matter
-                who or what wrote it. Read the whole query and check where it
-                will run before you execute it. Don't run it just because an
-                agent or a link suggested it.
-              </p>
-              <p style={prefillAlertTextStyle}>
-                Storage: <code>{prefill.storage ?? "(not set)"}</code>
-                {" · "}
-                Host:{" "}
-                <code>
-                  {prefill.host ? `${prefill.host}:${prefill.port}` : "(not set)"}
-                </code>
-              </p>
-            </Alert>
+    <EditorPanelLayout
+      title="Construct a ClickHouse System Query"
+      open={editorOpen}
+      onOpenChange={setEditorOpen}
+      summary={
+        <>
+          {query.sudo && (
+            <span style={{ color: COLORS.DANGER, fontWeight: 700 }}>
+              SUDO{" "}
+            </span>
           )}
-          <div style={editorTitleRowStyle}>
-            <h2 style={{ ...SECTION_HEADING_STYLE, margin: 0 }}>
-              Construct a ClickHouse System Query
-            </h2>
-            <Button
-              size="xs"
-              variant="light"
-              color="red"
-              leftIcon={<IconX size={14} />}
-              aria-label="Close editor"
-              onClick={() => setEditorOpen(false)}
-            >
-              Close
-            </Button>
-          </div>
+          {query.storage ?? "(no storage)"}
+          {" · "}
+          {query.host ? `${query.host}:${query.port}` : "(no host)"}
+          {" · "}
+          <code>{query.sql || "(no query)"}</code>
+        </>
+      }
+      banner={
+        prefill &&
+        prefillWarningOpen && (
+          <PrefillWarning onClose={() => setPrefillWarningOpen(false)}>
+            Storage: <code>{prefill.storage ?? "(not set)"}</code>
+            {" · "}
+            Host:{" "}
+            <code>
+              {prefill.host ? `${prefill.host}:${prefill.port}` : "(not set)"}
+            </code>
+          </PrefillWarning>
+        )
+      }
+      editor={
+        <>
           <div style={blockStyle}>
             <div style={targetRowStyle}>
               <div style={{ ...targetFieldStyle, width: "auto" }}>
@@ -445,8 +371,9 @@ function QueryDisplay(props: {
               </Tooltip>
             </div>
           </div>
-        </form>
-      </div>
+        </>
+      }
+    >
       <div>
         {getErrorDomElement(queryError, collapseOpened, setCollapseOpened)}
       </div>
@@ -468,7 +395,7 @@ function QueryDisplay(props: {
           />
         ))}
       </div>
-    </div>
+    </EditorPanelLayout>
   );
 }
 
@@ -511,72 +438,12 @@ const needsInputHintStyle = {
   margin: 0,
 };
 
-// Separates the results from the form above.
-const resultsHeadingStyle = {
-  ...SECTION_HEADING_STYLE,
-  marginTop: 32,
-  // Keeps the heading clear of the sticky editor bar when scrolled to.
-  scrollMarginTop: 72,
-};
-
-// Sticks to the top of the page's scroll area, just below the header.
-const editorPanelStyle = {
-  position: "sticky" as const,
-  top: 0,
-  zIndex: 10,
-  backgroundColor: COLORS.PANEL_BG,
-  border: `1px solid ${COLORS.BORDER_GRAY}`,
-  borderRadius: 4,
-  boxShadow: "0 2px 6px rgba(0, 0, 0, 0.08)",
-};
-
-// Scrolls on its own when the open editor is taller than the screen.
-const editorFormStyle = {
-  maxHeight: "calc(100vh - 100px)",
-  overflowY: "auto" as const,
-  padding: "12px 16px 0",
-};
-
-const editorTitleRowStyle = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  marginBottom: 12,
-};
-
-const editorClosedBarStyle = {
-  display: "flex",
-  width: "100%",
-  borderRadius: 4,
-  alignItems: "center",
-  gap: 12,
-  padding: "8px 16px",
-};
-
-// One line, so the closed bar stays short whatever the query.
-const editorSummaryStyle = {
-  minWidth: 0,
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap" as const,
-  color: COLORS.TEXT_LIGHTER,
-};
-
 // Takes the space between the mode toggle and Execute.
 const modeHelpTextStyle = {
   flex: 1,
   minWidth: 0,
   fontSize: "0.85em",
   margin: 0,
-};
-
-const prefillAlertStyle = {
-  margin: "0 0 16px 0",
-};
-
-const prefillAlertTextStyle = {
-  fontSize: 16,
-  margin: "4px 0px",
 };
 
 const inputStyle = {
@@ -596,5 +463,4 @@ const executeActionsStyle = {
   gap: 16,
 };
 
-export { STICKY_HEADER_TOP };
 export default QueryDisplay;
