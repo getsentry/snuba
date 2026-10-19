@@ -43,6 +43,8 @@ jobs:
         run: |
           SNUBA_SETTINGS=test_distributed python scripts/ddl-changes.py
       - name: Generate SQL for migration
+        # Dependabot's token is read-only, so the action can't post its PR comment
+        if: github.actor != 'dependabot[bot]'
         uses: getsentry/action-migrations@da718e78dc50bb8068806f40271b65a5b4d75a0d # v1.4.0
         env:
           SNUBA_SETTINGS: test_distributed
