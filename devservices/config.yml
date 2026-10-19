@@ -17,6 +17,12 @@ x-sentry-service-config:
         repo_name: sentry-shared-kafka
         branch: main
         repo_link: https://github.com/getsentry/sentry-shared-kafka.git
+    postgres:
+      description: Shared instance of postgres used by sentry services
+      remote:
+        repo_name: sentry-shared-postgres
+        branch: main
+        repo_link: https://github.com/getsentry/sentry-shared-postgres.git
     snuba:
       description: Service that provides a rich data model on top of Clickhouse together with a fast ingestion consumer and a query optimizer
     profiles-consumer:
@@ -28,7 +34,7 @@ x-sentry-service-config:
     metrics-consumer:
       description: Consumer for metrics
   modes:
-    default: [redis, kafka, clickhouse]
+    default: [redis, kafka, clickhouse, postgres]
     containerized: [clickhouse, redis, kafka, snuba]
     containerized-profiles: [clickhouse, redis, kafka, snuba, profiles-consumer, profile-chunks-consumer, functions-consumer, functions-consumer]
     containerized-metrics-dev: [clickhouse, redis, kafka, snuba, metrics-consumer]
