@@ -15,7 +15,10 @@ use sentry_protos::snuba::v1::any_value::Value;
 use sentry_protos::snuba::v1::{ArrayValue, TraceItem, TraceItemType};
 
 use crate::config::ProcessorConfig;
-use crate::processors::utils::{enforce_retentions, SilencedDLQMessage};
+use crate::processors::utils::{
+    enforce_retentions, get_drop_invalid_timestamps_enabled, out_of_valid_interval_secs,
+    SilencedDLQMessage,
+};
 use crate::strategies::clickhouse::rowbinary;
 use crate::types::CogsData;
 use crate::types::{item_type_name, InsertBatch, ItemTypeMetrics, KafkaMessageMetadata};
@@ -63,11 +66,13 @@ struct ProcessedItem {
     cogs_data: CogsData,
 }
 
+/// `Ok(None)` means the item was dropped for being out of range; the message
+/// is committed without inserting anything.
 fn process_eap_item(
     msg: KafkaPayload,
     metadata: &KafkaMessageMetadata,
     config: &ProcessorConfig,
-) -> anyhow::Result<ProcessedItem> {
+) -> anyhow::Result<Option<ProcessedItem>> {
     let payload: &[u8] = msg.payload().context("Expected payload")?;
     let trace_item = TraceItem::decode(payload)?;
     let origin_timestamp = trace_item
@@ -82,8 +87,25 @@ fn process_eap_item(
     let item_type =
         TraceItemType::try_from(trace_item.item_type).unwrap_or(TraceItemType::Unspecified);
 
+    let (retention_days, downsampled_retention_days) = enforce_retentions(
+        Some(trace_item.retention_days as u16),
+        Some(trace_item.downsampled_retention_days as u16),
+    );
+
+    let now = Utc::now();
+
     if let Some(event_ts) = event_timestamp {
-        let now = Utc::now();
+        if get_drop_invalid_timestamps_enabled()
+            && out_of_valid_interval_secs(event_ts, now, retention_days)
+        {
+            counter!(
+                "eap_items.messages.dropped_out_of_range_timestamp",
+                1,
+                "reason" => if event_ts > now { "future_ts" } else { "past_ts" },
+                "item_type" => item_type_name(item_type)
+            );
+            return Ok(None);
+        }
 
         if let Some(grace_min) = get_dlq_grace_period_min(&config.storage_name) {
             if let Some(reason) = should_dlq(event_ts, now, grace_min) {
@@ -97,11 +119,6 @@ fn process_eap_item(
             }
         }
     }
-
-    let (retention_days, downsampled_retention_days) = enforce_retentions(
-        Some(trace_item.retention_days as u16),
-        Some(trace_item.downsampled_retention_days as u16),
-    );
 
     let mut eap_item = EAPItem::try_from(trace_item)?;
 
@@ -118,7 +135,7 @@ fn process_eap_item(
     }
     eap_item.attributes.insert_int(
         "sentry._internal.ingested_at".into(),
-        Utc::now().timestamp_millis(),
+        now.timestamp_millis(),
     );
     // we are using this to compare to outcomes which stores the timestamp as seconds
     if let Some(received_at) = origin_timestamp {
@@ -156,12 +173,12 @@ fn process_eap_item(
         data: BTreeMap::from([(app_feature, payload.len() as u64)]),
     };
 
-    Ok(ProcessedItem {
+    Ok(Some(ProcessedItem {
         eap_item,
         origin_timestamp,
         item_type_metrics,
         cogs_data,
-    })
+    }))
 }
 
 fn get_dlq_grace_period_min(storage_name: &str) -> Option<i64> {
@@ -270,7 +287,9 @@ pub fn process_message(
     metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
-    let processed = process_eap_item(msg, &metadata, config)?;
+    let Some(processed) = process_eap_item(msg, &metadata, config)? else {
+        return Ok(InsertBatch::skip());
+    };
     let mut batch = InsertBatch::from_rows([processed.eap_item], processed.origin_timestamp)?;
     batch.item_type_metrics = Some(processed.item_type_metrics);
     batch.cogs_data = Some(processed.cogs_data);
@@ -282,7 +301,9 @@ pub fn process_message_row_binary(
     metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
-    let processed = process_eap_item(msg, &metadata, config)?;
+    let Some(processed) = process_eap_item(msg, &metadata, config)? else {
+        return Ok(InsertBatch::skip());
+    };
     let row = EAPItemRow::try_from(processed.eap_item)?;
 
     // Encode the row to RowBinary bytes inline so the wide typed struct (~80
@@ -315,7 +336,13 @@ pub(crate) fn process_message_row_binary_typed(
     metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<EAPItemRowBatch> {
-    let processed = process_eap_item(msg, &metadata, config)?;
+    let Some(processed) = process_eap_item(msg, &metadata, config)? else {
+        return Ok(EAPItemRowBatch {
+            rows: vec![],
+            cogs_data: None,
+            item_type_metrics: None,
+        });
+    };
     Ok(EAPItemRowBatch {
         rows: vec![EAPItemRow::try_from(processed.eap_item)?],
         cogs_data: Some(processed.cogs_data),
@@ -800,6 +827,7 @@ mod tests {
     use std::sync::Once;
 
     use super::*;
+    use crate::processors::utils::DROP_INVALID_TIMESTAMPS_KEY;
 
     static INIT: Once = Once::new();
     fn init_options() {
@@ -1378,6 +1406,107 @@ mod tests {
     fn test_get_dlq_grace_period_min_unset_storage_returns_none() {
         // Empty storage_name short-circuits to None without reading options.
         assert_eq!(get_dlq_grace_period_min(""), None);
+    }
+
+    fn encode_with_timestamp(event_ts: i64, retention_days: u32, downsampled: u32) -> Vec<u8> {
+        let mut trace_item = generate_trace_item(Uuid::new_v4());
+        trace_item.timestamp = Some(Timestamp {
+            seconds: event_ts,
+            nanos: 0,
+        });
+        trace_item.retention_days = retention_days;
+        trace_item.downsampled_retention_days = downsampled;
+        let mut payload = Vec::new();
+        trace_item.encode(&mut payload).unwrap();
+        payload
+    }
+
+    fn rows_inserted(payload: &[u8]) -> (usize, usize, usize) {
+        let metadata = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: Utc::now(),
+        };
+        let config = ProcessorConfig::default();
+        let json = process_message(
+            KafkaPayload::new(None, None, Some(payload.to_vec())),
+            metadata.clone(),
+            &config,
+        )
+        .unwrap();
+        let row_binary = process_message_row_binary(
+            KafkaPayload::new(None, None, Some(payload.to_vec())),
+            metadata.clone(),
+            &config,
+        )
+        .unwrap();
+        let typed = process_message_row_binary_typed(
+            KafkaPayload::new(None, None, Some(payload.to_vec())),
+            metadata,
+            &config,
+        )
+        .unwrap();
+        (
+            json.rows.num_rows,
+            row_binary.rows.num_rows,
+            typed.rows.len(),
+        )
+    }
+
+    #[test]
+    fn test_drop_invalid_timestamps_skips_items_past_retention() {
+        init_options();
+        let now = Utc::now().timestamp();
+        let past_90_days = encode_with_timestamp(now - 120 * 86_400, 90, 90);
+        let within_90_days = encode_with_timestamp(now - 60 * 86_400, 90, 90);
+        // NOTE: 60 days old on 30 day standard retention: dropped even though the
+        // downsample tiers would keep it for 396 days.
+        let past_standard_retention = encode_with_timestamp(now - 60 * 86_400, 30, 396);
+        let far_future = encode_with_timestamp(now + 8 * 86_400, 90, 90);
+
+        // Option off: everything is inserted.
+        assert_eq!(rows_inserted(&past_90_days), (1, 1, 1));
+        assert_eq!(rows_inserted(&far_future), (1, 1, 1));
+
+        let _guard =
+            override_options(&[("snuba", DROP_INVALID_TIMESTAMPS_KEY, json!(true))]).unwrap();
+        assert_eq!(rows_inserted(&past_90_days), (0, 0, 0));
+        assert_eq!(rows_inserted(&far_future), (0, 0, 0));
+        assert_eq!(rows_inserted(&within_90_days), (1, 1, 1));
+        assert_eq!(rows_inserted(&past_standard_retention), (0, 0, 0));
+    }
+
+    #[test]
+    fn test_drop_invalid_timestamps_runs_before_dlq() {
+        // An item past retention is dropped (committed, no rows), not DLQ'd,
+        // even when the prior-partition DLQ would otherwise catch it.
+        init_options();
+        let _guard = override_options(&[
+            ("snuba", DROP_INVALID_TIMESTAMPS_KEY, json!(true)),
+            (
+                "snuba",
+                "eap_items_dlq_grace_period_min",
+                json!({ "eap_items_dlq_test": 0 }),
+            ),
+        ])
+        .unwrap();
+        let config = ProcessorConfig {
+            storage_name: "eap_items_dlq_test".to_string(),
+            ..Default::default()
+        };
+        let metadata = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: Utc::now(),
+        };
+        let payload = encode_with_timestamp(Utc::now().timestamp() - 120 * 86_400, 90, 90);
+        let batch = process_message(
+            KafkaPayload::new(None, None, Some(payload)),
+            metadata,
+            &config,
+        )
+        .unwrap();
+        assert_eq!(batch.rows.num_rows, 0);
     }
 
     #[test]
