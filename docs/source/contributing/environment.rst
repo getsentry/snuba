@@ -2,77 +2,79 @@
 Snuba development environment
 =============================
 
-This section explains how to run snuba from source and set up a development
-environment.
-
-In order to set up Clickhouse, Redis, and Kafka, please refer to :doc:`/getstarted`.
+This section explains how to run Snuba from source. To set up ClickHouse,
+Redis, and Kafka, see :doc:`/getstarted`.
 
 Prerequisites
 -------------
-It is assumed that you have completed the steps to set up the `sentry dev environment <https://develop.sentry.dev/environment/>`_.
 
-You will need an installation of Rust to develop Snuba. Go `here <https://rustup.rs>`_ to get one::
+Set up the `Sentry development environment <https://develop.sentry.dev/environment/>`_
+first.
 
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+Install ``uv``. ``devenv sync`` no longer installs it::
 
-Make sure to follow installation steps and configure your shell for cargo (Rust's build sytem and package manager).
+    brew install uv
 
-If you are using Homebrew and a M1 Mac, ensure the development packages you've installed with Homebrew are available
-by setting these environment variables::
+If you use Homebrew on an Apple Silicon Mac, make the Homebrew development
+packages visible to the Rust build::
 
     export CPATH=/opt/homebrew/include
     export LIBRARY_PATH=/opt/homebrew/lib
 
-Install / Run
--------------
+Install and run
+---------------
 
-Clone this repo into your workspace::
+Clone the repository::
 
     git clone git@github.com:getsentry/snuba.git
-
-These commands set up the Python virtual environment::
-
     cd snuba
+
+Set up the environment. ``direnv allow`` puts ``.venv`` and ``rustup`` on your
+``PATH``. ``devenv sync`` installs ``rustup``, ``cmake``, and ``protobuf`` from
+``Brewfile``, syncs the Python virtual environment, and installs the
+pre-commit hooks::
+
+    direnv allow
     devenv sync
 
-This builds rust_snuba (it's expensive, so is kept out of `devenv sync`)::
+Build ``rust_snuba``. ``devenv sync`` skips it because the build is slow::
 
-    make install-rs-dev (one time)
-    make watch-rust-snuba (or watch and rebuild)
+    make install-rs-dev
 
-This command starts the Snuba api, which is capable of processing queries::
+To rebuild ``rust_snuba`` on every change, run ``make watch-rust-snuba`` instead.
+
+Start the Snuba API, which serves queries::
 
     snuba api
 
-This command starts the api and Snuba consumers to ingest
-data from Kafka::
+Start the API and the consumers that ingest data from Kafka::
 
     snuba devserver
 
-Running tests
--------------
+Run tests
+---------
 
-This command runs unit and integration tests::
+Run the Python unit and integration tests::
 
-    devenv sync (if you have not run it already)
     make test
 
-Running sentry tests against snuba
-++++++++++++++++++++++++++++++++++
+Run the Rust tests::
 
-This section instead runs Sentry tests against a running Snuba installation
+    make test-rust
 
-Make sure there is no snuba container already running::
+Run Sentry tests against Snuba
+++++++++++++++++++++++++++++++
+
+Make sure no Snuba container is running::
 
     docker ps -a | grep snuba
 
-Start your local snuba api server::
+Start your local Snuba API::
 
     git checkout your-snuba-branch
-    source .venv/bin/activate
     snuba api
 
-and, in another terminal::
+In another terminal, update Sentry and start Snuba's dependencies::
 
     cd ../sentry
     git checkout master
@@ -80,12 +82,10 @@ and, in another terminal::
     devservices up
     devservices toggle snuba local
 
-This will get the most recent version of Sentry on master, and bring up all snuba's dependencies.
+Then run the Sentry tests that cover your change. For example, the Sentry tests
+under ``tests/snuba/`` query Snuba::
 
-You will want to run the following Sentry tests::
+    .venv/bin/pytest tests/snuba
 
-    make test-acceptance
-    make test-snuba
-    make test-python
-
-These tests do not use Kafka due to performance reasons. The snuba test suite does test the kafka functionality
+These tests do not use Kafka, for performance. The Snuba test suite covers
+the Kafka paths.

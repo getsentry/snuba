@@ -1,15 +1,23 @@
 import logging
 import re
 from collections.abc import Callable, Sequence
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from snuba.clickhouse.escaping import escape_identifier
 from snuba.clickhouse.pool import ClickhousePool
+from snuba.clickhouse.prune_partitions import (
+    DEFAULT_RETENTION_MARGIN,
+    Category,
+    classify_partition,
+    is_weekly_retention_partition_key,
+)
+from snuba.clickhouse.prune_partitions import today as utc_today
 
 logger = logging.getLogger("snuba.clickhouse.partition_management")
 
 HealthCheck = Callable[[str], None]
 PartitionAttached = Callable[[str], None]
+PartitionExpired = Callable[[str], None]
 PartitionSkipped = Callable[[str, str], None]
 
 PARTITION_START_PARAM = "partition_start"
@@ -256,6 +264,69 @@ def filter_future_partitions(
     return kept
 
 
+def get_partition_key(clickhouse: ClickhousePool, database: str, table: str) -> str | None:
+    """Return a table's ``partition_key`` as rendered by ``system.tables``."""
+    response = clickhouse.execute(
+        "SELECT partition_key FROM system.tables WHERE database = %(database)s AND name = %(table)s",
+        {"database": database, "table": table},
+    )
+    if not response.results:
+        return None
+    return str(response.results[0][0])
+
+
+def filter_expired_partitions(
+    clickhouse: ClickhousePool,
+    database: str,
+    table: str,
+    partition_ids: Sequence[str],
+    *,
+    today: date,
+    retention_margin: timedelta = DEFAULT_RETENTION_MARGIN,
+    on_partition_expired: PartitionExpired | None = None,
+) -> Sequence[str]:
+    """
+    Drop partitions that are past retention plus ``retention_margin``, using
+    the same rule ``prune-partitions`` uses to decide a partition is dead.
+
+    TTL would delete the attached rows anyway. Attaching them also recreates
+    the destination's ``block_numbers`` znode, which ``prune-partitions`` then
+    forgets again, and on ClickHouse 25.8 an attach into a partition whose
+    znode was forgotten can fail with ZNONODE.
+
+    Only tables partitioned by ``(retention_days, toMonday(timestamp))`` are
+    filtered, because other keys' partition IDs can't be read as a retention and
+    a week. ``table`` must be the source table; ATTACH PARTITION FROM requires
+    the destination to share its partition key. The key is only read when some
+    partition ID looks expired.
+    """
+    expired = {
+        partition_id
+        for partition_id in partition_ids
+        if classify_partition(partition_id, today, retention_margin) == Category.DEAD_PAST
+    }
+    if not expired:
+        return list(partition_ids)
+
+    partition_key = get_partition_key(clickhouse, database, table)
+    if partition_key is None or not is_weekly_retention_partition_key(partition_key):
+        return list(partition_ids)
+
+    kept = []
+    for partition_id in partition_ids:
+        if partition_id in expired:
+            logger.info(
+                "Skipping partition %s: past retention by more than %s",
+                partition_id,
+                retention_margin,
+            )
+            if on_partition_expired is not None:
+                on_partition_expired(partition_id)
+            continue
+        kept.append(partition_id)
+    return kept
+
+
 def get_active_partition_ids(
     clickhouse: ClickhousePool, database: str, table: str
 ) -> Sequence[str]:
@@ -347,7 +418,9 @@ def attach_partitions_from_table(
     health_check_query: str | None = None,
     on_partition_attached: PartitionAttached | None = None,
     on_partition_skipped: PartitionSkipped | None = None,
+    on_partition_expired: PartitionExpired | None = None,
     max_future_age: timedelta | None = DEFAULT_MAX_FUTURE_PARTITION_AGE,
+    retention_margin: timedelta | None = DEFAULT_RETENTION_MARGIN,
     now: datetime | None = None,
     dry_run: bool = False,
 ) -> Sequence[str]:
@@ -368,6 +441,10 @@ def attach_partitions_from_table(
     skipped, which keeps implausibly future-dated partitions out of the
     destination. Pass ``max_future_age=None`` to attach them regardless.
 
+    Partitions past retention by more than ``retention_margin`` are skipped too,
+    as described in ``filter_expired_partitions``. Pass
+    ``retention_margin=None`` to attach them regardless.
+
     ClickHouse's ``ATTACH PARTITION ... FROM`` leaves the source partition in
     place. Re-running this function is safe because active destination partition
     IDs are skipped.
@@ -384,6 +461,19 @@ def attach_partitions_from_table(
         for partition_id in source_partition_ids
         if partition_id not in destination_partition_ids
     ]
+
+    if retention_margin is not None:
+        pending_partition_ids = list(
+            filter_expired_partitions(
+                clickhouse,
+                database,
+                source_table,
+                pending_partition_ids,
+                today=now.date() if now is not None else utc_today(),
+                retention_margin=retention_margin,
+                on_partition_expired=on_partition_expired,
+            )
+        )
 
     # Boundaries resolve hashed partition IDs, and are read once because the
     # date filter and a scoped health check query both need them. The date

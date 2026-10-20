@@ -1,10 +1,7 @@
 import React, { useState, useEffect } from "react";
 import Client from "SnubaAdmin/api_client";
-import { Table } from "SnubaAdmin/table";
-import QueryDisplay, {
-  STICKY_HEADER_TOP,
-} from "SnubaAdmin/clickhouse_queries/query_display";
-import { COLORS } from "SnubaAdmin/theme";
+import QueryDisplay from "SnubaAdmin/clickhouse_queries/query_display";
+import { ResultTable } from "SnubaAdmin/clickhouse_queries/result_table";
 import { parseSystemQueryPrefill } from "SnubaAdmin/clickhouse_queries/prefill";
 import { QueryResult, PredefinedQuery } from "./types";
 
@@ -37,10 +34,9 @@ function ClickhouseQueries(props: { api: Client }) {
 
   function tablePopulator(queryResult: QueryResult) {
     return (
-      <Table
-        headerData={queryResult.column_names}
-        rowData={queryResult.rows}
-        customStyles={stickyHeaderStyles}
+      <ResultTable
+        columnNames={queryResult.column_names}
+        rows={queryResult.rows}
       />
     );
   }
@@ -68,21 +64,6 @@ function ClickhouseQueries(props: { api: Client }) {
 const selectStyle = {
   marginBottom: 8,
   height: 30,
-};
-
-// Keeps column names in view below the editor pane while scrolling a long
-// result. This needs no scrolling ancestor between the table and the page,
-// so wide results wrap rather than scroll sideways.
-const stickyHeaderStyles = {
-  thStyle: {
-    position: "sticky" as const,
-    top: STICKY_HEADER_TOP,
-    zIndex: 1,
-    backgroundColor: COLORS.TABLE_HEADER_BG,
-    // Collapsed borders don't move with a stuck cell, so draw its bottom
-    // edge here.
-    boxShadow: `inset 0 -1px 0 ${COLORS.TABLE_BORDER}`,
-  },
 };
 
 export default ClickhouseQueries;

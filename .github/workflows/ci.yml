@@ -40,7 +40,7 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
 
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           enable-cache: false
 
@@ -71,7 +71,7 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
 
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           # we just cache the venv-dir directly in action-setup-venv
           enable-cache: false
@@ -139,6 +139,11 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+      # The runner's system Python can be newer than PyO3 supports.
+      - uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c # v5.0.0
+        with:
+          python-version-file: .python-version
+
       - name: Install Rust Toolchain
         run: |
           rustup toolchain install stable --profile minimal --no-self-update
@@ -160,7 +165,7 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
 
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           # we just cache the venv-dir directly in action-setup-venv
           enable-cache: false

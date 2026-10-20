@@ -10,6 +10,7 @@ from snuba.clickhouse.partition_management import (
     attach_partition_from_table,
     attach_partitions_from_table,
     build_health_check,
+    filter_expired_partitions,
     get_partition_boundaries,
     is_partition_too_far_in_future,
     parse_partition_start,
@@ -203,6 +204,8 @@ def test_resolves_boundaries_from_the_source_table_for_hashed_partition_ids() ->
         "source",
         "destination",
         health_check_query="SELECT count() FROM destination WHERE timestamp >= %(partition_start)s",
+        # These 2024 partitions are long past retention; expiry is tested separately.
+        retention_margin=None,
     )
 
     assert result == ["90-20240212"]
@@ -302,6 +305,8 @@ def test_retention_days_distinguishes_partitions_sharing_a_boundary() -> None:
             "SELECT count() FROM destination "
             "WHERE timestamp >= %(partition_start)s AND retention_days = %(retention_days)s"
         ),
+        # These 2024 partitions are long past retention; expiry is tested separately.
+        retention_margin=None,
     )
 
     assert result == ["30-20240212", "90-20240212"]
@@ -523,3 +528,164 @@ def test_dry_run_reports_the_date_filtered_partitions() -> None:
         for call_args in clickhouse.execute.call_args_list
         if "ATTACH PARTITION" in call_args.args[0]
     ]
+
+
+WEEKLY_RETENTION_KEY = "(retention_days, toMonday(timestamp))"
+# 2026-08-31 + 7 days + 30 days retention + 14 days margin = 2026-10-21.
+EXPIRY_NOW = datetime(2026, 10, 22)
+
+
+def make_eap_clickhouse(
+    source_partitions: list[str],
+    destination_partitions: list[str],
+    partition_key: str = WEEKLY_RETENTION_KEY,
+) -> Mock:
+    clickhouse = Mock(spec=ClickhousePool)
+    clickhouse.execute.side_effect = [
+        ClickhouseResult([(partition,) for partition in source_partitions]),
+        ClickhouseResult([(partition,) for partition in destination_partitions]),
+        ClickhouseResult([(partition_key,)]),
+        *[ClickhouseResult() for _ in source_partitions],
+    ]
+    return clickhouse
+
+
+def test_skips_partitions_past_retention() -> None:
+    clickhouse = make_eap_clickhouse(
+        ["30-20260831", "30-20260907", "90-19700101", "90-20260831"], []
+    )
+    expired = Mock(spec=Callable[[str], None])
+
+    result = attach_partitions_from_table(
+        clickhouse,
+        "default",
+        "source",
+        "destination",
+        health_check=Mock(spec=Callable[[str], None]),
+        on_partition_expired=expired,
+        max_future_age=None,
+        now=EXPIRY_NOW,
+    )
+
+    # 30-20260907 and the 90 day week are still within retention plus margin.
+    assert result == ["30-20260907", "90-20260831"]
+    assert expired.call_args_list == [call("30-20260831"), call("90-19700101")]
+    assert clickhouse.execute.call_args_list[2] == call(
+        "SELECT partition_key FROM system.tables WHERE database = %(database)s AND name = %(table)s",
+        {"database": "default", "table": "source"},
+    )
+
+
+def test_expiry_uses_the_retention_margin() -> None:
+    clickhouse = make_eap_clickhouse(["30-20260831"], [])
+
+    result = attach_partitions_from_table(
+        clickhouse,
+        "default",
+        "source",
+        "destination",
+        health_check=Mock(spec=Callable[[str], None]),
+        retention_margin=timedelta(days=30),
+        max_future_age=None,
+        now=EXPIRY_NOW,
+    )
+
+    assert result == ["30-20260831"]
+
+
+def test_attaches_expired_partitions_when_the_filter_is_disabled() -> None:
+    clickhouse = make_clickhouse(["30-20260831", "90-19700101"], [])
+
+    result = attach_partitions_from_table(
+        clickhouse,
+        "default",
+        "source",
+        "destination",
+        health_check=Mock(spec=Callable[[str], None]),
+        retention_margin=None,
+        max_future_age=None,
+        now=EXPIRY_NOW,
+    )
+
+    assert result == ["30-20260831", "90-19700101"]
+    assert not [
+        call_args
+        for call_args in clickhouse.execute.call_args_list
+        if "system.tables" in call_args.args[0]
+    ]
+
+
+def test_keeps_expired_looking_partitions_of_other_partition_keys() -> None:
+    # A monthly key renders the same ID shape, but the ID can't be read as a week.
+    clickhouse = make_eap_clickhouse(
+        ["30-20260801"], [], partition_key="(retention_days, toStartOfMonth(timestamp))"
+    )
+
+    result = attach_partitions_from_table(
+        clickhouse,
+        "default",
+        "source",
+        "destination",
+        health_check=Mock(spec=Callable[[str], None]),
+        max_future_age=None,
+        now=EXPIRY_NOW,
+    )
+
+    assert result == ["30-20260801"]
+
+
+def test_does_not_read_the_partition_key_without_expired_candidates() -> None:
+    clickhouse = make_clickhouse(["30-20261012", "20240213"], [])
+
+    result = attach_partitions_from_table(
+        clickhouse,
+        "default",
+        "source",
+        "destination",
+        health_check=Mock(spec=Callable[[str], None]),
+        max_future_age=None,
+        now=EXPIRY_NOW,
+    )
+
+    assert result == ["30-20261012", "20240213"]
+    assert not [
+        call_args
+        for call_args in clickhouse.execute.call_args_list
+        if "system.tables" in call_args.args[0]
+    ]
+
+
+def test_dry_run_reports_the_expiry_filtered_partitions() -> None:
+    clickhouse = make_eap_clickhouse(["30-20260831", "30-20260907"], [])
+
+    result = attach_partitions_from_table(
+        clickhouse,
+        "default",
+        "source",
+        "destination",
+        max_future_age=None,
+        now=EXPIRY_NOW,
+        dry_run=True,
+    )
+
+    assert result == ["30-20260907"]
+    assert not [
+        call_args
+        for call_args in clickhouse.execute.call_args_list
+        if "ATTACH PARTITION" in call_args.args[0]
+    ]
+
+
+def test_filter_expired_partitions_skips_missing_tables() -> None:
+    clickhouse = Mock(spec=ClickhousePool)
+    clickhouse.execute.return_value = ClickhouseResult([])
+
+    result = filter_expired_partitions(
+        clickhouse,
+        "default",
+        "missing",
+        ["90-19700101"],
+        today=EXPIRY_NOW.date(),
+    )
+
+    assert result == ["90-19700101"]

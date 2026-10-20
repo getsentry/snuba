@@ -25,6 +25,10 @@ export function setRecentHistory(key: string, query: any) {
   }
 }
 
+export function clearRecentHistory(key: string) {
+  localStorage.removeItem(`${key}.history`);
+}
+
 export function getRecentHistory(key: string) {
   const storageKey = `${key}.history`
   const recentHistory = localStorage.getItem(storageKey)

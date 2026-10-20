@@ -170,8 +170,9 @@ to build Snuba queries.
 Once a ``Query`` object has been created the Snuba client api provided by
 Sentry can and should be used to send the query to Snuba.
 
-The api is in `this module <https://github.com/getsentry/sentry/blob/master/src/sentry/utils/snuba.py#L667>`_.
-It takes care of caching, retries and allows bulk queries.
+Use ``raw_snql_query`` or ``bulk_snuba_queries`` in
+`sentry.utils.snuba <https://github.com/getsentry/sentry/blob/master/src/sentry/utils/snuba.py>`_.
+They take care of caching and retries, and ``bulk_snuba_queries`` sends several queries at once.
 
 The method returns a dictionary that contains the data in response and
 additional metadata::
