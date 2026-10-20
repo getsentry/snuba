@@ -354,7 +354,7 @@ def generate(storage_path: str, name: str | None = None) -> None:
     The generated migration will be written into the local directory. The user is responsible for making
     the commit, PR, and merging.
 
-    see MIGRATIONS.md in the root folder for more info
+    see docs/source/migrations/overview.md for more info
     """
     expected_pattern = r"(.+/)?snuba/datasets/configuration/.*/storages/.*\.(yml|yaml)"
     if not re.fullmatch(expected_pattern, storage_path):
