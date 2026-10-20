@@ -10,7 +10,7 @@ concurrency:
 jobs:
   docs:
     name: Sphinx
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # 26.04 has no Python 3.13.12 build (.python-version); unpin when we bump Python
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

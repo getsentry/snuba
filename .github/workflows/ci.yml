@@ -54,7 +54,7 @@ jobs:
 
   linting:
     name: "pre-commit hooks" # (includes Python formatting + linting)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # 26.04 has no Python 3.13.12 build (.python-version); unpin when we bump Python
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -124,7 +124,7 @@ jobs:
 
   rust-linting:
     name: "Linting - Rust"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # 26.04's system Python 3.14 is too new for PyO3 0.24
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -150,7 +150,7 @@ jobs:
 
   config-validation:
     name: "Dataset Config Validation"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # 26.04 has no Python 3.13.12 build (.python-version); unpin when we bump Python
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
