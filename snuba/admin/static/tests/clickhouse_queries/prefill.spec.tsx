@@ -81,6 +81,8 @@ describe("QueryDisplay opened from a link", () => {
   afterEach(() => {
     cleanup();
     window.location.hash = "";
+    // Runs are saved to history; start each test without the last one's.
+    localStorage.clear();
   });
 
   const nodes: [ClickhouseNodeData] = [
@@ -201,13 +203,15 @@ describe("QueryDisplay opened from a link", () => {
     await screen.findAllByDisplayValue("clickhouse-01:9000");
 
     fireEvent.click(screen.getByText("Execute Query"));
-    await screen.findByText("Open Editor");
+    await screen.findByText("1 row", { exact: false });
     expect(api.executeSystemQuery).toBeCalled();
+    expect(screen.getByLabelText("Open editor")).toBeTruthy();
     expect(screen.queryByRole("textbox")).toBeNull();
-    // The closed bar says what will run.
-    expect(screen.getByTestId("editor-panel").textContent).toContain(
-      "errors · clickhouse-01:9000 · SELECT 1"
-    );
+    // Where it will run stays in view; the closed bar shows the query.
+    expect(screen.getAllByDisplayValue("clickhouse-01:9000")).not.toHaveLength(0);
+    expect(
+      within(screen.getByLabelText("Open editor")).getByText("SELECT 1")
+    ).toBeTruthy();
 
     // Anywhere on the bar opens it, not just the button.
     fireEvent.click(
@@ -216,7 +220,40 @@ describe("QueryDisplay opened from a link", () => {
       })
     );
     expect(screen.getByRole("textbox").textContent).toBe("SELECT 1");
-    expect(screen.queryByText("Open Editor")).toBeNull();
+    expect(screen.queryByLabelText("Open editor")).toBeNull();
+  });
+
+  it("fills in the first host for the saved storage", async () => {
+    localStorage.setItem("select-storage", "errors");
+    const api = renderWithHash("#system-queries");
+    await waitFor(() => expect(api.getClickhouseNodes).toBeCalled());
+    expect(await screen.findAllByDisplayValue("clickhouse-01:9000")).not.toHaveLength(0);
+  });
+
+  it("leaves the host empty for a link that doesn't name one", async () => {
+    const api = renderWithHash("#system-queries?query=SELECT%201&storage=errors");
+    await waitFor(() => expect(api.getClickhouseNodes).toBeCalled());
+    expect(screen.getAllByText("Select a host to run the query.")).not.toHaveLength(0);
+    expect(screen.queryAllByDisplayValue("clickhouse-01:9000")).toHaveLength(0);
+  });
+
+  it("hides the error with the editor, and opens it for a failed run", async () => {
+    const api = renderWithHash(
+      "#system-queries?query=SELECT%201&storage=errors&host=clickhouse-01%3A9000"
+    );
+    api.executeSystemQuery.mockRejectedValue(new Error("Unknown table"));
+    await waitFor(() => expect(api.getClickhouseNodes).toBeCalled());
+    await screen.findAllByDisplayValue("clickhouse-01:9000");
+
+    fireEvent.click(screen.getByText("Execute Query"));
+    await screen.findByText("Unknown table");
+    fireEvent.click(screen.getByLabelText("Close editor"));
+    expect(screen.queryByText("Unknown table")).toBeNull();
+
+    // Running again from the closed bar brings the editor back to show it.
+    fireEvent.click(screen.getByText("Execute Query"));
+    await waitFor(() => expect(screen.queryByLabelText("Open editor")).toBeNull());
+    expect(screen.getByText("Unknown table")).toBeTruthy();
   });
 
   it("closes the editor with the X", async () => {
@@ -224,8 +261,24 @@ describe("QueryDisplay opened from a link", () => {
     await waitFor(() => expect(api.getClickhouseNodes).toBeCalled());
 
     fireEvent.click(screen.getByLabelText("Close editor"));
-    expect(screen.getByText("Open Editor")).toBeTruthy();
+    expect(screen.getByLabelText("Open editor")).toBeTruthy();
     expect(api.executeSystemQuery).not.toBeCalled();
+  });
+
+  it("runs the query from beside the host while the editor is closed", async () => {
+    const api = renderWithHash(
+      "#system-queries?query=SELECT%201&storage=errors&host=clickhouse-01%3A9000"
+    );
+    await waitFor(() => expect(api.getClickhouseNodes).toBeCalled());
+    await screen.findAllByDisplayValue("clickhouse-01:9000");
+
+    fireEvent.click(screen.getByLabelText("Close editor"));
+    // Only the button beside the host is rendered.
+    expect(screen.getAllByText("Execute Query")).toHaveLength(1);
+    fireEvent.click(screen.getByText("Execute Query"));
+    await screen.findByText("1 row", { exact: false });
+    expect(api.executeSystemQuery).toBeCalled();
+    expect(screen.getByLabelText("Open editor")).toBeTruthy();
   });
 
   it("shows no warning without params", async () => {
@@ -258,7 +311,7 @@ describe("QueryHistoryEntry", () => {
       />
     );
 
-    fireEvent.click(screen.getByText("Share query"));
+    fireEvent.click(screen.getByLabelText("Share query"));
 
     const url = writeText.mock.calls[0][0];
     expect(parseSystemQueryPrefill(new URL(url).hash)).toEqual({
@@ -268,4 +321,48 @@ describe("QueryHistoryEntry", () => {
       port: 9000,
     });
   });
+
+  it("copies the results as a table", () => {
+    const writeText = jest
+      .fn<(text: string) => Promise<void>>()
+      .mockResolvedValue(undefined);
+    Object.assign(window.navigator, { clipboard: { writeText } });
+    render(
+      <QueryHistoryEntry
+        queryResult={
+          {
+            input_query: "SELECT 1 (errors,clickhouse-01:9000)",
+            timestamp: 0,
+            column_names: ["name", "value"],
+            rows: [
+              ["a", "1"],
+              ["tab\there", "line\nbreak"],
+              ["a|b", ""],
+            ],
+          } as unknown as QueryResult
+        }
+        isLatest
+        defaultExpanded={false}
+        csv=""
+        resultDataPopulator={() => <div />}
+      />
+    );
+
+    fireEvent.click(screen.getByLabelText("Copy as table"));
+    expect(writeText).toBeCalledWith(
+      "name\tvalue\na\t1\ntab here\tline break\na|b\t"
+    );
+
+    fireEvent.click(screen.getByLabelText("Copy as Markdown"));
+    expect(writeText).toHaveBeenLastCalledWith(
+      [
+        "| name     | value      |",
+        "| -------- | ---------- |",
+        "| a        | 1          |",
+        "| tab here | line break |",
+        "| a\\|b     |            |",
+      ].join("\n")
+    );
+  });
+
 });
