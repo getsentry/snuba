@@ -4,7 +4,6 @@ import QueryEditor from "SnubaAdmin/query_editor";
 import ExecuteButton from "SnubaAdmin/utils/execute_button";
 import {
   ActionIcon,
-  Alert,
   Button,
   SegmentedControl,
   Text,
@@ -23,6 +22,7 @@ import {
   setRecentHistory,
 } from "SnubaAdmin/query_history";
 import { COLORS, SECTION_HEADING_STYLE } from "SnubaAdmin/theme";
+import { PrefillWarning } from "SnubaAdmin/editor_panel";
 import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
 import { getHostsForStorage, getErrorDomElement } from "SnubaAdmin/utils/clickhouse_node_utils";
 import { QueryHistoryEntry } from "SnubaAdmin/clickhouse_queries/query_history_entry";
@@ -282,29 +282,14 @@ function QueryDisplay(props: {
         {/* Storage and host stay in view while the editor is closed. */}
         <div style={targetPanelStyle}>
           {prefill && prefillWarningOpen && (
-            <Alert
-              color="orange"
-              title="This query was filled in from a link"
-              withCloseButton
-              onClose={() => setPrefillWarningOpen(false)}
-              style={prefillAlertStyle}
-              data-testid="prefill-warning"
-            >
-              <p style={prefillAlertTextStyle}>
-                Whoever clicks Execute is responsible for the query, no matter
-                who or what wrote it. Read the whole query and check where it
-                will run before you execute it. Don't run it just because an
-                agent or a link suggested it.
-              </p>
-              <p style={prefillAlertTextStyle}>
-                Storage: <code>{prefill.storage ?? "(not set)"}</code>
-                {" · "}
-                Host:{" "}
-                <code>
-                  {prefill.host ? `${prefill.host}:${prefill.port}` : "(not set)"}
-                </code>
-              </p>
-            </Alert>
+            <PrefillWarning onClose={() => setPrefillWarningOpen(false)}>
+              Storage: <code>{prefill.storage ?? "(not set)"}</code>
+              {" · "}
+              Host:{" "}
+              <code>
+                {prefill.host ? `${prefill.host}:${prefill.port}` : "(not set)"}
+              </code>
+            </PrefillWarning>
           )}
           <div style={targetRowStyle}>
             <div style={targetFieldStyle}>
@@ -658,15 +643,6 @@ const editorSummaryStyle = {
 };
 
 // Takes the space between the mode toggle and Execute.
-const prefillAlertStyle = {
-  margin: "0 0 16px 0",
-};
-
-const prefillAlertTextStyle = {
-  fontSize: 16,
-  margin: "4px 0px",
-};
-
 const inputStyle = {
   fontSize: 16,
   minHeight: '2.25rem',

@@ -64,19 +64,31 @@ export function parseSystemQueryPrefill(
   };
 }
 
+/** Builds a link to a page (e.g. "querylog") with these hash params. */
+export function buildHashUrl(
+  route: string,
+  values: Record<string, string | null | undefined>
+): string {
+  const params = new URLSearchParams();
+  Object.entries(values).forEach(([key, value]) => {
+    if (value) params.set(key, value);
+  });
+  // %20 reads better than "+" when the link is pasted somewhere.
+  const query = params.toString().replace(/\+/g, "%20");
+  return `${window.location.origin}${window.location.pathname}#${route}?${query}`;
+}
+
 /** Builds a link that opens System Queries pre-filled with these values. */
 export function buildSystemQueryUrl(prefill: {
   sql?: string;
   storage?: string | null;
   host?: string | null;
 }): string {
-  const params = new URLSearchParams();
-  if (prefill.sql) params.set("query", prefill.sql);
-  if (prefill.storage) params.set("storage", prefill.storage);
-  if (prefill.host) params.set("host", prefill.host);
-  // %20 reads better than "+" when the link is pasted somewhere.
-  const query = params.toString().replace(/\+/g, "%20");
-  return `${window.location.origin}${window.location.pathname}#system-queries?${query}`;
+  return buildHashUrl("system-queries", {
+    query: prefill.sql,
+    storage: prefill.storage,
+    host: prefill.host,
+  });
 }
 
 /**
