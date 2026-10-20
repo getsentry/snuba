@@ -32,14 +32,6 @@ pub fn setup_logging() {
     // everything at or above INFO, instead of breadcrumbs.
     let sentry_layer = sentry::integrations::tracing::layer().event_filter(|metadata| {
         match *metadata.level() {
-            // The usage accountant is a best-effort billing side channel. Its
-            // Kafka producer logs "Purged in queue/flight" at ERROR whenever the
-            // producer is flushed during a consumer shutdown/rebalance. These
-            // are transient and don't affect ingestion, so keep them as logs
-            // rather than issues (SNUBA-474, SNUBA-475).
-            Level::ERROR if metadata.target().starts_with("sentry_usage_accountant") => {
-                EventFilter::Log
-            }
             // The DogStatsD forwarder logs at ERROR on every undeliverable flush
             // (e.g. "Connection refused"), which self-heals but floods Sentry when
             // the target is unreachable. Keep it as logs only (SNUBA-BQ8).
