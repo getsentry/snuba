@@ -33,10 +33,10 @@ def test_escape_alias() -> None:
 @pytest.fixture
 def local_timezone(monkeypatch: pytest.MonkeyPatch) -> Generator[None]:
     # A zone east of UTC, where local midnight falls on the previous UTC day.
-    monkeypatch.setenv("TZ", "Asia/Tokyo")
-    time.tzset()
-    yield
-    monkeypatch.undo()
+    with monkeypatch.context() as m:
+        m.setenv("TZ", "Asia/Tokyo")
+        time.tzset()
+        yield
     time.tzset()
 
 
