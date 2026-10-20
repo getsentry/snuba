@@ -94,7 +94,7 @@ describe("Querylog QueryDisplay", () => {
       "SELECT 1"
     );
 
-    fireEvent.click(screen.getByText("Share query"));
+    fireEvent.click(screen.getByLabelText("Share query"));
     const url = writeText.mock.calls[0][0];
     expect(parseQuerylogPrefill(new URL(url).hash)).toEqual({
       sql: "SELECT 1",
@@ -109,7 +109,7 @@ describe("Querylog QueryDisplay", () => {
     expect(api.getQuerylogSchema).toBeCalledTimes(1);
     // Only the useful DESCRIBE columns.
     expect(screen.queryByText("default_type")).toBeNull();
-    expect(screen.queryByText("Share query")).toBeNull();
+    expect(screen.queryByLabelText("Share query")).toBeNull();
 
     fireEvent.change(screen.getByLabelText("Filter columns"), {
       target: { value: "data" },

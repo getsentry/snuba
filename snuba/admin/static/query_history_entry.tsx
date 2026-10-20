@@ -1,11 +1,59 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { Button, Group } from "@mantine/core";
 import QueryResultCopier from "SnubaAdmin/utils/query_result_copier";
 import { COLORS } from "SnubaAdmin/theme";
 
 type HistoryResult = {
   timestamp?: number;
-  rows: unknown[];
+  column_names: unknown[];
+  rows: unknown[][];
 };
+
+// One line per cell: tabs and newlines inside a value would split it in the
+// copied formats, so they become spaces.
+function cellText(value: unknown) {
+  const text =
+    value === null || value === undefined
+      ? ""
+      : typeof value === "object"
+      ? JSON.stringify(value)
+      : String(value);
+  return text.replace(/[\t\r\n]+/g, " ");
+}
+
+function tableRows(queryResult: HistoryResult) {
+  return [queryResult.column_names, ...queryResult.rows].map((row) =>
+    row.map(cellText)
+  );
+}
+
+// Tab-separated, which spreadsheets and docs paste as a table.
+function toTsv(queryResult: HistoryResult) {
+  return tableRows(queryResult)
+    .map((row) => row.join("\t"))
+    .join("\n");
+}
+
+// A Markdown table, padded so it also lines up as plain text. Pipes would
+// end a cell early, so they're escaped.
+function toMarkdown(queryResult: HistoryResult) {
+  const [header, ...rows] = tableRows(queryResult).map((row) =>
+    row.map((cell) => cell.replace(/\|/g, "\\|"))
+  );
+  // Markdown needs at least three dashes under each heading.
+  const widths = header.map((name, col) =>
+    Math.max(3, name.length, ...rows.map((row) => (row[col] ?? "").length))
+  );
+  const line = (row: string[]) =>
+    `| ${widths
+      .map((width, col) => (row[col] ?? "").padEnd(width))
+      .join(" | ")} |`;
+  return [
+    line(header),
+    line(widths.map((width) => "-".repeat(width))),
+    ...rows.map(line),
+  ].join("\n");
+}
 
 // A past query and its result, as a card that expands to show the result.
 function QueryHistoryEntry<R extends HistoryResult>(props: {
@@ -24,6 +72,16 @@ function QueryHistoryEntry<R extends HistoryResult>(props: {
 }) {
   const { queryResult, isLatest, sql, storage, host } = props;
   const [expanded, setExpanded] = useState(props.defaultExpanded);
+  // The full query is only shown on request, to keep results up top.
+  const [sqlShown, setSqlShown] = useState(false);
+
+  // A newer run takes over, so this one folds away to make room for it.
+  useEffect(() => {
+    if (!isLatest) {
+      setExpanded(false);
+    }
+  }, [isLatest]);
+
   const rowCount = queryResult.rows.length;
 
   return (
@@ -58,27 +116,44 @@ function QueryHistoryEntry<R extends HistoryResult>(props: {
             ? ` · ${new Date(queryResult.timestamp * 1000).toLocaleTimeString()}`
             : ""}
         </span>
-        {/* Copying shouldn't toggle the entry. */}
-        <div style={copierStyle} onClick={(evt) => evt.stopPropagation()}>
+        {rowCount === 0 && <span style={emptyBadgeStyle}>No results</span>}
+        {/* Showing the SQL or copying shouldn't toggle the entry. */}
+        <Group
+          spacing="xs"
+          style={copierStyle}
+          onClick={(evt) => evt.stopPropagation()}
+        >
+          <Button
+            size="xs"
+            variant="subtle"
+            aria-expanded={sqlShown}
+            onClick={() => setSqlShown((prev) => !prev)}
+          >
+            {sqlShown ? "Hide SQL" : "SQL"}
+          </Button>
           <QueryResultCopier
+            tableInput={toTsv(queryResult)}
+            markdownInput={toMarkdown(queryResult)}
             rawInput={props.rawOutput}
             jsonInput={JSON.stringify(queryResult)}
             csvInput={props.csv}
             linkInput={props.shareUrl}
             compact
           />
-        </div>
+        </Group>
       </div>
-      {expanded ? (
-        <>
-          <pre style={sqlStyle}>{sql}</pre>
-          <div style={resultsStyle}>
-            {props.resultDataPopulator(queryResult)}
-          </div>
-        </>
+      {sqlShown ? (
+        <pre style={sqlStyle}>{sql}</pre>
       ) : (
-        <div style={sqlPreviewStyle} title={sql}>
-          {sql.replace(/\s+/g, " ")}
+        !expanded && (
+          <div style={sqlPreviewStyle} title={sql}>
+            {sql.replace(/\s+/g, " ")}
+          </div>
+        )
+      )}
+      {expanded && (
+        <div style={resultsStyle}>
+          {props.resultDataPopulator(queryResult)}
         </div>
       )}
     </div>
@@ -135,6 +210,13 @@ const latestBadgeStyle = {
   ...badgeStyle,
   color: COLORS.SNUBA_BLUE,
   backgroundColor: "rgba(31, 111, 235, 0.1)",
+};
+
+// Calls out an empty result, which is easy to miss in the row count.
+const emptyBadgeStyle = {
+  ...badgeStyle,
+  color: COLORS.WARNING,
+  backgroundColor: "rgba(179, 92, 0, 0.1)",
 };
 
 const storageBadgeStyle = {

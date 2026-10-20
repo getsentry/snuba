@@ -48,5 +48,7 @@ it("should not call if loading", async () => {
 
   await waitFor(() => expect(mockCall).toBeCalledTimes(1));
   expect(screen.getByRole("status").textContent).toBe("Query running…");
-  expect(button.textContent).toContain("Running");
+  expect(button.getAttribute("aria-busy")).toBe("true");
+  // The label doesn't change, so the button keeps its size.
+  expect(button.textContent).toContain("Execute Query");
 });

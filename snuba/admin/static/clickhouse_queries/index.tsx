@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from "react";
 import Client from "SnubaAdmin/api_client";
-import { Table } from "SnubaAdmin/table";
 import QueryDisplay from "SnubaAdmin/clickhouse_queries/query_display";
-import { stickyTableHeaderStyles } from "SnubaAdmin/editor_panel";
+import { ResultTable } from "SnubaAdmin/clickhouse_queries/result_table";
 import { parseSystemQueryPrefill } from "SnubaAdmin/clickhouse_queries/prefill";
 import { QueryResult, PredefinedQuery } from "./types";
 
@@ -35,10 +34,9 @@ function ClickhouseQueries(props: { api: Client }) {
 
   function tablePopulator(queryResult: QueryResult) {
     return (
-      <Table
-        headerData={queryResult.column_names}
-        rowData={queryResult.rows}
-        customStyles={stickyTableHeaderStyles}
+      <ResultTable
+        columnNames={queryResult.column_names}
+        rows={queryResult.rows}
       />
     );
   }
