@@ -1,9 +1,9 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use crate::{counter, gauge, timer};
 use chrono::Utc;
 use sentry_arroyo::processing::stream::{PipelineEnvelope, Stage, StageResult};
-use sentry_arroyo::{counter, gauge, timer};
 
 use crate::pull::batch::batch_metadata::BatchMetadata;
 use crate::pull::batch::pipeline_batch::PipelineBatch;
@@ -38,6 +38,7 @@ impl Stage for ClickHouseWriterStage {
         let body = envelope.payload.rows.encoded_rows;
         let commit_log_offsets = envelope.payload.commit_log_offsets;
         let cogs_data = envelope.payload.cogs_data;
+        let offsets = envelope.offsets;
 
         if num_bytes == 0 {
             tracing::debug!("skipping write of empty payload ({} rows)", total_rows);
@@ -49,6 +50,7 @@ impl Stage for ClickHouseWriterStage {
                 metadata,
                 envelope.metadata,
                 envelope.raw,
+                offsets,
             ));
         }
 
@@ -85,6 +87,7 @@ impl Stage for ClickHouseWriterStage {
                     metadata,
                     envelope.metadata,
                     envelope.raw,
+                    offsets,
                 ))
             }
             Err(e) => {

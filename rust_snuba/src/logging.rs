@@ -1,7 +1,7 @@
+use crate::counter;
 use sentry::integrations::tracing::EventFilter;
 use sentry::protocol::Event;
 use sentry::ClientInitGuard;
-use sentry_arroyo::counter;
 use tracing::Level;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;

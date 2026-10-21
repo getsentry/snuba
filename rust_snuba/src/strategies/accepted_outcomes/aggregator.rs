@@ -1,10 +1,10 @@
 use std::collections::{BTreeMap, HashMap};
 use std::time::{Duration, Instant};
 
+use crate::counter;
 use chrono::{DateTime, Utc};
 use prost::Message as ProstMessage;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
-use sentry_arroyo::counter;
 use sentry_arroyo::processing::strategies::{
     merge_commit_request, CommitRequest, InvalidMessage, InvalidMessageReason, MessageRejected,
     ProcessingStrategy, StrategyError, SubmitError,
