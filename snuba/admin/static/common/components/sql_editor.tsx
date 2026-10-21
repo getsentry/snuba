@@ -1,10 +1,19 @@
 import React, { useLayoutEffect, useMemo, useRef } from "react";
-import { EditorState } from "@codemirror/state";
+import { Annotation, EditorState } from "@codemirror/state";
 import { EditorView, lineNumbers, keymap } from "@codemirror/view";
-import { insertNewline } from "@codemirror/commands";
+import {
+  history,
+  historyKeymap,
+  insertNewline,
+  isolateHistory,
+} from "@codemirror/commands";
 
 import { sql } from "@codemirror/lang-sql";
 import { theme, highlighting } from "./theme";
+
+// Marks changes that came from the `value` prop, so they are not echoed back
+// through `onChange`.
+const fromProps = Annotation.define<boolean>();
 
 export interface Props {
   value: string;
@@ -14,14 +23,20 @@ export interface Props {
 export function SQLEditor({ value, onChange }: Props) {
   const elementRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
+  // The editor is only created once, so read the latest callback from a ref
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
   const updateListener = useMemo(() => {
     return EditorView.updateListener.of((update) => {
-      if (update.docChanged) {
-        onChange(update.state.doc.toString());
+      if (
+        update.docChanged &&
+        !update.transactions.some((tr) => tr.annotation(fromProps))
+      ) {
+        onChangeRef.current(update.state.doc.toString());
       }
     });
-  }, [onChange]);
+  }, []);
 
   const multiNewLine = useMemo(() => {
     return keymap.of([{ key: "Enter", run: insertNewline }]);
@@ -30,6 +45,8 @@ export function SQLEditor({ value, onChange }: Props) {
   const extensions = [
     updateListener,
     multiNewLine,
+    history(),
+    keymap.of(historyKeymap),
     theme,
     highlighting,
     EditorView.lineWrapping,
@@ -41,6 +58,7 @@ export function SQLEditor({ value, onChange }: Props) {
     if (!elementRef.current) return;
 
     const state = EditorState.create({
+      doc: value,
       extensions,
     });
 
@@ -51,17 +69,18 @@ export function SQLEditor({ value, onChange }: Props) {
   }, []);
 
   useLayoutEffect(() => {
-    if (!viewRef.current) return;
+    const view = viewRef.current;
+    if (!view) return;
 
-    const state = viewRef.current.state;
+    const currentValue = view.state.doc.toString();
 
-    if (value !== state.doc.toString()) {
-      viewRef.current.setState(
-        EditorState.create({
-          doc: value,
-          extensions,
-        }),
-      );
+    // Dispatch rather than replace the state, so the undo history is kept and
+    // the new value (e.g. a predefined query) is its own undo step
+    if (value !== currentValue) {
+      view.dispatch({
+        changes: { from: 0, to: currentValue.length, insert: value },
+        annotations: [fromProps.of(true), isolateHistory.of("full")],
+      });
     }
   }, [value]);
 
