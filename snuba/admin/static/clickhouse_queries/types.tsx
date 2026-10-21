@@ -27,7 +27,7 @@ type QueryResult = {
   input_query: string;
   timestamp: number;
   column_names: QueryResultColumnMetadata;
-  rows: [QueryResultRow];
+  rows: QueryResultRow[];
   trace_output?: string;
   error?: string;
 };

@@ -44,7 +44,7 @@ from snuba.utils.schemas import ColumnValidator, InvalidColumnType
 from snuba.web import QueryException, QueryExtraData, QueryResult
 from snuba.web.db_query import _apply_allocation_policies_quota
 
-metrics = MetricsWrapper(environment.metrics, "snuba.delete")
+metrics = MetricsWrapper(environment.metrics, "delete")
 
 
 class DeletesNotEnabledError(Exception):

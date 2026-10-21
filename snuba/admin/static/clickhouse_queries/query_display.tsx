@@ -2,9 +2,27 @@ import React, { useEffect, useState } from "react";
 import Client from "SnubaAdmin/api_client";
 import QueryEditor from "SnubaAdmin/query_editor";
 import ExecuteButton from "SnubaAdmin/utils/execute_button";
-import { Alert, Box, SegmentedControl, Text, Tooltip } from "@mantine/core";
-import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";
+import {
+  ActionIcon,
+  Button,
+  SegmentedControl,
+  Text,
+  Tooltip,
+  UnstyledButton,
+} from "@mantine/core";
+import {
+  IconInfoCircle,
+  IconPencil,
+  IconTrash,
+  IconX,
+} from "@tabler/icons-react";
+import {
+  clearRecentHistory,
+  getRecentHistory,
+  setRecentHistory,
+} from "SnubaAdmin/query_history";
 import { COLORS, SECTION_HEADING_STYLE } from "SnubaAdmin/theme";
+import { PrefillWarning } from "SnubaAdmin/editor_panel";
 import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
 import { getHostsForStorage, getErrorDomElement } from "SnubaAdmin/utils/clickhouse_node_utils";
 import { QueryHistoryEntry } from "SnubaAdmin/clickhouse_queries/query_history_entry";
@@ -24,6 +42,13 @@ import {
 type QueryState = Partial<QueryRequest>;
 
 const HISTORY_KEY = "clickhouse_queries";
+// The storage's first node, to have a host ready as soon as a storage is
+// picked.
+function firstHost(nodeData: ClickhouseNodeData[], storage?: string) {
+  const [first] = getHostsForStorage(nodeData, storage);
+  return first ? parseHostPort(first.value) : {};
+}
+
 function QueryDisplay(props: {
   api: Client;
   resultDataPopulator: (queryResult: QueryResult) => JSX.Element;
@@ -37,6 +62,9 @@ function QueryDisplay(props: {
     prefill !== null
   );
   const [nodeData, setNodeData] = useState<ClickhouseNodeData[]>([]);
+  // The host is filled in once the nodes arrive, so until then it isn't
+  // flagged as missing.
+  const [nodesLoaded, setNodesLoaded] = useState(false);
   const [manualHostInput, setManualHostInput] = useState<string>("");
   const [query, setQuery] = useState<QueryState>({
     storage: prefill?.storage ?? getParamFromStorage("storage"),
@@ -49,6 +77,13 @@ function QueryDisplay(props: {
   // Only a result the user just ran opens automatically; saved history loads
   // collapsed.
   const [justRan, setJustRan] = useState<QueryResult | null>(null);
+  // The editor closes after a successful run to make room for the results.
+  // Closed, the panel sticks to the top so it can be reopened, or the query
+  // run again from beside the storage and host, from anywhere in them.
+  const [editorOpen, setEditorOpen] = useState(true);
+  // The query editor puts its predefined query picker here, beside Close.
+  const [predefinedQuerySlot, setPredefinedQuerySlot] =
+    useState<HTMLDivElement | null>(null);
 
   const [queryError, setQueryError] = useState<Error | null>(null);
 
@@ -61,6 +96,7 @@ function QueryDisplay(props: {
     }
     props.api.getClickhouseNodes().then((res) => {
       setNodeData(res);
+      setNodesLoaded(true);
       // A linked host the storage's node list doesn't know about can only be
       // shown (and checked) via manual host entry.
       if (prefill?.host) {
@@ -72,6 +108,13 @@ function QueryDisplay(props: {
           setManualHostInput(hostPort);
           setClusterlessHost(true);
         }
+      } else if (!prefill) {
+        // The saved storage comes back without a host.
+        setQuery((prevQuery) =>
+          prevQuery.host
+            ? prevQuery
+            : { ...prevQuery, ...firstHost(res, prevQuery.storage) }
+        );
       }
     });
   }, []);
@@ -85,6 +128,8 @@ function QueryDisplay(props: {
       return {
         ...prevQuery,
         storage: storage,
+        // A typed host isn't replaced; it's up to the user.
+        ...(prevQuery.clusterless ? {} : firstHost(nodeData, storage)),
       };
     });
   }
@@ -155,11 +200,21 @@ function QueryDisplay(props: {
         setRecentHistory(HISTORY_KEY, result);
         setQueryResultHistory((prevHistory) => [result, ...prevHistory]);
         setJustRan(result);
+        setEditorOpen(false);
       });
+  }
+
+  function clearResults() {
+    clearRecentHistory(HISTORY_KEY);
+    setQueryResultHistory([]);
+    setJustRan(null);
   }
 
   function handleQueryError(error: Error) {
     setQueryError(error);
+    // Errors only show in the editor, so a failed run from the closed bar
+    // opens it.
+    setEditorOpen(true);
   }
 
   function convertResultsToCSV(queryResult: QueryResult) {
@@ -187,57 +242,61 @@ function QueryDisplay(props: {
     host: "Select a host to run the query.",
     query: "Write or pick a query to run.",
   };
+  // What to flag on the page; Execute stays disabled either way.
+  const flagged = nodesLoaded ? missing : null;
+
+  const errorElement = getErrorDomElement(
+    queryError,
+    collapseOpened,
+    setCollapseOpened
+  );
+
+  // Sits beside storage and host while the editor is closed, and at the
+  // bottom of the editor while it's open.
+  const executeControl = (
+    // A disabled button gets no hover events, so the tooltip hangs off a
+    // wrapper.
+    <Tooltip
+      label={flagged ? missingHint[flagged] : ""}
+      disabled={!flagged}
+      withArrow
+    >
+      <div data-testid="execute-wrapper">
+        <ExecuteButton
+          label={query.sudo ? "Execute Sudo Query" : undefined}
+          color={query.sudo ? "red" : undefined}
+          onError={handleQueryError}
+          onClick={executeQuery}
+          disabled={missing !== null}
+        />
+      </div>
+    </Tooltip>
+  );
 
   return (
     <div>
-      <form>
-        {prefill && prefillWarningOpen && (
-          <Alert
-            color="orange"
-            title="This query was filled in from a link"
-            withCloseButton
-            onClose={() => setPrefillWarningOpen(false)}
-            style={prefillAlertStyle}
-            data-testid="prefill-warning"
-          >
-            <p style={prefillAlertTextStyle}>
-              Whoever clicks Execute is responsible for the query, no matter
-              who or what wrote it. Read the whole query and check where it
-              will run before you execute it. Don't run it just because an
-              agent or a link suggested it.
-            </p>
-            <p style={prefillAlertTextStyle}>
+      <div
+        style={editorOpen ? editorPanelStyle : stickyEditorPanelStyle}
+        data-testid="editor-panel"
+      >
+        {/* Storage and host stay in view while the editor is closed. */}
+        <div style={targetPanelStyle}>
+          {prefill && prefillWarningOpen && (
+            <PrefillWarning onClose={() => setPrefillWarningOpen(false)}>
               Storage: <code>{prefill.storage ?? "(not set)"}</code>
               {" · "}
               Host:{" "}
               <code>
                 {prefill.host ? `${prefill.host}:${prefill.port}` : "(not set)"}
               </code>
-            </p>
-          </Alert>
-        )}
-        <h2 style={SECTION_HEADING_STYLE}>Construct a ClickHouse System Query</h2>
-        <Section title="Where">
+            </PrefillWarning>
+          )}
           <div style={targetRowStyle}>
-            <div style={{ ...targetFieldStyle, width: "auto" }}>
-              <Text size="sm" fw={600}>
-                Host entry
-              </Text>
-              <SegmentedControl
-                aria-label="Host entry"
-                value={query.clusterless ? "manual" : "pick"}
-                onChange={(value) => setClusterlessHost(value === "manual")}
-                data={[
-                  { label: "Pick a node", value: "pick" },
-                  { label: "Enter host manually", value: "manual" },
-                ]}
-              />
-            </div>
             <div style={targetFieldStyle}>
               <Text size="sm" fw={600}>
                 Storage
               </Text>
-              <div style={missing === "storage" ? needsInputStyle : undefined}>
+              <div style={flagged === "storage" ? needsInputStyle : undefined}>
                 <CustomSelect
                   value={query.storage || ""}
                   onChange={selectStorage}
@@ -245,19 +304,33 @@ function QueryDisplay(props: {
                   options={nodeData.map((storage) => storage.storage_name)}
                 />
               </div>
-              {missing === "storage" && (
+              {flagged === "storage" && (
                 <p style={needsInputHintStyle}>{missingHint.storage}</p>
               )}
             </div>
             <div style={targetFieldStyle}>
-              <Text size="sm" fw={600}>
+              {/* The manual-entry rules live in a tooltip so they don't
+                  make the row taller. */}
+              <Text size="sm" fw={600} style={hostLabelStyle}>
                 Host
+                {query.clusterless && (
+                  <Tooltip
+                    label="Must be a known cluster node or listed in admin.copy_tables_allowed_target_hosts. Defaults to port 8123."
+                    multiline
+                    width={280}
+                    withArrow
+                  >
+                    <span aria-label="Manual host rules" style={hostInfoStyle}>
+                      <IconInfoCircle size={14} />
+                    </span>
+                  </Tooltip>
+                )}
               </Text>
               {query.clusterless ? (
                 <>
                   <input
                     style={
-                      missing === "host"
+                      flagged === "host"
                         ? { ...inputStyle, ...needsInputStyle }
                         : inputStyle
                     }
@@ -268,18 +341,13 @@ function QueryDisplay(props: {
                     placeholder="enter host or host:port..."
                     type="text"
                   />
-                  {missing === "host" && (
+                  {flagged === "host" && (
                     <p style={needsInputHintStyle}>{missingHint.host}</p>
                   )}
-                  <p style={hostHelpTextStyle}>
-                    Must be a known cluster node or listed in
-                    admin.copy_tables_allowed_target_hosts. Defaults to port
-                    8123.
-                  </p>
                 </>
               ) : (
                 <>
-                  <div style={missing === "host" ? needsInputStyle : undefined}>
+                  <div style={flagged === "host" ? needsInputStyle : undefined}>
                     <CustomSelect
                       disabled={!query.storage}
                       value={
@@ -292,68 +360,148 @@ function QueryDisplay(props: {
                       options={getHostsForStorage(nodeData, query.storage)}
                     />
                   </div>
-                  {missing === "host" && (
+                  {flagged === "host" && (
                     <p style={needsInputHintStyle}>{missingHint.host}</p>
                   )}
                 </>
               )}
             </div>
-          </div>
-        </Section>
-        <Section title="What">
-          <QueryEditor
-            onQueryUpdate={(sql) => {
-              updateQuerySql(sql);
-            }}
-            predefinedQueryOptions={props.predefinedQueryOptions}
-            initialQuery={prefill?.sql}
-          />
-        </Section>
-        <Section title="How" danger={query.sudo}>
-          <div style={executeActionsStyle}>
-            <div>
+            <div style={fixedFieldStyle}>
+              <Text size="sm" fw={600}>
+                Host entry
+              </Text>
               <SegmentedControl
-                aria-label="Mode"
-                value={query.sudo ? "sudo" : "user"}
-                onChange={(value) => setSudo(value === "sudo")}
-                color={query.sudo ? "red" : undefined}
+                aria-label="Host entry"
+                value={query.clusterless ? "manual" : "pick"}
+                onChange={(value) => setClusterlessHost(value === "manual")}
                 data={[
-                  { label: "User mode", value: "user" },
-                  { label: "Sudo mode", value: "sudo" },
+                  { label: "Pick a node", value: "pick" },
+                  { label: "Manual", value: "manual" },
                 ]}
-                style={segmentedStyle}
               />
-              <p style={modeHelpTextStyle}>
-                {query.sudo
-                  ? "Sudo only runs SYSTEM, ALTER, OPTIMIZE and DROP statements. It needs the sudo role, and every sudo query is audit-logged with a notification."
-                  : "SELECT, SHOW and DESCRIBE. SELECTs may only read system tables."}
-              </p>
             </div>
-            {/* A disabled button gets no hover events, so the tooltip
-                hangs off a wrapper. */}
-            <Tooltip
-              label={missing ? missingHint[missing] : ""}
-              disabled={!missing}
-              withArrow
-            >
-              <div data-testid="execute-wrapper">
-                <ExecuteButton
-                  label={query.sudo ? "Execute Sudo Query" : undefined}
-                  color={query.sudo ? "red" : undefined}
-                  onError={handleQueryError}
-                  onClick={executeQuery}
-                  disabled={missing !== null}
-                />
+            {!editorOpen && (
+              <div style={fixedFieldStyle}>
+                {/* An empty label lines the button up with the selects. */}
+                <Text size="sm" fw={600} aria-hidden>
+                  &nbsp;
+                </Text>
+                {executeControl}
               </div>
-            </Tooltip>
+            )}
           </div>
-        </Section>
-      </form>
-      <div>
-        {getErrorDomElement(queryError, collapseOpened, setCollapseOpened)}
+        </div>
+        {!editorOpen && (
+          // The whole bar opens the editor. The icon inside is only a span,
+          // since a real button can't be nested in another.
+          <UnstyledButton
+            onClick={() => setEditorOpen(true)}
+            aria-label="Open editor"
+            style={editorClosedBarStyle}
+            sx={{ "&:hover": { backgroundColor: COLORS.BG_GRAY_LIGHTER } }}
+          >
+            <Text size="sm" style={editorSummaryStyle}>
+              {query.sudo && (
+                <span style={{ color: COLORS.DANGER, fontWeight: 700 }}>
+                  SUDO{" "}
+                </span>
+              )}
+              <code>{query.sql || "(no query)"}</code>
+            </Text>
+            {/* Where the editor's Close button sits, so opening and closing
+                are in the same place. */}
+            <Tooltip label="Open editor" withArrow>
+              <ActionIcon
+                component="span"
+                variant="filled"
+                color="blue"
+                style={{ flexShrink: 0 }}
+              >
+                <IconPencil size={16} />
+              </ActionIcon>
+            </Tooltip>
+          </UnstyledButton>
+        )}
+        {/* Hidden rather than unmounted, so the editor keeps its state. */}
+        <form style={editorOpen ? editorFormStyle : { display: "none" }}>
+          <div style={editorTitleRowStyle}>
+            <h2 style={{ ...SECTION_HEADING_STYLE, margin: 0 }}>
+              Construct a ClickHouse System Query
+            </h2>
+            <div style={editorTitleActionsStyle}>
+              {/* What each mode allows is on hover, to keep the row short. */}
+              <Tooltip
+                label={
+                  query.sudo
+                    ? "Sudo only runs SYSTEM, ALTER, OPTIMIZE and DROP statements. It needs the sudo role, and every sudo query is audit-logged with a notification."
+                    : "SELECT, SHOW and DESCRIBE. SELECTs may only read system tables."
+                }
+                multiline
+                width={320}
+                withArrow
+              >
+                <div data-testid="mode-toggle">
+                  <SegmentedControl
+                    aria-label="Mode"
+                    size="xs"
+                    value={query.sudo ? "sudo" : "user"}
+                    onChange={(value) => setSudo(value === "sudo")}
+                    color={query.sudo ? "red" : undefined}
+                    data={[
+                      { label: "User mode", value: "user" },
+                      { label: "Sudo mode", value: "sudo" },
+                    ]}
+                  />
+                </div>
+              </Tooltip>
+              <div ref={setPredefinedQuerySlot} />
+              <Button
+                size="xs"
+                variant="light"
+                color="red"
+                leftIcon={<IconX size={14} />}
+                aria-label="Close editor"
+                onClick={() => setEditorOpen(false)}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+          <div style={blockStyle}>
+            <QueryEditor
+              onQueryUpdate={(sql) => {
+                updateQuerySql(sql);
+              }}
+              predefinedQueryOptions={props.predefinedQueryOptions}
+              initialQuery={prefill?.sql}
+              predefinedQuerySlot={predefinedQuerySlot}
+            />
+          </div>
+          {/* Sudo can change data, so it gets a red frame. */}
+          <div style={query.sudo ? sudoBlockStyle : blockStyle}>
+            {/* The error sits beside Execute, so it never moves the button. */}
+            <div style={executeActionsStyle}>
+              <div style={errorSlotStyle}>{editorOpen && errorElement}</div>
+              {editorOpen && executeControl}
+            </div>
+          </div>
+        </form>
       </div>
       <div>
-        <h2 style={SECTION_HEADING_STYLE}>Query results</h2>
+        <div style={resultsHeadingRowStyle}>
+          <h2 style={resultsHeadingStyle}>Query results</h2>
+          <Tooltip label="Clear saved results" withArrow>
+            <ActionIcon
+              variant="subtle"
+              color="red"
+              aria-label="Clear saved results"
+              disabled={queryResultHistory.length === 0}
+              onClick={clearResults}
+            >
+              <IconTrash size={16} />
+            </ActionIcon>
+          </Tooltip>
+        </div>
         {queryResultHistory.map((queryResult, idx) => (
           <QueryHistoryEntry
             // Entries shift down as new results arrive, so key on when they
@@ -372,58 +520,23 @@ function QueryDisplay(props: {
   );
 }
 
-function Section(props: {
-  title: string;
-  // Highlights the section in red, e.g. for sudo mode.
-  danger?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <Box
-      component="fieldset"
-      p="md"
-      mb="md"
-      style={props.danger ? dangerSectionStyle : sectionStyle}
-    >
-      <legend
-        style={
-          props.danger
-            ? { ...sectionLegendStyle, color: COLORS.DANGER }
-            : sectionLegendStyle
-        }
-      >
-        {props.title}
-      </legend>
-      {props.children}
-    </Box>
-  );
-}
-
-const sectionStyle = {
-  border: "1px solid #ced4da",
-  borderRadius: 4,
+// Spaces out the target, query and execute rows.
+const blockStyle = {
+  marginBottom: 16,
 };
 
-const dangerSectionStyle = {
-  ...sectionStyle,
+const sudoBlockStyle = {
+  ...blockStyle,
+  padding: 12,
   border: `2px solid ${COLORS.DANGER}`,
+  borderRadius: 4,
   backgroundColor: "rgba(168, 50, 45, 0.06)",
 };
 
-// A step smaller than the page headings, so sections read as nested.
-// Bootstrap makes legends large, full-width and floated; undo that so the
-// label sits in the border.
-const sectionLegendStyle = {
-  ...SECTION_HEADING_STYLE,
-  fontSize: 12,
-  float: "none" as const,
-  width: "auto",
-  padding: "0 4px",
-  margin: 0,
-};
-
-const segmentedStyle = {
-  marginBottom: 8,
+// Above the editor, so it shows whether the editor is open or closed.
+const targetPanelStyle = {
+  padding: "12px 16px",
+  borderBottom: `1px solid ${COLORS.BORDER_GRAY}`,
 };
 
 const targetRowStyle = {
@@ -432,11 +545,20 @@ const targetRowStyle = {
   gap: 16,
 };
 
+// Storage and host shrink before the row wraps, so it stays one line.
 const targetFieldStyle = {
-  width: "20em",
+  flex: "1 1 12em",
+  maxWidth: "20em",
   display: "flex",
   flexDirection: "column" as const,
   gap: 4,
+};
+
+// The host entry toggle and Execute keep their natural width.
+const fixedFieldStyle = {
+  ...targetFieldStyle,
+  flex: "none",
+  maxWidth: "none",
 };
 
 // Marks the field the user needs to fill in next.
@@ -452,36 +574,102 @@ const needsInputHintStyle = {
   margin: 0,
 };
 
-const modeHelpTextStyle = {
-  fontSize: "0.85em",
+// Separates the results from the form above.
+const resultsHeadingRowStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  marginTop: 32,
+  marginBottom: 12,
+};
+
+const resultsHeadingStyle = {
+  ...SECTION_HEADING_STYLE,
   margin: 0,
 };
 
-const prefillAlertStyle = {
-  margin: "0 0 16px 0",
+const editorPanelStyle = {
+  backgroundColor: COLORS.PANEL_BG,
+  border: `1px solid ${COLORS.BORDER_GRAY}`,
+  borderRadius: 4,
+  boxShadow: "0 2px 6px rgba(0, 0, 0, 0.08)",
 };
 
-const prefillAlertTextStyle = {
-  fontSize: 16,
-  margin: "4px 0px",
+// Closed, the panel is a short bar, so it sticks to the top of the page's
+// scroll area to run or reopen from anywhere in the results. Open, it's
+// tall enough to cover them, so it scrolls with the page.
+const stickyEditorPanelStyle = {
+  ...editorPanelStyle,
+  position: "sticky" as const,
+  top: 0,
+  zIndex: 10,
 };
 
+const editorFormStyle = {
+  padding: "12px 16px 0",
+};
+
+const editorTitleRowStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: 12,
+};
+
+const editorTitleActionsStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: 16,
+};
+
+const editorClosedBarStyle = {
+  display: "flex",
+  width: "100%",
+  borderRadius: 4,
+  alignItems: "center",
+  gap: 12,
+  padding: "8px 16px",
+};
+
+// One line, so the closed bar stays short whatever the query.
+const editorSummaryStyle = {
+  // Fills the bar, pushing the open icon to the right end.
+  flex: 1,
+  minWidth: 0,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap" as const,
+  color: COLORS.TEXT_LIGHTER,
+};
+
+// Takes the space between the mode toggle and Execute.
 const inputStyle = {
   fontSize: 16,
   minHeight: '2.25rem',
 }
 
-const hostHelpTextStyle = {
-  fontSize: '0.85em',
-  marginTop: 4,
-  marginBottom: 0,
-}
+const hostLabelStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: 4,
+};
 
+const hostInfoStyle = {
+  display: "inline-flex",
+  color: COLORS.TEXT_LIGHTER,
+  cursor: "help",
+};
+
+// Execute stays top right, however tall the error beside it gets.
 const executeActionsStyle = {
   display: "flex",
-  justifyContent: "space-between",
   alignItems: "flex-start",
   gap: 16,
+};
+
+const errorSlotStyle = {
+  flex: 1,
+  minWidth: 0,
 };
 
 export default QueryDisplay;

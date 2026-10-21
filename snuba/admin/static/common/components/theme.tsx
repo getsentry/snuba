@@ -9,6 +9,12 @@ export const theme = EditorView.theme({
     backgroundColor: COLORS.PANEL_BG,
     border: `1px solid ${COLORS.BORDER_GRAY}`,
     borderRadius: "4px",
+    // A long query scrolls inside the editor instead of pushing what's below
+    // it, like errors, off the screen.
+    maxHeight: "40vh",
+  },
+  ".cm-scroller": {
+    overflow: "auto",
   },
 });
 

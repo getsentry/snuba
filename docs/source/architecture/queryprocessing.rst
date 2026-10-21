@@ -3,7 +3,7 @@ Snuba Query Processing
 ======================
 
 Snuba has a query processing pipeline that starts with the parsing of the
-Snuba query language (legacy and SnQL) into an AST ands with a SQL query
+Snuba query language (SnQL and MQL) into an AST and ends with a SQL query
 being executed on Clickhouse. Between these two phases, several passes on
 the AST to apply query processing transformations are executed.
 
@@ -27,19 +27,17 @@ for the phases discussed above.
 
 .. image:: /_static/architecture/queryprocessing.png
 
-Legacy and SnQL Parsers
------------------------
+SnQL and MQL Parsers
+--------------------
 
-Snuba supports two languages, the legacy JSON based one and the new one named
-SnQL. With the exceptions of joins and composite queries which are not supported
-by the legacy language, the query processing pipeline does not change whether
-one or the other language is used.
+Snuba supports two languages, SnQL and MQL. The query processing pipeline does
+not change whether one or the other language is used.
 
 They both produce a logical query AST which is represented by
 `this data structure <https://github.com/getsentry/snuba/tree/master/snuba/query>`_.
 
-The legacy parser is `here <https://github.com/getsentry/snuba/blob/master/snuba/query/parser/__init__.py>`_,
-while the SnQL parser is `in this module <https://github.com/getsentry/snuba/tree/master/snuba/query/snql>`_.
+The SnQL parser is `in this module <https://github.com/getsentry/snuba/tree/master/snuba/query/snql>`_,
+and the MQL parser is `in this module <https://github.com/getsentry/snuba/tree/master/snuba/query/mql>`_.
 
 Query Validation
 ----------------
@@ -53,12 +51,13 @@ validation.
 
 General validation is composed by a set of checks that are applied to each query
 right after the Query is produced by the parser. This happens
-`in this function <https://github.com/getsentry/snuba/blob/master/snuba/query/parser/__init__.py#L91>`_.
+`in this module <https://github.com/getsentry/snuba/blob/master/snuba/query/parser/__init__.py>`_.
 This includes validations like preventing alias shadowing and function signature
 validation.
 
 Each entity can provide some validation logic as well in the form of required
-columns. This happens `in this class <https://github.com/getsentry/snuba/blob/master/snuba/datasets/entity.py#L46-L47>`_.
+columns. This happens in validators such as
+`EntityRequiredColumnValidator <https://github.com/getsentry/snuba/blob/master/snuba/query/validation/validators.py>`_.
 This allows the query processing to reject queries that do not have a condition
 on project_id or that do not have a time range.
 
@@ -66,11 +65,12 @@ Logical Query Processors
 ------------------------
 
 Query processors are stateless transformations that receive a Query object (with
-its AST) and transform it in place. `This <https://github.com/getsentry/snuba/blob/master/snuba/query/processors/__init__.py>`_
+its AST) and transform it in place. `LogicalQueryProcessor <https://github.com/getsentry/snuba/blob/master/snuba/query/processors/logical/__init__.py>`_
 is the interface to implement for logical processors. In the logical phase each
 entity provides the query processors to be applied in sequence.  Common use
-cases are custom functions like `apdex <https://github.com/getsentry/snuba/blob/10b747da57d7d833374984d5eb31151393577911/snuba/query/processors/performance_expressions.py#L12-L20>`_,
-or time bucketing like the `time series processor <https://github.com/getsentry/snuba/blob/master/snuba/query/processors/timeseries_processor.py>`_.
+cases are custom functions like ``apdex`` in the
+`custom function processor <https://github.com/getsentry/snuba/blob/master/snuba/query/processors/logical/custom_function.py>`_,
+or time bucketing like the `time series processor <https://github.com/getsentry/snuba/blob/master/snuba/query/processors/logical/timeseries_processor.py>`_.
 
 Query processors are not supposed to depend on other processors to be executed
 before or after and should be independent from each other.
@@ -85,7 +85,7 @@ for performance reasons as some can respond to some queries faster.
 At the end of the logical processing phase (which is entirely based on the entity)
 the storage selector can inspect the query and pick the appropriate storage for
 the query. Storage selectors are defined in the entity data model and implement
-this `interface <https://github.com/getsentry/snuba/blob/master/snuba/datasets/storage.py#L155-L165>`_.
+the `QueryStorageSelector <https://github.com/getsentry/snuba/blob/master/snuba/datasets/entities/storage_selectors/__init__.py>`_ interface.
 An example is the Errors entity, which has two storages, one is for consistent
 queries (they are routed to the same nodes where events are written) and the
 other only includes replicas we do not write onto to serve most queries. This
@@ -108,7 +108,8 @@ Contrarily to query processors, translation rules do not have full context
 on the query and can only translate an individual expression. This allows us
 to compose translation rules easily and reuse them across entities.
 
-`These <https://github.com/getsentry/snuba/blob/master/snuba/datasets/entities/transactions.py#L33-L81>`_
+The ``translation_mappers`` in
+`transactions.yaml <https://github.com/getsentry/snuba/blob/master/snuba/datasets/configuration/transactions/entities/transactions.yaml>`_
 are the translation rules for the transactions entity.
 
 Physical Query Processors
@@ -117,7 +118,7 @@ Physical Query Processors
 Physical query processors work in a very similar way compared to the Logical
 query processors. Their interface is very similar and the semantics is the same.
 The difference is that they operate on the physical query and, as such, they
-are mainly designed for optimizations. For example `this processor <https://github.com/getsentry/snuba/blob/master/snuba/query/processors/mapping_optimizer.py>`_
+are mainly designed for optimizations. For example `this processor <https://github.com/getsentry/snuba/blob/master/snuba/query/processors/physical/mapping_optimizer.py>`_
 finds equality conditions on tags and replace them with the equivalent condition
 on a tags hashmap (where we have a bloom filter index) making the filtering
 operation faster.

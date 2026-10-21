@@ -17,7 +17,7 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.topics import Topic
 
-metrics = MetricsWrapper(environment.metrics, "snuba.state")
+metrics = MetricsWrapper(environment.metrics, "state")
 logger = logging.getLogger("snuba.state")
 
 kfk: Producer | None = None

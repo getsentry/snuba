@@ -1,9 +1,7 @@
-If you don't know anything about snuba migrations see `MIGRATIONS.md` in the root folder
+# Migration groups
 
-Each folder in here represents a migration group. see `snuba/migrations/group_loader.py`
+Each directory here is a migration group. Loaders in `snuba/migrations/group_loader.py` map groups to directories.
 
-Each migration (ex. `events/0001_events_initial.py`) needs to follow the naming scheme `xxxx_migration_name.py`
-where `xxxx` is the 0 padded migration number. Migrations are applied in order of migration number. See `snuba/migrations/group_loader.py` for more info.
+Name each migration `xxxx_migration_name.py`, where `xxxx` is the zero-padded migration number, for example `events/0001_events_initial.py`. Migrations in a group run in number order.
 
-## Migration Auto-Generation
-Who wants to write their own migrations by hand? Certainly not me! See `MIGRATIONS.md` to learn how you can have them generated for you.
+To run, write, or generate migrations, see [the migrations guide](../../docs/source/migrations/overview.md).

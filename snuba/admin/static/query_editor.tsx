@@ -1,4 +1,5 @@
 import React, { useEffect, useState, ReactElement } from "react";
+import { createPortal } from "react-dom";
 
 import {
   Box,
@@ -8,6 +9,7 @@ import {
   Select,
   Stack,
   Text,
+  Tooltip,
 } from "@mantine/core";
 import { DateTimePicker } from "@mantine/dates";
 import { SQLEditor } from "SnubaAdmin/common/components/sql_editor";
@@ -110,6 +112,9 @@ function QueryEditor(props: {
   outcomeOptions?: Array<EnumOption>;
   // Replaces the saved query on mount, e.g. when opened from a link.
   initialQuery?: string;
+  // Where to put the predefined query picker instead of above the editor.
+  // It's null until that element mounts, and the picker waits for it.
+  predefinedQuerySlot?: HTMLElement | null;
 }) {
   const [query, setQuery] = useState<string>("");
   const hash = splitHash(window.location.hash).route;
@@ -210,10 +215,10 @@ function QueryEditor(props: {
   function renderPredefinedQueriesSelectors() {
     return (
       <div style={predefinedQueryStyle}>
-        <Text size="sm" fw={600}>
+        <Text size="sm" fw={600} style={{ whiteSpace: "nowrap" }}>
           Predefined query
         </Text>
-        <div>
+        <div style={predefinedQuerySelectStyle}>
           <CustomSelect
             value={selectedPredefinedQuery?.name ?? "undefined"}
             onChange={(value) => {
@@ -449,11 +454,33 @@ function QueryEditor(props: {
     return setters;
   }
 
+  const predefinedQueriesSelectors =
+    props.predefinedQueryOptions != null && renderPredefinedQueriesSelectors();
+  const description = selectedPredefinedQuery?.description;
+  // Moved into a toolbar, the picker shows its description on hover rather
+  // than as a line of text.
+  const inSlot = props.predefinedQuerySlot !== undefined;
+
   return (
     <form>
-      {props.predefinedQueryOptions != null &&
-        renderPredefinedQueriesSelectors()}
-      {selectedPredefinedQuery?.description ? (
+      {!inSlot
+        ? predefinedQueriesSelectors
+        : props.predefinedQuerySlot &&
+          createPortal(
+            <Tooltip
+              label={description}
+              disabled={!description}
+              multiline
+              width={320}
+              withArrow
+            >
+              <div>
+                {predefinedQueriesSelectors}
+              </div>
+            </Tooltip>,
+            props.predefinedQuerySlot
+          )}
+      {!inSlot && description ? (
         <Text size="sm" color="dimmed" mt={4}>
           {selectedPredefinedQuery?.description}
         </Text>
@@ -475,11 +502,15 @@ function QueryEditor(props: {
   );
 }
 
+// Label and picker on one line.
 const predefinedQueryStyle = {
-  width: "20em",
   display: "flex",
-  flexDirection: "column" as const,
-  gap: 4,
+  alignItems: "center",
+  gap: 8,
+};
+
+const predefinedQuerySelectStyle = {
+  width: "20em",
 };
 
 const timeRangeStyle = {

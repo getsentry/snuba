@@ -2,60 +2,65 @@
 Getting started with Snuba
 ==========================
 
-This is a guide to quickly start Snuba up in the context of a Sentry
-development environment.
+This guide starts Snuba in a Sentry development environment.
 
 Requirements
 ------------
 
-Snuba assumes:
+Snuba needs:
 
-1. A Clickhouse server endpoint at ``CLICKHOUSE_HOST`` (default ``127.0.0.1``).
-2. A redis instance running at ``REDIS_HOST`` (default ``127.0.0.1``). On port
-   `6379`
-3. A Kafka cluster running at ``127.0.0.1`` on port `9092`.
+1. A ClickHouse server at ``CLICKHOUSE_HOST`` (default ``127.0.0.1``).
+2. A Redis instance at ``REDIS_HOST`` (default ``127.0.0.1``) on ``REDIS_PORT``
+   (default ``6379``).
+3. A Kafka cluster at ``DEFAULT_BROKERS`` (default ``127.0.0.1:9092``).
 
-A quick way to get these services running is to set up sentry, and add the following line
-in ``~/.sentry/sentry.conf.py``::
+Snuba assumes that everything runs on UTC. Other timezones cause timezone
+mismatches.
 
-    SENTRY_EVENTSTREAM = "sentry.eventstream.kafka.KafkaEventStream"
+Start Snuba with Sentry
+-----------------------
 
-Then start the services and switch Snuba to local development::
+With a Sentry development environment set up, start the services from the
+Sentry repository::
 
     devservices up
+
+This runs Snuba in a container. To run Snuba from your Snuba checkout instead,
+switch it to local mode::
+
     devservices toggle snuba local
 
-To switch Snuba back to a containerized deployment, use::
+To switch back to the container, run::
 
     devservices toggle snuba containerized
 
-Note that Snuba assumes that everything is running on UTC time. Otherwise
-you may experience issues with timezone mismatches.
+Start only Snuba's dependencies
+-------------------------------
 
-
-Sentry + Snuba
---------------
-
-Add/change the following lines in ``~/.sentry/sentry.conf.py``::
-
-    SENTRY_SEARCH = 'sentry.search.snuba.EventsDatasetSnubaSearchBackend'
-    SENTRY_TSDB = 'sentry.tsdb.redissnuba.RedisSnubaTSDB'
-    SENTRY_EVENTSTREAM = 'sentry.eventstream.snuba.SnubaEventStream'
-
-Run::
+From the Snuba repository, start ClickHouse, Redis, and Kafka::
 
     devservices up
 
-Access raw clickhouse client (similar to psql)::
+Then start Snuba itself as described in :doc:`/contributing/environment`.
+
+Query ClickHouse directly
+-------------------------
+
+To open a ClickHouse client (similar to ``psql``), run::
 
     docker exec -it snuba-clickhouse-1 clickhouse-client
 
-Data is written into the table `sentry_local`: `select count() from sentry_local;`
+Errors are written to the ``errors_local`` table::
+
+    select count() from errors_local;
 
 Settings
 --------
 
-Settings are found in ``settings.py``
+Settings are in ``snuba/settings/__init__.py``. To override them, set
+``SNUBA_SETTINGS`` to a short name such as ``test``, which loads
+``snuba/settings/settings_test.py``, or to an absolute path to a settings file.
 
-- ``CLUSTERS`` : Provides the list of clusters and the hostname, port, and storage sets that should run on each cluster. Local vs distributed is also set per cluster.
-- ``REDIS_HOST`` : The host redis is running on.
+- ``CLUSTERS``: The ClickHouse clusters, with the host, port, and storage sets
+  for each. Each cluster also sets whether it is single node or distributed.
+- ``REDIS_HOST``: The host Redis runs on.
