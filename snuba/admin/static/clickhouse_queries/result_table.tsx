@@ -182,10 +182,13 @@ const tdStyle = {
   borderRight: `1px solid ${COLORS.BORDER_GRAY_LIGHT}`,
 };
 
-// Row numbers stay in view while scrolling sideways.
+// Row numbers stay in view while scrolling sideways. The tiny width shrinks
+// the column to its widest number, so a table stretched to fill the box gives
+// the spare room to the data columns.
 const rowNumberStyle = {
   position: "sticky" as const,
   left: 0,
+  width: 1,
   textAlign: "right" as const,
   color: COLORS.TEXT_LIGHTER,
   borderRight: border,
