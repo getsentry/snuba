@@ -140,6 +140,26 @@ class InactiveReplicas(SystemQuery):
     """
 
 
+class ReplicationDelayByTable(SystemQuery):
+    """
+    Replication delay of each replicated table on this host. A replica whose
+    absolute_delay exceeds max_replica_delay_for_distributed_queries is considered
+    stale and is skipped by distributed queries unless every replica is stale.
+    """
+
+    sql = """
+    SELECT
+        database,
+        table,
+        absolute_delay,
+        getSetting('max_replica_delay_for_distributed_queries') AS max_delay,
+        absolute_delay > max_delay AND max_delay > 0 AS considered_stale,
+        is_readonly
+    FROM system.replicas
+    ORDER BY absolute_delay DESC
+    """
+
+
 class ColumnSizeOnDisk(SystemQuery):
     """
     Shows the size of each column on disk in the selected table. Can be used to compare
