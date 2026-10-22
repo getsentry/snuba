@@ -23,7 +23,6 @@ local_tables = [
     "eap_items_2_downsample_8_local",
     "eap_items_2_downsample_64_local",
     "eap_items_2_downsample_512_local",
-
 ]
 
 
