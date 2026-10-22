@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = "==3.13.*"
 resolution-markers = [
     "platform_python_implementation == 'CPython' and sys_platform == 'darwin'",
@@ -225,10 +225,10 @@ wheels = [
 
 [[package]]
 name = "distlib"
-version = "0.3.9"
+version = "0.4.4"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/distlib-0.3.9-py2.py3-none-any.whl", hash = "sha256:47f8c22fd27c27e25a65601af709b38e4f0a45ea4fc2e710f65755fa8caaaf87" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/distlib-0.4.4-py2.py3-none-any.whl", hash = "sha256:cf09d55b1e85a89576b036aeb71550bfd68320f3f21761ca329eadadad918638" },
 ]
 
 [[package]]
@@ -690,10 +690,10 @@ wheels = [
 
 [[package]]
 name = "packaging"
-version = "24.1"
+version = "26.3"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/packaging-24.1-py3-none-any.whl", hash = "sha256:5b8f2217dbdbd2f7f384c41c628544e6d52f2d0f53c6d0c3ea61aa5d1d7ff124" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/packaging-26.3-py3-none-any.whl", hash = "sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c" },
 ]
 
 [[package]]
@@ -717,10 +717,10 @@ wheels = [
 
 [[package]]
 name = "platformdirs"
-version = "4.3.7"
+version = "4.13.5"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/platformdirs-4.3.7-py3-none-any.whl", hash = "sha256:a03875334331946f13c549dbd8f4bac7a13a50a895a0eb1e8c6a8ace80d40a94" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/platformdirs-4.13.5-py3-none-any.whl", hash = "sha256:53d3ec4280b815c1e0b02edad7f9ee8fda1ba9c0865dd9c2e6e63849ce82fc1e" },
 ]
 
 [[package]]
@@ -1569,16 +1569,17 @@ wheels = [
 
 [[package]]
 name = "virtualenv"
-version = "21.7.13"
+version = "21.14.12"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 dependencies = [
     { name = "distlib" },
     { name = "filelock" },
+    { name = "packaging" },
     { name = "platformdirs" },
     { name = "python-discovery" },
 ]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/virtualenv-21.7.13-py3-none-any.whl", hash = "sha256:1bea5af7463f59c4719db48fe739579a2a4f569c96f26c086edda85c96da9f59" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/virtualenv-21.14.12-py3-none-any.whl", hash = "sha256:7820aeaef23f1f59a96458edfc7f9d3deac937155718de15f1c9a64471e15551" },
 ]
 
 [[package]]
