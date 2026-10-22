@@ -30,6 +30,15 @@ function ResultTable(props: { columnNames: string[]; rows: unknown[][] }) {
   // "row:col" of each long value the user opened.
   const [openCells, setOpenCells] = useState<Set<string>>(new Set());
   const tall = rows.length > COLLAPSED_ROW_LIMIT;
+  // A column lines up on the right only if every value in it is a number, so
+  // one that mixes numbers and text doesn't zigzag.
+  const numericColumns = columnNames.map(
+    (_, c) =>
+      rows.some((row) => row[c] !== null && row[c] !== undefined) &&
+      rows.every(
+        (row) => row[c] === null || row[c] === undefined || isNumeric(row[c])
+      )
+  );
 
   function toggleCell(key: string) {
     setOpenCells((prev) => {
@@ -86,7 +95,7 @@ function ResultTable(props: { columnNames: string[]; rows: unknown[][] }) {
                         style={{
                           ...tdStyle,
                           backgroundColor: rowBg,
-                          textAlign: isNumeric(value) ? "right" : "left",
+                          textAlign: numericColumns[c] ? "right" : "left",
                         }}
                       >
                         {text === null ? (
@@ -182,10 +191,13 @@ const tdStyle = {
   borderRight: `1px solid ${COLORS.BORDER_GRAY_LIGHT}`,
 };
 
-// Row numbers stay in view while scrolling sideways.
+// Row numbers stay in view while scrolling sideways. The tiny width shrinks
+// the column to its widest number, so a table stretched to fill the box gives
+// the spare room to the data columns.
 const rowNumberStyle = {
   position: "sticky" as const,
   left: 0,
+  width: 1,
   textAlign: "right" as const,
   color: COLORS.TEXT_LIGHTER,
   borderRight: border,
