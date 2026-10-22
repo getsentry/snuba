@@ -3530,7 +3530,7 @@ dependencies = [
  "sentry",
  "sentry-kafka-schemas",
  "sentry-options",
- "sentry_arroyo",
+ "sentry_arroyo 2.43.1",
  "sentry_protos",
  "sentry_usage_accountant",
  "seq-macro",
@@ -3972,6 +3972,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "sentry_arroyo"
+version = "2.48.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b962caedc7c28baaf90780020e464d1f2436c6c2a38008dcfd43d96536802ce"
+dependencies = [
+ "async-stream",
+ "chrono",
+ "coarsetime",
+ "futures",
+ "metrics",
+ "once_cell",
+ "parking_lot",
+ "rand 0.8.6",
+ "rdkafka",
+ "sentry-core",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.58",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "sentry_protos"
 version = "0.80.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3985,16 +4011,15 @@ dependencies = [
 
 [[package]]
 name = "sentry_usage_accountant"
-version = "0.1.2"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88a60bb78d48a84d672855fa919d6ff462e243929f7106c89d7b08b8a818eea9"
+checksum = "9893113dbc7d8c93b69a1f81bd707af33d7636ee8a69ee622976dc3041ff7c97"
 dependencies = [
  "chrono",
- "rdkafka",
+ "sentry_arroyo 2.48.0",
  "serde",
  "serde_json",
  "thiserror 1.0.58",
- "tracing",
 ]
 
 [[package]]
