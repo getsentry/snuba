@@ -36,10 +36,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         name: Checkout code
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
-
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           enable-cache: false
@@ -67,10 +63,6 @@ jobs:
           client-id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
           private-key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
-
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           # we just cache the venv-dir directly in action-setup-venv
@@ -81,7 +73,8 @@ jobs:
 
           cache-dependency-path: uv.lock
           # NOTE: can't pass --only-dev yet since we're missing some mypy stub packages
-          install-cmd: uv sync --frozen --active
+          # rust_snuba is skipped: none of the hooks import the compiled extension.
+          install-cmd: uv sync --frozen --active --no-install-package rust-snuba
 
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
         with:
@@ -130,10 +123,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         name: Checkout code
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
-
       - name: Install protoc
         uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3
         with:
@@ -161,10 +150,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         name: Checkout code
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
-
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           # we just cache the venv-dir directly in action-setup-venv
@@ -174,9 +159,16 @@ jobs:
         with:
 
           cache-dependency-path: uv.lock
-          install-cmd: uv sync --frozen --active
+          # The validator only needs snuba's Python deps, not the rust_snuba extension.
+          install-cmd: uv sync --frozen --active --no-default-groups --no-install-package rust-snuba
 
       - name: Validate configs
+        env:
+          # Schema validation only runs when VALIDATE_DATASET_YAMLS_ON_STARTUP is
+          # set, which the test settings do (same as the pre-commit hook).
+          SNUBA_SETTINGS: test
+          # Use the venv prepared above; a sync here would build rust_snuba.
+          UV_NO_SYNC: "1"
         run: |
           make validate-configs
 
