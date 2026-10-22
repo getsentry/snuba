@@ -1,5 +1,6 @@
 import copy
 import logging
+from collections import Counter
 from typing import Any
 
 import pytest
@@ -7,8 +8,12 @@ import simplejson as json
 from flask import Response, jsonify
 from flask.testing import FlaskClient
 
+from snuba.clickhouse.connect import ClickhouseConnectPool
+from snuba.datasets.factory import get_dataset
+from snuba.datasets.schemas.tables import TableSchema
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.parser.exceptions import ParsingException
+from snuba.redis import all_redis_clients
 from snuba.web.views import application, dump_payload, handle_invalid_query
 
 invalid_query_exception_test_cases = [
@@ -51,6 +56,68 @@ def test_drop_allowed_when_debug_env_set(
     monkeypatch.setattr("snuba.web.views.all_redis_clients", lambda: [])
     response = snuba_api.post("/tests/events/drop")
     assert response.status_code == 200
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+def test_drop_truncates_every_table_once(
+    snuba_api: FlaskClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    commands: list[tuple[str, int, str]] = []
+    original_command = ClickhouseConnectPool.command
+
+    def record_command(
+        self: ClickhouseConnectPool, statement: str, *args: Any, **kwargs: Any
+    ) -> Any:
+        commands.append((self.host, self.port, statement))
+        return original_command(self, statement, *args, **kwargs)
+
+    monkeypatch.setattr(ClickhouseConnectPool, "command", record_command)
+
+    # The datasets Sentry's test suite drops before each Snuba test.
+    for dataset_name in [
+        "events_analytics_platform",
+        "events",
+        "functions",
+        "groupedmessage",
+        "transactions",
+        "metrics",
+        "search_issues",
+        "group_attributes",
+    ]:
+        expected = set()
+        for entity in get_dataset(dataset_name).get_all_entities():
+            for storage in entity.get_all_storages():
+                schema = storage.get_schema()
+                assert isinstance(schema, TableSchema)
+                cluster = storage.get_cluster()
+                for node in [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]:
+                    expected.add(
+                        (
+                            node.host_name,
+                            node.port,
+                            f"TRUNCATE TABLE IF EXISTS {cluster.get_database()}."
+                            f"{schema.get_local_table_name()}",
+                        )
+                    )
+
+        commands.clear()
+        assert snuba_api.post(f"/tests/{dataset_name}/drop").status_code == 200
+        truncates = Counter(c for c in commands if c[2].startswith("TRUNCATE"))
+        assert set(truncates) == expected, dataset_name
+        assert all(count == 1 for count in truncates.values()), dataset_name
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+def test_drop_flushes_every_redis_client(snuba_api: FlaskClient) -> None:
+    for i, redis_client in enumerate(all_redis_clients()):
+        redis_client.set(f"test_drop_{i}", "1")
+
+    assert snuba_api.post("/tests/events/drop").status_code == 200
+
+    for redis_client in all_redis_clients():
+        assert redis_client.dbsize() == 0
 
 
 def test_response_dumping() -> None:
