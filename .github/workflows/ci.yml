@@ -139,6 +139,11 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+      # The runner's system Python can be newer than PyO3 supports.
+      - uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c # v5.0.0
+        with:
+          python-version-file: .python-version
+
       - name: Install Rust Toolchain
         run: |
           rustup toolchain install stable --profile minimal --no-self-update

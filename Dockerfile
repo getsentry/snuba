@@ -1,4 +1,4 @@
-ARG PYTHON_VERSION=3.13.12
+ARG PYTHON_VERSION=3.13.15
 
 FROM ghcr.io/getsentry/image-mirror-library-python:${PYTHON_VERSION}-slim-trixie AS build_base
 
