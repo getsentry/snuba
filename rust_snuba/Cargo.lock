@@ -3949,13 +3949,15 @@ dependencies = [
 
 [[package]]
 name = "sentry_arroyo"
-version = "2.43.1"
-source = "git+https://github.com/getsentry/arroyo?branch=rbroughan%2Fpull-based-arroyo-part-2#1bf50571d5492cf6c208341aa8a95342cf88177b"
+version = "2.48.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b962caedc7c28baaf90780020e464d1f2436c6c2a38008dcfd43d96536802ce"
 dependencies = [
  "async-stream",
  "chrono",
  "coarsetime",
  "futures",
+ "metrics",
  "once_cell",
  "parking_lot",
  "rand 0.8.6",

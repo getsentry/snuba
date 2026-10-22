@@ -8,8 +8,8 @@ use serde::{Serialize, Serializer};
 use std::collections::{BTreeMap, HashMap};
 use uuid::Uuid;
 
+use crate::{counter, timer};
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
-use sentry_arroyo::{counter, timer};
 use sentry_options::options;
 use sentry_protos::snuba::v1::any_value::Value;
 use sentry_protos::snuba::v1::{ArrayValue, TraceItem, TraceItemType};
