@@ -59,5 +59,6 @@ class Migration(migration.ClickhouseNodeMigration):
                 target=OperationTarget.LOCAL,
             )
             for table in local_tables
-            for column in _columns(None)
+            # REMOVE CODEC not supported, so rollback declares LZ4 explicitly
+            for column in _columns(["LZ4"])
         ]
