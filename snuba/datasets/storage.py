@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -20,7 +20,10 @@ from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
 from snuba.query.allocation_policies import AllocationPolicy
-from snuba.query.allocation_policies.resolver import get_active_allocation_policies
+from snuba.query.allocation_policies.resolver import (
+    get_active_allocation_policies,
+    get_active_delete_allocation_policies,
+)
 from snuba.query.exceptions import QueryPlanException
 from snuba.query.processors.condition_checkers import ConditionChecker
 from snuba.query.processors.physical import ClickhouseQueryProcessor
@@ -164,8 +167,12 @@ class ReadableTableStorage(ReadableStorage):
     def get_mandatory_condition_checkers(self) -> Sequence[ConditionChecker]:
         return self.__mandatory_condition_checkers
 
-    def get_delete_allocation_policies(self) -> list[AllocationPolicy]:
-        return self.__delete_allocation_policies
+    def get_delete_allocation_policies(
+        self, tenant_ids: Mapping[str, str | int] | None = None
+    ) -> list[AllocationPolicy]:
+        return self.__delete_allocation_policies or get_active_delete_allocation_policies(
+            ResourceIdentifier(self.get_storage_key()), tenant_ids
+        )
 
     def get_deletion_settings(self) -> DeletionSettings:
         return self.__deletion_settings

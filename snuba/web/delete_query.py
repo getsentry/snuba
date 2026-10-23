@@ -324,9 +324,10 @@ def _get_attribution_info(attribution_info: Mapping[str, Any]) -> AttributionInf
 
 def _get_delete_allocation_policies(
     storage: WritableTableStorage,
+    tenant_ids: Mapping[str, str | int],
 ) -> list[AllocationPolicy]:
     """mostly here to be able to stub easily in tests"""
-    return storage.get_delete_allocation_policies()
+    return storage.get_delete_allocation_policies(tenant_ids)
 
 
 def _execute_query(
@@ -343,7 +344,7 @@ def _execute_query(
     """
 
     formatted_query = format_query(query)
-    allocation_policies = _get_delete_allocation_policies(storage)
+    allocation_policies = _get_delete_allocation_policies(storage, attribution_info.tenant_ids)
     query_id = uuid.uuid4().hex
     query_settings.push_clickhouse_setting("query_id", query_id)
     result = None

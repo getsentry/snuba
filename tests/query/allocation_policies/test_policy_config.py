@@ -7,6 +7,8 @@ import pytest
 from sentry_options.testing import override_options
 
 from snuba.configs.configuration import ResourceIdentifier
+from snuba.datasets.storages.factory import get_writable_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import AllocationPolicy, PassthroughPolicy
 from snuba.query.allocation_policies.policy_config import BASE_KEY, REGION_KEY
 from snuba.query.allocation_policies.resolver import (
@@ -401,3 +403,29 @@ def test_delete_policies_only_apply_to_deletes() -> None:
 
 def test_delete_policies_unset_is_empty() -> None:
     assert get_active_delete_allocation_policies(ResourceIdentifier("search_issues")) == []
+
+
+def test_storage_delete_policies_come_from_option() -> None:
+    config = {
+        "resources": {
+            "search_issues": {
+                "delete_policies": {"delete_concurrent_rate_limit": {"concurrent_limit": 3}},
+                "overrides": [
+                    {
+                        "match": {"organization_id": [1]},
+                        "delete_policies": {
+                            "delete_concurrent_rate_limit": {"concurrent_limit": 1}
+                        },
+                    }
+                ],
+            }
+        }
+    }
+    storage = get_writable_storage(StorageKey.SEARCH_ISSUES)
+    with override_policy_config(base=config):
+        (default,) = storage.get_delete_allocation_policies()
+        (for_org_1,) = storage.get_delete_allocation_policies({"organization_id": 1})
+
+    assert default.class_name() == "DeleteConcurrentRateLimitAllocationPolicy"
+    assert default.get_config_value("concurrent_limit") == 3
+    assert for_org_1.get_config_value("concurrent_limit") == 1
