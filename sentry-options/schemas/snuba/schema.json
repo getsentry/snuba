@@ -425,7 +425,401 @@
         }
       },
       "default": {},
-      "description": "Which AllocationPolicy classes to construct for a ResourceIdentifier. Keyed by resource (storage key for SNQL, 'EAP' for routing strategies). Each resource is a list of match blocks ({match, policies, remove?, thresholds?}). match keys (organization_id, project_id, referrer) are lists; AND across keys, OR within a key; match: {} always matches. Matching blocks apply in file order: remove names, then add/replace policies by name. Each policy item requires name. A configured policy is active. Optional per-policy settings (is_enforced, concurrent_limit, max_threads) are applied as constructor default_config_overrides. Block-level thresholds (a reject map of load ceilings keyed by LoadInfo field) are copied onto every policy in the block and gate dynamic pardoning. An absent or empty result falls back to PassthroughPolicy. Managed in sentry-options-automator."
+      "description": "Legacy format, being replaced by allocation_policies.base / allocation_policies.region (a resource configured there ignores this option). Which AllocationPolicy classes to construct for a ResourceIdentifier. Keyed by resource (storage key for SNQL, 'EAP' for routing strategies). Each resource is a list of match blocks ({match, policies, remove?, thresholds?}). match keys (organization_id, project_id, referrer) are lists; AND across keys, OR within a key; match: {} always matches. Matching blocks apply in file order: remove names, then add/replace policies by name. Each policy item requires name. A configured policy is active. Optional per-policy settings (is_enforced, concurrent_limit, max_threads) become that policy's config defaults. Block-level thresholds (a reject map of load ceilings keyed by LoadInfo field) are copied onto every policy in the block and gate dynamic pardoning. An absent or empty result falls back to PassthroughPolicy. Managed in sentry-options-automator."
+    },
+    "allocation_policies.base": {
+      "type": "object",
+      "properties": {
+        "defaults": {
+          "type": "object",
+          "optional": true,
+          "properties": {
+            "enforce": { "type": "boolean", "optional": true },
+            "pardonable": { "type": "boolean", "optional": true },
+            "max_threads": { "type": "integer", "optional": true },
+            "thresholds": {
+              "type": "object",
+              "optional": true,
+              "properties": {
+                "reject": {
+                  "type": "object",
+                  "optional": true,
+                  "properties": {
+                    "cluster_load": { "type": "number", "optional": true },
+                    "concurrent_queries": { "type": "number", "optional": true },
+                    "cgroup_user_time_normalized": { "type": "number", "optional": true },
+                    "disk_inflight_ops": { "type": "number", "optional": true },
+                    "memory_allocated": { "type": "number", "optional": true },
+                    "part_mutation": { "type": "number", "optional": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "resources": {
+          "type": "object",
+          "optional": true,
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "enforce": { "type": "boolean", "optional": true },
+              "pardonable": { "type": "boolean", "optional": true },
+              "max_threads": { "type": "integer", "optional": true },
+              "thresholds": {
+                "type": "object",
+                "optional": true,
+                "properties": {
+                  "reject": {
+                    "type": "object",
+                    "optional": true,
+                    "properties": {
+                      "cluster_load": { "type": "number", "optional": true },
+                      "concurrent_queries": { "type": "number", "optional": true },
+                      "cgroup_user_time_normalized": { "type": "number", "optional": true },
+                      "disk_inflight_ops": { "type": "number", "optional": true },
+                      "memory_allocated": { "type": "number", "optional": true },
+                      "part_mutation": { "type": "number", "optional": true }
+                    }
+                  }
+                }
+              },
+              "policies": {
+                "type": "object",
+                "optional": true,
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "enforce": { "type": "boolean", "optional": true },
+                    "pardonable": { "type": "boolean", "optional": true },
+                    "max_threads": { "type": "integer", "optional": true },
+                    "enabled": { "type": "boolean", "optional": true },
+                    "cap_instead_of_reject": { "type": "boolean", "optional": true },
+                    "referrer_limits": {
+                      "type": "object",
+                      "optional": true,
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "max_threads": { "type": "integer" },
+                          "concurrent_limit": { "type": "integer" }
+                        }
+                      }
+                    }
+                  },
+                  "additionalProperties": { "type": "number" }
+                }
+              },
+              "delete_policies": {
+                "type": "object",
+                "optional": true,
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "enforce": { "type": "boolean", "optional": true },
+                    "pardonable": { "type": "boolean", "optional": true },
+                    "max_threads": { "type": "integer", "optional": true },
+                    "enabled": { "type": "boolean", "optional": true },
+                    "cap_instead_of_reject": { "type": "boolean", "optional": true },
+                    "referrer_limits": {
+                      "type": "object",
+                      "optional": true,
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "max_threads": { "type": "integer" },
+                          "concurrent_limit": { "type": "integer" }
+                        }
+                      }
+                    }
+                  },
+                  "additionalProperties": { "type": "number" }
+                }
+              },
+              "overrides": {
+                "type": "array",
+                "optional": true,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "match": {
+                      "type": "object",
+                      "properties": {
+                        "organization_id": {
+                          "type": "array",
+                          "optional": true,
+                          "items": { "type": "integer" }
+                        },
+                        "project_id": {
+                          "type": "array",
+                          "optional": true,
+                          "items": { "type": "integer" }
+                        },
+                        "referrer": {
+                          "type": "array",
+                          "optional": true,
+                          "items": { "type": "string" }
+                        }
+                      }
+                    },
+                    "policies": {
+                      "type": "object",
+                      "optional": true,
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "enforce": { "type": "boolean", "optional": true },
+                          "pardonable": { "type": "boolean", "optional": true },
+                          "max_threads": { "type": "integer", "optional": true },
+                          "enabled": { "type": "boolean", "optional": true },
+                          "cap_instead_of_reject": { "type": "boolean", "optional": true },
+                          "referrer_limits": {
+                            "type": "object",
+                            "optional": true,
+                            "additionalProperties": {
+                              "type": "object",
+                              "properties": {
+                                "max_threads": { "type": "integer" },
+                                "concurrent_limit": { "type": "integer" }
+                              }
+                            }
+                          }
+                        },
+                        "additionalProperties": { "type": "number" }
+                      }
+                    },
+                    "delete_policies": {
+                      "type": "object",
+                      "optional": true,
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "enforce": { "type": "boolean", "optional": true },
+                          "pardonable": { "type": "boolean", "optional": true },
+                          "max_threads": { "type": "integer", "optional": true },
+                          "enabled": { "type": "boolean", "optional": true },
+                          "cap_instead_of_reject": { "type": "boolean", "optional": true },
+                          "referrer_limits": {
+                            "type": "object",
+                            "optional": true,
+                            "additionalProperties": {
+                              "type": "object",
+                              "properties": {
+                                "max_threads": { "type": "integer" },
+                                "concurrent_limit": { "type": "integer" }
+                              }
+                            }
+                          }
+                        },
+                        "additionalProperties": { "type": "number" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "default": {},
+      "description": "Allocation policy config, keyed by resource (storage key for SnQL, 'EAP' for RPC routing) under 'resources'. A setting resolves most-specific-first: matching override > policy > resource > 'defaults'. Only enforce, pardonable, max_threads and thresholds are inherited from 'defaults' and the resource. policies / delete_policies map a policy key (e.g. concurrent_rate_limit) to its settings; delete_policies limit delete queries only. overrides[].match (organization_id, project_id, referrer lists; AND across keys, OR within) patches settings field by field; among matching overrides, more matched keys win, ties go to the later one. enabled: false removes a policy. A resource listed here ignores the legacy allocation_policies option; other resources still use it. See snuba/query/allocation_policies/CONFIG.md. Managed in sentry-options-automator. Set in the default target only; regions add allocation_policies.region on top."
+    },
+    "allocation_policies.region": {
+      "type": "object",
+      "properties": {
+        "defaults": {
+          "type": "object",
+          "optional": true,
+          "properties": {
+            "enforce": { "type": "boolean", "optional": true },
+            "pardonable": { "type": "boolean", "optional": true },
+            "max_threads": { "type": "integer", "optional": true },
+            "thresholds": {
+              "type": "object",
+              "optional": true,
+              "properties": {
+                "reject": {
+                  "type": "object",
+                  "optional": true,
+                  "properties": {
+                    "cluster_load": { "type": "number", "optional": true },
+                    "concurrent_queries": { "type": "number", "optional": true },
+                    "cgroup_user_time_normalized": { "type": "number", "optional": true },
+                    "disk_inflight_ops": { "type": "number", "optional": true },
+                    "memory_allocated": { "type": "number", "optional": true },
+                    "part_mutation": { "type": "number", "optional": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "resources": {
+          "type": "object",
+          "optional": true,
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "enforce": { "type": "boolean", "optional": true },
+              "pardonable": { "type": "boolean", "optional": true },
+              "max_threads": { "type": "integer", "optional": true },
+              "thresholds": {
+                "type": "object",
+                "optional": true,
+                "properties": {
+                  "reject": {
+                    "type": "object",
+                    "optional": true,
+                    "properties": {
+                      "cluster_load": { "type": "number", "optional": true },
+                      "concurrent_queries": { "type": "number", "optional": true },
+                      "cgroup_user_time_normalized": { "type": "number", "optional": true },
+                      "disk_inflight_ops": { "type": "number", "optional": true },
+                      "memory_allocated": { "type": "number", "optional": true },
+                      "part_mutation": { "type": "number", "optional": true }
+                    }
+                  }
+                }
+              },
+              "policies": {
+                "type": "object",
+                "optional": true,
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "enforce": { "type": "boolean", "optional": true },
+                    "pardonable": { "type": "boolean", "optional": true },
+                    "max_threads": { "type": "integer", "optional": true },
+                    "enabled": { "type": "boolean", "optional": true },
+                    "cap_instead_of_reject": { "type": "boolean", "optional": true },
+                    "referrer_limits": {
+                      "type": "object",
+                      "optional": true,
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "max_threads": { "type": "integer" },
+                          "concurrent_limit": { "type": "integer" }
+                        }
+                      }
+                    }
+                  },
+                  "additionalProperties": { "type": "number" }
+                }
+              },
+              "delete_policies": {
+                "type": "object",
+                "optional": true,
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "enforce": { "type": "boolean", "optional": true },
+                    "pardonable": { "type": "boolean", "optional": true },
+                    "max_threads": { "type": "integer", "optional": true },
+                    "enabled": { "type": "boolean", "optional": true },
+                    "cap_instead_of_reject": { "type": "boolean", "optional": true },
+                    "referrer_limits": {
+                      "type": "object",
+                      "optional": true,
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "max_threads": { "type": "integer" },
+                          "concurrent_limit": { "type": "integer" }
+                        }
+                      }
+                    }
+                  },
+                  "additionalProperties": { "type": "number" }
+                }
+              },
+              "overrides": {
+                "type": "array",
+                "optional": true,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "match": {
+                      "type": "object",
+                      "properties": {
+                        "organization_id": {
+                          "type": "array",
+                          "optional": true,
+                          "items": { "type": "integer" }
+                        },
+                        "project_id": {
+                          "type": "array",
+                          "optional": true,
+                          "items": { "type": "integer" }
+                        },
+                        "referrer": {
+                          "type": "array",
+                          "optional": true,
+                          "items": { "type": "string" }
+                        }
+                      }
+                    },
+                    "policies": {
+                      "type": "object",
+                      "optional": true,
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "enforce": { "type": "boolean", "optional": true },
+                          "pardonable": { "type": "boolean", "optional": true },
+                          "max_threads": { "type": "integer", "optional": true },
+                          "enabled": { "type": "boolean", "optional": true },
+                          "cap_instead_of_reject": { "type": "boolean", "optional": true },
+                          "referrer_limits": {
+                            "type": "object",
+                            "optional": true,
+                            "additionalProperties": {
+                              "type": "object",
+                              "properties": {
+                                "max_threads": { "type": "integer" },
+                                "concurrent_limit": { "type": "integer" }
+                              }
+                            }
+                          }
+                        },
+                        "additionalProperties": { "type": "number" }
+                      }
+                    },
+                    "delete_policies": {
+                      "type": "object",
+                      "optional": true,
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "enforce": { "type": "boolean", "optional": true },
+                          "pardonable": { "type": "boolean", "optional": true },
+                          "max_threads": { "type": "integer", "optional": true },
+                          "enabled": { "type": "boolean", "optional": true },
+                          "cap_instead_of_reject": { "type": "boolean", "optional": true },
+                          "referrer_limits": {
+                            "type": "object",
+                            "optional": true,
+                            "additionalProperties": {
+                              "type": "object",
+                              "properties": {
+                                "max_threads": { "type": "integer" },
+                                "concurrent_limit": { "type": "integer" }
+                              }
+                            }
+                          }
+                        },
+                        "additionalProperties": { "type": "number" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "default": {},
+      "description": "Allocation policy config, keyed by resource (storage key for SnQL, 'EAP' for RPC routing) under 'resources'. A setting resolves most-specific-first: matching override > policy > resource > 'defaults'. Only enforce, pardonable, max_threads and thresholds are inherited from 'defaults' and the resource. policies / delete_policies map a policy key (e.g. concurrent_rate_limit) to its settings; delete_policies limit delete queries only. overrides[].match (organization_id, project_id, referrer lists; AND across keys, OR within) patches settings field by field; among matching overrides, more matched keys win, ties go to the later one. enabled: false removes a policy. A resource listed here ignores the legacy allocation_policies option; other resources still use it. See snuba/query/allocation_policies/CONFIG.md. Managed in sentry-options-automator. Deep-merged over allocation_policies.base: maps merge, override lists are appended after base, other values replace."
     },
     "storage_routing_sampled_too_low_threshold": {
       "type": "object",
