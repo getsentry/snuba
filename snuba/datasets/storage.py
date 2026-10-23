@@ -137,7 +137,6 @@ class ReadableTableStorage(ReadableStorage):
         deletion_settings: DeletionSettings | None = None,
         deletion_processors: Sequence[ClickhouseQueryProcessor] | None = None,
         mandatory_condition_checkers: Sequence[ConditionChecker] | None = None,
-        allocation_policies: list[AllocationPolicy] | None = None,
         delete_allocation_policies: list[AllocationPolicy] | None = None,
         required_time_column: str | None = None,
     ) -> None:
@@ -148,7 +147,6 @@ class ReadableTableStorage(ReadableStorage):
         )
         self.__deletion_processors = deletion_processors or []
         self.__mandatory_condition_checkers = mandatory_condition_checkers or []
-        self.__allocation_policies = allocation_policies or []
         self.__delete_allocation_policies = delete_allocation_policies or []
         super().__init__(
             storage_set_key,
@@ -165,9 +163,6 @@ class ReadableTableStorage(ReadableStorage):
 
     def get_mandatory_condition_checkers(self) -> Sequence[ConditionChecker]:
         return self.__mandatory_condition_checkers
-
-    def get_allocation_policies(self) -> list[AllocationPolicy]:
-        return self.__allocation_policies or super().get_allocation_policies()
 
     def get_delete_allocation_policies(self) -> list[AllocationPolicy]:
         return self.__delete_allocation_policies
@@ -189,7 +184,6 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         query_processors: Sequence[ClickhouseQueryProcessor],
         stream_loader: KafkaStreamLoader,
         mandatory_condition_checkers: Sequence[ConditionChecker] | None = None,
-        allocation_policies: list[AllocationPolicy] | None = None,
         delete_allocation_policies: list[AllocationPolicy] | None = None,
         replacer_processor: ReplacerProcessor[Any] | None = None,
         deletion_settings: DeletionSettings | None = None,
@@ -209,7 +203,6 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
             deletion_settings,
             deletion_processors,
             mandatory_condition_checkers,
-            allocation_policies,
             delete_allocation_policies,
             required_time_column=required_time_column,
         )
