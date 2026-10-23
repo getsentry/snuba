@@ -412,7 +412,7 @@ impl TryFrom<TraceItem> for EAPItem {
             project_id: from.project_id,
             item_type: from.item_type as u8,
             trace_id: Uuid::parse_str(&from.trace_id)?,
-            session_id: parse_uuid_or_random(&from.session_id),
+            session_id: parse_uuid_or_nil(&from.session_id),
             ai_conversation_id: from.conversation_id,
             item_id: read_item_id(from.item_id)?,
             timestamp: timestamp.seconds as u32,
@@ -487,17 +487,11 @@ fn fnv_1a(input: &[u8]) -> u32 {
 }
 
 /// Parse a UUID-valued TraceItem field (e.g. `session_id`) for its non-nullable
-/// UUID column. An absent, malformed, or all-zero value is replaced with a fresh
-/// random UUID, avoiding the all-zero "magic" UUID that would balloon the
-/// bloom-filter index with a single high-frequency value.
-fn parse_uuid_or_random(value: &str) -> Uuid {
-    if value.is_empty() {
-        return Uuid::new_v4();
-    }
-    match Uuid::parse_str(value) {
-        Ok(uuid) if !uuid.is_nil() => uuid,
-        _ => Uuid::new_v4(),
-    }
+/// UUID column. An absent or malformed value is stored as the nil UUID,
+/// compressing to almost nothing and adds just a single entry per granule
+/// to the column's bloom-filter index.
+fn parse_uuid_or_nil(value: &str) -> Uuid {
+    Uuid::parse_str(value).unwrap_or_else(|_| Uuid::nil())
 }
 
 fn read_item_id(from: Vec<u8>) -> anyhow::Result<u128> {
@@ -1615,7 +1609,7 @@ mod tests {
         assert_eq!(row.item_id, item_id.as_u128());
         assert_eq!(row.sampling_weight, 1);
         assert!((row.sampling_factor - 1.0).abs() < f64::EPSILON);
-        assert!(!row.session_id.is_nil());
+        assert!(row.session_id.is_nil());
         assert!(row.ai_conversation_id.is_empty());
     }
 
@@ -1639,13 +1633,13 @@ mod tests {
         let trace_item = generate_trace_item(item_id);
 
         let eap_item = EAPItem::try_from(trace_item).unwrap();
-        // Absent conversation id → empty String; absent session id → random UUID.
+        // Absent conversation id → empty String; absent session id → nil UUID.
         assert!(eap_item.ai_conversation_id.is_empty());
-        assert!(!eap_item.session_id.is_nil());
+        assert!(eap_item.session_id.is_nil());
     }
 
     #[test]
-    fn test_session_id_malformed_is_randomized() {
+    fn test_session_id_malformed_is_nil() {
         let item_id = Uuid::new_v4();
         let mut trace_item = generate_trace_item(item_id);
         trace_item.conversation_id = "not-a-uuid".to_string();
@@ -1654,17 +1648,17 @@ mod tests {
         let eap_item = EAPItem::try_from(trace_item).unwrap();
         // The conversation id is free-form, so it is stored verbatim.
         assert_eq!(eap_item.ai_conversation_id, "not-a-uuid");
-        assert!(!eap_item.session_id.is_nil());
+        assert!(eap_item.session_id.is_nil());
     }
 
     #[test]
-    fn test_explicit_nil_session_id_is_randomized() {
+    fn test_explicit_nil_session_id_stays_nil() {
         let item_id = Uuid::new_v4();
         let mut trace_item = generate_trace_item(item_id);
         trace_item.session_id = Uuid::nil().to_string();
 
         let eap_item = EAPItem::try_from(trace_item).unwrap();
-        assert!(!eap_item.session_id.is_nil());
+        assert!(eap_item.session_id.is_nil());
     }
 
     #[test]
