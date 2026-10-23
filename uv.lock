@@ -29,6 +29,19 @@ wheels = [
 ]
 
 [[package]]
+name = "alembic"
+version = "1.20.0"
+source = { registry = "https://pypi.devinfra.sentry.io/simple" }
+dependencies = [
+    { name = "mako" },
+    { name = "sqlalchemy" },
+    { name = "typing-extensions" },
+]
+wheels = [
+    { url = "https://pypi.devinfra.sentry.io/wheels/alembic-1.20.0-py3-none-any.whl", hash = "sha256:77eb101048d95f982c0353e9233404889dcd7a6fc244c107836c0e2fc9cf7d9d" },
+]
+
+[[package]]
 name = "ast-serialize"
 version = "0.3.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
@@ -578,6 +591,17 @@ wheels = [
 ]
 
 [[package]]
+name = "mako"
+version = "1.4.3"
+source = { registry = "https://pypi.devinfra.sentry.io/simple" }
+dependencies = [
+    { name = "markupsafe" },
+]
+wheels = [
+    { url = "https://pypi.devinfra.sentry.io/wheels/mako-1.4.3-py3-none-any.whl", hash = "sha256:723296007c870bfd6b3f0c3230dba7198096e5269297ebf5e4eff9e7ffa39d4f" },
+]
+
+[[package]]
 name = "markdown-it-py"
 version = "4.0.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
@@ -776,6 +800,29 @@ wheels = [
     { url = "https://pypi.devinfra.sentry.io/wheels/protobuf-5.29.6-cp38-abi3-macosx_10_9_universal2.whl", hash = "sha256:b5a169e664b4057183a34bdc424540e86eea47560f3c123a0d64de4e137f9269" },
     { url = "https://pypi.devinfra.sentry.io/wheels/protobuf-5.29.6-cp38-abi3-manylinux2014_aarch64.whl", hash = "sha256:a8866b2cff111f0f863c1b3b9e7572dc7eaea23a7fae27f6fc613304046483e6" },
     { url = "https://pypi.devinfra.sentry.io/wheels/protobuf-5.29.6-cp38-abi3-manylinux2014_x86_64.whl", hash = "sha256:e3387f44798ac1106af0233c04fb8abf543772ff241169946f698b3a9a3d3ab9" },
+]
+
+[[package]]
+name = "psycopg"
+version = "3.3.6"
+source = { registry = "https://pypi.devinfra.sentry.io/simple" }
+wheels = [
+    { url = "https://pypi.devinfra.sentry.io/wheels/psycopg-3.3.6-py3-none-any.whl", hash = "sha256:a1db9f7148b06a28606767efaca51fa6f9398c5c0a3810519be69d7000bdb631" },
+]
+
+[package.optional-dependencies]
+binary = [
+    { name = "psycopg-binary", marker = "implementation_name != 'pypy'" },
+]
+
+[[package]]
+name = "psycopg-binary"
+version = "3.3.6"
+source = { registry = "https://pypi.devinfra.sentry.io/simple" }
+wheels = [
+    { url = "https://pypi.devinfra.sentry.io/wheels/psycopg_binary-3.3.6-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:373704aea331d3f3e3402c125a1543f5875e2986ebb54f97d1647942161f803f" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/psycopg_binary-3.3.6-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:cec5ea900390897d0b46130f60bc2883bf19c314f9044235217c8be88b0ef269" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/psycopg_binary-3.3.6-cp313-cp313-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:98c02090d88f2ebc0ec1e8da538f77d225ce0fffecf372aa39262e62a1b054ef" },
 ]
 
 [[package]]
@@ -1180,6 +1227,7 @@ name = "snuba"
 version = "26.11.0.dev0"
 source = { editable = "." }
 dependencies = [
+    { name = "alembic" },
     { name = "blinker" },
     { name = "click" },
     { name = "clickhouse-connect" },
@@ -1201,6 +1249,7 @@ dependencies = [
     { name = "progressbar2" },
     { name = "proto-plus" },
     { name = "protobuf" },
+    { name = "psycopg", extra = ["binary"] },
     { name = "pyasn1" },
     { name = "pyjwt", extra = ["crypto"] },
     { name = "python-dateutil" },
@@ -1220,6 +1269,7 @@ dependencies = [
     { name = "simplejson" },
     { name = "snuba-sdk" },
     { name = "sql-metadata" },
+    { name = "sqlalchemy" },
     { name = "sqlparse" },
     { name = "structlog" },
     { name = "structlog-sentry" },
@@ -1256,6 +1306,7 @@ docs = [
 
 [package.metadata]
 requires-dist = [
+    { name = "alembic", specifier = ">=1.20.0" },
     { name = "blinker", specifier = ">=1.9" },
     { name = "click", specifier = ">=8.1.7" },
     { name = "clickhouse-connect", specifier = ">=1.6.0" },
@@ -1277,6 +1328,7 @@ requires-dist = [
     { name = "progressbar2", specifier = ">=4.2.0" },
     { name = "proto-plus", specifier = ">=1.24.0" },
     { name = "protobuf", specifier = ">=5.29.5" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.3.6" },
     { name = "pyasn1", specifier = ">=0.6.4" },
     { name = "pyjwt", extras = ["crypto"], specifier = ">=2.8.0" },
     { name = "python-dateutil", specifier = ">=2.8.2" },
@@ -1296,6 +1348,7 @@ requires-dist = [
     { name = "simplejson", specifier = ">=3.17.6" },
     { name = "snuba-sdk", specifier = ">=3.0.39" },
     { name = "sql-metadata", specifier = ">=3.0.1" },
+    { name = "sqlalchemy", specifier = ">=2.1.4" },
     { name = "sqlparse", specifier = ">=0.6.0" },
     { name = "structlog", specifier = ">=22.3.0" },
     { name = "structlog-sentry", specifier = ">=2.0.0" },
@@ -1424,6 +1477,19 @@ dependencies = [
 ]
 wheels = [
     { url = "https://pypi.devinfra.sentry.io/wheels/sql_metadata-3.0.1-py3-none-any.whl", hash = "sha256:33b17891a149bfd851f5927d38fe6f133c63fca5955c016925dbc67113a07f7d" },
+]
+
+[[package]]
+name = "sqlalchemy"
+version = "2.1.4"
+source = { registry = "https://pypi.devinfra.sentry.io/simple" }
+dependencies = [
+    { name = "typing-extensions" },
+]
+wheels = [
+    { url = "https://pypi.devinfra.sentry.io/wheels/sqlalchemy-2.1.4-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:70006e9e6157200b795beeee04bd5cb15bccb40a14de595eb9f5dcf5945ed244" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/sqlalchemy-2.1.4-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:3341ddc430733cd961bc064889f42712a0b4056733a21c83176842aad67d12a6" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/sqlalchemy-2.1.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:98f7a4bfeaed3722804f737ae2bd4077b35e57d6f4531fe612bac8160cda5acd" },
 ]
 
 [[package]]

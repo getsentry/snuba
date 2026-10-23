@@ -267,6 +267,7 @@ jobs:
             "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:6.2.0"
             "ghcr.io/getsentry/image-mirror-confluentinc-cp-zookeeper:6.2.0"
             "ghcr.io/getsentry/docker-redis-cluster:7.0.10"
+            "ghcr.io/getsentry/image-mirror-library-postgres:18-alpine"
           )
           pulled=0
           for image in "${images[@]}"; do
@@ -339,6 +340,7 @@ jobs:
             "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:6.2.0"
             "ghcr.io/getsentry/image-mirror-confluentinc-cp-zookeeper:6.2.0"
             "ghcr.io/getsentry/docker-redis-cluster:7.0.10"
+            "ghcr.io/getsentry/image-mirror-library-postgres:18-alpine"
           )
           for image in "${images[@]}"; do
             if ! docker image inspect "$image" &>/dev/null; then
@@ -533,6 +535,7 @@ jobs:
             "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:6.2.0"
             "ghcr.io/getsentry/image-mirror-confluentinc-cp-zookeeper:6.2.0"
             "ghcr.io/getsentry/docker-redis-cluster:7.0.10"
+            "ghcr.io/getsentry/image-mirror-library-postgres:18-alpine"
           )
           for image in "${images[@]}"; do
             if ! docker image inspect "$image" &>/dev/null; then
