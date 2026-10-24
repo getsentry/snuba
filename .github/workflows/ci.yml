@@ -18,8 +18,18 @@ jobs:
     outputs:
       api_changes: ${{ steps.changes.outputs.api_changes }}
       devservices_changes: ${{ steps.changes.outputs.devservices_changes }}
+      sentry_sha: ${{ steps.sentry.outputs.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Resolve getsentry/sentry once so every `sentry` shard (and any rerun of
+      # failed shards) tests against the same revision.
+      - name: Resolve getsentry/sentry revision
+        id: sentry
+        run: |
+          sha=$(git ls-remote https://github.com/getsentry/sentry refs/heads/master | cut -f1)
+          test -n "$sha"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
       - name: Check for backend file changes
         uses: getsentry/paths-filter@66f7f1844185eb7fb6738ea4ea59d74bb99199e5 # v2
@@ -455,6 +465,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: getsentry/sentry
+          ref: ${{ needs.files-changed.outputs.sentry_sha }}
           path: sentry
 
       - name: Setup steps
@@ -473,6 +484,9 @@ jobs:
           # tests marked @requires_objectstore (e.g. minidump) can run.
           # minimal is only postgres+snuba and fails those tests.
           mode: backend-ci
+          # Overlap `devservices up` with the venv setup; setup-sentry still
+          # waits for it before returning.
+          early-devservices: 'true'
 
       - name: Start snuba
         run: |
@@ -498,17 +512,14 @@ jobs:
       - name: Bootstrap per-worker Snuba instances
         run: python3 sentry/.github/workflows/scripts/bootstrap-snuba.py
 
-      - name: Run snuba CI tests
+      - name: Run snuba tests
         working-directory: sentry
+        env:
+          # API changes also run the rest of the `snuba`-marked tests. One
+          # pytest run instead of two saves a full collection + DB setup.
+          MARKERS: ${{ needs.files-changed.outputs.api_changes == 'true' && 'snuba_ci or snuba' || 'snuba_ci' }}
         run: |
-          export PYTEST_ADDOPTS="$PYTEST_ADDOPTS -k 'not __In' -m snuba_ci -n $XDIST_WORKERS --dist=loadfile -vv"
-          make test-python-ci
-
-      - name: Run full tests
-        if: needs.files-changed.outputs.api_changes == 'true'
-        working-directory: sentry
-        run: |
-          export PYTEST_ADDOPTS="$PYTEST_ADDOPTS -k 'not __In' -m 'snuba and not snuba_ci' -n $XDIST_WORKERS --dist=loadfile -vv"
+          export PYTEST_ADDOPTS="$PYTEST_ADDOPTS -k 'not __In' -m '$MARKERS' -n $XDIST_WORKERS --dist=loadfile -vv"
           make test-python-ci
 
   clickhouse-versions:
