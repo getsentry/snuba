@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Snuba migration modes &#8212; Snuba 26.11.0.dev0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=27fed22d" />
+    <script src="../_static/documentation_options.js?v=8faed7fb"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Snuba development environment" href="../contributing/environment.html" />
+    <link rel="prev" title="Snuba migrations" href="overview.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="snuba-migration-modes">
+<h1>Snuba migration modes<a class="headerlink" href="#snuba-migration-modes" title="Link to this heading">¶</a></h1>
+<p>Snuba runs migrations against a single node ClickHouse (local mode) or a
+replicated, sharded cluster (distributed mode). The mode comes from
+<code class="docutils literal notranslate"><span class="pre">settings.CLUSTERS</span></code>. See <a class="reference internal" href="overview.html"><span class="doc">Snuba migrations</span></a> for the settings.</p>
+<section id="local-mode">
+<h2>Local mode<a class="headerlink" href="#local-mode" title="Link to this heading">¶</a></h2>
+<p>Local mode is the default. The ClickHouse container that <code class="docutils literal notranslate"><span class="pre">devservices</span> <span class="pre">up</span></code>
+starts is a single node, and the default settings use it:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">devservices</span> <span class="n">up</span>
+<span class="n">snuba</span> <span class="n">migrations</span> <span class="n">migrate</span> <span class="o">--</span><span class="n">force</span>
+</pre></div>
+</div>
+</section>
+<section id="distributed-mode">
+<h2>Distributed mode<a class="headerlink" href="#distributed-mode" title="Link to this heading">¶</a></h2>
+<p>Distributed mode needs a ClickHouse cluster with ZooKeeper. The devservices
+ClickHouse is a single node, so it cannot run distributed migrations.</p>
+<p>To run the distributed migration tests locally, run:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">make</span> <span class="n">test</span><span class="o">-</span><span class="n">distributed</span><span class="o">-</span><span class="n">migrations</span>
+</pre></div>
+</div>
+<p>The target builds a Snuba image and starts the <code class="docutils literal notranslate"><span class="pre">multi_node</span></code> profile of
+<code class="docutils literal notranslate"><span class="pre">docker-compose.gcb.yml</span></code>. That profile runs ZooKeeper, a query node, and four
+storage nodes, and runs the tests in <code class="docutils literal notranslate"><span class="pre">test_distributed_migrations/</span></code>.</p>
+<p>To run migrations against your own cluster, set <code class="docutils literal notranslate"><span class="pre">SNUBA_SETTINGS=distributed</span></code>.
+This loads <code class="docutils literal notranslate"><span class="pre">snuba/settings/settings_distributed.py</span></code>, which assigns every
+storage set to the one-shard cluster <code class="docutils literal notranslate"><span class="pre">cluster_one_sh</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">SNUBA_SETTINGS</span><span class="o">=</span><span class="n">distributed</span> <span class="n">snuba</span> <span class="n">migrations</span> <span class="n">migrate</span> <span class="o">--</span><span class="n">force</span>
+</pre></div>
+</div>
+<p>More information about distributed tables is in the
+<a class="reference external" href="https://clickhouse.com/docs/engines/table-engines/special/distributed">ClickHouse documentation</a>.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="../index.html">
+              <img class="logo" src="../_static/snuba.svg" alt="Logo of Snuba"/>
+            </a></p>
+<h1 class="logo"><a href="../index.html">Snuba</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../getstarted.html">Getting started with Snuba</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/overview.html">Snuba Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/overview.html#snuba-within-a-sentry-deployment">Snuba within a Sentry Deployment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/datamodel.html">Snuba Data Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/slicing.html">Snuba Data Slicing (under development)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/slicing.html#configuring-a-slice">Configuring a slice</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/slicing.html#working-in-a-sliced-environment">Working in a Sliced Environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/queryprocessing.html">Snuba Query Processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/consumer.html">Snuba Consumers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../configuration/overview.html">Dataset Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../query/overview.html">Querying Snuba</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../language/snql.html">The SnQL query language</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../language/mql.html">The MQL query language</a></li>
+<li class="toctree-l1"><a class="reference internal" href="overview.html">Snuba migrations</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Snuba migration modes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../contributing/environment.html">Snuba development environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/topology.html">ClickHouse Topology Best Practices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/schema_design.html">ClickHouse Schema Design Best Practices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/supported_versions.html">ClickHouse supported versions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profiler.html">Profiling</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="overview.html" title="previous chapter">Snuba migrations</a></li>
+      <li>Next: <a href="../contributing/environment.html" title="next chapter">Snuba development environment</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2021, Sentry Team and Contributors.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.0.4</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../_sources/migrations/modes.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
