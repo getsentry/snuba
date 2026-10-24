@@ -9,6 +9,10 @@ jobs:
   docs:
     name: Sphinx
     runs-on: ubuntu-latest
+    env:
+      # `make` targets call `uv run`; use the venv prepared below instead of
+      # re-syncing, which would build rust_snuba.
+      UV_NO_SYNC: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -17,15 +21,12 @@ jobs:
           # we just cache the venv-dir directly in action-setup-venv
           enable-cache: false
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
-
       - uses: getsentry/action-setup-venv@5a80476d175edf56cb205b08bc58986fa99d1725 # v3.2.0
         with:
 
           cache-dependency-path: uv.lock
-          install-cmd: echo
+          # The docs build doesn't need the rust_snuba extension, so skip compiling it.
+          install-cmd: uv sync --locked --active --no-default-groups --group docs --no-install-package rust-snuba
 
       - name: Generate config schema docs
         run: |
