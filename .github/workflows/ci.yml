@@ -123,11 +123,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         name: Checkout code
 
-      - name: Install protoc
-        uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
       # The runner's system Python can be newer than PyO3 supports.
       - uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c # v5.0.0
         with:
@@ -137,6 +132,13 @@ jobs:
         run: |
           rustup toolchain install stable --profile minimal --no-self-update
           rustup component add clippy rustfmt --toolchain stable
+
+      # Keyed on the resolved rustc version and Cargo.lock. Only master saves,
+      # so PRs reuse master's dependency builds without churning the cache.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: rust_snuba
+          save-if: ${{ github.ref == 'refs/heads/master' }}
 
       - name: Run linter
         run: |
@@ -342,10 +344,42 @@ jobs:
         run: |
           docker network create --attachable cloudbuild
 
+      # The CI image only ships the release build, so `cargo test` has to
+      # compile the test profile. Cache its target dir (outside the image, so
+      # the other test jobs don't download it), keyed on the image's rustc.
+      - name: Compute Rust test build cache key
+        id: rust-target-key
+        if: ${{ matrix.snuba_settings == 'test_rust' }}
+        run: |
+          rustc=$(docker run --rm --user root --entrypoint rustc -w /usr/src/snuba/rust_snuba \
+            ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} -vV | sed -n 's/^commit-hash: //p')
+          echo "prefix=rust-test-target-${rustc}-" >> "$GITHUB_OUTPUT"
+          echo "key=rust-test-target-${rustc}-${{ hashFiles('rust_snuba/Cargo.lock') }}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Rust test build cache
+        id: rust-target-cache
+        if: ${{ matrix.snuba_settings == 'test_rust' }}
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
+        with:
+          path: .rust-target
+          key: ${{ steps.rust-target-key.outputs.key }}
+          restore-keys: ${{ steps.rust-target-key.outputs.prefix }}
+
       - name: Docker Snuba Rust tests
         run: |
-          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=test docker compose -f docker-compose.gcb.yml run --rm snuba-test-rust
+          mkdir -p .rust-target
+          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=test docker compose -f docker-compose.gcb.yml run --rm \
+            -e CARGO_INCREMENTAL=0 \
+            -v "$PWD/.rust-target:/usr/src/snuba/rust_snuba/target" \
+            snuba-test-rust
         if: ${{ matrix.snuba_settings == 'test_rust' }}
+
+      - name: Save Rust test build cache
+        if: ${{ matrix.snuba_settings == 'test_rust' && github.ref == 'refs/heads/master' && steps.rust-target-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
+        with:
+          path: .rust-target
+          key: ${{ steps.rust-target-key.outputs.key }}
 
       - name: Docker Snuba tests
         env:
