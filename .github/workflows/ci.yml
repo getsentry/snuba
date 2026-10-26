@@ -124,7 +124,7 @@ jobs:
         name: Checkout code
 
       # The runner's system Python can be newer than PyO3 supports.
-      - uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c # v5.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version-file: .python-version
 
