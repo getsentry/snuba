@@ -30,7 +30,7 @@ schema:
 required_time_column: timestamp
 storages:
   - storage: llm_proxy_cost_raw
-    is_writable: false
+    is_writable: true
 storage_selector:
   selector: DefaultQueryStorageSelector
 query_processors:
