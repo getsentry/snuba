@@ -49,5 +49,5 @@ IMAGE_TAG="${GO_REVISION_SNUBA_REPO}"
 && k8s-deploy \
   --label-selector="${LABEL_SELECTOR}" \
   --image="us-docker.pkg.dev/sentryio/snuba-mr/image:${IMAGE_TAG}" \
-  --type="${SNUBA_API_DEPLOY_TYPE:-deployment}" \
+  --type="rollout" \
   --container-name="api"
