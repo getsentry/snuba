@@ -40,6 +40,12 @@ local migrate_stage(stage_name, region) = [
   },
 ];
 
+// Regions where snuba-api is an Argo Rollout and k8s-deploy should track the
+// Rollout instead of the (scaled to zero) Deployment it references.
+local api_rollout_regions = ['s4s2'];
+
+local is_api_rollout(region) = std.member(api_rollout_regions, region);
+
 local saas_datadog_monitor_ids = {
   us: '311884335 311884334',
   de: '311884404 311884405',
@@ -215,10 +221,13 @@ function(region) {
             ],
           },
           'deploy-primary': {
-            timeout: 1200,
+            // Argo Rollout canary steps and analyses take longer than a
+            // plain rolling update.
+            timeout: if is_api_rollout(region) then 2400 else 1200,
             elastic_profile_id: 'snuba',
             environment_variables: {
               LABEL_SELECTOR: 'service=snuba',
+              [if is_api_rollout(region) then 'SNUBA_API_DEPLOY_TYPE' else null]: 'rollout',
             },
             tasks: [
               gocdtasks.script(importstr '../bash/deploy-py.sh'),
