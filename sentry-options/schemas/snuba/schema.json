@@ -25,15 +25,15 @@
       "default": 600,
       "description": "Age threshold in seconds for consumer.dlq_by_age_sample_rate_by_storage. Messages whose Kafka broker timestamp is older than this are candidates for being routed to the DLQ."
     },
-    "experimental_healthcheck": {
+    "consumer.partition_stall_timeout_secs": {
+      "type": "integer",
+      "default": 300,
+      "description": "Timeout in seconds for --health-check partition-stall. A partition with in-flight work and no commit progress for this long is unhealthy (the health file is not touched). 0 disables stall detection (file is touched on every poll). Ignored for other --health-check values."
+    },
+    "eap_items_drop_invalid_timestamps": {
       "type": "boolean",
       "default": false,
-      "description": "When true, the consumer healthcheck strategy treats commit requests (progress) as healthy and touches the healthcheck file accordingly."
-    },
-    "generic_metrics_use_case_killswitch": {
-      "type": "string",
-      "default": "",
-      "description": "Substring-matched list of generic-metrics use case ids to drop in the consumer; a message is skipped when its use_case_id appears in this string."
+      "description": "When true, the eap-items consumer and the accepted outcomes consumer skip messages whose event timestamp is more than one week in the future or older than the item's retention_days (at most 90)."
     },
     "clickhouse_load_balancing": {
       "type": "object",
@@ -123,10 +123,23 @@
       "default": {},
       "description": "Dict mapping storage name to a grace period in minutes; eap-items messages from before the current partition older than this are routed to the DLQ. Storages with no entry have no grace-period dropping. Migrated from per-storage runtime config eap_items_dlq_grace_period_min:<storage>."
     },
+    "validate_schema": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "boolean"
+      },
+      "default": {},
+      "description": "Dict mapping storage name to whether that storage's consumer validates every message against its kafka schema before processing it. Storages with no entry default to true (validation on); false skips validation for that storage. Consumers running with --enforce-schema always validate and ignore a false here. Read once when the consumer builds its processing strategies, so a change requires a consumer restart (or a rebalance) to take effect."
+    },
     "eap_items_emit_received_at": {
       "type": "boolean",
       "default": false,
       "description": "When true, the EAP items consumer writes the Kafka broker timestamp in epoch milliseconds to the received_at column."
+    },
+    "eap_items_bytes_processed_sample_rate": {
+      "type": "integer",
+      "default": 0,
+      "description": "Emit one eap_items.item_bytes_processed distribution sample per this many messages, as an independent coin flip per message. 0 (the default) disables the distribution entirely; 1 samples every message. Negative values fall back to the default. Sized for spans: low-volume item types get proportionally fewer samples, so read their percentiles over longer windows. Only the distribution is sampled; the insertions.item_bytes_processed counter is always exact. Read per message, so changes apply without a redeploy."
     },
     "quantized_rebalance_consumer_group_delay_secs": {
       "type": "object",
@@ -243,6 +256,14 @@
       "default": false,
       "description": "When true, non-consistent EAP-items queries are routed to the read-only table replica."
     },
+    "eap_items_2_tiers": {
+      "type": "array",
+      "items": {
+        "type": "integer"
+      },
+      "default": [],
+      "description": "Sampling tiers served from the eap_items_2 tables instead of eap_items_1. 1 is the unsampled base table; 8, 64 and 512 are the downsample tiers. Any tier not listed keeps reading eap_items_1, and the empty default keeps every read on eap_items_1. Tiers are listed individually because eap_items_2's downsample tiers are populated after its base table, so tier 1 has to be able to cut over on its own; setting [1, 8, 64, 512] before the downsample partitions are attached would silently serve near-empty results. Unrecognised values are ignored."
+    },
     "use_cross_item_path_for_single_item_queries": {
       "type": "boolean",
       "default": false,
@@ -309,10 +330,40 @@
           "properties": {
             "match": {
               "type": "object",
-              "properties": {}
+              "properties": {
+                "organization_id": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  },
+                  "optional": true
+                },
+                "project_id": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  },
+                  "optional": true
+                },
+                "referrer": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "optional": true
+                }
+              }
+            },
+            "remove": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "optional": true
             },
             "policies": {
               "type": "array",
+              "optional": true,
               "items": {
                 "type": "object",
                 "properties": {
@@ -346,6 +397,27 @@
                     },
                     "optional": true
                   }
+                },
+                "additionalProperties": {
+                    "type": "number"
+                }
+              }
+            },
+            "thresholds": {
+              "type": "object",
+              "optional": true,
+              "properties": {
+                "reject": {
+                  "type": "object",
+                  "optional": true,
+                  "properties": {
+                    "cluster_load": { "type": "number", "optional": true },
+                    "concurrent_queries": { "type": "number", "optional": true },
+                    "cgroup_user_time_normalized": { "type": "number", "optional": true },
+                    "disk_inflight_ops": { "type": "number", "optional": true },
+                    "memory_allocated": { "type": "number", "optional": true },
+                    "part_mutation": { "type": "number", "optional": true }
+                  }
                 }
               }
             }
@@ -353,7 +425,7 @@
         }
       },
       "default": {},
-      "description": "Which AllocationPolicy classes to construct for a ResourceIdentifier. Keyed by resource (storage key for SNQL, 'EAP' for routing strategies). Each resource is a list of match blocks ({match, policies}). The reader uses the first block's policies list; match is reserved. Each policy item requires name. A configured policy is active. Tenant types are hardcoded on the policy class. Optional per-policy settings (is_enforced, concurrent_limit, max_threads) are applied as constructor default_config_overrides. An absent or empty entry falls back to PassthroughPolicy. Managed in sentry-options-automator."
+      "description": "Which AllocationPolicy classes to construct for a ResourceIdentifier. Keyed by resource (storage key for SNQL, 'EAP' for routing strategies). Each resource is a list of match blocks ({match, policies, remove?, thresholds?}). match keys (organization_id, project_id, referrer) are lists; AND across keys, OR within a key; match: {} always matches. Matching blocks apply in file order: remove names, then add/replace policies by name. Each policy item requires name. A configured policy is active. Optional per-policy settings (is_enforced, concurrent_limit, max_threads) are applied as constructor default_config_overrides. Block-level thresholds (a reject map of load ceilings keyed by LoadInfo field) are copied onto every policy in the block and gate dynamic pardoning. An absent or empty result falls back to PassthroughPolicy. Managed in sentry-options-automator."
     },
     "storage_routing_sampled_too_low_threshold": {
       "type": "object",
@@ -721,11 +793,6 @@
       "default": true,
       "description": "Killswitch for the MappingOptimizer flags-hashmap query optimization on the errors/errors_ro storages. When false the optimizer is a no-op."
     },
-    "generic_metrics/tags_hash_map_enabled": {
-      "type": "boolean",
-      "default": true,
-      "description": "Killswitch for the MappingOptimizer tags-hashmap query optimization on generic-metrics storages (distributions, gauges). When false the optimizer is a no-op."
-    },
     "use_sentry_metrics": {
       "type": "boolean",
       "default": false,
@@ -761,6 +828,14 @@
       "default": 4,
       "description": "max_threads ClickHouse setting used by the admin querylog query; clamped to a hard maximum of 4."
     },
+    "admin.copy_tables_allowed_target_hosts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Hostnames (or host:port) that snuba-admin may connect to even when the host is not a member of the storage's cluster: Copy Tables CREATE targets and manual host entry in System Queries. Used to bootstrap and inspect newly provisioned nodes before they are added to Snuba cluster config. Empty (the default) allows no extra hosts. Compared case-insensitively; a hostname with no port matches any port."
+    },
     "executor_queue_size_factor": {
       "type": "integer",
       "default": 10,
@@ -773,21 +848,32 @@
     },
     "use_co_occurring_attrs_v2": {
       "type": "boolean",
-      "default": false,
-      "description": "When true, the TraceItemAttributeNames RPC may read the v2 co-occurring-attributes storage (eap_item_co_occurring_attrs_v2) instead of v1. v2 is a SummingMergeTree carrying an occurrence count per attribute set (so count ordering sums that column rather than counting rows), a last_seen timestamp (which v1 lacks entirely, so ordering by COLUMN_LAST_SEEN is only honoured on v2 and degrades to COLUMN_COUNT otherwise), and one attribute-key array per type, which lets int and array-typed keys be returned with their real AttributeKey type. Enabling this is safe at any time: a request whose time range reaches back before co_occurring_attrs_v2_start_timestamp still reads v1, since v2 has no data there."
+      "default": true,
+      "description": "When true (the default), the TraceItemAttributeNames RPC may read the v2 co-occurring-attributes storage (eap_item_co_occurring_attrs_v2) instead of v1. v2 is a SummingMergeTree carrying an occurrence count per attribute set (so count ordering sums that column rather than counting rows), a last_seen timestamp (which v1 lacks entirely, so ordering by COLUMN_LAST_SEEN is only honoured on v2 and degrades to COLUMN_COUNT otherwise), and one attribute-key array per type, which lets int and array-typed keys be returned with their real AttributeKey type. Set false to roll back to v1. A request whose time range reaches back before co_occurring_attrs_v2_start_timestamp still reads v1, since v2 has no data there."
     },
     "co_occurring_attrs_v2_start_timestamp": {
       "type": "integer",
       "default": 1785110400,
       "description": "Unix timestamp of the earliest weekly date bucket the v2 co-occurring-attributes tables hold data for; TraceItemAttributeNames only reads v2 for requests whose range starts at or after it, and reads v1 otherwise. Defaults to 2026-07-27 00:00 UTC, the Monday of the week the v2 tables and their materialized view were created. Must be a Monday: the date column is bucketed weekly with toMonday() and the query rounds its lower bound down to the previous Monday, so a mid-week value would let a request read a bucket v2 never populated. Lower it only to a bucket v2 has been backfilled to."
     },
-    "eap_items_use_indexed_name_organization_ids": {
-      "type": "array",
-      "items": {
-        "type": "integer"
+    "indexed_columns": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object",
+          "properties": {
+            "indexed_column_name": {
+              "type": "string"
+            },
+            "indexed_start_date": {
+              "type": "string"
+            }
+          }
+        }
       },
-      "default": [],
-      "description": "Organization ids the eap_items indexed_name rewrite is enabled for. For each listed org, equality and IN filters on sentry.op / sentry.metric.name read the bloom-filter-indexed indexed_name column instead of the unindexed attributes_string bucket lookup. Empty (the default) disables the rewrite everywhere. Only add an org once indexed_name is fully populated across its queried retention window, otherwise rows written before it was populated are silently dropped."
+      "default": {},
+      "description": "Nested dict: unindexed eap_items column or attribute (e.g. sentry.op) -> item type (span, metric, log, ...) -> the bloom-filter-indexed column holding a copy of it for that item type. One indexed column can hold a different attribute per item type (indexed_name is sentry.op for spans, sentry.metric_name for metrics), so filters on the attribute for any item type without an entry keep reading the attribute map. Indexed columns can't be backfilled, so indexed_start_date is the date (YYYY-MM-DD, from 00:00 UTC) from which the indexed column is fully populated for that item type. Equality and IN filters read indexed_column_name instead only for requests starting at or after it. Never set it before the column was fully populated, otherwise older rows are silently dropped. Empty (the default) disables the rewrite."
     }
   }
 }

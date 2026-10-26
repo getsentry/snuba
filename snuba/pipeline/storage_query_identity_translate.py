@@ -42,7 +42,6 @@ def _translate_storage_query(
         res.set_from_clause(
             get_query_data_source(
                 storage.get_schema().get_data_source(),
-                allocation_policies=storage.get_allocation_policies(),
                 final=query.get_final(),
                 sampling_rate=query.get_sample(),
                 storage_key=storage.get_storage_key(),

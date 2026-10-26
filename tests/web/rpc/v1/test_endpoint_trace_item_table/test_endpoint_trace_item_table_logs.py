@@ -2,6 +2,7 @@ from datetime import timedelta
 from typing import Any
 
 import pytest
+import time_machine
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageMeta
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
@@ -28,6 +29,8 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.downsampled_storage_tiers import Tier
+from snuba.web.rpc.storage_routing.common import encode_routing_hint
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -99,7 +102,9 @@ class TestTraceItemTableForLogs(BaseApiTest):
             ],
             limit=20,
         )
-        response = EndpointTraceItemTable().execute(message)
+        with time_machine.travel(BASE_TIME, tick=False):
+            response = EndpointTraceItemTable().execute(message)
+            expected_routing_hint = encode_routing_hint(Tier.TIER_1)
         index_range = range(0, 40, 2)
         expected_response = TraceItemTableResponse(
             column_values=[
@@ -128,8 +133,69 @@ class TestTraceItemTableForLogs(BaseApiTest):
                     )
                 ],
             ),
+            routing_hint=expected_routing_hint,
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
+
+
+@pytest.mark.eap
+@pytest.mark.redis_db
+class TestPreciseTimestampForLogs(BaseApiTest):
+    def test_timestamp_precise_as_int_keeps_nanos(self, eap: None, redis_db: None) -> None:
+        # Last digits don't survive a Float64 round-trip; must come from attributes_int.
+        nanos = int(BASE_TIME.timestamp() * 1e9) + 64
+        assert int(float(nanos)) != nanos
+        # Float-only write (no attributes_int entry) must still be readable as TYPE_INT.
+        float_only = float(nanos)
+        write_raw_unprocessed_events(
+            get_writable_storage(StorageKey("eap_items")),
+            [
+                gen_item_message(
+                    start_timestamp=BASE_TIME,
+                    remove_default_attributes=True,
+                    type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+                    attributes={"sentry.timestamp_precise": AnyValue(int_value=nanos)},
+                ),
+                gen_item_message(
+                    start_timestamp=BASE_TIME,
+                    remove_default_attributes=True,
+                    type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+                    attributes={"sentry.timestamp_precise": AnyValue(double_value=float_only)},
+                ),
+            ],
+        )
+        key = AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.timestamp_precise")
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+            ),
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=key,
+                    value=AttributeValue(val_int=nanos - 10_000),
+                    op=ComparisonFilter.OP_GREATER_THAN,
+                ),
+            ),
+            columns=[Column(key=key)],
+            order_by=[TraceItemTableRequest.OrderBy(column=Column(key=key))],
+            limit=10,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        (values,) = response.column_values
+        # The float-only row can round to either side of nanos, so don't rely on ORDER BY position.
+        vals = [r.val_int for r in values.results]
+        assert nanos in vals
+        vals.remove(nanos)
+        (float_val,) = vals
+        # Float64 → Int64 cast of the float-only row is lossy; it just has to be close.
+        assert abs(float_val - nanos) < 1_000
 
 
 @pytest.fixture(autouse=False)

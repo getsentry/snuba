@@ -6,6 +6,7 @@ from typing import Any
 from unittest.mock import MagicMock, call, patch
 
 import pytest
+import time_machine
 from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
@@ -60,6 +61,7 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.downsampled_storage_tiers import Tier
 from snuba.protos.common import _resolve_canonical
 from snuba.query import LimitBy, OrderBy, OrderByDirection
 from snuba.query.dsl import Functions as f
@@ -67,25 +69,26 @@ from snuba.query.dsl import column as snuba_column
 from snuba.query.expressions import Expression
 from snuba.web import QueryException
 from snuba.web.rpc import RPCEndpoint
+from snuba.web.rpc.common.aggregation import aggregation_to_expression
 from snuba.web.rpc.common.common import attribute_key_to_expression
 from snuba.web.rpc.common.exceptions import (
     BadSnubaRPCRequestException,
     QueryTimeoutException,
 )
+from snuba.web.rpc.common.trace_item_table import convert_results
 from snuba.web.rpc.proto_visitor import (
     AggregationToConditionalAggregationVisitor,
     TraceItemTableRequestWrapper,
 )
+from snuba.web.rpc.storage_routing.common import encode_routing_hint
 from snuba.web.rpc.v1.endpoint_trace_item_table import (
     EndpointTraceItemTable,
     _apply_labels_to_columns,
     _validate_limit_by,
     _validate_order_by,
     _validate_select_and_groupby,
+    build_query,
 )
-from snuba.web.rpc.v1.resolvers.common.aggregation import aggregation_to_expression
-from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
-from snuba.web.rpc.v1.resolvers.R_eap_items.resolver_trace_item_table import build_query
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import (
@@ -333,7 +336,9 @@ class TestTraceItemTable(BaseApiTest):
             columns=[Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="server_name"))],
             order_by=[TraceItemTableRequest.OrderBy(column=Column(label="server_name"))],
         )
-        response = EndpointTraceItemTable().execute(message)
+        with time_machine.travel(BASE_TIME, tick=False):
+            response = EndpointTraceItemTable().execute(message)
+            expected_routing_hint = encode_routing_hint(Tier.TIER_1)
         expected_response = TraceItemTableResponse(
             column_values=[
                 TraceItemColumnValues(
@@ -357,6 +362,7 @@ class TestTraceItemTable(BaseApiTest):
                     )
                 ],
             ),
+            routing_hint=expected_routing_hint,
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
@@ -386,7 +392,9 @@ class TestTraceItemTable(BaseApiTest):
                 )
             ],
         )
-        response = EndpointTraceItemTable().execute(message)
+        with time_machine.travel(BASE_TIME, tick=False):
+            response = EndpointTraceItemTable().execute(message)
+            expected_routing_hint = encode_routing_hint(Tier.TIER_1)
         expected_response = TraceItemTableResponse(
             column_values=[
                 TraceItemColumnValues(
@@ -410,6 +418,7 @@ class TestTraceItemTable(BaseApiTest):
                     )
                 ],
             ),
+            routing_hint=expected_routing_hint,
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
@@ -464,7 +473,9 @@ class TestTraceItemTable(BaseApiTest):
             ],
             limit=61,
         )
-        response = EndpointTraceItemTable().execute(message)
+        with time_machine.travel(BASE_TIME, tick=False):
+            response = EndpointTraceItemTable().execute(message)
+            expected_routing_hint = encode_routing_hint(Tier.TIER_1)
         expected_response = TraceItemTableResponse(
             column_values=[
                 TraceItemColumnValues(
@@ -492,6 +503,7 @@ class TestTraceItemTable(BaseApiTest):
                     )
                 ],
             ),
+            routing_hint=expected_routing_hint,
         )
         assert response == expected_response
 
@@ -547,7 +559,9 @@ class TestTraceItemTable(BaseApiTest):
                 ),
             ],
         )
-        response = EndpointTraceItemTable().execute(message)
+        with time_machine.travel(BASE_TIME, tick=False):
+            response = EndpointTraceItemTable().execute(message)
+            expected_routing_hint = encode_routing_hint(Tier.TIER_1)
         expected_response = TraceItemTableResponse(
             column_values=[
                 TraceItemColumnValues(
@@ -579,6 +593,7 @@ class TestTraceItemTable(BaseApiTest):
                     )
                 ],
             ),
+            routing_hint=expected_routing_hint,
         )
         assert response.page_token == expected_response.page_token
         # make sure columns are ordered in the order they are requested
@@ -4573,6 +4588,120 @@ class TestTraceItemTable(BaseApiTest):
         assert res.attribute_name == "avg(game_size * game_size_unit_mult)"
         assert len(res.results) == 1
         assert isclose(res.results[0].val_double, expected_avg)
+
+    def test_literal_in_attribute_aggregation(self) -> None:
+        """
+        Tests p99((ingested_at_ms / 1000) - received_at_seconds) using an AttributeKeyExpression
+        literal to convert from milliseconds to seconds.
+        """
+        items_storage = get_writable_storage(StorageKey("eap_items"))
+
+        base_seconds = 1_700_000_000.0
+        deltas = list(range(1, 100 + 1))
+        write_raw_unprocessed_events(
+            items_storage,
+            [
+                gen_item_message(
+                    BASE_TIME,
+                    attributes={
+                        "received_at_seconds": AnyValue(double_value=base_seconds),
+                        "ingested_at_ms": AnyValue(double_value=(base_seconds + delta) * 1000.0),
+                    },
+                )
+                for delta in deltas
+            ],
+        )
+
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    label="p99((ingested_at_ms / 1000) - received_at_seconds)",
+                    conditional_aggregation=AttributeConditionalAggregation(
+                        aggregate=Function.FUNCTION_P99,
+                        expression=AttributeKeyExpression(
+                            formula=AttributeKeyExpression.Formula(
+                                op=AttributeKeyExpression.OP_SUB,
+                                left=AttributeKeyExpression(
+                                    formula=AttributeKeyExpression.Formula(
+                                        op=AttributeKeyExpression.OP_DIV,
+                                        left=AttributeKeyExpression(
+                                            key=AttributeKey(
+                                                type=AttributeKey.TYPE_DOUBLE, name="ingested_at_ms"
+                                            )
+                                        ),
+                                        right=AttributeKeyExpression(
+                                            literal=Literal(val_double=1000.0)
+                                        ),
+                                    )
+                                ),
+                                right=AttributeKeyExpression(
+                                    key=AttributeKey(
+                                        type=AttributeKey.TYPE_DOUBLE, name="received_at_seconds"
+                                    )
+                                ),
+                            )
+                        ),
+                        label="p99((ingested_at_ms / 1000) - received_at_seconds)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+
+        assert len(response.column_values) == 1
+        res = response.column_values[0]
+        assert len(res.results) == 1
+        # p99 of 1 to 100 seconds
+        assert isclose(res.results[0].val_double, 99.01)
+
+    def test_bare_literal_in_attribute_aggregation(self) -> None:
+        """
+        Tests avg(5.0), an expression made up of only a literal
+        """
+        items_storage = get_writable_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            items_storage,
+            [gen_item_message(BASE_TIME)],
+        )
+
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    label="avg(5.0)",
+                    conditional_aggregation=AttributeConditionalAggregation(
+                        aggregate=Function.FUNCTION_AVG,
+                        expression=AttributeKeyExpression(literal=Literal(val_double=5.0)),
+                        label="avg(5.0)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+
+        assert len(response.column_values) == 1
+        res = response.column_values[0]
+        assert len(res.results) == 1
+        assert isclose(res.results[0].val_double, 5.0)
 
 
 def _str_array(*values: str) -> AnyValue:

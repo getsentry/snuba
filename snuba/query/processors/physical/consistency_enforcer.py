@@ -1,7 +1,6 @@
 from dataclasses import replace
 
 from snuba.clickhouse.query import Query
-from snuba.query.final import query_final_disabled
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 
@@ -13,9 +12,11 @@ class ConsistencyEnforcerProcessor(ClickhouseQueryProcessor):
 
     This should only be used for tables whose data is mutable and have less amount of data entries
     like the CDC tables.
+
+    This processor intentionally ignores the `disable_query_final` killswitch: these tables
+    (group_attributes, groupedmessage, groupassignee) store one row per update in a
+    ReplacingMergeTree and return stale/duplicate results without FINAL.
     """
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
-        if query_final_disabled():
-            return
         query.set_from_clause(replace(query.get_from_clause(), final=True))

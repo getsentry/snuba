@@ -3,4 +3,31 @@
     <merge_tree>
         <old_parts_lifetime>1</old_parts_lifetime>
     </merge_tree>
+
+    <!--
+    ClickHouse's own diagnostic log tables have no TTL by default, so in a
+    long-lived dev volume they grow without bound (tens of GB of trace_log
+    alone). When their schema changes (ClickHouse upgrades, or this TTL
+    being added) ClickHouse renames them to <name>_N and starts fresh
+    tables; copies renamed before the TTL existed never expire and have to
+    be dropped by hand.
+    -->
+    <trace_log>
+        <ttl>event_date + INTERVAL 1 DAY DELETE</ttl>
+    </trace_log>
+    <text_log>
+        <ttl>event_date + INTERVAL 1 DAY DELETE</ttl>
+    </text_log>
+    <metric_log>
+        <ttl>event_date + INTERVAL 1 DAY DELETE</ttl>
+    </metric_log>
+    <asynchronous_metric_log>
+        <ttl>event_date + INTERVAL 1 DAY DELETE</ttl>
+    </asynchronous_metric_log>
+    <query_log>
+        <ttl>event_date + INTERVAL 1 DAY DELETE</ttl>
+    </query_log>
+    <part_log>
+        <ttl>event_date + INTERVAL 1 DAY DELETE</ttl>
+    </part_log>
 </yandex>

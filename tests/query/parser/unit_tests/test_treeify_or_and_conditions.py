@@ -7,8 +7,8 @@ from snuba.query.logical import Query
 from snuba.query.snql.parser import _treeify_or_and_conditions
 
 from_dist = QueryEntity(
-    EntityKey("generic_metrics_counters"),
-    get_entity(EntityKey("generic_metrics_counters")).get_data_model(),
+    EntityKey("metrics_counters"),
+    get_entity(EntityKey("metrics_counters")).get_data_model(),
 )
 
 

@@ -19,7 +19,7 @@ class TestPerReferrerPolicy:
     def test_policy_pass_basic(self):
         policy = ReferrerGuardRailPolicy.from_kwargs(
             **{
-                "storage_key": "generic_metrics_counters",
+                "storage_key": "metrics_counters",
             }
         )
 
@@ -52,7 +52,7 @@ class TestPerReferrerPolicy:
     def test_throttle(self) -> None:
         policy = ReferrerGuardRailPolicy.from_kwargs(
             **{
-                "storage_key": "generic_metrics_counters",
+                "storage_key": "metrics_counters",
             }
         )
 
@@ -79,25 +79,8 @@ class TestPerReferrerPolicy:
     def test_override(self):
         policy = ReferrerGuardRailPolicy.from_kwargs(
             **{
-                "storage_key": "generic_metrics_counters",
+                "storage_key": "metrics_counters",
             }
-        )
-        set_component_config(
-            policy,
-            "referrer_max_threads_override",
-            2,
-            {"referrer": "statistical_detectors"},
-        )
-        assert (
-            policy.get_quota_allowance(
-                tenant_ids={"referrer": "statistical_detectors"}, query_id="1"
-            ).max_threads
-            == 2
-        )
-        policy.update_quota_balance(
-            tenant_ids={"referrer": "statistical_detectors"},
-            query_id="1",
-            result_or_error=_RESULT_SUCCESS,
         )
         set_component_config(
             policy,
@@ -110,3 +93,18 @@ class TestPerReferrerPolicy:
             tenant_ids={"referrer": "statistical_detectors"}, query_id="2"
         )
         assert not quota_allowance.can_run and quota_allowance.max_threads == 0
+
+    @pytest.mark.redis_db
+    def test_respects_max_threads_config(self) -> None:
+        policy = ReferrerGuardRailPolicy.from_kwargs(
+            **{
+                "storage_key": "metrics_counters",
+            }
+        )
+        set_component_config(policy, "max_threads", 4)
+        assert (
+            policy.get_quota_allowance(
+                tenant_ids={"referrer": "statistical_detectors"}, query_id="1"
+            ).max_threads
+            == 4
+        )

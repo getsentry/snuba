@@ -30,7 +30,7 @@ A Dataset is a name space over Snuba data. It provides its own schema and
 it is independent from other datasets both in terms of logical model and
 physical model.
 
-Examples of datasets are, discover, outcomes, sessions. There is no
+Examples of datasets are discover, outcomes, and replays. There is no
 relationship between them.
 
 A Dataset can be seen as a container for the components that define its

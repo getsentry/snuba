@@ -225,8 +225,9 @@ class FlexibleTimeWindowPageWithFilters:
                             )
 
                         # Mark SORT_SEMVER string columns so get_filters wraps
-                        # both sides in the semver key (matching ORDER BY); mirrors
-                        # the resolver's string-only guard.
+                        # both sides in the semver key (matching ORDER BY);
+                        # mirrors `_convert_order_by`'s string-only guard in
+                        # `endpoint_trace_item_table`.
                         is_semver = (
                             order_by_clause.sort == TraceItemTableRequest.OrderBy.SORT_SEMVER
                             and selected_key is not None

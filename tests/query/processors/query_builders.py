@@ -7,7 +7,6 @@ from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.translators.snuba.mappers import build_mapping_expr
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression
-from snuba.query.allocation_policies import DEFAULT_PASSTHROUGH_POLICY
 from snuba.query.conditions import binary_condition
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
@@ -23,7 +22,6 @@ def build_query(
             "test",
             ColumnSet([]),
             storage_key=StorageKey("test"),
-            allocation_policies=[DEFAULT_PASSTHROUGH_POLICY],
         ),
         selected_columns=[
             SelectedExpression(name=s.alias, expression=s) for s in selected_columns or []

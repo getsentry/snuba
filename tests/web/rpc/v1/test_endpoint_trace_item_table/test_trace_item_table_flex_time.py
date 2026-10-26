@@ -23,7 +23,9 @@ from sentry_relay.consts import DataCategory
 
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.downsampled_storage_tiers import Tier
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.storage_routing.common import decode_routing_hint
 from snuba.web.rpc.storage_routing.routing_strategies.outcomes_flex_time import (
     OutcomesFlexTimeRoutingStrategy,
 )
@@ -332,6 +334,8 @@ class TestTraceItemTableFlexTime:
                 )
                 response = EndpointTraceItemTable().execute(message)
                 assert isinstance(response, TraceItemTableResponse)
+                # flextime shrinks the time window instead of downsampling
+                assert decode_routing_hint(response.routing_hint) == Tier.TIER_1
                 result_size = len(response.column_values[0].results)
                 page_token = response.page_token
                 assert result_size == limit_per_query

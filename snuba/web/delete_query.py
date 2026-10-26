@@ -44,7 +44,7 @@ from snuba.utils.schemas import ColumnValidator, InvalidColumnType
 from snuba.web import QueryException, QueryExtraData, QueryResult
 from snuba.web.db_query import _apply_allocation_policies_quota
 
-metrics = MetricsWrapper(environment.metrics, "snuba.delete")
+metrics = MetricsWrapper(environment.metrics, "delete")
 
 
 class DeletesNotEnabledError(Exception):
@@ -117,12 +117,13 @@ def delete_from_storage(
 
 
 def _preprocess_for_items(storage: WritableTableStorage, where_clause: Expression) -> Expression:
-    if storage.get_storage_key() != StorageKey.EAP_ITEMS:
+    storage_key = storage.get_storage_key()
+    if storage_key not in (StorageKey.EAP_ITEMS, StorageKey.EAP_ITEMS_2):
         return where_clause
 
     entity = get_entity(EntityKey.EAP_ITEMS)
     for storage_connection in entity.get_all_storage_connections():
-        if storage_connection.storage.get_storage_key() == StorageKey.EAP_ITEMS:
+        if storage_connection.storage.get_storage_key() == storage_key:
             translation_mappers = storage_connection.translation_mappers
             translator = SnubaClickhouseMappingTranslator(translation_mappers)
             return where_clause.accept(translator)
@@ -144,7 +145,6 @@ def _delete_from_table(
             table,
             ColumnSet([]),
             storage_key=storage.get_storage_key(),
-            allocation_policies=storage.get_delete_allocation_policies(),
         ),
         condition=where_clause,
         on_cluster=on_cluster,
@@ -282,7 +282,6 @@ def _enforce_max_rows(delete_query: Query, count_storage_key: StorageKey | None 
             table_name=count_table_name,
             schema=from_clause.schema,
             storage_key=from_clause.storage_key,
-            allocation_policies=from_clause.allocation_policies,
         )
 
     select_query_to_count_rows = Query(

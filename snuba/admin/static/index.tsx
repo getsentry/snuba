@@ -1,21 +1,25 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 
 import * as Sentry from "@sentry/react";
 import Header from "SnubaAdmin/header";
-import Nav from "SnubaAdmin/nav";
 import Body from "SnubaAdmin/body";
 import { NAV_ITEMS } from "SnubaAdmin/data";
 import Client from "SnubaAdmin/api_client";
 import { MantineProvider } from "@mantine/core";
+import { COLORS, sloganTiling } from "SnubaAdmin/theme";
 import { ShellStateProvider } from "SnubaAdmin/sql_shell/shell_context";
 
 import 'bootstrap/dist/css/bootstrap.min.css';
+// Imported after bootstrap so these rules take precedence.
+import './styles.css';
 
 const containerStyle = {
   display: "flex",
   flexDirection: "column" as const,
   height: "100%",
+  backgroundColor: COLORS.PAGE_BG,
+  color: COLORS.TEXT_DEFAULT,
 };
 
 const bodyStyle = {
@@ -66,6 +70,18 @@ function App() {
     }
   }
 
+  // Pages can link to each other with plain hrefs (e.g. the overview tiles),
+  // so keep the active tab in sync with the hash.
+  useEffect(() => {
+    function onHashChange() {
+      try {
+        setActiveTab(getTab(window.location.hash));
+      } catch {}
+    }
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
+
   function navigate(nextTab: string) {
     setActiveTab(nextTab);
     window.location.hash = nextTab;
@@ -74,10 +90,16 @@ function App() {
   return (
     <MantineProvider withGlobalStyles withNormalizeCSS>
       <ShellStateProvider>
-        <div style={containerStyle}>
-          <Header />
+        <div
+          style={{
+            ...containerStyle,
+            // The slogan tiling is only shown on the home page.
+            backgroundImage:
+              activeTab === "overview" ? sloganTiling() : undefined,
+          }}
+        >
+          <Header api={client} active={activeTab} />
           <div style={bodyStyle}>
-            <Nav active={activeTab} navigate={navigate} api={client} />
             {activeTab && <Body active={activeTab} api={client} />}
           </div>
         </div>
@@ -91,7 +113,8 @@ function getTab(locationHash: string): string {
     throw new Error("invalid hash");
   }
 
-  const hash = locationHash.split("/")[0];
+  // Pages may carry params after the id, e.g. "#system-queries?query=...".
+  const hash = locationHash.split(/[/?]/)[0];
 
   const navItem = NAV_ITEMS.find((item) => "#" + item.id === hash);
 

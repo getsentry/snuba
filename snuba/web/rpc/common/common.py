@@ -2,9 +2,10 @@ import math
 from collections.abc import Callable, Iterable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
-from typing import Any, TypeVar, cast
+from typing import Any, TypedDict, TypeVar
 
 from google.protobuf.message import Message as ProtobufMessage
+from google.protobuf.timestamp_pb2 import Timestamp as ProtobufTimestamp
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
@@ -26,7 +27,10 @@ from snuba.protos.common import (
     array_element_column,
     coalesced_attribute_names,
     first_present_value,
+    get_trace_item_type_name,
+    is_precise_int_read,
     key_existence_conditions,
+    precise_int_read,
     sentry_column,
     type_array_to_membership_array_expression_from_typed_columns,
     type_array_typed_column_native_array,
@@ -57,7 +61,7 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-from snuba.state.sentry_options import get_option
+from snuba.state.sentry_options import get_mapped_option, get_option
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
@@ -226,6 +230,17 @@ def _check_non_string_values_cannot_ignore_case(
             raise BadSnubaRPCRequestException("Cannot ignore case on non-string values")
     elif value_type not in ("val_str", "val_str_array"):
         raise BadSnubaRPCRequestException("Cannot ignore case on non-string values")
+
+
+def as_datetime(value: Any) -> datetime:
+    """Coerce a ClickHouse DateTime result into a datetime.
+
+    Which the reader returns depends on the driver (native gives a datetime, HTTP can give an
+    ISO string), so accept both.
+    """
+    if isinstance(value, datetime):
+        return value
+    return datetime.fromisoformat(str(value))
 
 
 def next_monday(dt: datetime) -> datetime:
@@ -465,8 +480,12 @@ def _map_backed_operands(k: AttributeKey) -> tuple[Expression, Expression]:
     values = [_value(name) for name in names]
     existences = key_existence_conditions(col_name, names)
 
-    exists = combine_or_conditions(existences) if len(existences) > 1 else existences[0]
     value = first_present_value(values, existences)
+    if is_precise_int_read(k):
+        value = precise_int_read(k.name, value)
+        existences = key_existence_conditions("attributes_int", [k.name]) + existences
+
+    exists = combine_or_conditions(existences) if len(existences) > 1 else existences[0]
     return value, exists
 
 
@@ -556,7 +575,9 @@ _NEGATIVE_OPS = {
     AnyAttributeFilter.OP_NOT_IN,
 }
 
-_POSITIVE_OP_FOR_NEGATIVE: dict[int, int] = {
+_POSITIVE_OP_FOR_NEGATIVE: dict[
+    AnyAttributeFilter.Op.ValueType, AnyAttributeFilter.Op.ValueType
+] = {
     AnyAttributeFilter.OP_NOT_EQUALS: AnyAttributeFilter.OP_EQUALS,
     AnyAttributeFilter.OP_NOT_LIKE: AnyAttributeFilter.OP_LIKE,
     AnyAttributeFilter.OP_NOT_IN: AnyAttributeFilter.OP_IN,
@@ -596,15 +617,15 @@ def _array_value_length(v: AttributeValue, value_type: str) -> int:
 def _validate_comparison_filter_type_array(
     op: ComparisonFilter.Op.ValueType, v: AttributeValue, key: AttributeKey
 ) -> None:
-    if op in (ComparisonFilter.OP_LIKE, ComparisonFilter.OP_NOT_LIKE):
+    if op in (ComparisonFilter.OP_LIKE, ComparisonFilter.OP_NOT_LIKE, ComparisonFilter.OP_REGEXP):
         if v.WhichOneof("value") != "val_str":
-            raise BadSnubaRPCRequestException(
-                "LIKE/NOT_LIKE on array keys requires a string pattern"
-            )
-        # LIKE only matches string elements, so it makes sense only for string arrays.
+            label = "REGEXP" if op == ComparisonFilter.OP_REGEXP else "LIKE/NOT_LIKE"
+            raise BadSnubaRPCRequestException(f"{label} on array keys requires a string pattern")
+        # LIKE/REGEXP only match string elements, so they make sense only for string arrays.
         if key.type not in (AttributeKey.Type.TYPE_ARRAY, AttributeKey.Type.TYPE_ARRAY_STRING):
+            label = "REGEXP" if op == ComparisonFilter.OP_REGEXP else "LIKE/NOT_LIKE"
             raise BadSnubaRPCRequestException(
-                "LIKE/NOT_LIKE on array keys is only supported on string arrays "
+                f"{label} on array keys is only supported on string arrays "
                 f"(TYPE_ARRAY_STRING), got {AttributeKey.Type.Name(key.type)}"
             )
         return
@@ -843,6 +864,57 @@ def _typed_array_like_expression(
     )
 
 
+def _regexp_match(value: Expression, pattern: Expression, ignore_case: bool) -> FunctionCall:
+    # Needs ClickHouse > 26.8 for matchCaseInsensitive; lower() is a stand-in until then.
+    if ignore_case:
+        return f.match(f.lower(value), f.lower(pattern))
+    return f.match(value, pattern)
+
+
+def _is_valid_regexp_pattern(v: AttributeValue) -> None:
+    if v.WhichOneof("value") != "val_str" or v.val_str == "":
+        raise BadSnubaRPCRequestException("REGEXP pattern must be a non-empty string")
+
+
+def _any_attribute_op_expression(
+    *,
+    filter_: AnyAttributeFilter,
+    op: AnyAttributeFilter.Op.ValueType,
+    element: Argument,
+    value_expr: Expression,
+    membership_as_has: bool,
+) -> Expression:
+    match op:
+        case AnyAttributeFilter.OP_EQUALS:
+            if filter_.ignore_case:
+                return f.equals(f.lower(element), f.lower(value_expr))
+            return f.equals(element, value_expr)
+        case AnyAttributeFilter.OP_LIKE:
+            if filter_.ignore_case:
+                return f.ilike(element, value_expr)
+            return f.like(element, value_expr)
+        case AnyAttributeFilter.OP_REGEXP:
+            return _regexp_match(element, value_expr, filter_.ignore_case)
+        case AnyAttributeFilter.OP_IN:
+            if filter_.ignore_case:
+                if filter_.value.WhichOneof("value") == "val_str_array":
+                    lowered = [literal(s.lower()) for s in filter_.value.val_str_array.values]
+                else:
+                    lowered = [
+                        literal(elem.val_str.lower()) for elem in filter_.value.val_array.values
+                    ]
+                return _in_or_has(
+                    f.lower(element),
+                    literals_array(None, lowered),
+                    as_has=membership_as_has,
+                )
+            return _in_or_has(element, value_expr, as_has=membership_as_has)
+        case _:
+            raise BadSnubaRPCRequestException(
+                f"Unsupported any_attribute_filter op: {AnyAttributeFilter.Op.Name(filter_.op)}"
+            )
+
+
 def _any_attribute_filter_to_expression(
     filt: AnyAttributeFilter,
     *,
@@ -907,11 +979,16 @@ def _any_attribute_filter_to_expression(
             )
         col_name = _VALUE_TYPE_TO_COLUMN[value_type]
 
-    # LIKE/NOT_LIKE only makes sense on string columns
-    if effective_op == AnyAttributeFilter.OP_LIKE and col_name not in _STRING_COLUMNS:
-        raise BadSnubaRPCRequestException(
-            "LIKE/NOT_LIKE operations are only supported on string values"
-        )
+    # LIKE/NOT_LIKE/REGEXP only makes sense on string columns
+    if (
+        effective_op in (AnyAttributeFilter.OP_LIKE, AnyAttributeFilter.OP_REGEXP)
+        and col_name not in _STRING_COLUMNS
+    ):
+        label = "REGEXP" if effective_op == AnyAttributeFilter.OP_REGEXP else "LIKE/NOT_LIKE"
+        raise BadSnubaRPCRequestException(f"{label} operations are only supported on string values")
+
+    if effective_op == AnyAttributeFilter.OP_REGEXP:
+        _is_valid_regexp_pattern(v)
 
     # ignore_case uses lower() which only works on string columns
     if filt.ignore_case and col_name not in _STRING_COLUMNS:
@@ -921,35 +998,13 @@ def _any_attribute_filter_to_expression(
 
     # 3. Build the lambda comparison
     x = Argument(None, "x")
-
-    if effective_op == AnyAttributeFilter.OP_EQUALS:
-        if filt.ignore_case:
-            comparison = f.equals(f.lower(x), f.lower(v_expression))
-        else:
-            comparison = f.equals(x, v_expression)
-    elif effective_op == AnyAttributeFilter.OP_LIKE:
-        if filt.ignore_case:
-            comparison = f.ilike(x, v_expression)
-        else:
-            comparison = f.like(x, v_expression)
-    elif effective_op == AnyAttributeFilter.OP_IN:
-        if filt.ignore_case:
-            if value_type == "val_str_array":
-                lowered = [literal(s.lower()) for s in v.val_str_array.values]
-            else:
-                lowered = [literal(elem.val_str.lower()) for elem in v.val_array.values]
-            comparison = _in_or_has(
-                f.lower(x),
-                literals_array(None, lowered),
-                as_has=membership_as_has,
-            )
-        else:
-            comparison = _in_or_has(x, v_expression, as_has=membership_as_has)
-    else:
-        raise BadSnubaRPCRequestException(
-            f"Unsupported any_attribute_filter op: {AnyAttributeFilter.Op.Name(filt.op)}"
-        )
-
+    comparison = _any_attribute_op_expression(
+        filter_=filt,
+        op=effective_op,
+        element=x,
+        value_expr=v_expression,
+        membership_as_has=membership_as_has,
+    )
     lam = Lambda(None, ("x",), comparison)
 
     # 4. Build the arrayExists expression for the single matching column.
@@ -960,18 +1015,47 @@ def _any_attribute_filter_to_expression(
     return positive_expr
 
 
-_INDEXED_NAME_KEY_BY_ITEM_TYPE: dict[TraceItemType.ValueType, str] = {
-    TraceItemType.TRACE_ITEM_TYPE_SPAN: "sentry.op",
-    TraceItemType.TRACE_ITEM_TYPE_METRIC: "sentry.metric.name",
-}
-
-USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION = "eap_items_use_indexed_name_organization_ids"
+class IndexedColumn(TypedDict):
+    indexed_column_name: str
+    indexed_start_date: str
 
 
-def use_indexed_name_for_request(meta: RequestMeta) -> bool:
-    return meta.organization_id in cast(
-        "list[int]", get_option(USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION, [])
-    )
+INDEXED_COLUMNS_OPTION = "indexed_columns"
+
+
+def indexed_column_for(
+    start_timestamp: ProtobufTimestamp | None,
+    item_type: TraceItemType.ValueType,
+    unindexed_column: str,
+) -> str | None:
+    """
+    Indexed columns can't be backfilled, so each one only holds data from its
+    indexed_start_date (YYYY-MM-DD) onwards. An indexed column can hold a
+    different attribute per item type (indexed_name is sentry.op for spans,
+    sentry.metric_name for metrics), so each entry only applies to its own item_type.
+    Set per region in options-automator.
+    """
+    try:
+        if start_timestamp is None:
+            return None
+
+        indexed_column: dict[str, IndexedColumn] = get_mapped_option(
+            INDEXED_COLUMNS_OPTION, unindexed_column, {}
+        )
+
+        type = get_trace_item_type_name(item_type)
+        indexed_type = indexed_column.get(type)
+        if indexed_type is None:
+            return None
+
+        indexed_start = datetime.fromisoformat(indexed_type["indexed_start_date"]).replace(
+            tzinfo=UTC
+        )
+        if start_timestamp.ToDatetime(tzinfo=UTC) < indexed_start:
+            return None
+        return indexed_type["indexed_column_name"]
+    except Exception:
+        return None
 
 
 def trace_item_filters_to_expression(
@@ -979,7 +1063,7 @@ def trace_item_filters_to_expression(
     item_filter: TraceItemFilter,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
     membership_as_has: bool = False,
-    use_indexed_name: bool = False,
+    start_timestamp: ProtobufTimestamp | None = None,
 ) -> Expression:
     """
     Trace Item Filters are things like (span.id=12345 AND start_timestamp >= "june 4th, 2024")
@@ -993,7 +1077,8 @@ def trace_item_filters_to_expression(
         ``IN`` set leaks an unstable ``__set_*`` identifier into the result-block column
         name and breaks mixed-version distributed reads (see ``_in_or_has``). Leave the
         default for WHERE clauses, where the prepared ``IN`` set drives pruning.
-    :param use_indexed_name: see ``use_indexed_name_for_request``.
+    :param start_timestamp: request start; enables reading indexed columns, see
+        ``indexed_column_for``.
     :return:
 
     Array predicates always read the typed ``attributes_array_*`` map columns: an
@@ -1011,7 +1096,7 @@ def trace_item_filters_to_expression(
                 filters[0],
                 attribute_key_to_expression,
                 membership_as_has,
-                use_indexed_name,
+                start_timestamp,
             )
         return and_cond(
             *(
@@ -1020,7 +1105,7 @@ def trace_item_filters_to_expression(
                     x,
                     attribute_key_to_expression,
                     membership_as_has,
-                    use_indexed_name,
+                    start_timestamp,
                 )
                 for x in filters
             )
@@ -1036,7 +1121,7 @@ def trace_item_filters_to_expression(
                 filters[0],
                 attribute_key_to_expression,
                 membership_as_has,
-                use_indexed_name,
+                start_timestamp,
             )
         return or_cond(
             *(
@@ -1045,7 +1130,7 @@ def trace_item_filters_to_expression(
                     x,
                     attribute_key_to_expression,
                     membership_as_has,
-                    use_indexed_name,
+                    start_timestamp,
                 )
                 for x in filters
             )
@@ -1062,7 +1147,7 @@ def trace_item_filters_to_expression(
                     filters[0],
                     attribute_key_to_expression,
                     membership_as_has,
-                    use_indexed_name,
+                    start_timestamp,
                 )
             )
         return not_cond(
@@ -1073,7 +1158,7 @@ def trace_item_filters_to_expression(
                         x,
                         attribute_key_to_expression,
                         membership_as_has,
-                        use_indexed_name,
+                        start_timestamp,
                     )
                     for x in filters
                 )
@@ -1104,17 +1189,16 @@ def trace_item_filters_to_expression(
             v_expression = _attribute_value_to_expression(v)
 
         if (
-            use_indexed_name
-            and k.type == AttributeKey.Type.TYPE_STRING
-            and k.name == _INDEXED_NAME_KEY_BY_ITEM_TYPE.get(item_type)
+            k.type == AttributeKey.Type.TYPE_STRING
             and not v.is_null
             and not item_filter.comparison_filter.ignore_case
+            and (index_name := indexed_column_for(start_timestamp, item_type, k.name)) is not None
         ):
             if op == ComparisonFilter.OP_EQUALS and v.val_str:
-                return f.equals(column("indexed_name"), v_expression)
+                return f.equals(column(index_name), v_expression)
             values = v.val_str_array.values
             if op == ComparisonFilter.OP_IN and values and "" not in values:
-                return _in_or_has(column("indexed_name"), v_expression, as_has=membership_as_has)
+                return _in_or_has(column(index_name), v_expression, as_has=membership_as_has)
 
         # `sentry.timestamp` is a normalized column that `attribute_key_to_expression`
         # maps to `CAST(timestamp, 'Float64')`. Wrapping the primary-key/partition
@@ -1250,6 +1334,26 @@ def trace_item_filters_to_expression(
                 value, exists = _map_backed_operands(k)
                 return and_cond(exists, comparison_function(value, v_expression))
             return comparison_function(k_expression, v_expression)
+        if op == ComparisonFilter.OP_REGEXP:
+            _is_valid_regexp_pattern(v)
+            ignore_case = item_filter.comparison_filter.ignore_case
+            if k.type in ARRAY_TYPES:
+                return f.arrayExists(
+                    Lambda(
+                        None,
+                        ("x",),
+                        _regexp_match(Argument(None, "x"), v_expression, ignore_case),
+                    ),
+                    type_array_typed_column_native_array(k, "attributes_array_string"),
+                )
+            if k.type != AttributeKey.Type.TYPE_STRING:
+                raise BadSnubaRPCRequestException(
+                    "the REGEXP comparison is only supported on string and array keys"
+                )
+            if _is_map_backed_key(k):
+                value, exists = _map_backed_operands(k)
+                return and_cond(exists, _regexp_match(value, v_expression, ignore_case))
+            return _regexp_match(k_expression, v_expression, ignore_case)
         if op == ComparisonFilter.OP_NOT_LIKE:
             if k.type in ARRAY_TYPES:
                 return not_cond(

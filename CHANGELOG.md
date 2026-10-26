@@ -1,5 +1,317 @@
 # Changelog
 
+## 26.10.0
+
+### New Features ✨
+
+#### Admin
+
+- Show System Queries history as cards by @onewland in [#8547](https://github.com/getsentry/snuba/pull/8547)
+- Replace the sidebar with region and page switchers by @onewland in [#8536](https://github.com/getsentry/snuba/pull/8536)
+- Light theme and tiled home page by @onewland in [#8533](https://github.com/getsentry/snuba/pull/8533)
+- Add clear site data button to home page by @sentry-junior in [#8531](https://github.com/getsentry/snuba/pull/8531)
+- Color the region banner by environment name by @onewland in [#8491](https://github.com/getsentry/snuba/pull/8491)
+- Make region banner higher contrast by @onewland in [#8490](https://github.com/getsentry/snuba/pull/8490)
+- Add Snuba favicon by @sentry-junior in [#8483](https://github.com/getsentry/snuba/pull/8483)
+
+#### Eap
+
+- Collect more cluster load signals for storage routing by @pbhandari in [#8466](https://github.com/getsentry/snuba/pull/8466)
+- Route `TraceItemDetails` with a `routing_hint` from `TraceItemTable` by @ElioDiNino in [#8477](https://github.com/getsentry/snuba/pull/8477)
+
+#### Eap Items
+
+- Route indexed-column filters from options-automator config by @dezzeddi in [#8515](https://github.com/getsentry/snuba/pull/8515)
+- Apply indexed_name rewrite to all organizations by @sentry-junior in [#8508](https://github.com/getsentry/snuba/pull/8508)
+- Route trace item deletes to eap_items_2 by @onewland in [#8505](https://github.com/getsentry/snuba/pull/8505)
+- Emit message size as a sampled distribution by @onewland in [#8481](https://github.com/getsentry/snuba/pull/8481)
+
+#### Other
+
+- (allocation) Dynamically enforce allocation policies via load thresholds by @pbhandari in [#8527](https://github.com/getsentry/snuba/pull/8527)
+- (allocation_policies) Pardon rejections when dynamic allocation policy is on by @pbhandari in [#8431](https://github.com/getsentry/snuba/pull/8431)
+- (clickhouse) Add prune-partitions command to forget dead block_numbers znodes by @onewland in [#8529](https://github.com/getsentry/snuba/pull/8529)
+- Adds new query to querylog in snuba admin by @dezzeddi in [#8502](https://github.com/getsentry/snuba/pull/8502)
+
+### Bug Fixes 🐛
+
+#### Admin
+
+- Allow db-qualified table names in sudo SYSTEM commands by @sentry-junior in [#8545](https://github.com/getsentry/snuba/pull/8545)
+- Show the full table list in copy tables results by @onewland in [#8494](https://github.com/getsentry/snuba/pull/8494)
+
+#### Other
+
+- (allocation_policies) Do not short-circuit remaining policies when a rejection is pardoned by @pbhandari in [#8525](https://github.com/getsentry/snuba/pull/8525)
+- (eap) Read TYPE_INT timestamp_precise keys from attributes_int by @pbhandari in [#8544](https://github.com/getsentry/snuba/pull/8544)
+- (eap-items) Only use indexed_name for ranges after it was populated by @phacops in [#8496](https://github.com/getsentry/snuba/pull/8496)
+- (functions) Store profiling_type as SimpleAggregateFunction(any) by @phacops in [#8504](https://github.com/getsentry/snuba/pull/8504)
+- (perf) Start indexing the right column by @pbhandari in [#8488](https://github.com/getsentry/snuba/pull/8488)
+- (query) Keep FINAL on CDC-style storages when killswitch is on by @phacops in [#8506](https://github.com/getsentry/snuba/pull/8506)
+- (storage_routing) Drop duplicate snuba prefix from load_info metrics by @sentry-junior in [#8526](https://github.com/getsentry/snuba/pull/8526)
+- Cap requires-python so uv can lock on 3.13 by @phacops in [#8476](https://github.com/getsentry/snuba/pull/8476)
+
+### Internal Changes 🔧
+
+#### Deps
+
+- Bump handlebars from 4.7.9 to 4.7.10 in /snuba/admin by @dependabot in [#8543](https://github.com/getsentry/snuba/pull/8543)
+- Bump actions/setup-node from 7.0.0 to 7.1.0 by @dependabot in [#8538](https://github.com/getsentry/snuba/pull/8538)
+- Bump actions/upload-artifact from 7.0.1 to 7.0.2 by @dependabot in [#8539](https://github.com/getsentry/snuba/pull/8539)
+- Bump actions/download-artifact from 8.0.1 to 8.0.2 by @dependabot in [#8541](https://github.com/getsentry/snuba/pull/8541)
+- Bump virtualenv from 20.36.1 to 21.7.13 by @dependabot in [#8523](https://github.com/getsentry/snuba/pull/8523)
+- Bump werkzeug from 3.1.6 to 3.1.9 by @dependabot in [#8521](https://github.com/getsentry/snuba/pull/8521)
+- Keep Dependabot uv updates on internal PyPI by @sentry-junior in [#8522](https://github.com/getsentry/snuba/pull/8522)
+- Bump rustls from 0.23.42 to 0.23.45 in /rust_snuba by @dependabot in [#8520](https://github.com/getsentry/snuba/pull/8520)
+- Bump @sentry/esbuild-plugin to 5.4.1 in admin by @sentry-junior in [#8517](https://github.com/getsentry/snuba/pull/8517)
+- Bump pyjwt from 2.13.0 to 2.15.0 by @dependabot in [#8509](https://github.com/getsentry/snuba/pull/8509)
+- Bump urllib3 from 2.7.0 to 2.8.0 by @dependabot in [#8510](https://github.com/getsentry/snuba/pull/8510)
+- Bump getsentry/craft from 2.31.0 to 2.31.1 by @dependabot in [#8497](https://github.com/getsentry/snuba/pull/8497)
+- Bump astral-sh/setup-uv from 10.1.0 to 10.2.0 by @dependabot in [#8498](https://github.com/getsentry/snuba/pull/8498)
+- Bump docker/build-push-action from 7.3.0 to 7.4.0 by @dependabot in [#8485](https://github.com/getsentry/snuba/pull/8485)
+- Bump docker/setup-buildx-action from 4.3.0 to 4.4.1 by @dependabot in [#8484](https://github.com/getsentry/snuba/pull/8484)
+- Bump getsentry/craft from 2.30.1 to 2.31.0 by @dependabot in [#8468](https://github.com/getsentry/snuba/pull/8468)
+- Bump astral-sh/setup-uv from 10.0.1 to 10.1.0 by @dependabot in [#8467](https://github.com/getsentry/snuba/pull/8467)
+
+#### Docker
+
+- Pull python base image from GHCR mirror by @sentry-junior in [#8535](https://github.com/getsentry/snuba/pull/8535)
+- Remove docker_entrypoint.sh by @oioki in [#8500](https://github.com/getsentry/snuba/pull/8500)
+- Pull DHI base from the AR pull-through mirror by @oioki in [#8473](https://github.com/getsentry/snuba/pull/8473)
+
+#### Gocd
+
+- Rename the snuba-py deploy pipeline to snuba by @sentry-junior in [#8537](https://github.com/getsentry/snuba/pull/8537)
+- Drop the snuba-rs deploy pipeline by @sentry-junior in [#8511](https://github.com/getsentry/snuba/pull/8511)
+- Collapse rust consumer deploys into the python deploy script by @pbhandari in [#8479](https://github.com/getsentry/snuba/pull/8479)
+
+#### Protos
+
+- Share get_trace_item_type_name across snuba by @dezzeddi in [#8516](https://github.com/getsentry/snuba/pull/8516)
+- Bump sentry-protos to 0.80.0 and handle WORKFLOW_ENGINE_EVALUATION by @pbhandari in [#8514](https://github.com/getsentry/snuba/pull/8514)
+
+#### Resolvers
+
+- Remove the TraceItemDataResolver abstraction by @MeredithAnya in [#8455](https://github.com/getsentry/snuba/pull/8455)
+- Inline the trace item table resolver by @MeredithAnya in [#8454](https://github.com/getsentry/snuba/pull/8454)
+- Inline the time series resolver by @MeredithAnya in [#8453](https://github.com/getsentry/snuba/pull/8453)
+
+#### Other
+
+- (allocation_policies) Drop referrer_max_threads_override by @pbhandari in [#8534](https://github.com/getsentry/snuba/pull/8534)
+- (attach-partitions) Skip partitions dated far in the future by @onewland in [#8480](https://github.com/getsentry/snuba/pull/8480)
+- (deletes) Convert item_type to TraceItemType.ValueType at deserialization by @dezzeddi in [#8518](https://github.com/getsentry/snuba/pull/8518)
+- (eap) No-op migrations for tables that are no longer used by @MeredithAnya in [#8495](https://github.com/getsentry/snuba/pull/8495)
+- (image) Give each architecture its own BuildKit cache by @sentry-junior in [#8546](https://github.com/getsentry/snuba/pull/8546)
+- (options) Ignore local sentry-options values dir by @sentry-junior in [#8507](https://github.com/getsentry/snuba/pull/8507)
+- (pull) Clean up pull consumer wiring and get pull-arroyo improvments by @tryangul in [#8465](https://github.com/getsentry/snuba/pull/8465)
+- (rpc) Avoid building unused aggregation expressions by @vgrozdanic in [#8530](https://github.com/getsentry/snuba/pull/8530)
+- Bump sentry-conventions to 0.27.0 by @sentry-junior in [#8542](https://github.com/getsentry/snuba/pull/8542)
+- Bump sentry-conventions to 0.26.0 by @sentry-junior in [#8524](https://github.com/getsentry/snuba/pull/8524)
+- Add ClickHouse 26.8 to the version test matrix by @MeredithAnya in [#8493](https://github.com/getsentry/snuba/pull/8493)
+- Bump sentry-conventions to 0.25.0 by @getsentry-bot in [#8501](https://github.com/getsentry/snuba/pull/8501)
+- Remove generic metrics migrations and the cardinality analyzer by @phacops in [#8499](https://github.com/getsentry/snuba/pull/8499)
+- Add ClickHouse 26.3 altinity to the version test matrix by @MeredithAnya in [#8492](https://github.com/getsentry/snuba/pull/8492)
+- Bump sentry-conventions to 0.24.0 by @getsentry-bot in [#8489](https://github.com/getsentry/snuba/pull/8489)
+- Update Sentry Rust SDK by @szokeasaurusrex in [#8486](https://github.com/getsentry/snuba/pull/8486)
+- Migrate to actions/create-github-app-token by @joshuarli in [#8487](https://github.com/getsentry/snuba/pull/8487)
+- Bump new development version by @sentry-release-bot[bot] in [ff76b96a](https://github.com/getsentry/snuba/commit/ff76b96af1d3e557a84bb9b7c76b6ba0e6483e27)
+
+### Other
+
+- ref!(metrics): Remove remaining generic metrics dataset by @phacops in [#8474](https://github.com/getsentry/snuba/pull/8474)
+- SEC-1901: use readonly bot for schema validation by @Jeffreyhung in [#8475](https://github.com/getsentry/snuba/pull/8475)
+
+## 26.9.0
+
+### Breaking Changes 🛠
+
+- (clickhouse) Raise minimum ClickHouse version to 25.8 by @phacops in [#8359](https://github.com/getsentry/snuba/pull/8359)
+
+### New Features ✨
+
+#### Admin
+
+- Load outcomes category/outcome dropdowns from Python by @sentry-junior in [#8418](https://github.com/getsentry/snuba/pull/8418)
+- Allow system queries on allowlisted hosts by @onewland in [#8414](https://github.com/getsentry/snuba/pull/8414)
+- Allow copy-tables CREATE on any target host by @phacops in [#8411](https://github.com/getsentry/snuba/pull/8411)
+- Show ClickHouse cluster inventory by @sentry-junior in [#8374](https://github.com/getsentry/snuba/pull/8374)
+- Add outcomes time range controls by @sentry-junior in [#8375](https://github.com/getsentry/snuba/pull/8375)
+- Show query and storage node versions by @sentry-junior in [#8372](https://github.com/getsentry/snuba/pull/8372)
+- Report ad hoc job executions to Slack by @onewland in [#8249](https://github.com/getsentry/snuba/pull/8249)
+
+#### Allocation Policies
+
+- Per-tenant attachment via match blocks by @pbhandari in [#8393](https://github.com/getsentry/snuba/pull/8393)
+- Attach policies via sentry-options by @pbhandari in [#8387](https://github.com/getsentry/snuba/pull/8387)
+
+#### Consumer
+
+- Track consume to CH latency in the same way as push model. by @tryangul in [#8371](https://github.com/getsentry/snuba/pull/8371)
+- Harden KIP-345 static membership for multi-Deployment rollouts by @phacops in [#8339](https://github.com/getsentry/snuba/pull/8339)
+
+#### Consumers
+
+- Honor clickhouse-concurrency without async-inserts by @phacops in [#8460](https://github.com/getsentry/snuba/pull/8460)
+- Auto-restart on single-partition lag by @sentry-junior in [#8386](https://github.com/getsentry/snuba/pull/8386)
+
+#### Eap
+
+- Translate OP_REGEXP to ClickHouse match() by @pbhandari in [#8437](https://github.com/getsentry/snuba/pull/8437)
+- Support literals in aggregation expressions by @edwardgou-sentry in [#8441](https://github.com/getsentry/snuba/pull/8441)
+
+#### Eap Items
+
+- Populate co-occurring attrs from eap_items_2 by @onewland in [#8470](https://github.com/getsentry/snuba/pull/8470)
+- Add the eap_items_2 read switch by @onewland in [#8449](https://github.com/getsentry/snuba/pull/8449)
+- Add the eap_items_2 storages by @onewland in [#8448](https://github.com/getsentry/snuba/pull/8448)
+- Create the eap_items_2 read-only distributed tables by @onewland in [#8447](https://github.com/getsentry/snuba/pull/8447)
+- Create the eap_items_2 downsample materialized views by @onewland in [#8443](https://github.com/getsentry/snuba/pull/8443)
+- Create the eap_items_2 tables by @onewland in [#8438](https://github.com/getsentry/snuba/pull/8438)
+- Add version column to eap_items_1_downsample_512_local by @onewland in [#8427](https://github.com/getsentry/snuba/pull/8427)
+- Add version column to eap_items_1_downsample_64_local by @onewland in [#8426](https://github.com/getsentry/snuba/pull/8426)
+- Add version column to eap_items_1_downsample_8_local by @onewland in [#8428](https://github.com/getsentry/snuba/pull/8428)
+- Add version column to eap_items_1 by @onewland in [#8424](https://github.com/getsentry/snuba/pull/8424)
+- Use rowbinary for pull consumer. by @tryangul in [#8389](https://github.com/getsentry/snuba/pull/8389)
+
+#### Events
+
+- Enable ReferrerGuardRailPolicy on errors by @phacops in [#8404](https://github.com/getsentry/snuba/pull/8404)
+- Re-enable BytesScannedRejectingPolicy on errors by @sentry-junior in [#8383](https://github.com/getsentry/snuba/pull/8383)
+
+#### Outcomes
+
+- Add `callback_error` discard reason by @msonnb in [#8422](https://github.com/getsentry/snuba/pull/8422)
+- Route old and billing queries to the daily table by @dashed in [#7877](https://github.com/getsentry/snuba/pull/7877)
+
+#### Replacer
+
+- Honor disable_query_final on INSERT SELECT by @phacops in [#8403](https://github.com/getsentry/snuba/pull/8403)
+- Add org bypass for max-groups FINAL by @onewland in [#8399](https://github.com/getsentry/snuba/pull/8399)
+- Tune REPLACE resources via a sentry-option by @sentry-junior in [#8380](https://github.com/getsentry/snuba/pull/8380)
+
+#### Other
+
+- (ci) Ship the DHI runtime as the only snuba image by @oioki in [#8301](https://github.com/getsentry/snuba/pull/8301)
+- (clickhouse) Add partition attachment tooling by @onewland in [#8357](https://github.com/getsentry/snuba/pull/8357)
+- (query) Add disable_query_final killswitch by @phacops in [#8402](https://github.com/getsentry/snuba/pull/8402)
+- (snuba) Implement alternative pull-based Snuba(hackweek) by @tryangul in [#8355](https://github.com/getsentry/snuba/pull/8355)
+
+### Bug Fixes 🐛
+
+#### Admin
+
+- Allow listing migrations without every storage set configured by @phacops in [#8412](https://github.com/getsentry/snuba/pull/8412)
+- Resolve allowlisted tables via EXPLAIN QUERY TREE by @phacops in [#8345](https://github.com/getsentry/snuba/pull/8345)
+- Reject merge() in non-sudo system queries by @phacops in [#8344](https://github.com/getsentry/snuba/pull/8344)
+- Validate copy-tables cluster names and require sudo by @phacops in [#8351](https://github.com/getsentry/snuba/pull/8351)
+- Ignore caller-supplied tracing query_id by @phacops in [#8343](https://github.com/getsentry/snuba/pull/8343)
+- Reject production queries with unconstrained OR branches by @phacops in [#8354](https://github.com/getsentry/snuba/pull/8354)
+- Hide uncaught exception text from clients by @phacops in [#8348](https://github.com/getsentry/snuba/pull/8348)
+
+#### Gocd
+
+- Audit Rust consumer deploy targets by @sentry-junior in [#8472](https://github.com/getsentry/snuba/pull/8472)
+- Trigger snuba-rs deploys on sentry-options changes by @sentry-junior in [#8423](https://github.com/getsentry/snuba/pull/8423)
+- Deploy rust consumers and api on snuba ST by @pbhandari in [#8425](https://github.com/getsentry/snuba/pull/8425)
+- Use deploy-pipeline monitors for canary health check by @phacops in [#8342](https://github.com/getsentry/snuba/pull/8342)
+
+#### Querylog
+
+- Drop illegal UUID SAMPLE BY from querylog_local by @phacops in [#8358](https://github.com/getsentry/snuba/pull/8358)
+- Redact DangerousRawSQL and reused aliases by @phacops in [#8349](https://github.com/getsentry/snuba/pull/8349)
+
+#### Other
+
+- (clickhouse) Correct regexp compilation error code by @sentry-junior in [#8461](https://github.com/getsentry/snuba/pull/8461)
+- (deletes) Stop reporting max row rejections by @sentry-junior in [#8340](https://github.com/getsentry/snuba/pull/8340)
+- (jobs) Stop mass-assigning untrusted job params by @phacops in [#8346](https://github.com/getsentry/snuba/pull/8346)
+- (migrations) Send HTTP progress during long ON CLUSTER DDL by @phacops in [#8413](https://github.com/getsentry/snuba/pull/8413)
+- (replacer) Cap REPLACE queries at 10 minutes by @sentry-junior in [#8377](https://github.com/getsentry/snuba/pull/8377)
+- (retention) Clamp write-path retention from sentry-options by @phacops in [#8361](https://github.com/getsentry/snuba/pull/8361)
+- (rust) Stop attaching Kafka payloads to Sentry by @phacops in [#8352](https://github.com/getsentry/snuba/pull/8352)
+- (schema.json) Policies can accept any number of arbitrary properties by @pbhandari in [#8421](https://github.com/getsentry/snuba/pull/8421)
+- (tests) Expect ReferrerGuardRailPolicy explanation keys by @sentry-junior in [#8406](https://github.com/getsentry/snuba/pull/8406)
+- AND-of-OR project filters still bypass ADMIN_ALLOWED_PROD_PROJECTS by @phacops in [#8370](https://github.com/getsentry/snuba/pull/8370)
+- Client-controlled cross_org_query flag bypasses allocation quotas by @phacops in [#8363](https://github.com/getsentry/snuba/pull/8363)
+- RPC subscription build_request does not re-bind project/org scope by @phacops in [#8366](https://github.com/getsentry/snuba/pull/8366)
+- Full query result object logged on missing bytes scanned by @phacops in [#8364](https://github.com/getsentry/snuba/pull/8364)
+- Full SnQL query body written to warning logs on parse failure by @phacops in [#8365](https://github.com/getsentry/snuba/pull/8365)
+- Heatmap bucket limit only enforced for TYPE_INT attributes by @phacops in [#8367](https://github.com/getsentry/snuba/pull/8367)
+- Unauthenticated /tests/*/drop truncates datasets and flushes Redis by @phacops in [#8369](https://github.com/getsentry/snuba/pull/8369)
+- Real staff email committed in test fixture by @phacops in [#8368](https://github.com/getsentry/snuba/pull/8368)
+
+### Documentation 📚
+
+- Clearer instructions and minor tweaks by @ElioDiNino in [#8464](https://github.com/getsentry/snuba/pull/8464)
+
+### Internal Changes 🔧
+
+#### Admin
+
+- Make region URLs list more dynamic by @ElioDiNino in [#8463](https://github.com/getsentry/snuba/pull/8463)
+- Remove migration status overwrite route by @phacops in [#8347](https://github.com/getsentry/snuba/pull/8347)
+
+#### Ci
+
+- Bump action-build-and-push-images to WIF-token fix by @sentry-junior in [#8440](https://github.com/getsentry/snuba/pull/8440)
+- Run more of sentry's tests when we change the API in snuba by @pbhandari in [#8237](https://github.com/getsentry/snuba/pull/8237)
+
+#### Deps
+
+- Bump js-yaml from 3.15.1 to 3.15.2 in /snuba/admin by @dependabot in [#8446](https://github.com/getsentry/snuba/pull/8446)
+- Bump brace-expansion to patched 1.1.18 and 5.0.9 by @oioki in [#8436](https://github.com/getsentry/snuba/pull/8436)
+- Bump browserslist from 4.24.2 to 4.28.9 in /snuba/admin by @dependabot in [#8435](https://github.com/getsentry/snuba/pull/8435)
+- Bump sqlparse to 0.6.0 and sql-metadata to 3.0.1 by @dependabot in [#8398](https://github.com/getsentry/snuba/pull/8398)
+- Bump arroyo for batch flush-reason metric by @tryangul in [#8405](https://github.com/getsentry/snuba/pull/8405)
+- Bump devservices to >=1.5.0 by @sentry-junior in [#8395](https://github.com/getsentry/snuba/pull/8395)
+- Bump astral-sh/setup-uv from 10.0.0 to 10.0.1 by @dependabot in [#8384](https://github.com/getsentry/snuba/pull/8384)
+- Bump docker/setup-buildx-action from 4.2.0 to 4.3.0 by @dependabot in [#8385](https://github.com/getsentry/snuba/pull/8385)
+- Bump getsentry/craft from 2.28.0 to 2.30.1 by @dependabot in [#8312](https://github.com/getsentry/snuba/pull/8312)
+- Bump astral-sh/setup-uv from 9.0.0 to 10.0.0 by @dependabot in [#8313](https://github.com/getsentry/snuba/pull/8313)
+
+#### Resolvers
+
+- Inline the trace item stats resolver by @MeredithAnya in [#8452](https://github.com/getsentry/snuba/pull/8452)
+- Remove unused resolver declarations by @MeredithAnya in [#8451](https://github.com/getsentry/snuba/pull/8451)
+
+#### Other
+
+- (attribute-values) Return the most recent items by @MeredithAnya in [#8409](https://github.com/getsentry/snuba/pull/8409)
+- (attrvalues) Support array-of-string attributes and typed value_data by @MeredithAnya in [#8390](https://github.com/getsentry/snuba/pull/8390)
+- (cli) Make attach-partitions output legible for long runs by @onewland in [#8432](https://github.com/getsentry/snuba/pull/8432)
+- (clickhouse) Remove clickhouse-driver native protocol path by @sentry-junior in [#8307](https://github.com/getsentry/snuba/pull/8307)
+- (devservices) Upgrade ClickHouse to 25.8.16.10001.altinitystable by @sentry-junior in [#8360](https://github.com/getsentry/snuba/pull/8360)
+- (dlq) Add a TTL to the DLQ instruction key by @strongs in [#8391](https://github.com/getsentry/snuba/pull/8391)
+- (docker) Exclude gha-creds files from image context by @phacops in [#8439](https://github.com/getsentry/snuba/pull/8439)
+- (docs) Move dependencies to pyproject by @sentry-junior in [#8315](https://github.com/getsentry/snuba/pull/8315)
+- (eap) Drop the materialized view writing to co-occurring attrs v1 by @phacops in [#8408](https://github.com/getsentry/snuba/pull/8408)
+- (events) Cap error queries at 25 seconds by @sentry-junior in [#8381](https://github.com/getsentry/snuba/pull/8381)
+- (generic-metrics) Limit remaining storages by @sentry-junior in [#8458](https://github.com/getsentry/snuba/pull/8458)
+- (genmetrics) Remove from deployments by @MeredithAnya in [#8434](https://github.com/getsentry/snuba/pull/8434)
+- (gocd) Use GitHub App credentials by @joshuarli in [#8396](https://github.com/getsentry/snuba/pull/8396)
+- (image) Use scoped gha-snuba-push SA for GAR push by @oioki in [#8444](https://github.com/getsentry/snuba/pull/8444)
+- (manual-jobs) Bound the manual jobs Redis keys by @strongs in [#8397](https://github.com/getsentry/snuba/pull/8397)
+- (replacer) Drop pre-insert count and speed up FINAL inserts by @sentry-junior in [#8379](https://github.com/getsentry/snuba/pull/8379)
+- (rust-consumers) Validate_schema option by @MeredithAnya in [#8433](https://github.com/getsentry/snuba/pull/8433)
+- (us2) Remove us2 region from pipelines by @dmajere in [#8407](https://github.com/getsentry/snuba/pull/8407)
+- (warden) Add security review by @sentry-junior in [#8304](https://github.com/getsentry/snuba/pull/8304)
+- Bump sentry-conventions to 0.23.0 by @getsentry-bot in [#8459](https://github.com/getsentry/snuba/pull/8459)
+- Bump sentry-conventions to 0.22.0 by @getsentry-bot in [#8457](https://github.com/getsentry/snuba/pull/8457)
+- Migrate fast revert to actions/create-github-app-token by @joshuarli in [#8417](https://github.com/getsentry/snuba/pull/8417)
+- Bump sentry-conventions to 0.21.0 by @getsentry-bot in [#8420](https://github.com/getsentry/snuba/pull/8420)
+- Pin `action-build-and-push-images` to latest master by @oioki in [#8410](https://github.com/getsentry/snuba/pull/8410)
+- Test forcing of gzip layer compression on published images by @oioki in [#8392](https://github.com/getsentry/snuba/pull/8392)
+- Bump sentry-conventions to 0.20.0 by @getsentry-bot in [#8388](https://github.com/getsentry/snuba/pull/8388)
+- Harden workflow secret passing by @phacops in [#8350](https://github.com/getsentry/snuba/pull/8350)
+- Bump new development version by @sentry-release-bot[bot] in [4b817390](https://github.com/getsentry/snuba/commit/4b8173907f2db79341555f5e267035708f622c2f)
+
+### Other
+
+- Reapply "feat(eap-items): carry version through the downsample materi… by @onewland in [#8442](https://github.com/getsentry/snuba/pull/8442)
+- Cleanup types with aliases. Make noisy logs debug. Add upload jitter.… by @tryangul in [#8373](https://github.com/getsentry/snuba/pull/8373)
+- deploy(gocd): roll image for eap-items static-membership shadows by @sentry-junior in [#8353](https://github.com/getsentry/snuba/pull/8353)
+
 ## 26.8.0
 
 ### New Features ✨

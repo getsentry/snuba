@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.query.allocation_policies import DEFAULT_PASSTHROUGH_POLICY, AllocationPolicy
 from snuba.query.data_source import DataSource
 from snuba.query.expressions import FunctionCall
 
@@ -93,12 +92,6 @@ class Table(SimpleDataSource):
     table_name: str
     schema: ColumnSet
     storage_key: StorageKey
-    # By default a table has a regular passthrough policy.
-    # this is overwridden by the query pipeline if there
-    # is one defined on the storage.
-    allocation_policies: list[AllocationPolicy] = field(
-        default_factory=lambda: [DEFAULT_PASSTHROUGH_POLICY]
-    )
     final: bool = False
     sampling_rate: float | None = None
     # TODO: Move mandatory connditions out of

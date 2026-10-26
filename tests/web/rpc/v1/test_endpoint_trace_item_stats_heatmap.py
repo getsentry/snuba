@@ -23,7 +23,7 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.utils.metrics.timer import Timer
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.endpoint_trace_item_stats import EndpointTraceItemStats
-from snuba.web.rpc.v1.resolvers.R_eap_items.heatmap_builder import HeatmapBuilder
+from snuba.web.rpc.v1.heatmap_builder import HeatmapBuilder
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import (

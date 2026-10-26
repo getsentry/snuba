@@ -159,8 +159,6 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[Any]) -> No
     for item in items:
         if item.get_closest_marker("eap"):
             item.fixturenames.append("eap")
-        elif item.get_closest_marker("genmetrics_db"):
-            item.fixturenames.append("genmetrics_db")
         elif item.get_closest_marker("events_db"):
             item.fixturenames.append("events_db")
         elif item.get_closest_marker("clickhouse_db"):
@@ -447,17 +445,6 @@ def eap(request: pytest.FixtureRequest, create_databases: None) -> Generator[Non
     yield from _run_db_fixture(
         request=request,
         marker_name="eap",
-        groups=groups,
-        cache_key=frozenset(groups),
-    )
-
-
-@pytest.fixture
-def genmetrics_db(request: pytest.FixtureRequest, create_databases: None) -> Generator[None]:
-    groups = [MigrationGroup.GENERIC_METRICS]
-    yield from _run_db_fixture(
-        request=request,
-        marker_name="genmetrics_db",
         groups=groups,
         cache_key=frozenset(groups),
     )

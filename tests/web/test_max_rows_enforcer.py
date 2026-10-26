@@ -32,7 +32,6 @@ class TestMaxRowsEnforcer(BaseApiTest):
             "eap_items_1_local",
             ColumnSet([]),
             storage_key=StorageKey.EAP_ITEMS,
-            allocation_policies=[],
         )
         self.query = Query(
             from_clause=from_clause,

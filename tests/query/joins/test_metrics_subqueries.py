@@ -21,11 +21,11 @@ from snuba.query.expressions import Expression
 from snuba.query.joins.metrics_subquery_generator import generate_metrics_subqueries
 from snuba.query.logical import Query as LogicalQuery
 
-entity_key = EntityKey.GENERIC_METRICS_COUNTERS
+entity_key = EntityKey.METRICS_COUNTERS
 distributions = Entity(entity_key, get_entity(entity_key).get_data_model())
-tags_raw_d0 = NestedColumn("tags_raw", "c0")
 tags_d0 = NestedColumn("tags", "c0")
-tags_raw_d1 = NestedColumn("tags_raw", "c1")
+tags_d0 = NestedColumn("tags", "c0")
+tags_d1 = NestedColumn("tags", "c1")
 tags_d1 = NestedColumn("tags", "c1")
 
 

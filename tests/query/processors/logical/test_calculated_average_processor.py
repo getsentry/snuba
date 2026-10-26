@@ -11,8 +11,8 @@ from snuba.query.processors.logical.calculated_average_processor import (
 )
 from snuba.query.query_settings import HTTPQuerySettings
 
-entity = get_entity(EntityKey("generic_metrics_counters"))
-query_entity = QueryEntity(EntityKey("generic_metrics_counters"), entity.get_data_model())
+entity = get_entity(EntityKey("metrics_counters"))
+query_entity = QueryEntity(EntityKey("metrics_counters"), entity.get_data_model())
 
 AVG_VALUE_EXPRESSION = FunctionCall(
     alias="_snuba_aggregate_value",

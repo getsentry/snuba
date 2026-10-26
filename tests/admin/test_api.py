@@ -68,6 +68,25 @@ def get_node_for_table(admin_api: FlaskClient, storage_name: str) -> tuple[str, 
 
 
 @pytest.mark.redis_db
+def test_admin_regions(admin_api: FlaskClient) -> None:
+    with (
+        mock.patch("snuba.settings.ADMIN_REGIONS", ["us", "de"]),
+        mock.patch("snuba.settings.ADMIN_MAIN_REGION", "us"),
+    ):
+        response = admin_api.get("/admin_regions")
+
+    assert response.status_code == 200
+    assert json.loads(response.data) == [
+        {"name": "us", "url": "https://snuba-admin.getsentry.net/", "is_main": True},
+        {
+            "name": "de",
+            "url": "https://snuba-admin.de.getsentry.net/",
+            "is_main": False,
+        },
+    ]
+
+
+@pytest.mark.redis_db
 @pytest.mark.events_db
 def test_system_query(admin_api: FlaskClient) -> None:
     _, host, port = get_node_for_table(admin_api, "errors")

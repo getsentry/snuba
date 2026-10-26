@@ -38,8 +38,8 @@ _PASS_THROUGH_REFERRERS = {
 UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY = int(1e12)
 _RATE_LIMITER = RedisSlidingWindowRateLimiter(get_redis_client(RedisClientKey.RATE_LIMITER))
 DEFAULT_OVERRIDE_LIMIT = -1
-PETABYTE = 10**12
-DEFAULT_BYTES_SCANNED_LIMIT = int(1.28 * PETABYTE)
+TERABYTE = 10**12
+DEFAULT_BYTES_SCANNED_LIMIT = int(1.28 * TERABYTE)
 DEFAULT_TIMEOUT_PENALIZATION = DEFAULT_BYTES_SCANNED_LIMIT // 40
 DEFAULT_BYTES_THROTTLE_DIVIDER = 1.5
 DEFAULT_THREADS_THROTTLE_DIVIDER = 2
@@ -48,8 +48,6 @@ SUGGESTION = "The feature, organization/project is scanning too many bytes, this
 
 
 class BytesScannedRejectingPolicy(AllocationPolicy):
-    required_tenant_types: frozenset[str] = frozenset({"organization_id", "project_id", "referrer"})
-
     """For every query that comes in, keep track of the amount of bytes scanned for every
         (project_id|organization_id, referrer)
     combination in the last 10 minutes (sliding window). If a specific combination scans too

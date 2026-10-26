@@ -1,13 +1,28 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Button } from "@mantine/core";
+
+// Fast queries finish before this, so they don't flash a spinner.
+const SPINNER_DELAY_MS = 150;
 
 function ExecuteButton(props: {
   disabled: boolean;
   onClick: () => Promise<any>;
   onError?: (error: Error) => any;
   label?: string;
+  // Mantine color, e.g. "red" for actions that need extra care.
+  color?: string;
 }) {
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
+  const [showSpinner, setShowSpinner] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!isExecuting) {
+      setShowSpinner(false);
+      return;
+    }
+    const timer = setTimeout(() => setShowSpinner(true), SPINNER_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [isExecuting]);
 
   let label = props.label || "Execute Query";
 
@@ -29,8 +44,10 @@ function ExecuteButton(props: {
   }
 
   function executeQuery() {
+    // Until the spinner shows the button still looks clickable, so extra
+    // clicks are ignored rather than queued.
     if (isExecuting) {
-      window.alert("A query is already running");
+      return;
     }
     setIsExecuting(true);
     props
@@ -45,20 +62,38 @@ function ExecuteButton(props: {
       });
   }
 
+  // The label stays put and the spinner covers it, so the button keeps its
+  // size and nothing around it moves while a query runs.
   return (
-    <div>
+    <>
       <Button
         onClick={(evt: any) => {
           evt.preventDefault();
           executeQuery();
         }}
-        loading={isExecuting}
-        disabled={isExecuting || props.disabled}
+        color={props.color}
+        loading={showSpinner}
+        loaderPosition="center"
+        disabled={props.disabled}
+        aria-busy={isExecuting}
       >
         {label}
       </Button>
-    </div>
+      <span role="status" aria-live="polite" style={visuallyHiddenStyle}>
+        {isExecuting ? "Query running…" : ""}
+      </span>
+    </>
   );
 }
+
+// Read out by screen readers without taking up space.
+const visuallyHiddenStyle = {
+  position: "absolute" as const,
+  width: 1,
+  height: 1,
+  overflow: "hidden",
+  clip: "rect(0 0 0 0)",
+  whiteSpace: "nowrap" as const,
+};
 
 export default ExecuteButton;

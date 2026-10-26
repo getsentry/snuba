@@ -1,4 +1,5 @@
 import uuid
+from unittest import mock
 
 import pytest
 from sentry_options.testing import override_options
@@ -108,11 +109,6 @@ def ch_query() -> Query:
                 ]
             ),
             storage_key=StorageKey.TRANSACTIONS,
-            allocation_policies=[
-                MockAllocationPolicy(
-                    ResourceIdentifier(StorageKey("mystorage")),
-                )
-            ],
         ),
         selected_columns=[
             SelectedExpression(
@@ -141,24 +137,26 @@ def test_basic(ch_query: Query) -> None:
     settings = HTTPQuerySettings()
     timer = Timer("test")
     metadata = get_fake_metadata()
-    res = ExecutionStage(attinfo, query_metadata=metadata).execute(
-        QueryPipelineResult(
-            data=ch_query,
-            query_settings=settings,
-            timer=timer,
-            error=None,
+    policy = MockAllocationPolicy(ResourceIdentifier(StorageKey("mystorage")))
+    with mock.patch(
+        "snuba.web.db_query._get_allocation_policies",
+        return_value=[policy],
+    ):
+        res = ExecutionStage(attinfo, query_metadata=metadata).execute(
+            QueryPipelineResult(
+                data=ch_query,
+                query_settings=settings,
+                timer=timer,
+                error=None,
+            )
         )
-    )
     # data
     assert (
         res.data
         and len(res.data.result["data"]) == 1
         and "avg(duration)" in res.data.result["data"][0]
     )
-    # allocation policy
-    assert len(ch_query.get_from_clause().allocation_policies) == 1
-    policy = ch_query.get_from_clause().allocation_policies[0]
-    assert isinstance(policy, MockAllocationPolicy) and policy.did_update
+    assert policy.did_update
     q = settings.get_resource_quota()
     assert q and q.max_threads == 1
     # metadata

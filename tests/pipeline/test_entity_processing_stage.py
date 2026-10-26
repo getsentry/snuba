@@ -66,7 +66,6 @@ def test_basic(mock_storage: ReadableTableStorage, mock_entity: PluggableEntity)
                 table_name=schema.get_table_name(),
                 schema=mock_storage.get_schema().get_columns(),
                 storage_key=mock_storage.get_storage_key(),
-                allocation_policies=mock_storage.get_allocation_policies(),
                 final=logical_query.get_final(),
                 sampling_rate=logical_query.get_sample(),
                 mandatory_conditions=mock_storage.get_schema()
@@ -113,7 +112,6 @@ def test_basic_storage(
                 table_name=schema.get_table_name(),
                 schema=mock_storage.get_schema().get_columns(),
                 storage_key=mock_storage.get_storage_key(),
-                allocation_policies=mock_storage.get_allocation_policies(),
                 final=logical_query.get_final(),
                 sampling_rate=logical_query.get_sample(),
                 mandatory_conditions=mock_storage.get_schema()

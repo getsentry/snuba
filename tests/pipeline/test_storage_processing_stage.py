@@ -81,7 +81,6 @@ def test_basic(mock_storage: ReadableTableStorage) -> None:
                 table_name=schema.get_table_name(),
                 schema=mock_storage.get_schema().get_columns(),
                 storage_key=mock_storage.get_storage_key(),
-                allocation_policies=mock_storage.get_allocation_policies(),
                 final=query.get_from_clause().final,
                 sampling_rate=query.get_from_clause().sampling_rate,
                 mandatory_conditions=mock_storage.get_schema()
@@ -132,7 +131,6 @@ def test_default_subscriptable(mock_storage: ReadableTableStorage) -> None:
             table_name=schema.get_table_name(),
             schema=mock_storage.get_schema().get_columns(),
             storage_key=mock_storage.get_storage_key(),
-            allocation_policies=mock_storage.get_allocation_policies(),
             final=query.get_from_clause().final,
             sampling_rate=query.get_from_clause().sampling_rate,
             mandatory_conditions=mock_storage.get_schema()

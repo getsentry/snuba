@@ -12,6 +12,7 @@ from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query as ClickhouseQuery
+from snuba.clusters.load_info import LoadInfo
 from snuba.configs.configuration import Configuration, ResourceIdentifier
 from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.storage import Storage
@@ -24,7 +25,6 @@ from snuba.query.allocation_policies import (
     NO_UNITS,
     AllocationPolicy,
     AllocationPolicyViolations,
-    PassthroughPolicy,
     QueryResultOrError,
     QuotaAllowance,
 )
@@ -41,6 +41,10 @@ from snuba.web.db_query import (
     _get_query_settings_from_config,
     db_query,
     execute_query,
+)
+from tests.query.allocation_policies.attachment import (
+    match_block,
+    override_allocation_policy,
 )
 
 test_data = [
@@ -245,7 +249,7 @@ def test_query_settings_from_config(
 
 
 def _build_test_query(
-    select_expression: str, allocation_policies: list[AllocationPolicy] | None = None
+    select_expression: str,
 ) -> tuple[ClickhouseQuery, Storage, AttributionInfo]:
     storage = get_storage(StorageKey("errors_ro"))
     data_source = storage.get_schema().get_data_source()
@@ -256,7 +260,6 @@ def _build_test_query(
                 data_source.get_table_name(),
                 schema=storage.get_schema().get_columns(),
                 final=False,
-                allocation_policies=allocation_policies or storage.get_allocation_policies(),
                 storage_key=storage.get_storage_key(),
             ),
             selected_columns=[
@@ -469,10 +472,7 @@ def test_empty_result_meta_prefers_alias_over_name() -> None:
 def test_db_record_bytes_scanned() -> None:
     dataset_name = "events"
     storage_key = StorageKey("errors_ro")
-    query, storage, attribution_info = _build_test_query(
-        "count(distinct(project_id))",
-        allocation_policies=[PassthroughPolicy(ResourceIdentifier(storage_key))],
-    )
+    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
 
     query_metadata_list: list[ClickhouseQueryMetadata] = []
     stats: dict[str, Any] = {}
@@ -504,39 +504,35 @@ def test_db_record_bytes_scanned() -> None:
 @pytest.mark.events_db
 @pytest.mark.redis_db
 def test_db_query_success() -> None:
-    query, storage, _ = _build_test_query("count(distinct(project_id))")
-    # Use a unique tenant so leftover Redis quota from other tests does not affect
-    # this assertion. BytesScannedRejectingPolicy keys by (org|project, referrer).
-    attribution_info = AttributionInfo(
-        app_id=AppID(key="key"),
-        tenant_ids={
-            "referrer": "test_db_query_success",
-            "organization_id": 987654321,
-        },
-        referrer="test_db_query_success",
-        team=None,
-        feature=None,
-        parent_api=None,
-    )
+    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
 
     query_metadata_list: list[ClickhouseQueryMetadata] = []
     stats: dict[str, Any] = {}
 
-    result = db_query(
-        clickhouse_query=query,
-        query_settings=HTTPQuerySettings(),
-        attribution_info=attribution_info,
-        dataset_name="events",
-        query_metadata_list=query_metadata_list,
-        formatted_query=format_query(query),
-        reader=storage.get_cluster().get_reader(),
-        timer=Timer("foo"),
-        stats=stats,
-        trace_id="trace_id",
-        robust=False,
-    )
+    with override_allocation_policy(
+        {
+            "errors_ro": match_block(
+                [
+                    {"name": "PassthroughPolicy", "is_enforced": 0},
+                ]
+            )
+        }
+    ):
+        result = db_query(
+            clickhouse_query=query,
+            query_settings=HTTPQuerySettings(),
+            attribution_info=attribution_info,
+            dataset_name="events",
+            query_metadata_list=query_metadata_list,
+            formatted_query=format_query(query),
+            reader=storage.get_cluster().get_reader(),
+            timer=Timer("foo"),
+            stats=stats,
+            trace_id="trace_id",
+            robust=False,
+        )
 
-    assert stats["quota_allowance"] == {
+    expected_quota_allowance = {
         "summary": {
             "threads_used": 10,
             "is_successful": True,
@@ -548,42 +544,24 @@ def test_db_query_success() -> None:
             "throttled_by": {},
         },
         "details": {
-            "BytesScannedRejectingPolicy": {
+            "PassthroughPolicy": {
                 "can_run": True,
                 "max_threads": 10,
                 "max_bytes_to_read": 0,
                 "explanation": {
-                    "reason": "within_limit",
                     "storage_key": "errors_ro",
                 },
                 "is_throttled": False,
-                "throttle_threshold": 1706666666666,
-                "rejection_threshold": 2560000000000,
-                # probe requests 1e12 against the org limit (2.56e12), so used is limit-probe
-                "quota_used": 1560000000000,
-                "quota_unit": "bytes",
-                "suggestion": "no_suggestion",
-            },
-            "ReferrerGuardRailPolicy": {
-                "can_run": True,
-                "max_threads": 10,
-                "max_bytes_to_read": 0,
-                "explanation": {
-                    "reason": "within limit",
-                    "policy": "referrer_guard_rail_policy",
-                    "referrer": "test_db_query_success",
-                    "storage_key": "errors_ro",
-                },
-                "is_throttled": False,
-                "throttle_threshold": 66,
-                "rejection_threshold": 100,
-                "quota_used": 1,
-                "quota_unit": "concurrent_queries",
-                "suggestion": "no_suggestion",
+                "throttle_threshold": MAX_THRESHOLD,
+                "rejection_threshold": MAX_THRESHOLD,
+                "quota_used": 0,
+                "quota_unit": NO_UNITS,
+                "suggestion": NO_SUGGESTION,
             },
         },
     }
 
+    assert stats["quota_allowance"] == expected_quota_allowance
     assert len(query_metadata_list) == 1
     assert result.extra["stats"] == stats
     assert result.extra["sql"] is not None
@@ -984,31 +962,32 @@ def test_allocation_policy_threads_applied_to_query() -> None:
             )
 
     # Should limit to minimal threads across policies
-    query, storage, attribution_info = _build_test_query(
-        "count(distinct(project_id))",
-        [
-            ThreadLimitPolicy(ResourceIdentifier(StorageKey("doesntmatter"))),
-            ThreadLimitPolicyDuplicate(ResourceIdentifier(StorageKey("doesntmatter"))),
-        ],
-    )
+    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
 
     query_metadata_list: list[ClickhouseQueryMetadata] = []
     stats: dict[str, Any] = {}
     settings = HTTPQuerySettings()
     settings.set_resource_quota(ResourceQuota(max_threads=420))
-    db_query(
-        clickhouse_query=query,
-        query_settings=settings,
-        attribution_info=attribution_info,
-        dataset_name="events",
-        query_metadata_list=query_metadata_list,
-        formatted_query=format_query(query),
-        reader=storage.get_cluster().get_reader(),
-        timer=Timer("foo"),
-        stats=stats,
-        trace_id="trace_id",
-        robust=False,
-    )
+    with mock.patch(
+        "snuba.web.db_query._get_allocation_policies",
+        return_value=[
+            ThreadLimitPolicy(ResourceIdentifier(StorageKey("doesntmatter"))),
+            ThreadLimitPolicyDuplicate(ResourceIdentifier(StorageKey("doesntmatter"))),
+        ],
+    ):
+        db_query(
+            clickhouse_query=query,
+            query_settings=settings,
+            attribution_info=attribution_info,
+            dataset_name="events",
+            query_metadata_list=query_metadata_list,
+            formatted_query=format_query(query),
+            reader=storage.get_cluster().get_reader(),
+            timer=Timer("foo"),
+            stats=stats,
+            trace_id="trace_id",
+            robust=False,
+        )
     resource_quota = settings.get_resource_quota()
     assert resource_quota is not None
     assert resource_quota.max_threads == POLICY_THREADS
@@ -1093,31 +1072,32 @@ def test_allocation_policy_updates_quota() -> None:
             queries_run_duplicate += 1
 
     # the first policy will error and short circuit the rest
-    query, storage, attribution_info = _build_test_query(
-        "count(distinct(project_id))",
-        [
-            CountQueryPolicy(ResourceIdentifier(StorageKey("doesntmatter"))),
-            CountQueryPolicyDuplicate(ResourceIdentifier(StorageKey("doesntmatter"))),
-        ],
-    )
+    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
 
     def _run_query() -> None:
         query_metadata_list: list[ClickhouseQueryMetadata] = []
         stats: dict[str, Any] = {}
         settings = HTTPQuerySettings()
-        db_query(
-            clickhouse_query=query,
-            query_settings=settings,
-            attribution_info=attribution_info,
-            dataset_name="events",
-            query_metadata_list=query_metadata_list,
-            formatted_query=format_query(query),
-            reader=storage.get_cluster().get_reader(),
-            timer=Timer("foo"),
-            stats=stats,
-            trace_id="trace_id",
-            robust=False,
-        )
+        with mock.patch(
+            "snuba.web.db_query._get_allocation_policies",
+            return_value=[
+                CountQueryPolicy(ResourceIdentifier(StorageKey("doesntmatter"))),
+                CountQueryPolicyDuplicate(ResourceIdentifier(StorageKey("doesntmatter"))),
+            ],
+        ):
+            db_query(
+                clickhouse_query=query,
+                query_settings=settings,
+                attribution_info=attribution_info,
+                dataset_name="events",
+                query_metadata_list=query_metadata_list,
+                formatted_query=format_query(query),
+                reader=storage.get_cluster().get_reader(),
+                timer=Timer("foo"),
+                stats=stats,
+                trace_id="trace_id",
+                robust=False,
+            )
 
     for _ in range(MAX_QUERIES_TO_RUN):
         _run_query()
@@ -1324,29 +1304,28 @@ def test_policy_sets_max_bytes_to_read() -> None:
         ) -> None:
             pass
 
-    query, storage, attribution_info = _build_test_query(
-        "count(distinct(project_id))",
-        [
-            MaxBytesPolicy(ResourceIdentifier(StorageKey("doesntmatter"))),
-        ],
-    )
+    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
 
     query_metadata_list: list[ClickhouseQueryMetadata] = []
     stats: dict[str, Any] = {}
     settings = HTTPQuerySettings()
-    db_query(
-        clickhouse_query=query,
-        query_settings=settings,
-        attribution_info=attribution_info,
-        dataset_name="events",
-        query_metadata_list=query_metadata_list,
-        formatted_query=format_query(query),
-        reader=storage.get_cluster().get_reader(),
-        timer=Timer("foo"),
-        stats=stats,
-        trace_id="trace_id",
-        robust=False,
-    )
+    with mock.patch(
+        "snuba.web.db_query._get_allocation_policies",
+        return_value=[MaxBytesPolicy(ResourceIdentifier(StorageKey("doesntmatter")))],
+    ):
+        db_query(
+            clickhouse_query=query,
+            query_settings=settings,
+            attribution_info=attribution_info,
+            dataset_name="events",
+            query_metadata_list=query_metadata_list,
+            formatted_query=format_query(query),
+            reader=storage.get_cluster().get_reader(),
+            timer=Timer("foo"),
+            stats=stats,
+            trace_id="trace_id",
+            robust=False,
+        )
 
     assert stats["quota_allowance"] == {
         "details": {
@@ -1382,3 +1361,166 @@ def test_policy_sets_max_bytes_to_read() -> None:
             },
         },
     }
+
+
+class _RejectAllPolicy(AllocationPolicy):
+    def _additional_config_definitions(self) -> list[Configuration]:
+        return []
+
+    def _get_quota_allowance(
+        self, tenant_ids: dict[str, str | int], query_id: str
+    ) -> QuotaAllowance:
+        return QuotaAllowance(
+            can_run=False,
+            max_threads=0,
+            explanation={"reason": "reject"},
+            is_throttled=False,
+            throttle_threshold=MAX_THRESHOLD,
+            rejection_threshold=MAX_THRESHOLD,
+            quota_used=0,
+            quota_unit=NO_UNITS,
+            suggestion=NO_SUGGESTION,
+        )
+
+    def _update_quota_balance(
+        self,
+        tenant_ids: dict[str, str | int],
+        query_id: str,
+        result_or_error: QueryResultOrError,
+    ) -> None:
+        return
+
+
+class _RecordCallPolicy(AllocationPolicy):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.called = False
+
+    def _additional_config_definitions(self) -> list[Configuration]:
+        return []
+
+    def _get_quota_allowance(
+        self, tenant_ids: dict[str, str | int], query_id: str
+    ) -> QuotaAllowance:
+        self.called = True
+        return QuotaAllowance(
+            can_run=True,
+            max_threads=self.max_threads,
+            explanation={"reason": "allow"},
+            is_throttled=False,
+            throttle_threshold=MAX_THRESHOLD,
+            rejection_threshold=MAX_THRESHOLD,
+            quota_used=0,
+            quota_unit=NO_UNITS,
+            suggestion=NO_SUGGESTION,
+        )
+
+    def _update_quota_balance(
+        self,
+        tenant_ids: dict[str, str | int],
+        query_id: str,
+        result_or_error: QueryResultOrError,
+    ) -> None:
+        return
+
+
+def test_idle_pardon_allows_rejected_query() -> None:
+    attribution_info = mock.Mock()
+    attribution_info.tenant_ids = {"referrer": "test_referrer", "organization_id": 1}
+    stats: MutableMapping[str, Any] = {}
+    idle = LoadInfo(cluster_load=1.0, concurrent_queries=1)
+    reject_thresholds = {"reject": {"cluster_load": 90.0, "concurrent_queries": 100.0}}
+    with (
+        override_options("snuba", {"storage_routing.enable_get_cluster_loadinfo": True}),
+        mock.patch(
+            "snuba.web.db_query.get_cluster_loadinfo",
+            return_value=idle,
+        ),
+    ):
+        query_settings = HTTPQuerySettings()
+        _apply_allocation_policies_quota(
+            query_settings=query_settings,
+            attribution_info=attribution_info,
+            formatted_query=mock.Mock(),
+            stats=stats,
+            allocation_policies=[
+                _RejectAllPolicy(
+                    ResourceIdentifier(StorageKey("errors_ro")),
+                    thresholds=reject_thresholds,
+                )
+            ],
+            query_id="pardon_query",
+        )
+    assert stats["quota_allowance"]["summary"]["is_rejected"] is False
+    details = stats["quota_allowance"]["details"]["_RejectAllPolicy"]
+    assert details["can_run"] is False
+    assert details["max_threads"] == 0
+    assert details["explanation"]["idle_pardon"] == idle.to_dict()
+    quota = query_settings.get_resource_quota()
+    assert quota is not None
+    assert quota.max_threads == 10
+
+
+def test_idle_pardon_still_rejects_when_not_idle() -> None:
+    attribution_info = mock.Mock()
+    attribution_info.tenant_ids = {"referrer": "test_referrer", "organization_id": 1}
+    stats: MutableMapping[str, Any] = {}
+    busy = LoadInfo(cluster_load=50.0, concurrent_queries=1)
+    # cluster_load 50 exceeds the 40 reject ceiling, so the query keeps rejecting.
+    reject_thresholds = {"reject": {"cluster_load": 40.0, "concurrent_queries": 100.0}}
+    with (
+        override_options("snuba", {"storage_routing.enable_get_cluster_loadinfo": True}),
+        mock.patch(
+            "snuba.web.db_query.get_cluster_loadinfo",
+            return_value=busy,
+        ),
+        pytest.raises(AllocationPolicyViolations),
+    ):
+        _apply_allocation_policies_quota(
+            query_settings=HTTPQuerySettings(),
+            attribution_info=attribution_info,
+            formatted_query=mock.Mock(),
+            stats=stats,
+            allocation_policies=[
+                _RejectAllPolicy(
+                    ResourceIdentifier(StorageKey("errors_ro")),
+                    thresholds=reject_thresholds,
+                )
+            ],
+            query_id="no_pardon_query",
+        )
+    assert stats["quota_allowance"]["summary"]["is_rejected"] is True
+
+
+def test_idle_pardon_does_not_short_circuit_remaining_policies() -> None:
+    attribution_info = mock.Mock()
+    attribution_info.tenant_ids = {"referrer": "test_referrer", "organization_id": 1}
+    stats: MutableMapping[str, Any] = {}
+    idle = LoadInfo(cluster_load=1.0, concurrent_queries=1)
+    reject_thresholds = {"reject": {"cluster_load": 90.0, "concurrent_queries": 100.0}}
+    second = _RecordCallPolicy(ResourceIdentifier(StorageKey("errors_ro")))
+    with (
+        override_options("snuba", {"storage_routing.enable_get_cluster_loadinfo": True}),
+        mock.patch(
+            "snuba.web.db_query.get_cluster_loadinfo",
+            return_value=idle,
+        ),
+    ):
+        _apply_allocation_policies_quota(
+            query_settings=HTTPQuerySettings(),
+            attribution_info=attribution_info,
+            formatted_query=mock.Mock(),
+            stats=stats,
+            allocation_policies=[
+                _RejectAllPolicy(
+                    ResourceIdentifier(StorageKey("errors_ro")),
+                    thresholds=reject_thresholds,
+                ),
+                second,
+            ],
+            query_id="pardon_no_short_circuit",
+        )
+    assert second.called
+    assert stats["quota_allowance"]["summary"]["is_rejected"] is False
+    assert stats["quota_allowance"]["details"]["_RejectAllPolicy"]["can_run"] is False
+    assert "_RecordCallPolicy" in stats["quota_allowance"]["details"]

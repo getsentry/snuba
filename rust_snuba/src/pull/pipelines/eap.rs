@@ -18,7 +18,7 @@ use crate::pull::stages::processor_stage::ProcessorStage;
 ///
 /// Processor → [DLQ rejections] → Batch → Writer → CommitLog → COGS
 ///
-/// Covers: eap_items, generic_metrics (same shape).
+/// Covers: eap_items.
 pub struct EapPipeline {
     processor: ProcessorStage,
     processing_concurrency: usize,
@@ -64,16 +64,16 @@ impl EapPipeline {
 impl Pipeline for EapPipeline {
     type Output = BatchMetadata;
 
-    fn stream<'a>(
-        &'a self,
-        source: impl Stream<Item = StageResult<KafkaPayload>> + 'a,
-    ) -> impl Stream<Item = StageResult<BatchMetadata>> + 'a {
+    fn stream(
+        self,
+        source: impl Stream<Item = StageResult<KafkaPayload>> + Send,
+    ) -> impl Stream<Item = StageResult<BatchMetadata>> + Send {
         source
-            .apply_concurrent(&self.processor, self.processing_concurrency)
-            .apply_with_timer(&self.batch, self.idle_timeout, self.max_batch_time)
-            .apply_concurrent(&self.writer, self.writer_concurrency)
-            .apply(&self.commit_log)
-            .apply(&self.cogs)
-            .on_reject(&self.dlq_handler)
+            .apply_concurrent(self.processor, self.processing_concurrency)
+            .apply_with_timer(self.batch, self.idle_timeout, self.max_batch_time)
+            .apply_concurrent(self.writer, self.writer_concurrency)
+            .apply(self.commit_log)
+            .apply(self.cogs)
+            .on_reject(self.dlq_handler)
     }
 }

@@ -18,4 +18,20 @@ type PredefinedQuery = {
   description: string;
 };
 
-export { OutcomesQueryRequest, OutcomesQueryResult, PredefinedQuery };
+type EnumOption = {
+  value: string;
+  label: string;
+};
+
+type OutcomesEnumOptions = {
+  categories: EnumOption[];
+  outcomes: EnumOption[];
+};
+
+export {
+  EnumOption,
+  OutcomesEnumOptions,
+  OutcomesQueryRequest,
+  OutcomesQueryResult,
+  PredefinedQuery,
+};

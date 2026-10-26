@@ -61,3 +61,59 @@ def test_rust_consumer_passes_skip_write(resolve_config: Mock, *_mocks: Sequence
     assert result.exit_code == 0, result.output
     mock_rust.consumer.assert_called_once()
     assert mock_rust.consumer.call_args.args[-1] is True
+
+
+@patch("snuba.cli.rust_consumer.asdict", return_value={})
+@patch("snuba.cli.rust_consumer.resolve_consumer_config")
+def test_rust_consumer_clickhouse_concurrency_without_async_inserts(
+    resolve_config: Mock, *_mocks: Sequence[Mock]
+) -> None:
+    """--clickhouse-concurrency is honored even without --async-inserts."""
+    resolve_config.return_value = Mock()
+    mock_rust = Mock()
+    mock_rust.consumer.return_value = 0
+
+    runner = CliRunner()
+    with patch.dict(sys.modules, {"rust_snuba": mock_rust}):
+        result = runner.invoke(
+            rust_consumer,
+            [
+                "--storage",
+                "eap_items",
+                "--consumer-group",
+                "snuba-eap-items-consumers",
+                "--clickhouse-concurrency",
+                "4",
+            ],
+        )
+
+    assert result.exit_code == 0, result.output
+    mock_rust.consumer.assert_called_once()
+    assert mock_rust.consumer.call_args.args[5] == 4
+
+
+@patch("snuba.cli.rust_consumer.asdict", return_value={})
+@patch("snuba.cli.rust_consumer.resolve_consumer_config")
+def test_rust_consumer_clickhouse_concurrency_defaults_to_two(
+    resolve_config: Mock, *_mocks: Sequence[Mock]
+) -> None:
+    """Without --clickhouse-concurrency the writer keeps its historical default of 2."""
+    resolve_config.return_value = Mock()
+    mock_rust = Mock()
+    mock_rust.consumer.return_value = 0
+
+    runner = CliRunner()
+    with patch.dict(sys.modules, {"rust_snuba": mock_rust}):
+        result = runner.invoke(
+            rust_consumer,
+            [
+                "--storage",
+                "eap_items",
+                "--consumer-group",
+                "snuba-eap-items-consumers",
+            ],
+        )
+
+    assert result.exit_code == 0, result.output
+    mock_rust.consumer.assert_called_once()
+    assert mock_rust.consumer.call_args.args[5] == 2

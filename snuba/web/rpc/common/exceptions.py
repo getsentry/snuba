@@ -3,6 +3,7 @@ from typing import Any
 from google.protobuf import any_pb2, struct_pb2
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 
+from snuba.clickhouse.error_codes import ErrorCodes
 from snuba.web import QueryException
 
 
@@ -61,5 +62,9 @@ def convert_rpc_exception_to_proto(exc: RPCRequestException | QueryException) ->
     inferred_status = 500
     if exc.exception_type == "RateLimitExceeded":
         inferred_status = 429
+    else:
+        error_code = exc.extra.get("stats", {}).get("error_code")
+        if error_code == ErrorCodes.CANNOT_COMPILE_REGEXP:
+            inferred_status = 400
 
     return ErrorProto(code=inferred_status, message=str(exc))

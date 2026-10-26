@@ -6,7 +6,6 @@ use chrono::{DateTime, Utc};
 use sentry_arroyo::backends::kafka::config::KafkaConfig;
 use sentry_arroyo::backends::kafka::producer::KafkaProducer;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
-use sentry_arroyo::metrics;
 use sentry_arroyo::processing::dlq::{DlqLimit, DlqPolicy, KafkaDlqProducer};
 
 use sentry_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
@@ -19,7 +18,7 @@ use pyo3::types::PyBytes;
 use crate::config;
 use crate::factory_v2::ConsumerStrategyFactoryV2;
 use crate::logging::{setup_logging, setup_sentry};
-use crate::metrics::statsd::create_dogstatsd_backend;
+use crate::metrics::statsd::install_dogstatsd;
 use crate::processors;
 use crate::rebalancing;
 use crate::types::{InsertOrReplacement, KafkaMessageMetadata};
@@ -161,9 +160,7 @@ pub fn consumer_impl(
             ("consumer_group", consumer_group.to_owned()),
         ];
 
-        if let Some(backend) = create_dogstatsd_backend(&env_config, "snuba.consumer", &tags) {
-            metrics::init(backend).unwrap();
-        }
+        install_dogstatsd(&env_config, "snuba.consumer", &tags);
     }
 
     if !use_rust_processor {
@@ -224,7 +221,8 @@ pub fn consumer_impl(
             let producer = KafkaProducer::new(KafkaConfig::new_producer_config(
                 vec![],
                 Some(dlq_topic_config.broker_config),
-            ));
+            ))
+            .expect("failed to create kafka producer");
 
             let kafka_dlq_producer = Box::new(KafkaDlqProducer::new(
                 producer,
@@ -252,7 +250,8 @@ pub fn consumer_impl(
     } else if let Some(topic_config) = consumer_config.commit_log_topic {
         let producer_config =
             KafkaConfig::new_producer_config(vec![], Some(topic_config.broker_config));
-        let producer = KafkaProducer::new(producer_config);
+        let producer =
+            KafkaProducer::new(producer_config).expect("failed to create kafka producer");
         Some((
             Arc::new(producer),
             Topic::new(&topic_config.physical_topic_name),

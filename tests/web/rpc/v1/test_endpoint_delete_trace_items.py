@@ -68,7 +68,7 @@ _SPANS = [
 
 @pytest.fixture(autouse=False)
 def setup_teardown(eap: None, redis_db: None) -> None:
-    items_storage = get_writable_storage(StorageKey("eap_items"))
+    items_storage = get_writable_storage(StorageKey("eap_items_2"))
     write_raw_unprocessed_events(items_storage, _SPANS)
 
 
@@ -145,7 +145,7 @@ class TestEndpointDeleteTrace(BaseApiTest):
 
         # Check the arguments to produce_delete_query
         called_args = produce_delete_query_mock.call_args[0][0]
-        assert called_args["storage_name"] == "eap_items"
+        assert called_args["storage_name"] == "eap_items_2"
         assert called_args["conditions"]["project_id"] == [1, 2, 3]
         assert called_args["conditions"]["organization_id"] == [1]
         assert called_args["conditions"]["trace_id"] == [_TRACE_ID]

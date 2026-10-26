@@ -96,20 +96,19 @@ test-rust:
 lint-rust:
 	. scripts/rust-envvars && \
 		cd rust_snuba && \
-		rustup component add clippy && \
 		cargo clippy --workspace --all-targets --no-deps -- -D warnings
 .PHONY: lint-rust
 
 format-rust:
 	. scripts/rust-envvars && \
 		cd rust_snuba && \
-		cargo +stable fmt --all
+		cargo fmt --all
 .PHONY: format-rust
 
 format-rust-ci:
 	. scripts/rust-envvars && \
 		cd rust_snuba && \
-		cargo +stable fmt --all --check
+		cargo fmt --all --check
 .PHONY: format-rust-ci
 
 gocd:
@@ -118,8 +117,7 @@ gocd:
 	cd ./gocd/templates && jb install && jb update
 	find . -type f \( -name '*.libsonnet' -o -name '*.jsonnet' \) -print0 | xargs -n 1 -0 jsonnetfmt -i
 	find . -type f \( -name '*.libsonnet' -o -name '*.jsonnet' \) -print0 | xargs -n 1 -0 jsonnet-lint -J ./gocd/templates/vendor
-	cd ./gocd/templates && jsonnet --ext-code output-files=true -J vendor -m ../generated-pipelines ./snuba-py.jsonnet
-	cd ./gocd/templates && jsonnet --ext-code output-files=true -J vendor -m ../generated-pipelines ./snuba-rs.jsonnet
+	cd ./gocd/templates && jsonnet --ext-code output-files=true -J vendor -m ../generated-pipelines ./snuba.jsonnet
 	cd ./gocd/generated-pipelines && find . -type f \( -name '*.yaml' \) -print0 | xargs -n 1 -0 yq -p json -o yaml -i
 .PHONY: gocd
 

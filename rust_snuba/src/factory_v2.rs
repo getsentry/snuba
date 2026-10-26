@@ -7,7 +7,6 @@ use sentry_arroyo::backends::kafka::config::KafkaConfig;
 use sentry_arroyo::backends::kafka::producer::KafkaProducer;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::processing::strategies::commit_offsets::CommitOffsets;
-use sentry_arroyo::processing::strategies::healthcheck::HealthCheck;
 use sentry_arroyo::processing::strategies::reduce::Reduce;
 use sentry_arroyo::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskInThreads,
@@ -28,7 +27,7 @@ use crate::strategies::accountant::RecordCogs;
 use crate::strategies::clickhouse::writer_v2::{JsonWriterStep, RowBinaryWriterStep};
 use crate::strategies::commit_log::ProduceCommitLog;
 use crate::strategies::dlq_by_age::DlqByAge;
-use crate::strategies::healthcheck::HealthCheck as SnubaHealthCheck;
+use crate::strategies::healthcheck;
 use crate::strategies::join_timeout::SetJoinTimeout;
 use crate::strategies::processor::{
     get_schema, make_rust_processor, make_rust_processor_with_replacements, validate_schema,
@@ -100,6 +99,9 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
         let eap_items_emit_received_at = processor_name == "EAPItemsProcessor"
             && crate::processors::eap_items::emit_received_at();
 
+        let validate_schema_enabled =
+            crate::options::validate_schema_enabled(&self.storage_config.name);
+
         // RowBinary storages: the processor swap (JSON → RowBinary sibling) and
         // the column list the RowBinary writer needs, both used below.
         let (process_fn_override, insert_columns): (
@@ -144,7 +146,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
 
         let cogs_label = get_cogs_label(&self.storage_config.message_processor.python_class_name);
 
-        // Produce cogs if generic metrics AND we are not skipping writes AND record_cogs is true
+        // Produce cogs if the processor has a COGS label AND we are not skipping writes AND record_cogs is true
         let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<()>>> =
             match (self.env_config.record_cogs, self.skip_write, cogs_label) {
                 (true, false, Some(resource_id)) => Box::new(RecordCogs::new(
@@ -244,7 +246,8 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                         self.replacements_config.clone().expect(
                             "replacements topic required for processors that emit replacements",
                         );
-                    let producer = KafkaProducer::new(replacements_config);
+                    let producer = KafkaProducer::new(replacements_config)
+                        .expect("failed to create kafka producer");
                     ProduceReplacements::new(
                         next_step,
                         producer,
@@ -259,6 +262,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                     func,
                     &self.logical_topic_name,
                     self.enforce_schema,
+                    validate_schema_enabled,
                     &self.processing_concurrency,
                     config::ProcessorConfig {
                         env_config: self.env_config.clone(),
@@ -278,6 +282,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                     func,
                     &self.logical_topic_name,
                     self.enforce_schema,
+                    validate_schema_enabled,
                     &self.processing_concurrency,
                     config::ProcessorConfig {
                         env_config: self.env_config.clone(),
@@ -294,7 +299,17 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                 panic!("Consumer with replacements cannot be run in hybrid-mode");
             }
             _ => {
-                let schema = get_schema(&self.logical_topic_name, self.enforce_schema);
+                // Same rule `make_rust_processor` applies on the Rust path:
+                // `enforce_schema` implies validation, so the option can only
+                // turn it off for consumers not running with --enforce-schema.
+                let validate_schema = validate_schema_enabled || self.enforce_schema;
+
+                // Skip loading the schema when we won't validate against it.
+                let schema = if validate_schema {
+                    get_schema(&self.logical_topic_name, self.enforce_schema)
+                } else {
+                    None
+                };
 
                 Box::new(RunTaskInThreads::new(
                     PythonTransformStep::new(
@@ -307,6 +322,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                     SchemaValidator {
                         schema,
                         enforce_schema: self.enforce_schema,
+                        validate_schema,
                     },
                     &self.processing_concurrency,
                     Some("validate_schema"),
@@ -333,17 +349,12 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
         };
 
         if let Some(path) = &self.health_check_file {
-            {
-                if self.health_check == "snuba" {
-                    tracing::info!(
-                        "Using Snuba HealthCheck for consumer group: {}",
-                        self.physical_consumer_group
-                    );
-                    Box::new(SnubaHealthCheck::new(next_step, path))
-                } else {
-                    Box::new(HealthCheck::new(next_step, path))
-                }
-            }
+            tracing::info!(
+                "Using {} healthcheck for consumer group: {}",
+                self.health_check,
+                self.physical_consumer_group
+            );
+            healthcheck::wrap_health_check(next_step, &self.health_check, path)
         } else {
             Box::new(next_step)
         }
@@ -354,6 +365,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
 struct SchemaValidator {
     schema: Option<Arc<Schema>>,
     enforce_schema: bool,
+    validate_schema: bool,
 }
 
 impl SchemaValidator {
@@ -361,7 +373,9 @@ impl SchemaValidator {
         self,
         message: Message<KafkaPayload>,
     ) -> Result<Message<KafkaPayload>, RunTaskError<anyhow::Error>> {
-        validate_schema(&message, &self.schema, self.enforce_schema)?;
+        if self.validate_schema {
+            validate_schema(&message, &self.schema, self.enforce_schema)?;
+        }
         Ok(message)
     }
 }
@@ -447,6 +461,7 @@ mod tests {
         max_batch_size: usize,
         calculation: config::BatchSizeCalculation,
     ) -> Reduce<BytesInsertBatch<RowData>, BytesInsertBatch<RowData>> {
+        #[allow(clippy::result_large_err)]
         let accumulator = Arc::new(
             |batch: BytesInsertBatch<RowData>, small_batch: Message<BytesInsertBatch<RowData>>| {
                 Ok(batch.merge(small_batch.into_payload()))

@@ -79,3 +79,9 @@ class TestGetRequestStatus:
         status = get_request_status(error)
         assert status.status == RequestStatus.CLICKHOUSE_TIMEOUT
         assert status.slo == SLO.AGAINST
+
+    def test_get_request_status_cannot_compile_regexp(self) -> None:
+        error = ClickhouseError("cannot compile regexp", code=ErrorCodes.CANNOT_COMPILE_REGEXP)
+        status = get_request_status(error)
+        assert status.status == RequestStatus.INVALID_REQUEST
+        assert status.slo == SLO.FOR

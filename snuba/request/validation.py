@@ -37,7 +37,7 @@ from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.sentry import SENTRY_OP, set_tag_and_attribute
 
-metrics = MetricsWrapper(environment.metrics, "snuba.validation")
+metrics = MetricsWrapper(environment.metrics, "validation")
 
 
 class Parser(Protocol):

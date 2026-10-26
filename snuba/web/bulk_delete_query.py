@@ -7,6 +7,7 @@ from typing import Any, TypedDict
 import rapidjson
 from confluent_kafka import KafkaError, Producer
 from confluent_kafka import Message as KafkaMessage
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
 from snuba import environment, settings
 from snuba.attribution.attribution_info import AttributionInfo
@@ -14,12 +15,13 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
 from snuba.clusters.cluster import UndefinedClickhouseCluster, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.deletion_settings import DeletionSettings, get_trace_item_type_name
+from snuba.datasets.deletion_settings import DeletionSettings
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_config_built_storages
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.lw_deletions.types import AttributeConditions, ConditionsBag, ConditionsType
+from snuba.protos.common import get_trace_item_type_name
 from snuba.query.conditions import combine_or_conditions
 from snuba.query.data_source.simple import Table
 from snuba.query.dsl import literal
@@ -40,7 +42,7 @@ from snuba.web.delete_query import (
     deletes_are_enabled,
 )
 
-metrics = MetricsWrapper(environment.metrics, "snuba.delete")
+metrics = MetricsWrapper(environment.metrics, "delete")
 logger = logging.getLogger(__name__)
 
 
@@ -56,13 +58,15 @@ class DeleteQueryMessage(TypedDict, total=False):
     conditions: ConditionsType
     tenant_ids: Mapping[str, str | int]
     attribute_conditions: dict[str, WireAttributeCondition] | None
-    attribute_conditions_item_type: int | None
+    attribute_conditions_item_type: TraceItemType.ValueType | None
 
 
 PRODUCER_MAP: MutableMapping[str, Producer] = {}
 STORAGE_TOPIC: Mapping[str, Topic] = {
     StorageKey.SEARCH_ISSUES.value: Topic.LW_DELETIONS_GENERIC_EVENTS,
+    # TODO: remove EAP_ITEMS once every region's consumer runs --storage eap_items_2
     StorageKey.EAP_ITEMS.value: Topic.LW_DELETIONS_EAP_ITEMS,
+    StorageKey.EAP_ITEMS_2.value: Topic.LW_DELETIONS_EAP_ITEMS,
 }
 
 
@@ -253,7 +257,6 @@ def construct_query(storage: WritableTableStorage, table: str, condition: Expres
             table,
             ColumnSet([]),
             storage_key=storage.get_storage_key(),
-            allocation_policies=storage.get_delete_allocation_policies(),
         ),
         condition=condition,
         on_cluster=on_cluster,

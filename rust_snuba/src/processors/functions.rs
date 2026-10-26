@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 
+use crate::processors::utils::serialize_opt_datetime64_us;
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
@@ -103,7 +104,9 @@ struct Function<'a> {
     release: Option<&'a str>,
     retention_days: u32,
     timestamp: u64,
+    #[serde(serialize_with = "serialize_opt_datetime64_us")]
     start_timestamp: Option<u64>,
+    #[serde(serialize_with = "serialize_opt_datetime64_us")]
     end_timestamp: Option<u64>,
     transaction_name: &'a str,
     thread_id: String,

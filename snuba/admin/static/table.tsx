@@ -97,13 +97,14 @@ const tableStyle = {
   ...border,
   borderCollapse: "collapse" as const,
   width: "100%",
+  backgroundColor: COLORS.TABLE_BG,
   fontSize: 16,
   marginBottom: 20,
 };
 
 const headerStyle = {
-  backgroundColor: COLORS.SNUBA_BLUE,
-  color: "white",
+  backgroundColor: COLORS.TABLE_HEADER_BG,
+  color: COLORS.TABLE_HEADER_TEXT,
 };
 
 const thStyle = {

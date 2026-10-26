@@ -38,10 +38,8 @@ def _pre_entity_query_processing(query: CompositeQuery[Entity]) -> None:
     if isinstance(from_clause, JoinClause):
         nodes = from_clause.get_alias_node_map()
         for node in nodes.values():
-            if (
-                isinstance(node.data_source, Entity)
-                and not node.data_source.key.value.startswith("generic_metrics")
-                and not node.data_source.key.value.startswith("metrics")
+            if isinstance(node.data_source, Entity) and not node.data_source.key.value.startswith(
+                "metrics"
             ):
                 is_gen_metrics_join_query = False
     else:

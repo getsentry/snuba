@@ -1,7 +1,6 @@
 import re
 import uuid
 from collections.abc import Mapping
-from datetime import datetime
 from typing import Any
 
 from google.protobuf.json_format import MessageToDict
@@ -31,6 +30,7 @@ from snuba.web import QueryResult
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
+    as_datetime,
     next_monday,
     prev_monday,
     project_id_and_org_conditions,
@@ -39,8 +39,8 @@ from snuba.web.rpc.common.common import (
 )
 from snuba.web.rpc.common.debug_info import extract_response_meta
 from snuba.web.rpc.proto_visitor import ProtoVisitor, TraceItemFilterWrapper
-from snuba.web.rpc.v1.resolvers.R_eap_items import co_occurring_attrs
-from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs import CoOccurringAttrsSource
+from snuba.web.rpc.v1 import co_occurring_attrs
+from snuba.web.rpc.v1.co_occurring_attrs import CoOccurringAttrsSource
 
 # max value the user can provide for 'limit' in their request
 MAX_REQUEST_LIMIT = 1000
@@ -149,17 +149,6 @@ def _semver_sort_key_py(name: str) -> tuple[tuple[int, int, int, int], int, str]
         is_stable,
         non_null,
     )
-
-
-def _as_datetime(value: Any) -> datetime:
-    """Coerce a ClickHouse DateTime result into a datetime.
-
-    Which the reader returns depends on the driver (native gives a datetime, HTTP can give an
-    ISO string), so accept both. Mirrors resolver_trace_item_stats.
-    """
-    if isinstance(value, datetime):
-        return value
-    return datetime.fromisoformat(str(value))
 
 
 def _name_order_by_expression(semver: bool) -> Expression:
@@ -281,7 +270,7 @@ def get_co_occurring_attributes(
 
       **Storage:** the roll-up this reads and the parts of the query shape that differ between
       the two (per-type key arrays, the aggregates) come from the `CoOccurringAttrsSource`
-      returned by `resolvers.R_eap_items.co_occurring_attrs.for_request`.
+      returned by `co_occurring_attrs.for_request`.
 
       **Explanation:**
 
@@ -486,7 +475,7 @@ def _aggregate_sort_key(row: Mapping[str, Any], sort_column: str) -> float:
     if value is None:
         return 0.0
     if sort_column == "last_seen":
-        return _as_datetime(value).timestamp()
+        return as_datetime(value).timestamp()
     return float(value)
 
 
@@ -517,7 +506,7 @@ def convert_co_occurring_results_to_attributes(
             attribute.count = int(count)
         last_seen = row.get("last_seen")
         if last_seen is not None:
-            attribute.last_seen.FromDatetime(_as_datetime(last_seen))
+            attribute.last_seen.FromDatetime(as_datetime(last_seen))
         return attribute
 
     # Name-ordering key that mirrors the ClickHouse ORDER BY: the raw (type, name)

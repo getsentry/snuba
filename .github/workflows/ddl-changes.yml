@@ -24,11 +24,7 @@ jobs:
           clean: false
           fetch-depth: 200
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
-
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           # we just cache the venv-dir directly in action-setup-venv
           enable-cache: false
@@ -43,7 +39,7 @@ jobs:
         run: |
           SNUBA_SETTINGS=test_distributed python scripts/ddl-changes.py
       - name: Generate SQL for migration
-        uses: getsentry/action-migrations@5ca775d9f0cfef6f2557ac8a7e8c744bcb4e7078 # v1.2.2
+        uses: getsentry/action-migrations@47e84b9ed20784c3b07e705ae9df8a97df3febcf # v1.4.1
         env:
           SNUBA_SETTINGS: test_distributed
         with:

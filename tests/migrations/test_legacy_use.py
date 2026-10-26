@@ -20,7 +20,6 @@ legacy_cutoff: Mapping[MigrationGroup, str] = {
     MigrationGroup.DISCOVER: "0007",
     MigrationGroup.EVENTS: "0018",
     MigrationGroup.FUNCTIONS: "0001",
-    MigrationGroup.GENERIC_METRICS: "0009",
     MigrationGroup.METRICS: "0034",
     MigrationGroup.OUTCOMES: "0005",
     MigrationGroup.PROFILES: "0004",

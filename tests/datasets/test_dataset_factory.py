@@ -27,7 +27,6 @@ def test_get_dataset() -> None:
         "transactions",
         "profiles",
         "functions",
-        "generic_metrics",
         "replays",
     ]:
         factory_ds = get_dataset(ds_name)
@@ -72,7 +71,6 @@ def test_all_names() -> None:
         "transactions",
         "profiles",
         "functions",
-        "generic_metrics",
         "replays",
         "search_issues",
         "group_attributes",

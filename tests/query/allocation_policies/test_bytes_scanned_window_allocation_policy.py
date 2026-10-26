@@ -159,6 +159,7 @@ def test_simple_config_values(policy: AllocationPolicy) -> None:
         "org_limit_bytes_scanned_override",
         "throttled_thread_number",
         "is_enforced",
+        "is_pardonable",
         "max_threads",
     }
     assert policy.get_config_value("org_limit_bytes_scanned") == ORG_SCAN_LIMIT

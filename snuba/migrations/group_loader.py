@@ -164,11 +164,6 @@ class FunctionsLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.functions")
 
 
-class GenericMetricsLoader(DirectoryLoader):
-    def __init__(self) -> None:
-        super().__init__("snuba.snuba_migrations.generic_metrics")
-
-
 class SearchIssuesLoader(DirectoryLoader):
     def __init__(self) -> None:
         super().__init__("snuba.snuba_migrations.search_issues")

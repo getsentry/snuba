@@ -647,7 +647,9 @@ def test_format_clickhouse_specific_query() -> None:
 
 
 @override_options("snuba", {"disable_query_final": True})
-def test_format_omits_final_when_killswitch_enabled() -> None:
+def test_format_respects_final_flag_when_killswitch_enabled() -> None:
+    # The killswitch is enforced by the processors that set FINAL, not the formatter,
+    # so storages that always need FINAL (e.g. group_attributes) keep it.
     query = Query(
         Table(
             "my_table",
@@ -661,7 +663,7 @@ def test_format_omits_final_when_killswitch_enabled() -> None:
         ],
     )
 
-    assert format_query(query).get_sql() == "SELECT column1 FROM my_table SAMPLE 0.1"
+    assert format_query(query).get_sql() == "SELECT column1 FROM my_table FINAL SAMPLE 0.1"
 
 
 def test_delete_query() -> None:

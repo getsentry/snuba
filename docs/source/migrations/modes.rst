@@ -1,52 +1,39 @@
 ======================
-Snuba Migration Modes
+Snuba migration modes
 ======================
 
-This document outlines a way to try out distributed migrations.
-Note that this is experimental, and should be used only for development
-purposes at the moment. Distributed mode is not supported when testing yet.
-Local mode for migrations is currently fully supported.
+Snuba runs migrations against a single node ClickHouse (local mode) or a
+replicated, sharded cluster (distributed mode). The mode comes from
+``settings.CLUSTERS``. See :doc:`overview` for the settings.
 
-If you are running ClickHouse via Sentry's devservices, the main "switch"
-between the two modes for running data migrations (local and distributed) is
-``SENTRY_DISTRIBUTED_CLICKHOUSE_TABLES``. Its default is defined in
-`src/sentry/conf/server.py <https://github.com/getsentry/sentry/blob/master/src/sentry/conf/server.py>`_,
-and you can override it in ``~/.sentry/sentry.conf.py``.
+Local mode
+==========
 
-Once this boolean variable is set, one of two ClickHouse Docker volumes will be
-used for data storage, depending on the mode (distributed or local). Whenever a user
-wants to switch between the two modes, they must "turn off" the running ClickHouse
-container, alter the environment variable mentioned above, and then "turn on" the
-same container to be in the new mode.
+Local mode is the default. The ClickHouse container that ``devservices up``
+starts is a single node, and the default settings use it::
 
-More information on migrations in general can be found `here <https://github.com/getsentry/snuba/blob/master/MIGRATIONS.md>`_.
+    devservices up
+    snuba migrations migrate --force
 
-Enabling Local Mode
-=====================
+Distributed mode
+================
 
-In ``~/.sentry/sentry.conf.py``, set ``SENTRY_DISTRIBUTED_CLICKHOUSE_TABLES``
-to False. This is the default setting, so configuration is already
-set up for local mode migrations. Start up the corresponding ClickHouse
-container (``devservices up clickhouse``).
+Distributed mode needs a ClickHouse cluster with ZooKeeper. The devservices
+ClickHouse is a single node, so it cannot run distributed migrations.
 
-Now, run migrations as expected (``snuba migrations migrate --force``).
+To run the distributed migration tests locally, run::
 
+    make test-distributed-migrations
 
-Enabling Distributed Mode
-============================
+The target builds a Snuba image and starts the ``multi_node`` profile of
+``docker-compose.gcb.yml``. That profile runs ZooKeeper, a query node, and four
+storage nodes, and runs the tests in ``test_distributed_migrations/``.
 
-In ``~/.sentry/sentry.conf.py``, set ``SENTRY_DISTRIBUTED_CLICKHOUSE_TABLES``
-to True. Start up the corresponding ClickHouse container (``devservices up clickhouse``).
-Make sure that the Zookeeper container is also running; without it, distributed migrations
-will not work properly.
+To run migrations against your own cluster, set ``SNUBA_SETTINGS=distributed``.
+This loads ``snuba/settings/settings_distributed.py``, which assigns every
+storage set to the one-shard cluster ``cluster_one_sh``::
 
-Set up cluster connection details (for example, which storage is assigned to
-which cluster) in
-`snuba/settings/settings_distributed.py <https://github.com/getsentry/snuba/blob/master/snuba/settings/settings_distributed.py>`_.
-This is needed only for distributed migrations. The default configuration uses
-a one-shard cluster and supports migrations for all storages. More information
-about distributed tables is available in the
+    SNUBA_SETTINGS=distributed snuba migrations migrate --force
+
+More information about distributed tables is in the
 `ClickHouse documentation <https://clickhouse.com/docs/engines/table-engines/special/distributed>`_.
-
-Now, run migrations with the ``SNUBA_SETTINGS`` environment variable pointing to distributed mode.
-This can be done as follows: ``SNUBA_SETTINGS=distributed snuba migrations migrate --force``.

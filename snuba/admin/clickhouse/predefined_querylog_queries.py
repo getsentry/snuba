@@ -141,6 +141,25 @@ class BeforeAfterBytesScannedComparison(QuerylogQuery):
     """
 
 
+class TopBytesScannedByOrg(QuerylogQuery):
+    """Top 10 org/project-set pairs by bytes scanned in a date range; an org repeats per distinct project set."""
+
+    sql = """
+    SELECT
+        organization,
+        arrayStringConcat(groupUniqArray(projects), ', '),
+        formatReadableSize(
+           sum(arraySum(clickhouse_queries.bytes_scanned)) AS total_bytes
+         ) AS bytes_scanned
+    FROM querylog_dist
+    WHERE toDateTime('{{start_timestamp}}', 'Universal') <= timestamp
+      AND timestamp <= toDateTime('{{end_timestamp}}', 'Universal')
+    GROUP BY organization, projects
+    ORDER BY total_bytes DESC
+    LIMIT 10
+    """
+
+
 class BeforeAfterDurationComparison(QuerylogQuery):
     """Given a certain time that abuse started on a certain cluster, specify a time range before and after the abuse (recommend 30 minutes). This will show the referrers with the largest change in duration."""
 

@@ -3,15 +3,15 @@ from __future__ import annotations
 import json
 import os
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
-from enum import Enum
-from typing import Any, cast
+from enum import Enum, IntEnum
+from typing import Any, assert_never, cast
 
 from redis.exceptions import TimeoutError as RedisTimeoutError
 from sentry_sdk import traces
 
 from snuba import environment, settings
+from snuba.clusters.load_info import LoadInfo
 from snuba.configs.configuration import (
     ConfigurableComponent,
     ConfigurableComponentData,
@@ -20,14 +20,14 @@ from snuba.configs.configuration import (
     logger,
 )
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.state.sentry_options import get_mapped_option
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.registered_class import InvalidConfigKeyError, import_submodules_in_directory
+from snuba.utils.registered_class import import_submodules_in_directory
 from snuba.utils.sentry import SENTRY_OP
 from snuba.utils.serializable_exception import JsonSerializable, SerializableException
 from snuba.web import QueryResult
 
 IS_ENFORCED = "is_enforced"
+IS_PARDONABLE = "is_pardonable"
 MAX_THREADS = "max_threads"
 NO_UNITS = "no_units"
 NO_SUGGESTION = "no_suggestion"
@@ -56,6 +56,17 @@ class AllocationPolicyConfig(Configuration):
     pass
 
 
+class QuotaAllowanceDecision(IntEnum):
+    REJECTED = 0
+    PARDONED = 1
+    ALLOWED = 2
+    THROTTLED = 3
+
+    @property
+    def is_rejected(self) -> bool:
+        return self is QuotaAllowanceDecision.REJECTED
+
+
 @dataclass(frozen=True)
 class QuotaAllowance:
     can_run: bool
@@ -79,6 +90,41 @@ class QuotaAllowance:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+    def decision(
+        self,
+        policy: AllocationPolicy,
+        load_info: LoadInfo | None,
+    ) -> QuotaAllowanceDecision:
+        if not self.can_run:
+            # Pardon a rejection only when the policy opts in, we have load info,
+            # the block configured reject thresholds, and the cluster is below all
+            # of them. No thresholds or missing load info => keep rejecting.
+            reject_thresholds = policy.thresholds.get("reject") or {}
+            idle_pardon = (
+                policy.is_pardonable and load_info and not load_info.exceeds(reject_thresholds)
+            )
+            return (
+                QuotaAllowanceDecision.PARDONED if idle_pardon else QuotaAllowanceDecision.REJECTED
+            )
+
+        if self.max_threads < policy.max_threads:
+            return QuotaAllowanceDecision.THROTTLED
+
+        return QuotaAllowanceDecision.ALLOWED
+
+    def threads_for(
+        self,
+        decision: QuotaAllowanceDecision,
+        policy: AllocationPolicy,
+    ) -> int:
+        """Threads this allowance contributes to the combined cap. A pardoned
+        rejection contributes the policy's full budget instead of the rejection's 0,
+        every other decision contributes what the policy asked for (which is how
+        throttling reduces threads)."""
+        if decision is QuotaAllowanceDecision.PARDONED:
+            return policy.max_threads
+        return self.max_threads
 
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, QuotaAllowance):
@@ -223,9 +269,11 @@ class AllocationPolicy(ConfigurableComponent, ABC):
     Any configuration definition that exists in your sub class' `_additional_config_definitions()` will appear in the
     Capacity Management Snuba Admin UI for the policy. From there you can modify the live values to alter how your policy works.
 
-    The base class comes with a built in config accessible as a property of the class itself:
+    The base class comes with built in configs accessible as properties of the class itself:
     - is_enforced
         - Use this to throttle/reject queries OR just log stuff. A configured policy is always active.
+    - is_pardonable
+        - When true, rejections from this policy can be pardoned if the cluster is idle.
 
     Eg.
 
@@ -331,20 +379,29 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         See `_build_config_key()` for more info.
     """
 
-    required_tenant_types: frozenset[str] = frozenset()
-
     def __init__(
         self,
         storage_key: ResourceIdentifier,
         **kwargs: Any,
     ) -> None:
         self._resource_identifier = storage_key
+        thresholds = kwargs.get("thresholds") or {}
+        self._thresholds: dict[str, dict[str, float]] = {
+            action: {k: float(v) for k, v in ceilings.items()}
+            for action, ceilings in thresholds.items()
+        }
         self._default_config_definitions = [
             AllocationPolicyConfig(
                 name=IS_ENFORCED,
                 description="Toggles whether or not this policy is enforced. If enforced, policy will be able to throttle/reject incoming queries. If not enforced, this policy will not throttle/reject queries if policy is triggered, but all the policy code will still run.",
                 value_type=int,
                 default=kwargs.get(IS_ENFORCED, 1),
+            ),
+            AllocationPolicyConfig(
+                name=IS_PARDONABLE,
+                description="Toggles whether rejections from this policy can be pardoned when the cluster is idle.",
+                value_type=int,
+                default=kwargs.get(IS_PARDONABLE, 1),
             ),
             AllocationPolicyConfig(
                 name=MAX_THREADS,
@@ -378,6 +435,14 @@ class AllocationPolicy(ConfigurableComponent, ABC):
     @property
     def is_enforced(self) -> bool:
         return bool(self.get_config_value(IS_ENFORCED))
+
+    @property
+    def is_pardonable(self) -> bool:
+        return bool(self.get_config_value(IS_PARDONABLE))
+
+    @property
+    def thresholds(self) -> dict[str, dict[str, float]]:
+        return self._thresholds
 
     @property
     def max_threads(self) -> int:
@@ -416,7 +481,10 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         return cast(list[Configuration], self._default_config_definitions)
 
     def get_quota_allowance(
-        self, tenant_ids: dict[str, str | int], query_id: str
+        self,
+        tenant_ids: dict[str, str | int],
+        query_id: str,
+        load_info: LoadInfo | None = None,
     ) -> QuotaAllowance:
         with traces.start_span(
             name=self.__class__.__name__,
@@ -424,6 +492,8 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         ) as span:
             for t, tid in tenant_ids.items():
                 span.set_attribute(f"tenant_ids.{t}", str(tid))
+
+            passthrough = _default_passthough_policy(self._resource_identifier.value)
             try:
                 allowance = self._get_quota_allowance(tenant_ids, query_id)
             except InvalidTenantsForAllocationPolicy as e:
@@ -446,7 +516,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                     1,
                     tags={"method": "get_quota_allowance", "reason": type(e).__name__},
                 )
-                return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids, query_id)
+                return passthrough.get_quota_allowance(tenant_ids, query_id, load_info)
             except Exception:
                 self.metrics.increment("fail_open", 1, tags={"method": "get_quota_allowance"})
                 logger.exception(
@@ -454,24 +524,30 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                 )
                 if settings.RAISE_ON_ALLOCATION_POLICY_FAILURES:
                     raise
-                return DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance(tenant_ids, query_id)
-            if not allowance.can_run:
-                self.metrics.increment(
-                    "db_request_rejected",
-                    tags={"referrer": str(tenant_ids.get("referrer", "no_referrer"))},
-                )
-            elif allowance.max_threads < self.max_threads:
-                # NOTE: The elif is very intentional here. Don't count the throttling
-                # if the request was rejected.
-                self.metrics.increment(
-                    "db_request_throttled",
-                    tags={
-                        "referrer": str(tenant_ids.get("referrer", "no_referrer")),
-                        "max_threads": str(allowance.max_threads),
-                    },
-                )
-                span.set_attribute("db_request_throttled", True)
-            if not self.is_enforced:
+                return passthrough.get_quota_allowance(tenant_ids, query_id, load_info)
+
+            decision = allowance.decision(self, load_info)
+            referrer = str(tenant_ids.get("referrer", "no_referrer"))
+            match decision:
+                case QuotaAllowanceDecision.PARDONED:
+                    self.metrics.increment("db_request_pardoned", tags={"referrer": referrer})
+                    allowance.explanation["idle_pardon"] = (
+                        load_info.to_dict() if load_info is not None else {}
+                    )
+                case QuotaAllowanceDecision.REJECTED:
+                    self.metrics.increment("db_request_rejected", tags={"referrer": referrer})
+                case QuotaAllowanceDecision.THROTTLED:
+                    self.metrics.increment(
+                        "db_request_throttled",
+                        tags={"referrer": referrer, "max_threads": str(allowance.max_threads)},
+                    )
+                    span.set_attribute("db_request_throttled", True)
+                case QuotaAllowanceDecision.ALLOWED:
+                    pass
+                case unreachable:
+                    assert_never(unreachable)
+
+            if decision.is_rejected and not self.is_enforced:
                 allowance = QuotaAllowance(
                     can_run=True,
                     max_threads=self.max_threads,
@@ -483,6 +559,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                     quota_unit=allowance.quota_unit,
                     suggestion=allowance.suggestion,
                 )
+
             # make sure we always know which storage key we rejected a query from
             allowance.explanation["storage_key"] = self._resource_identifier.value
             for k, v in allowance.to_dict().items():
@@ -545,8 +622,6 @@ class AllocationPolicy(ConfigurableComponent, ABC):
 
 
 class PassthroughPolicy(AllocationPolicy):
-    required_tenant_types: frozenset[str] = frozenset()
-
     def _additional_config_definitions(self) -> list[Configuration]:
         return []
 
@@ -584,67 +659,6 @@ def _default_passthough_policy(storage_key: str = "default.no_storage_key") -> A
 
 
 DEFAULT_PASSTHROUGH_POLICY = _default_passthough_policy()
-
-
-def get_active_allocation_policies(
-    resource_identifier: ResourceIdentifier,
-) -> list[AllocationPolicy]:
-    """Build the AllocationPolicy list configured for ``resource_identifier``.
-
-    Reads the ``allocation_policies`` sentry-option (keyed by ResourceIdentifier
-    value). Each resource is a list of match blocks; this reader uses the first
-    block's ``policies`` list (``match`` is ignored). An absent or empty entry
-    falls back to a PassthroughPolicy for that resource. Tenant types live on
-    the policy class, not the option. Per-policy settings on the item
-    (is_enforced, concurrent_limit, …) are passed as constructor kwargs.
-    """
-    policies: list[AllocationPolicy] = []
-    blocks: list[Mapping[str, Any]] = get_mapped_option(
-        ALLOCATION_POLICY_KEY, resource_identifier.value, []
-    )
-    first = blocks[0] if blocks else {}
-    specs: list[Any] = first.get("policies", []) if isinstance(first, dict) else []
-    if not isinstance(specs, list):
-        logger.warning(
-            "Ignoring allocation_policy block without policies list for %s: %r",
-            resource_identifier.value,
-            first,
-        )
-        specs = []
-
-    for spec in specs:
-        if not isinstance(spec, dict):
-            logger.warning(
-                "Ignoring malformed allocation_policy entry for %s: %r",
-                resource_identifier.value,
-                spec,
-            )
-            continue
-
-        name = spec.get("name", None)
-        if not isinstance(name, str):
-            logger.warning(
-                "Ignoring allocation_policy entry without name for %s: %r",
-                resource_identifier.value,
-                spec,
-            )
-            continue
-
-        try:
-            policies.append(
-                AllocationPolicy.get_from_name(name).from_kwargs(
-                    storage_key=resource_identifier.value,
-                    **spec,
-                )
-            )
-        except InvalidConfigKeyError:
-            logger.warning(
-                "Unknown allocation policy %s for %s",
-                name,
-                resource_identifier.value,
-            )
-
-    return policies or [_default_passthough_policy(resource_identifier.value)]
 
 
 import_submodules_in_directory(

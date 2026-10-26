@@ -19,7 +19,7 @@ class TestCrossOrgQueryAllocationPolicy:
     def test_policy_pass_basic(self):
         policy = CrossOrgQueryAllocationPolicy.from_kwargs(
             **{
-                "storage_key": "generic_metrics_counters",
+                "storage_key": "metrics_counters",
                 "cross_org_referrer_limits": {
                     "statistical_detectors": {
                         "concurrent_limit": 1,
@@ -35,7 +35,7 @@ class TestCrossOrgQueryAllocationPolicy:
         assert unimportant_allowance.max_threads == 10
         assert unimportant_allowance.explanation == {
             "reason": "pass_through",
-            "storage_key": "generic_metrics_counters",
+            "storage_key": "metrics_counters",
         }
         cross_org_allowance = policy.get_quota_allowance(
             tenant_ids={"referrer": "statistical_detectors"}, query_id="2"
@@ -60,7 +60,7 @@ class TestCrossOrgQueryAllocationPolicy:
         "config",
         [
             {
-                "storage_key": "generic_metrics_counters",
+                "storage_key": "metrics_counters",
                 "cross_org_referrer_limits": {
                     "statistical_detectors": {
                         "max_threads": 1,
@@ -68,7 +68,7 @@ class TestCrossOrgQueryAllocationPolicy:
                 },
             },
             {
-                "storage_key": "generic_metrics_counters",
+                "storage_key": "metrics_counters",
                 "cross_org_referrer_limits": {
                     "statistical_detectors": {
                         "concurrent_limit": 2,
@@ -76,7 +76,7 @@ class TestCrossOrgQueryAllocationPolicy:
                 },
             },
             {
-                "storage_key": "generic_metrics_counters",
+                "storage_key": "metrics_counters",
                 "cross_org_referrer_limits": {
                     "statistical_detectors": {"max_threads": {}, "concurrent_limit": 2},
                 },
@@ -91,7 +91,7 @@ class TestCrossOrgQueryAllocationPolicy:
     def test_override(self):
         policy = CrossOrgQueryAllocationPolicy.from_kwargs(
             **{
-                "storage_key": "generic_metrics_counters",
+                "storage_key": "metrics_counters",
                 "cross_org_referrer_limits": {
                     "statistical_detectors": {
                         "concurrent_limit": 1,
@@ -99,23 +99,6 @@ class TestCrossOrgQueryAllocationPolicy:
                     },
                 },
             }
-        )
-        set_component_config(
-            policy,
-            "referrer_max_threads_override",
-            2,
-            {"referrer": "statistical_detectors"},
-        )
-        assert (
-            policy.get_quota_allowance(
-                tenant_ids={"referrer": "statistical_detectors"}, query_id="1"
-            ).max_threads
-            == 2
-        )
-        policy.update_quota_balance(
-            tenant_ids={"referrer": "statistical_detectors"},
-            query_id="1",
-            result_or_error=_RESULT_SUCCESS,
         )
         set_component_config(
             policy,
@@ -130,10 +113,37 @@ class TestCrossOrgQueryAllocationPolicy:
         assert not quota_allowance.can_run and quota_allowance.max_threads == 0
 
     @pytest.mark.redis_db
+    def test_respects_max_threads_config(self) -> None:
+        policy = CrossOrgQueryAllocationPolicy.from_kwargs(
+            **{
+                "storage_key": "metrics_counters",
+                "cross_org_referrer_limits": {
+                    "statistical_detectors": {
+                        "concurrent_limit": 10,
+                        "max_threads": 4,
+                    },
+                },
+            }
+        )
+        set_component_config(policy, "max_threads", 7)
+        assert (
+            policy.get_quota_allowance(
+                tenant_ids={"referrer": "some_referrer"}, query_id="1"
+            ).max_threads
+            == 7
+        )
+        assert (
+            policy.get_quota_allowance(
+                tenant_ids={"referrer": "statistical_detectors"}, query_id="2"
+            ).max_threads
+            == 4
+        )
+
+    @pytest.mark.redis_db
     def test_throttle_cross_org_query_with_unregistered_referrer(self):
         policy = CrossOrgQueryAllocationPolicy.from_kwargs(
             **{
-                "storage_key": "generic_metrics_counters",
+                "storage_key": "metrics_counters",
                 "cross_org_referrer_limits": {
                     "statistical_detectors": {
                         "concurrent_limit": 1,
@@ -156,5 +166,5 @@ class TestCrossOrgQueryAllocationPolicy:
         assert not allowance.can_run
         assert (
             allowance.explanation["cross_org_query"]
-            == "This referrer is not registered for the current storage generic_metrics_counters, if you want to increase its limits, register it in the yaml of the CrossOrgQueryAllocationPolicy"
+            == "This referrer is not registered for the current storage metrics_counters, if you want to increase its limits, register it in the yaml of the CrossOrgQueryAllocationPolicy"
         )

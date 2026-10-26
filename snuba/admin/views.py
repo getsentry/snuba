@@ -22,15 +22,11 @@ from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.audit_log.base import AuditLog
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
 from snuba.admin.auth_roles import ExecuteSudoSystemQuery
-from snuba.admin.cardinality_analyzer.cardinality_analyzer import run_metrics_query
 from snuba.admin.clickhouse.clusters import get_cluster_info
 from snuba.admin.clickhouse.common import InvalidCustomQuery, InvalidNodeError
 from snuba.admin.clickhouse.copy_tables import InvalidClusterName, copy_tables
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.clickhouse.nodes import get_storage_info
-from snuba.admin.clickhouse.predefined_cardinality_analyzer_queries import (
-    CardinalityQuery,
-)
 from snuba.admin.clickhouse.predefined_outcomes_queries import OutcomesQuery
 from snuba.admin.clickhouse.predefined_querylog_queries import QuerylogQuery
 from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
@@ -51,6 +47,7 @@ from snuba.admin.migrations_policies import (
     check_migration_perms,
     get_migration_group_policies,
 )
+from snuba.admin.outcomes_analyzer.enums import outcomes_enum_options
 from snuba.admin.outcomes_analyzer.outcomes_analyzer import run_outcomes_query
 from snuba.admin.production_queries.prod_queries import run_snql_query
 from snuba.admin.rpc.rpc_queries import validate_request_meta
@@ -349,18 +346,17 @@ def querylog_queries() -> Response:
     return make_response(jsonify(res), 200)
 
 
-@application.route("/cardinality_queries")
-@check_tool_perms(tools=[AdminTools.CARDINALITY_ANALYZER])
-def cardinality_queries() -> Response:
-    res = [q.to_json() for q in CardinalityQuery.all_classes()]
-    return make_response(jsonify(res), 200)
-
-
 @application.route("/outcomes_queries")
 @check_tool_perms(tools=[AdminTools.OUTCOMES_ANALYZER])
 def outcomes_queries() -> Response:
     res = [q.to_json() for q in OutcomesQuery.all_classes()]
     return make_response(jsonify(res), 200)
+
+
+@application.route("/outcomes_enum_options")
+@check_tool_perms(tools=[AdminTools.OUTCOMES_ANALYZER])
+def outcomes_enum_options_view() -> Response:
+    return make_response(jsonify(outcomes_enum_options()), 200)
 
 
 @application.route("/auto-replacements-bypass-projects")
@@ -975,12 +971,6 @@ def _run_admin_ro_sql_query(
         )
 
 
-@application.route("/cardinality_query", methods=["POST"])
-@check_tool_perms(tools=[AdminTools.CARDINALITY_ANALYZER])
-def cardinality_analyzer_query() -> Response:
-    return _run_admin_ro_sql_query(run_metrics_query)
-
-
 @application.route("/outcomes_query", methods=["POST"])
 @check_tool_perms(tools=[AdminTools.OUTCOMES_ANALYZER])
 def outcomes_analyzer_query() -> Response:
@@ -1053,7 +1043,18 @@ def get_allowed_projects() -> Response:
 
 @application.route("/admin_regions", methods=["GET"])
 def get_admin_regions() -> Response:
-    return make_response(jsonify(settings.ADMIN_REGIONS), 200)
+    regions = []
+    for region in settings.ADMIN_REGIONS:
+        is_main = region == settings.ADMIN_MAIN_REGION
+        subdomain = "" if is_main else f".{region}"
+        regions.append(
+            {
+                "name": region,
+                "url": f"https://snuba-admin{subdomain}.getsentry.net/",
+                "is_main": is_main,
+            }
+        )
+    return make_response(jsonify(regions), 200)
 
 
 @application.route("/job-specs", methods=["GET"])

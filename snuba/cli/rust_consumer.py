@@ -106,7 +106,13 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
 @click.option(
     "--clickhouse-concurrency",
     type=int,
-    help="Number of concurrent clickhouse batches at one time.",
+    default=2,
+    help=(
+        "Number of concurrent clickhouse batches at one time. Defaults to 2. "
+        "Independent of --async-inserts: raising it increases concurrent "
+        "in-flight writes (and inserts/sec) on ClickHouse, so size memory and "
+        "batch buffers accordingly."
+    ),
 )
 @click.option(
     "--use-rust-processor/--use-python-processor",
@@ -189,8 +195,14 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
 @click.option(
     "--health-check",
     default="arroyo",
-    type=click.Choice(["snuba", "arroyo"]),
-    help="Specify which health check to use for the consumer. If not specified, the default Arroyo health check is used.",
+    type=click.Choice(["arroyo", "commit-progress", "partition-stall"]),
+    help=(
+        "Which strategy owns the Kubernetes health file. "
+        "arroyo: touch on every poll. "
+        "commit-progress: touch on commit or idle. "
+        "partition-stall: touch unless a partition has in-flight work with no commit "
+        "past consumer.partition_stall_timeout_secs."
+    ),
 )
 @click.option(
     "--use-row-binary",
@@ -308,14 +320,9 @@ def rust_consumer(
             clickhouse_concurrency or 2,
             max_poll_interval_ms,
             dry_run or 0,
+            use_row_binary,
         )
         sys.exit(exitcode)
-
-    if not async_inserts:
-        # we don't want to allow increasing this if
-        # we aren't using async inserts since that will increase
-        # the number of inserts/sec on clickhouse
-        clickhouse_concurrency = 2
 
     exitcode = rust_snuba.consumer(  # type: ignore[attr-defined]
         consumer_group,

@@ -11,10 +11,14 @@ jobs:
   docs:
     name: Sphinx
     runs-on: ubuntu-latest
+    env:
+      # `make` targets call `uv run`; use the venv prepared below instead of
+      # re-syncing, which would build rust_snuba.
+      UV_NO_SYNC: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           # we just cache the venv-dir directly in action-setup-venv
           enable-cache: false
@@ -23,7 +27,8 @@ jobs:
         with:
 
           cache-dependency-path: uv.lock
-          install-cmd: echo
+          # The docs build doesn't need the rust_snuba extension, so skip compiling it.
+          install-cmd: uv sync --locked --active --no-default-groups --group docs --no-install-package rust-snuba
 
       - name: Generate config schema docs
         run: |

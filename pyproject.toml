@@ -1,6 +1,9 @@
 [project]
 name = "snuba"
-version = "26.9.0.dev0"
+version = "26.11.0.dev0"
+# CPython 3.13 only (.python-version / prod image). Cap the upper bound so uv
+# does not resolve future Python versions that our pinned wheels do not support.
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "blinker>=1.9",
     "click>=8.1.7",
@@ -29,23 +32,23 @@ dependencies = [
     "python-rapidjson>=1.8",
     "pyyaml>=6.0",
     "redis>=4.5.4",
-    "sentry-arroyo>=2.39.2",
-    "sentry-conventions>=0.20.0",
+    "sentry-arroyo>=2.46.0",
+    "sentry-conventions>=0.29.0",
     "sentry-kafka-schemas>=2.1.39",
     "sentry-options>=1.2.1",
-    "sentry-protos>=0.62.0",
+    "sentry-protos>=0.80.0",
     "sentry-redis-tools>=0.5.1",
     "sentry-relay>=0.9.25",
     "sentry-sdk>=2.66.1",
     "sentry-usage-accountant>=0.0.11",
     "simplejson>=3.17.6",
     "snuba-sdk>=3.0.39",
-    "sql-metadata>=2.11.0",
-    "sqlparse>=0.5.0",
+    "sql-metadata>=3.0.1",
+    "sqlparse>=0.6.0",
     "structlog>=22.3.0",
     "structlog-sentry>=2.0.0",
-    "urllib3>=2.7.0",
-    "werkzeug>=3.0.6",
+    "urllib3>=2.8.0",
+    "werkzeug>=3.1.9",
     "rust_snuba>=0.0.0",
 ]
 
@@ -72,8 +75,16 @@ required-environments = [
 [[tool.uv.index]]
 # We don't allow using public pypi - submit a PR to
 # https://github.com/getsentry/pypi to add a dependency.
+name = "sentry-pypi"
 url = "https://pypi.devinfra.sentry.io/simple"
 default = true
+
+[[tool.uv.index]]
+# Org-level Dependabot registry. Declaring it here stops Dependabot from
+# passing it as `--default-index`; `explicit` keeps uv from ever using it.
+name = "sfw"
+url = "https://sfw.security.sentry.io/pypi/simple"
+explicit = true
 
 [build-system]
 requires = ["uv_build"]
@@ -122,7 +133,6 @@ markers = [
     "redis_db: Use redis",
     "ci_only: Only run in CI",
     "eap: Use clickhouse with EAP migrations only",
-    "genmetrics_db: Use clickhouse with generic metrics migrations only",
 ]
 
 [tool.ruff]

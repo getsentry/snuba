@@ -47,20 +47,19 @@ from snuba.web.rpc.common.common import (
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
-    use_indexed_name_for_request,
 )
-from snuba.web.rpc.common.debug_info import (
-    extract_response_meta,
-    setup_trace_query_settings,
-)
-from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
+from snuba.web.rpc.common.cross_item_queries import (
     CROSS_ITEM_DISTRIBUTED_PRODUCT_MODE,
     convert_trace_filters_to_trace_item_filter_with_type,
     get_trace_ids_sql_for_cross_item_query,
     trace_id_in_subquery_condition,
     use_local_join_for_cross_item_queries,
 )
+from snuba.web.rpc.common.debug_info import (
+    extract_response_meta,
+    setup_trace_query_settings,
+)
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 _DEFAULT_ROW_LIMIT = 10_000
 _BUFFER_WINDOW = 2 * 3600  # 2 hours
@@ -579,7 +578,6 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         for trace_filter in filters:
             filters_by_item_type[trace_filter.item_type].append(trace_filter.filter)
 
-        use_indexed_name = use_indexed_name_for_request(request_meta)
         for item_type in filters_by_item_type:
             filter_expressions_by_item_type[item_type] = and_cond(
                 f.equals(column("item_type"), item_type),
@@ -592,7 +590,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                     ),
                     attribute_key_to_expression,
                     membership_as_has=True,
-                    use_indexed_name=use_indexed_name,
+                    start_timestamp=request_meta.start_timestamp,
                 ),
             )
 
@@ -617,7 +615,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                 ),
             ),
             attribute_key_to_expression,
-            use_indexed_name=use_indexed_name_for_request(request.meta),
+            start_timestamp=request.meta.start_timestamp,
         )
         selected_columns: list[SelectedExpression] = [
             SelectedExpression(

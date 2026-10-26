@@ -1,19 +1,18 @@
-ARG PYTHON_VERSION=3.13.12
+ARG PYTHON_VERSION=3.13.17
 
-FROM python:${PYTHON_VERSION}-slim-trixie AS build_base
+FROM ghcr.io/getsentry/image-mirror-library-python:${PYTHON_VERSION}-slim-trixie AS build_base
 
 WORKDIR /usr/src/snuba
 
 ENV PATH="/.venv/bin:$PATH" UV_PROJECT_ENVIRONMENT=/.venv \
-		PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1 \
     UV_COMPILE_BYTECODE=1 UV_NO_CACHE=1
 
-RUN python3 -m pip install \
-		--index-url 'https://pypi.devinfra.sentry.io/simple' 'uv'
+COPY --from=ghcr.io/astral-sh/uv:0.13.5@sha256:32a7bb39b496babbd997b0a39a4d66c126bdaf5661b302bf6f06abda8deca6ff \
+    /uv /uvx /usr/local/bin/
 
 # We don't want uv-managed python, we want to use python from the image.
 # We only want to use uv to manage dependencies.
-RUN python3 -m venv "$UV_PROJECT_ENVIRONMENT"
+RUN python3 -m venv --without-pip "$UV_PROJECT_ENVIRONMENT"
 
 RUN set -ex; \
     \
@@ -143,20 +142,20 @@ ENV SENTRY_OPTIONS_DIR=/etc/sentry-options
 
 USER snuba
 EXPOSE 1218 1219
-ENTRYPOINT [ "./docker_entrypoint.sh" ]
+ENTRYPOINT ["python3", "/usr/src/snuba/docker_entrypoint.py"]
 CMD [ "api" ]
 
 # Prepare artifacts for the DHI runtime: fix venv symlinks and verify shared libs.
 # The build image has Python at /usr/local/bin/python3, but the DHI
-# runtime has it at /opt/python/bin/python3.
+# runtime has it at /usr/bin/python3.
 FROM application_base AS runtime_prep
 USER 0
-RUN ln -sf /opt/python/bin/python3 /.venv/bin/python3 && \
-    ln -sf /opt/python/bin/python3 /.venv/bin/python
+RUN ln -sf /usr/bin/python3 /.venv/bin/python3 && \
+    ln -sf /usr/bin/python3 /.venv/bin/python
 RUN find /.venv -name "*.so" -exec ldd {} \; 2>&1 | grep "not found" && exit 1 || true
 
 # Production image — DHI runtime, no shell
-FROM ghcr.io/getsentry/dhi/python:3.13-debian13 AS application
+FROM us-docker.pkg.dev/sentryio/dhi-mirror/python:3.13-debian13 AS application
 
 COPY --from=runtime_prep /.venv /.venv
 COPY --from=runtime_prep /usr/src/snuba /usr/src/snuba
@@ -167,7 +166,7 @@ COPY --from=runtime_prep /etc/group /etc/group
 
 WORKDIR /usr/src/snuba
 ARG SOURCE_COMMIT
-ENV PATH="/.venv/bin:/opt/python/bin:$PATH" \
+ENV PATH="/.venv/bin:$PATH" \
     LD_PRELOAD=/usr/lib/libjemalloc.so.2 \
     SNUBA_RELEASE=$SOURCE_COMMIT \
     FLASK_DEBUG=0 \
@@ -181,7 +180,7 @@ ENTRYPOINT ["python3", "/usr/src/snuba/docker_entrypoint.py"]
 CMD ["api"]
 
 # Debug image — includes busybox (sh, ls, cat, wget, env, etc.)
-FROM ghcr.io/getsentry/dhi/python:3.13-debian13-dev AS application-debug
+FROM us-docker.pkg.dev/sentryio/dhi-mirror/python:3.13-debian13-dev AS application-debug
 
 COPY --from=runtime_prep /.venv /.venv
 COPY --from=runtime_prep /usr/src/snuba /usr/src/snuba
@@ -192,7 +191,7 @@ COPY --from=runtime_prep /etc/group /etc/group
 
 WORKDIR /usr/src/snuba
 ARG SOURCE_COMMIT
-ENV PATH="/.venv/bin:/opt/python/bin:$PATH" \
+ENV PATH="/.venv/bin:$PATH" \
     LD_PRELOAD=/usr/lib/libjemalloc.so.2 \
     SNUBA_RELEASE=$SOURCE_COMMIT \
     FLASK_DEBUG=0 \

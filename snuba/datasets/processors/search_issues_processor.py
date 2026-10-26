@@ -219,11 +219,13 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
         self, event_data: IssueEventData, processed: MutableMapping[str, Any]
     ) -> None:
         client_timestamp = processed["client_timestamp"]
-        # NOTE: we do this conversion because the JSONRowEncoder will strip out milliseconds out
-        # of datetime objects specifically. To work around that, we convert the datetime to a
-        # timestamp in milliseconds
+        # NOTE: the JSONRowEncoder strips milliseconds from datetime objects, so we send a
+        # quoted "<seconds>.<millis>" string instead. It must be quoted: since ClickHouse 26.8
+        # an unquoted number for a DateTime64 column is read as seconds, not raw ticks
+        # (https://github.com/ClickHouse/ClickHouse/pull/108091).
         client_timestamp = client_timestamp.replace(tzinfo=UTC)
-        processed["timestamp_ms"] = int(client_timestamp.timestamp() * 1000)
+        ms = int(client_timestamp.timestamp() * 1000)
+        processed["timestamp_ms"] = f"{ms // 1000}.{ms % 1000:03d}"
 
     def process_insert_v1(
         self, event: SearchIssueEvent, metadata: KafkaMessageMetadata

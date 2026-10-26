@@ -19,7 +19,7 @@ from snuba.query.expressions import (
 )
 from snuba.query.logical import Query as LogicalQuery
 
-tags_raw = NestedColumn("tags_raw")
+tags = NestedColumn("tags")
 
 tests = [
     pytest.param(
@@ -196,11 +196,11 @@ tests = [
                                                                     "in",
                                                                     (
                                                                         SubscriptableReference(
-                                                                            "_snuba_tags_raw[888]",
+                                                                            "_snuba_tags[888]",
                                                                             column=Column(
-                                                                                "_snuba_tags_raw",
+                                                                                "_snuba_tags",
                                                                                 None,
-                                                                                "tags_raw",
+                                                                                "tags",
                                                                             ),
                                                                             key=Literal(
                                                                                 None,
@@ -237,7 +237,7 @@ tests = [
                 ),
             ),
         ),
-        """and_cond(f.equals(column('granularity', None, '_snuba_granularity'), literal(60)), and_cond(in_cond(column('project_id', None, '_snuba_project_id'), f.tuple(literal(11))), and_cond(in_cond(column('org_id', None, '_snuba_org_id'), f.tuple(literal(1))), and_cond(f.equals(column('use_case_id', None, '_snuba_use_case_id'), literal('transactions')), and_cond(f.greaterOrEquals(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2023, 11, 23, 18, 30))), and_cond(f.less(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2023, 11, 23, 22, 30))), and_cond(f.equals(column('metric_id', None, '_snuba_metric_id'), literal(123456)), in_cond(tags_raw['888'], f.tuple(literal('dist1'), literal('dist2'))))))))))""",
+        """and_cond(f.equals(column('granularity', None, '_snuba_granularity'), literal(60)), and_cond(in_cond(column('project_id', None, '_snuba_project_id'), f.tuple(literal(11))), and_cond(in_cond(column('org_id', None, '_snuba_org_id'), f.tuple(literal(1))), and_cond(f.equals(column('use_case_id', None, '_snuba_use_case_id'), literal('transactions')), and_cond(f.greaterOrEquals(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2023, 11, 23, 18, 30))), and_cond(f.less(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2023, 11, 23, 22, 30))), and_cond(f.equals(column('metric_id', None, '_snuba_metric_id'), literal(123456)), in_cond(tags['888'], f.tuple(literal('dist1'), literal('dist2'))))))))))""",
     ),
     pytest.param(
         and_cond(
@@ -270,11 +270,11 @@ tests = [
                 ),
                 and_cond(
                     f.equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
-                    in_cond(tags_raw["888"], f.tuple(literal("dist1"), literal("dist2"))),
+                    in_cond(tags["888"], f.tuple(literal("dist1"), literal("dist2"))),
                 ),
             ),
         ),
-        """and_cond(and_cond(and_cond(f.greaterOrEquals(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2023, 11, 23, 18, 30))), f.less(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2023, 11, 23, 22, 30)))), and_cond(in_cond(column('project_id', None, '_snuba_project_id'), f.tuple(literal(11))), in_cond(column('org_id', None, '_snuba_org_id'), f.tuple(literal(1))))), and_cond(and_cond(f.equals(column('use_case_id', None, '_snuba_use_case_id'), literal('transactions')), f.equals(column('granularity', None, '_snuba_granularity'), literal(60))), and_cond(f.equals(column('metric_id', None, '_snuba_metric_id'), literal(123456)), in_cond(tags_raw['888'], f.tuple(literal('dist1'), literal('dist2'))))))""",
+        """and_cond(and_cond(and_cond(f.greaterOrEquals(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2023, 11, 23, 18, 30))), f.less(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2023, 11, 23, 22, 30)))), and_cond(in_cond(column('project_id', None, '_snuba_project_id'), f.tuple(literal(11))), in_cond(column('org_id', None, '_snuba_org_id'), f.tuple(literal(1))))), and_cond(and_cond(f.equals(column('use_case_id', None, '_snuba_use_case_id'), literal('transactions')), f.equals(column('granularity', None, '_snuba_granularity'), literal(60))), and_cond(f.equals(column('metric_id', None, '_snuba_metric_id'), literal(123456)), in_cond(tags['888'], f.tuple(literal('dist1'), literal('dist2'))))))""",
     ),
 ]
 
@@ -289,8 +289,8 @@ query_tests = [
     pytest.param(
         LogicalQuery(
             QueryEntity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -443,11 +443,11 @@ query_tests = [
                                                                         "in",
                                                                         (
                                                                             SubscriptableReference(
-                                                                                "_snuba_tags_raw[888]",
+                                                                                "_snuba_tags[888]",
                                                                                 column=Column(
-                                                                                    "_snuba_tags_raw",
+                                                                                    "_snuba_tags",
                                                                                     None,
-                                                                                    "tags_raw",
+                                                                                    "tags",
                                                                                 ),
                                                                                 key=Literal(
                                                                                     None,
@@ -505,10 +505,10 @@ query_tests = [
             limit=1000,
         ),
         """Query(
-        from_clause=Entity(EntityKey.GENERIC_METRICS_COUNTERS,get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model()),
+        from_clause=Entity(EntityKey.METRICS_COUNTERS,get_entity(EntityKey.METRICS_COUNTERS).get_data_model()),
         selected_columns=[SelectedExpression('aggregate_value', f.sum(column('value', None, '_snuba_value'), alias='_snuba_aggregate_value'))],
         array_join=None,
-        condition=and_cond(f.equals(column('granularity', None, '_snuba_granularity'), literal(60)), and_cond(in_cond(column('project_id', None, '_snuba_project_id'), f.tuple(literal(1))), and_cond(in_cond(column('org_id', None, '_snuba_org_id'), f.tuple(literal(1))), and_cond(f.equals(column('use_case_id', None, '_snuba_use_case_id'), literal('transactions')), and_cond(f.greaterOrEquals(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2021, 1, 1, 0, 0))), and_cond(f.less(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2021, 1, 2, 0, 0))), and_cond(f.equals(column('metric_id', None, '_snuba_metric_id'), literal(123456)), in_cond(tags_raw['888'], f.tuple(literal('dist1'), literal('dist2')))))))))),
+        condition=and_cond(f.equals(column('granularity', None, '_snuba_granularity'), literal(60)), and_cond(in_cond(column('project_id', None, '_snuba_project_id'), f.tuple(literal(1))), and_cond(in_cond(column('org_id', None, '_snuba_org_id'), f.tuple(literal(1))), and_cond(f.equals(column('use_case_id', None, '_snuba_use_case_id'), literal('transactions')), and_cond(f.greaterOrEquals(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2021, 1, 1, 0, 0))), and_cond(f.less(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2021, 1, 2, 0, 0))), and_cond(f.equals(column('metric_id', None, '_snuba_metric_id'), literal(123456)), in_cond(tags['888'], f.tuple(literal('dist1'), literal('dist2')))))))))),
         groupby=None,
         having=None,
         order_by=[OrderBy(OrderByDirection.ASC, f.sum(column('value', None, '_snuba_value'), alias='_snuba_aggregate_value'))],

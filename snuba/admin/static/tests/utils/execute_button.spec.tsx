@@ -1,4 +1,3 @@
-import Nav from "SnubaAdmin/nav";
 import Client from "SnubaAdmin/api_client";
 import React from "react";
 import { it, expect, jest, afterEach } from "@jest/globals";
@@ -48,4 +47,8 @@ it("should not call if loading", async () => {
   fireEvent.click(button);
 
   await waitFor(() => expect(mockCall).toBeCalledTimes(1));
+  expect(screen.getByRole("status").textContent).toBe("Query running…");
+  expect(button.getAttribute("aria-busy")).toBe("true");
+  // The label doesn't change, so the button keeps its size.
+  expect(button.textContent).toContain("Execute Query");
 });

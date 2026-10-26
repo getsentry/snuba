@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -23,7 +24,7 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.rpc.common.common import USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION
+from snuba.web.rpc.common.common import INDEXED_COLUMNS_OPTION
 from snuba.web.rpc.v1.endpoint_time_series import EndpointTimeSeries
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -50,7 +51,7 @@ def _store_metrics() -> None:
                     type=TraceItemType.TRACE_ITEM_TYPE_METRIC,
                     remove_default_attributes=True,
                     attributes={
-                        "sentry.metric.name": AnyValue(string_value=name),
+                        "sentry.metric_name": AnyValue(string_value=name),
                         "value": AnyValue(double_value=1.0),
                     },
                 )
@@ -71,7 +72,7 @@ def _request() -> TimeSeriesRequest:
         ),
         filter=TraceItemFilter(
             comparison_filter=ComparisonFilter(
-                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.metric.name"),
+                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.metric_name"),
                 op=ComparisonFilter.OP_EQUALS,
                 value=AttributeValue(val_str="my.metric"),
             )
@@ -88,6 +89,14 @@ def _request() -> TimeSeriesRequest:
     )
 
 
+def _indexed_columns(index_start: str) -> Any:
+    return {
+        "sentry.metric_name": {
+            "metric": {"indexed_column_name": "indexed_name", "indexed_start_date": index_start}
+        }
+    }
+
+
 def _total(response: TimeSeriesResponse) -> float:
     return float(sum(dp.data for ts in response.result_timeseries for dp in ts.data_points))
 
@@ -98,10 +107,10 @@ class TestTimeSeriesIndexedName(BaseApiTest):
     def test_indexed_name_rewrite_is_result_preserving(self) -> None:
         _store_metrics()
 
-        with override_options("snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: []}):
+        with override_options("snuba", {INDEXED_COLUMNS_OPTION: _indexed_columns("9999-12-31")}):
             disabled = EndpointTimeSeries().execute(_request())
 
-        with override_options("snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: [1]}):
+        with override_options("snuba", {INDEXED_COLUMNS_OPTION: _indexed_columns("1970-01-01")}):
             enabled = EndpointTimeSeries().execute(_request())
 
         assert _total(disabled) == float(MATCHING_COUNT)

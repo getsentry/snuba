@@ -1,7 +1,0 @@
-version: v1
-kind: dataset
-name: generic_metrics
-
-entities:
-  - generic_metrics_counters
-  - generic_org_metrics_counters

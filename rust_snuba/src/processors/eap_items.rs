@@ -8,14 +8,17 @@ use serde::{Serialize, Serializer};
 use std::collections::{BTreeMap, HashMap};
 use uuid::Uuid;
 
+use crate::{counter, timer};
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
-use sentry_arroyo::counter;
 use sentry_options::options;
 use sentry_protos::snuba::v1::any_value::Value;
 use sentry_protos::snuba::v1::{ArrayValue, TraceItem, TraceItemType};
 
 use crate::config::ProcessorConfig;
-use crate::processors::utils::{enforce_retentions, SilencedDLQMessage};
+use crate::processors::utils::{
+    enforce_retentions, get_drop_invalid_timestamps_enabled, out_of_valid_interval_secs,
+    SilencedDLQMessage,
+};
 use crate::strategies::clickhouse::rowbinary;
 use crate::types::CogsData;
 use crate::types::{item_type_name, InsertBatch, ItemTypeMetrics, KafkaMessageMetadata};
@@ -36,6 +39,21 @@ use crate::types::{item_type_name, InsertBatch, ItemTypeMetrics, KafkaMessageMet
 const DLQ_GRACE_PERIOD_MIN_KEY: &str = "eap_items_dlq_grace_period_min";
 const EMIT_RECEIVED_AT_KEY: &str = "eap_items_emit_received_at";
 
+/// Runtime config key `eap_items_bytes_processed_sample_rate`: emit one
+/// message-size distribution sample per this many messages. `1` samples every
+/// message, `0` turns the distribution off, and anything negative or
+/// non-integer falls back to [`DEFAULT_BYTES_PROCESSED_SAMPLE_RATE`].
+const BYTES_PROCESSED_SAMPLE_RATE_KEY: &str = "eap_items_bytes_processed_sample_rate";
+
+/// Sample rate used when `eap_items_bytes_processed_sample_rate` is unset:
+/// off, so the distribution costs nothing until someone opts in.
+///
+/// The DogStatsD exporter ships every histogram point it is given (no
+/// reservoir sampling), so an unsampled per-message distribution would put
+/// one point per span on the wire. Raising the rate from zero bounds that
+/// traffic while keeping percentiles representative.
+const DEFAULT_BYTES_PROCESSED_SAMPLE_RATE: u64 = 0;
+
 /// Precision factor for sampling_factor calculations to compensate for floating point errors
 const SAMPLING_FACTOR_PRECISION: f64 = 1e6;
 /// Minimum allowed sampling_factor value
@@ -48,11 +66,13 @@ struct ProcessedItem {
     cogs_data: CogsData,
 }
 
+/// `Ok(None)` means the item was dropped for being out of range; the message
+/// is committed without inserting anything.
 fn process_eap_item(
     msg: KafkaPayload,
     metadata: &KafkaMessageMetadata,
     config: &ProcessorConfig,
-) -> anyhow::Result<ProcessedItem> {
+) -> anyhow::Result<Option<ProcessedItem>> {
     let payload: &[u8] = msg.payload().context("Expected payload")?;
     let trace_item = TraceItem::decode(payload)?;
     let origin_timestamp = trace_item
@@ -67,8 +87,25 @@ fn process_eap_item(
     let item_type =
         TraceItemType::try_from(trace_item.item_type).unwrap_or(TraceItemType::Unspecified);
 
+    let (retention_days, downsampled_retention_days) = enforce_retentions(
+        Some(trace_item.retention_days as u16),
+        Some(trace_item.downsampled_retention_days as u16),
+    );
+
+    let now = Utc::now();
+
     if let Some(event_ts) = event_timestamp {
-        let now = Utc::now();
+        if get_drop_invalid_timestamps_enabled()
+            && out_of_valid_interval_secs(event_ts, now, retention_days)
+        {
+            counter!(
+                "eap_items.messages.dropped_out_of_range_timestamp",
+                1,
+                "reason" => if event_ts > now { "future_ts" } else { "past_ts" },
+                "item_type" => item_type_name(item_type)
+            );
+            return Ok(None);
+        }
 
         if let Some(grace_min) = get_dlq_grace_period_min(&config.storage_name) {
             if let Some(reason) = should_dlq(event_ts, now, grace_min) {
@@ -82,11 +119,6 @@ fn process_eap_item(
             }
         }
     }
-
-    let (retention_days, downsampled_retention_days) = enforce_retentions(
-        Some(trace_item.retention_days as u16),
-        Some(trace_item.downsampled_retention_days as u16),
-    );
 
     let mut eap_item = EAPItem::try_from(trace_item)?;
 
@@ -103,7 +135,7 @@ fn process_eap_item(
     }
     eap_item.attributes.insert_int(
         "sentry._internal.ingested_at".into(),
-        Utc::now().timestamp_millis(),
+        now.timestamp_millis(),
     );
     // we are using this to compare to outcomes which stores the timestamp as seconds
     if let Some(received_at) = origin_timestamp {
@@ -115,6 +147,7 @@ fn process_eap_item(
 
     let mut item_type_metrics = ItemTypeMetrics::new();
     item_type_metrics.record_item(item_type, payload.len());
+    record_item_bytes_distribution(item_type, payload.len());
 
     // COGS tracking by item type
     let app_feature = match item_type {
@@ -131,6 +164,7 @@ fn process_eap_item(
         TraceItemType::Preprod => "preprod",
         TraceItemType::UserSession => "sessions",
         TraceItemType::ProcessingError => "processing_errors",
+        TraceItemType::WorkflowEngineEvaluation => "workflow_engine_evaluations",
         TraceItemType::Unspecified => "null",
     }
     .to_string();
@@ -139,12 +173,12 @@ fn process_eap_item(
         data: BTreeMap::from([(app_feature, payload.len() as u64)]),
     };
 
-    Ok(ProcessedItem {
+    Ok(Some(ProcessedItem {
         eap_item,
         origin_timestamp,
         item_type_metrics,
         cogs_data,
-    })
+    }))
 }
 
 fn get_dlq_grace_period_min(storage_name: &str) -> Option<i64> {
@@ -164,6 +198,57 @@ pub(crate) fn emit_received_at() -> bool {
         .and_then(|o| o.get(EMIT_RECEIVED_AT_KEY).ok())
         .and_then(|v| v.as_bool())
         .unwrap_or(false)
+}
+
+/// `None` when the message-size distribution is switched off (the default),
+/// otherwise the 1-in-N rate to sample at.
+fn bytes_processed_sample_rate() -> Option<u64> {
+    let sample_rate = options("snuba")
+        .ok()
+        .and_then(|o| o.get(BYTES_PROCESSED_SAMPLE_RATE_KEY).ok())
+        .and_then(|v| v.as_i64())
+        .filter(|&n| n >= 0)
+        .map(|n| n as u64)
+        .unwrap_or(DEFAULT_BYTES_PROCESSED_SAMPLE_RATE);
+
+    (sample_rate > 0).then_some(sample_rate)
+}
+
+/// An independent 1-in-`sample_rate` coin flip. A rate of 1 always samples,
+/// since `rand::random::<f64>()` is in `[0, 1)`.
+fn should_sample_bytes_processed(sample_rate: u64) -> bool {
+    rand::random::<f64>() * (sample_rate as f64) < 1.0
+}
+
+/// Record the raw Kafka payload size of one item as a distribution sample.
+///
+/// Reaches Datadog as `snuba.consumer.eap_items.item_bytes_processed.distribution`
+/// (arroyo timers are recorded as distributions, see `metrics::statsd`), tagged
+/// by `item_type`, and answers "how big is a span/log/metric" — which the
+/// `insertions.item_bytes_processed` counter cannot, being a per-batch sum.
+///
+/// Sampling is an independent 1-in-N coin flip per message, so an item type
+/// gets samples in proportion to its own volume. That is sized for spans;
+/// percentiles for the low-volume item types are correspondingly thinner and
+/// should be read over longer windows.
+///
+/// Because samples are dropped, only the shape of this distribution
+/// (percentiles, min, max, avg) is meaningful; its `count` and `sum` are not.
+/// Total bytes processed stays on the counter.
+fn record_item_bytes_distribution(item_type: TraceItemType, size_bytes: usize) {
+    let Some(sample_rate) = bytes_processed_sample_rate() else {
+        return;
+    };
+
+    if !should_sample_bytes_processed(sample_rate) {
+        return;
+    }
+
+    timer!(
+        "eap_items.item_bytes_processed",
+        size_bytes as u64,
+        "item_type" => item_type_name(item_type)
+    );
 }
 
 /// Most recent Monday 00:00 UTC at or before `now` — the active weekly
@@ -202,7 +287,9 @@ pub fn process_message(
     metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
-    let processed = process_eap_item(msg, &metadata, config)?;
+    let Some(processed) = process_eap_item(msg, &metadata, config)? else {
+        return Ok(InsertBatch::skip());
+    };
     let mut batch = InsertBatch::from_rows([processed.eap_item], processed.origin_timestamp)?;
     batch.item_type_metrics = Some(processed.item_type_metrics);
     batch.cogs_data = Some(processed.cogs_data);
@@ -214,7 +301,9 @@ pub fn process_message_row_binary(
     metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
-    let processed = process_eap_item(msg, &metadata, config)?;
+    let Some(processed) = process_eap_item(msg, &metadata, config)? else {
+        return Ok(InsertBatch::skip());
+    };
     let row = EAPItemRow::try_from(processed.eap_item)?;
 
     // Encode the row to RowBinary bytes inline so the wide typed struct (~80
@@ -247,7 +336,13 @@ pub(crate) fn process_message_row_binary_typed(
     metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<EAPItemRowBatch> {
-    let processed = process_eap_item(msg, &metadata, config)?;
+    let Some(processed) = process_eap_item(msg, &metadata, config)? else {
+        return Ok(EAPItemRowBatch {
+            rows: vec![],
+            cogs_data: None,
+            item_type_metrics: None,
+        });
+    };
     Ok(EAPItemRowBatch {
         rows: vec![EAPItemRow::try_from(processed.eap_item)?],
         cogs_data: Some(processed.cogs_data),
@@ -269,7 +364,7 @@ struct EAPItem {
     item_id: u128,
 
     /// Per-item-type primary name attribute, promoted to a dedicated column.
-    /// Sourced from `sentry.op` for spans and `sentry.metric.name` for metrics.
+    /// Sourced from `sentry.op` for spans and `sentry.metric_name` for metrics.
     indexed_name: String,
 
     #[serde(flatten)]
@@ -295,14 +390,14 @@ impl TryFrom<TraceItem> for EAPItem {
         let timestamp = from.timestamp.context("Expected a timestamp")?;
 
         // Promote the per-item-type primary name attribute into a dedicated
-        // `indexed_name` column: `sentry.op` for spans, `sentry.metric.name`
+        // `indexed_name` column: `sentry.op` for spans, `sentry.metric_name`
         // for metrics. Read it before `from.attributes` is consumed by the loop
         // below; the attribute is also still written to the attribute maps.
         let item_type =
             TraceItemType::try_from(from.item_type).unwrap_or(TraceItemType::Unspecified);
         let indexed_name = match item_type {
             TraceItemType::Span => Some("sentry.op"),
-            TraceItemType::Metric => Some("sentry.metric.name"),
+            TraceItemType::Metric => Some("sentry.metric_name"),
             _ => None,
         }
         .and_then(|key| from.attributes.get(key))
@@ -732,6 +827,7 @@ mod tests {
     use std::sync::Once;
 
     use super::*;
+    use crate::processors::utils::DROP_INVALID_TIMESTAMPS_KEY;
 
     static INIT: Once = Once::new();
     fn init_options() {
@@ -1312,6 +1408,107 @@ mod tests {
         assert_eq!(get_dlq_grace_period_min(""), None);
     }
 
+    fn encode_with_timestamp(event_ts: i64, retention_days: u32, downsampled: u32) -> Vec<u8> {
+        let mut trace_item = generate_trace_item(Uuid::new_v4());
+        trace_item.timestamp = Some(Timestamp {
+            seconds: event_ts,
+            nanos: 0,
+        });
+        trace_item.retention_days = retention_days;
+        trace_item.downsampled_retention_days = downsampled;
+        let mut payload = Vec::new();
+        trace_item.encode(&mut payload).unwrap();
+        payload
+    }
+
+    fn rows_inserted(payload: &[u8]) -> (usize, usize, usize) {
+        let metadata = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: Utc::now(),
+        };
+        let config = ProcessorConfig::default();
+        let json = process_message(
+            KafkaPayload::new(None, None, Some(payload.to_vec())),
+            metadata.clone(),
+            &config,
+        )
+        .unwrap();
+        let row_binary = process_message_row_binary(
+            KafkaPayload::new(None, None, Some(payload.to_vec())),
+            metadata.clone(),
+            &config,
+        )
+        .unwrap();
+        let typed = process_message_row_binary_typed(
+            KafkaPayload::new(None, None, Some(payload.to_vec())),
+            metadata,
+            &config,
+        )
+        .unwrap();
+        (
+            json.rows.num_rows,
+            row_binary.rows.num_rows,
+            typed.rows.len(),
+        )
+    }
+
+    #[test]
+    fn test_drop_invalid_timestamps_skips_items_past_retention() {
+        init_options();
+        let now = Utc::now().timestamp();
+        let past_90_days = encode_with_timestamp(now - 120 * 86_400, 90, 90);
+        let within_90_days = encode_with_timestamp(now - 60 * 86_400, 90, 90);
+        // NOTE: 60 days old on 30 day standard retention: dropped even though the
+        // downsample tiers would keep it for 396 days.
+        let past_standard_retention = encode_with_timestamp(now - 60 * 86_400, 30, 396);
+        let far_future = encode_with_timestamp(now + 8 * 86_400, 90, 90);
+
+        // Option off: everything is inserted.
+        assert_eq!(rows_inserted(&past_90_days), (1, 1, 1));
+        assert_eq!(rows_inserted(&far_future), (1, 1, 1));
+
+        let _guard =
+            override_options(&[("snuba", DROP_INVALID_TIMESTAMPS_KEY, json!(true))]).unwrap();
+        assert_eq!(rows_inserted(&past_90_days), (0, 0, 0));
+        assert_eq!(rows_inserted(&far_future), (0, 0, 0));
+        assert_eq!(rows_inserted(&within_90_days), (1, 1, 1));
+        assert_eq!(rows_inserted(&past_standard_retention), (0, 0, 0));
+    }
+
+    #[test]
+    fn test_drop_invalid_timestamps_runs_before_dlq() {
+        // An item past retention is dropped (committed, no rows), not DLQ'd,
+        // even when the prior-partition DLQ would otherwise catch it.
+        init_options();
+        let _guard = override_options(&[
+            ("snuba", DROP_INVALID_TIMESTAMPS_KEY, json!(true)),
+            (
+                "snuba",
+                "eap_items_dlq_grace_period_min",
+                json!({ "eap_items_dlq_test": 0 }),
+            ),
+        ])
+        .unwrap();
+        let config = ProcessorConfig {
+            storage_name: "eap_items_dlq_test".to_string(),
+            ..Default::default()
+        };
+        let metadata = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: Utc::now(),
+        };
+        let payload = encode_with_timestamp(Utc::now().timestamp() - 120 * 86_400, 90, 90);
+        let batch = process_message(
+            KafkaPayload::new(None, None, Some(payload)),
+            metadata,
+            &config,
+        )
+        .unwrap();
+        assert_eq!(batch.rows.num_rows, 0);
+    }
+
     #[test]
     fn test_get_dlq_grace_period_min_reads_dict_option() {
         init_options();
@@ -1338,6 +1535,55 @@ mod tests {
             .unwrap();
             assert_eq!(get_dlq_grace_period_min("eap_items_dlq_test"), None);
         }
+    }
+
+    #[test]
+    fn test_bytes_processed_sample_rate_option() {
+        init_options();
+        // Unset means off: no distribution samples until someone opts in.
+        assert_eq!(DEFAULT_BYTES_PROCESSED_SAMPLE_RATE, 0);
+        assert_eq!(bytes_processed_sample_rate(), None);
+
+        {
+            let _guard =
+                override_options(&[("snuba", BYTES_PROCESSED_SAMPLE_RATE_KEY, json!(1))]).unwrap();
+            assert_eq!(bytes_processed_sample_rate(), Some(1));
+        }
+        {
+            let _guard =
+                override_options(&[("snuba", BYTES_PROCESSED_SAMPLE_RATE_KEY, json!(100))])
+                    .unwrap();
+            assert_eq!(bytes_processed_sample_rate(), Some(100));
+        }
+        {
+            // Zero is the kill switch.
+            let _guard =
+                override_options(&[("snuba", BYTES_PROCESSED_SAMPLE_RATE_KEY, json!(0))]).unwrap();
+            assert_eq!(bytes_processed_sample_rate(), None);
+        }
+        {
+            // Negative values are rejected in favour of the default.
+            let _guard =
+                override_options(&[("snuba", BYTES_PROCESSED_SAMPLE_RATE_KEY, json!(-5))]).unwrap();
+            assert_eq!(bytes_processed_sample_rate(), None);
+        }
+    }
+
+    #[test]
+    fn test_should_sample_bytes_processed() {
+        // A rate of 1 samples every message: rand::random::<f64>() is in
+        // [0, 1), so the product can never reach 1.0.
+        assert!((0..1_000).all(|_| should_sample_bytes_processed(1)));
+
+        // Anything higher is a 1-in-N coin flip. Bounds are deliberately loose
+        // (expected 10_000, sigma ~87) so this cannot flake.
+        let sampled = (0..40_000)
+            .filter(|_| should_sample_bytes_processed(4))
+            .count();
+        assert!(
+            (8_000..12_000).contains(&sampled),
+            "expected roughly 1 in 4 of 40k draws to be sampled, got {sampled}"
+        );
     }
 
     #[test]
@@ -1706,7 +1952,7 @@ mod tests {
         let mut trace_item = generate_trace_item(item_id);
         trace_item.item_type = TraceItemType::Metric.into();
         trace_item.attributes.insert(
-            "sentry.metric.name".to_string(),
+            "sentry.metric_name".to_string(),
             AnyValue {
                 value: Some(Value::StringValue("my.metric".to_string())),
             },

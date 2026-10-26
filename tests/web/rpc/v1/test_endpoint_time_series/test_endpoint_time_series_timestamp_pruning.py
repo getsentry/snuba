@@ -22,7 +22,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 
 from snuba.query.expressions import Column, Expression, FunctionCall
-from snuba.web.rpc.v1.resolvers.R_eap_items.resolver_time_series import build_query
+from snuba.web.rpc.v1.endpoint_time_series import build_query
 
 # Aligned to a 600s boundary so the meta window matches what the time-series
 # bucketing produces; values are arbitrary fixed unix seconds.

@@ -5,7 +5,6 @@ use std::time::Duration;
 use sentry_arroyo::backends::kafka::config::KafkaConfig;
 use sentry_arroyo::backends::kafka::producer::KafkaProducer;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
-use sentry_arroyo::metrics;
 use sentry_arroyo::processing::dlq::{DlqLimit, DlqPolicy, KafkaDlqProducer};
 use sentry_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use sentry_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
@@ -17,10 +16,11 @@ use pyo3::prelude::*;
 use crate::config;
 use crate::logging::{setup_logging, setup_sentry};
 use crate::metrics::global_tags::set_global_tag;
-use crate::metrics::statsd::create_dogstatsd_backend;
+use crate::metrics::statsd::install_dogstatsd;
 use crate::strategies::accepted_outcomes::aggregator::OutcomesAggregator;
 use crate::strategies::accepted_outcomes::commit_outcomes::CommitOutcomes;
 use crate::strategies::accepted_outcomes::produce_outcome::ProduceAcceptedOutcome;
+use crate::strategies::healthcheck;
 use crate::strategies::noop::Noop;
 
 pub struct AcceptedOutcomesStrategyFactory {
@@ -31,6 +31,8 @@ pub struct AcceptedOutcomesStrategyFactory {
     produce_topic: Topic,
     producer: Arc<KafkaProducer>,
     concurrency: ConcurrencyConfig,
+    health_check: String,
+    health_check_file: Option<String>,
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for AcceptedOutcomesStrategyFactory {
@@ -49,12 +51,23 @@ impl ProcessingStrategyFactory<KafkaPayload> for AcceptedOutcomesStrategyFactory
             &self.concurrency,
         );
         let commit = CommitOutcomes::new(produce, Some(self.commit_frequency));
-        Box::new(OutcomesAggregator::new(
-            commit,
-            self.max_batch_size,
-            self.max_batch_time_ms,
-            self.bucket_interval,
-        ))
+        let next_step: Box<dyn ProcessingStrategy<KafkaPayload>> =
+            Box::new(OutcomesAggregator::new(
+                commit,
+                self.max_batch_size,
+                self.max_batch_time_ms,
+                self.bucket_interval,
+            ));
+
+        if let Some(path) = &self.health_check_file {
+            tracing::info!(
+                "Using {} healthcheck for accepted outcomes consumer",
+                self.health_check
+            );
+            healthcheck::wrap_health_check(next_step, &self.health_check, path)
+        } else {
+            next_step
+        }
     }
 }
 
@@ -108,8 +121,8 @@ pub fn accepted_outcomes_consumer_impl(
     concurrency: usize,
     _enforce_schema: bool,
     max_poll_interval_ms: usize,
-    _health_check: &str,
-    _health_check_file: Option<&str>,
+    health_check: &str,
+    health_check_file: Option<&str>,
     max_dlq_buffer_length: Option<usize>,
     _join_timeout_ms: Option<u64>,
     max_batch_size: usize,
@@ -155,9 +168,7 @@ pub fn accepted_outcomes_consumer_impl(
             ("consumer_group", consumer_group.to_owned()),
         ];
 
-        if let Some(backend) = create_dogstatsd_backend(&env_config, "snuba.consumer", &tags) {
-            metrics::init(backend).unwrap();
-        }
+        install_dogstatsd(&env_config, "snuba.consumer", &tags);
     }
 
     // DLQ setup
@@ -166,7 +177,8 @@ pub fn accepted_outcomes_consumer_impl(
     let dlq_policy = consumer_config.dlq_topic.map(|dlq_topic_config| {
         let dlq_producer_config =
             KafkaConfig::new_producer_config(vec![], Some(dlq_topic_config.broker_config));
-        let dlq_producer = KafkaProducer::new(dlq_producer_config);
+        let dlq_producer =
+            KafkaProducer::new(dlq_producer_config).expect("failed to create kafka producer");
 
         let kafka_dlq_producer = Box::new(KafkaDlqProducer::new(
             dlq_producer,
@@ -205,7 +217,8 @@ pub fn accepted_outcomes_consumer_impl(
     // TODO consider adding a higher linger.ms to the config for batching produced messages
     let producer_config =
         KafkaConfig::new_producer_config(vec![], Some(topic_config.broker_config));
-    let producer = Arc::new(KafkaProducer::new(producer_config));
+    let producer =
+        Arc::new(KafkaProducer::new(producer_config).expect("failed to create kafka producer"));
     let produce_topic = Topic::new(&topic_config.physical_topic_name);
 
     let factory = AcceptedOutcomesStrategyFactory {
@@ -216,6 +229,8 @@ pub fn accepted_outcomes_consumer_impl(
         produce_topic,
         producer,
         concurrency: ConcurrencyConfig::new(concurrency),
+        health_check: health_check.to_string(),
+        health_check_file: health_check_file.map(ToOwned::to_owned),
     };
     let processor = StreamProcessor::with_kafka(config, factory, topic, dlq_policy);
 

@@ -1,42 +1,154 @@
 import React, { useEffect, useState } from "react";
 import Client from "SnubaAdmin/api_client";
+import { COLORS, SECTION_HEADING_STYLE } from "SnubaAdmin/theme";
+import ToolGrid from "SnubaAdmin/tool_grid";
+import { AdminRegion } from "SnubaAdmin/types";
+import { regionColor } from "SnubaAdmin/utils/region_color";
 
 function Welcome(props: { api: Client }) {
-  const [adminRegions, setAdminRegions] = useState<string[]>([]);
+  const [adminRegions, setAdminRegions] = useState<AdminRegion[]>([]);
+  const [allowedTools, setAllowedTools] = useState<string[] | null>(null);
+  const [toolsError, setToolsError] = useState<string | null>(null);
 
   useEffect(() => {
     props.api.getAdminRegions().then((res) => {
       setAdminRegions(res);
     });
+    props.api
+      .getAllowedTools()
+      .then((res) => {
+        if (!Array.isArray(res?.tools)) {
+          throw new Error("unexpected response from /tools");
+        }
+        setAllowedTools(res.tools);
+      })
+      .catch((err) => {
+        setToolsError(err?.message ?? String(err));
+      });
   }, []);
 
-  function urls() {
-    return (
-      <div>
-        <p>Available regions:</p>
-        <p>MEREDITH IS #1</p>
-        <ul>
-          <li>
-            <a href="https://snuba-admin.getsentry.net/" target="_blank">
-              SaaS
-            </a>
-          </li>
-          {adminRegions.map((region) => (
-            <li>
-              <a
-                href={"https://snuba-admin." + region + ".getsentry.net/"}
-                target="_blank"
-              >
-                {region}
-              </a>
-            </li>
-          ))}
-        </ul>
-      </div>
+  async function clearSiteData() {
+    if (!window.confirm("Clear all site data for Snuba Admin?")) return;
+    localStorage.clear();
+    sessionStorage.clear();
+    document.cookie.split(";").forEach((cookie) => {
+      const name = cookie.split("=")[0].trim();
+      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+    });
+    const [cacheNames, databases] = await Promise.all([
+      caches.keys(),
+      indexedDB.databases(),
+    ]);
+    await Promise.all(cacheNames.map((name) => caches.delete(name)));
+    await Promise.all(
+      databases.map(
+        (db) =>
+          new Promise((resolve) => {
+            if (!db.name) return resolve(null);
+            const request = indexedDB.deleteDatabase(db.name);
+            request.onsuccess = request.onerror = request.onblocked = resolve;
+          })
+      )
     );
+    window.location.reload();
   }
 
-  return <div>{urls()}</div>;
+  return (
+    <div>
+      <section style={{ ...sectionStyle, ...regionSectionStyle }}>
+        {adminRegions.length > 0 && (
+          <>
+            <h2 style={{ ...headingStyle, margin: 0 }}>Regions</h2>
+            <div style={regionRowStyle}>
+              {adminRegions.map((region) => (
+                <a
+                  key={region.name}
+                  href={region.url}
+                  target="_blank"
+                  className="region-button"
+                  style={{
+                    ...regionButtonStyle,
+                    // Match the header banner, which calls the main region "SaaS".
+                    backgroundColor: regionColor(
+                      region.is_main ? "SaaS" : region.name
+                    ),
+                  }}
+                >
+                  {region.is_main ? `SaaS (${region.name})` : region.name}
+                </a>
+              ))}
+            </div>
+          </>
+        )}
+        <button
+          className="danger-button"
+          onClick={clearSiteData}
+          style={clearSiteDataStyle}
+        >
+          Clear site data
+        </button>
+      </section>
+      <section style={sectionStyle}>
+        <h2 style={headingStyle}>Tools</h2>
+        {toolsError && (
+          <p style={errorStyle}>
+            Couldn't load the tools you have access to: {toolsError}
+          </p>
+        )}
+        <ToolGrid allowedTools={allowedTools} />
+      </section>
+    </div>
+  );
 }
+
+const sectionStyle = {
+  marginBottom: 30,
+};
+
+const headingStyle = SECTION_HEADING_STYLE;
+
+// Heading and pills share one line.
+const regionSectionStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: 16,
+};
+
+const regionRowStyle = {
+  display: "flex",
+  flexWrap: "wrap" as const,
+  gap: 10,
+};
+
+// Same treatment as the region banner in the header.
+const regionButtonStyle = {
+  color: COLORS.REGION_TEXT,
+  fontSize: 16,
+  fontWeight: 700,
+  letterSpacing: "0.05em",
+  textTransform: "uppercase" as const,
+  textDecoration: "none",
+  padding: "6px 16px",
+  borderRadius: 4,
+  whiteSpace: "nowrap" as const,
+};
+
+// Same type as the region pills, but outlined so it doesn't read as a region.
+const clearSiteDataStyle = {
+  ...regionButtonStyle,
+  marginLeft: "auto",
+  color: COLORS.DANGER,
+  border: `1px solid ${COLORS.DANGER}`,
+  // Buttons don't inherit line height, and the border adds 2px, so match the
+  // pills' height explicitly.
+  lineHeight: "inherit",
+  padding: "5px 16px",
+  cursor: "pointer",
+};
+
+const errorStyle = {
+  fontSize: 14,
+  color: COLORS.ERROR,
+};
 
 export default Welcome;

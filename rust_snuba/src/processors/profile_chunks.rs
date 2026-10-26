@@ -6,7 +6,7 @@ use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::processors::utils::enforce_standard_retention;
+use crate::processors::utils::{enforce_standard_retention, serialize_datetime64_us};
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
@@ -43,9 +43,15 @@ struct Chunk {
     project_id: u64,
     profiler_id: Uuid,
     chunk_id: Uuid,
-    #[serde(rename(serialize = "start_timestamp"))]
+    #[serde(
+        rename(serialize = "start_timestamp"),
+        serialize_with = "serialize_datetime64_us"
+    )]
     start_timestamp_micro: u64,
-    #[serde(rename(serialize = "end_timestamp"))]
+    #[serde(
+        rename(serialize = "end_timestamp"),
+        serialize_with = "serialize_datetime64_us"
+    )]
     end_timestamp_micro: u64,
     environment: Option<String>,
     retention_days: Option<u16>,

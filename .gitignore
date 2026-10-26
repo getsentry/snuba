@@ -19,3 +19,4 @@ gocd/generated-pipelines/
 Brewfile.lock.json
 .zed/
 dump.rdb
+sentry-options/values/

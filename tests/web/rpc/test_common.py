@@ -1,5 +1,7 @@
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Any
+from unittest import mock
 
 import pytest
 from google.protobuf import json_format, struct_pb2
@@ -29,9 +31,10 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ExistsFilter,
     TraceItemFilter,
 )
-from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
+from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue
 
 from snuba import settings
+from snuba.clickhouse.error_codes import ErrorCodes
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.protos.common import (
@@ -53,19 +56,20 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.logical import Query
+from snuba.web import QueryException
 from snuba.web.rpc.common.common import (
-    USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION,
+    INDEXED_COLUMNS_OPTION,
     _any_attribute_filter_to_expression,
     _comparison_can_match_column_default,
     add_existence_check_to_map_attribute_reads,
     attribute_key_to_expression,
     dedupe_and_conditions,
+    indexed_column_for,
     next_monday,
     prev_monday,
     semver_sort_key,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
-    use_indexed_name_for_request,
     use_sampling_factor,
 )
 from snuba.web.rpc.common.exceptions import (
@@ -1198,6 +1202,20 @@ def test_convert_rpc_exception_to_proto_packs_details() -> None:
     assert unpacked == routing_decision_log_dict
 
 
+def test_convert_rpc_exception_cannot_compile_regexp_is_400() -> None:
+    exc = QueryException.from_args(
+        "ClickhouseError",
+        "Code: 427. Cannot compile regexp",
+        extra={
+            "stats": {"error_code": ErrorCodes.CANNOT_COMPILE_REGEXP},
+            "sql": "SELECT 1",
+            "experiments": {},
+        },
+    )
+    proto = convert_rpc_exception_to_proto(exc)
+    assert proto.code == 400
+
+
 class TestAnyAttributeFilter:
     def test_like_on_non_string_value_raises(self) -> None:
         filt = AnyAttributeFilter(
@@ -1447,6 +1465,53 @@ class TestAnyAttributeFilterIntegration:
         )
         assert colors == ["red"]
 
+    def test_regexp_finds_target_span(self) -> None:
+        colors = self._execute(
+            TraceItemFilter(
+                any_attribute_filter=AnyAttributeFilter(
+                    op=AnyAttributeFilter.OP_REGEXP,
+                    value=AttributeValue(val_str=self.UNIQUE_VALUE),
+                )
+            )
+        )
+        assert colors == ["red"]
+
+    def test_regexp_ignore_case(self) -> None:
+        colors = self._execute(
+            TraceItemFilter(
+                any_attribute_filter=AnyAttributeFilter(
+                    op=AnyAttributeFilter.OP_REGEXP,
+                    value=AttributeValue(val_str=self.UNIQUE_VALUE.upper()),
+                    ignore_case=True,
+                )
+            )
+        )
+        assert colors == ["red"]
+
+    def test_regexp_empty_pattern_raises(self) -> None:
+        with pytest.raises(
+            BadSnubaRPCRequestException, match="REGEXP pattern must be a non-empty string"
+        ):
+            self._execute(
+                TraceItemFilter(
+                    any_attribute_filter=AnyAttributeFilter(
+                        op=AnyAttributeFilter.OP_REGEXP,
+                        value=AttributeValue(val_str=""),
+                    )
+                )
+            )
+
+    def test_regexp_on_non_string_value_raises(self) -> None:
+        with pytest.raises(BadSnubaRPCRequestException, match="REGEXP"):
+            self._execute(
+                TraceItemFilter(
+                    any_attribute_filter=AnyAttributeFilter(
+                        op=AnyAttributeFilter.OP_REGEXP,
+                        value=AttributeValue(val_int=42),
+                    )
+                )
+            )
+
     def test_not_equals_excludes_target_span(self) -> None:
         """OP_NOT_EQUALS on the unique value should return the other two spans."""
         colors = self._execute(
@@ -1640,9 +1705,199 @@ class TestEmptyVsAbsentComparison:
         # absent key.
         assert self._execute(ComparisonFilter.OP_LIKE, value="%") == ["blue", "red"]
 
+    def test_regexp_dotstar_matches_present_not_absent(self) -> None:
+        assert self._execute(ComparisonFilter.OP_REGEXP, value=".*") == ["blue", "red"]
+
     def test_not_like_wildcard_matches_only_absent(self) -> None:
         # Present rows all `like '%'`, so only the absent key survives NOT LIKE.
         assert self._execute(ComparisonFilter.OP_NOT_LIKE, value="%") == ["green"]
+
+
+@pytest.mark.eap
+@pytest.mark.redis_db
+class TestRegexpComparisonFilterIntegration:
+    """Ingest spans, then REGEXP-filter them through EndpointTraceItemTable."""
+
+    ATTR = "test.regexp.haystack"
+    ARRAY_ATTR = "test.regexp.tags"
+    BATCH_ATTR = "test.regexp.batch"
+
+    @pytest.fixture(autouse=True)
+    def setup(self, eap: None, redis_db: None) -> None:
+        self.batch = f"batch-{uuid.uuid4().hex}"
+        self.base_time = datetime.now(tz=UTC).replace(
+            minute=0, second=0, microsecond=0
+        ) - timedelta(hours=1)
+        self.start_ts = Timestamp(seconds=int((self.base_time - timedelta(hours=1)).timestamp()))
+        self.end_ts = Timestamp(seconds=int((self.base_time + timedelta(hours=2)).timestamp()))
+        batch = AnyValue(string_value=self.batch)
+        messages = [
+            gen_item_message(
+                start_timestamp=self.base_time,
+                attributes={
+                    self.BATCH_ATTR: batch,
+                    self.ATTR: AnyValue(string_value="db.query"),
+                    self.ARRAY_ATTR: AnyValue(
+                        array_value=ArrayValue(
+                            values=[
+                                AnyValue(string_value="timeout"),
+                                AnyValue(string_value="retry"),
+                            ]
+                        )
+                    ),
+                    "color": AnyValue(string_value="red"),
+                },
+            ),
+            gen_item_message(
+                start_timestamp=self.base_time + timedelta(minutes=1),
+                attributes={
+                    self.BATCH_ATTR: batch,
+                    self.ATTR: AnyValue(string_value="http.server"),
+                    self.ARRAY_ATTR: AnyValue(
+                        array_value=ArrayValue(values=[AnyValue(string_value="ok")])
+                    ),
+                    "color": AnyValue(string_value="blue"),
+                },
+            ),
+        ]
+        storage = get_writable_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(storage, messages)
+
+    def _execute(
+        self,
+        filt: TraceItemFilter,
+    ) -> list[str]:
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="test",
+                referrer="test",
+                start_timestamp=self.start_ts,
+                end_timestamp=self.end_ts,
+                request_id=uuid.uuid4().hex,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                and_filter=AndFilter(
+                    filters=[
+                        TraceItemFilter(
+                            comparison_filter=ComparisonFilter(
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_STRING, name=self.BATCH_ATTR
+                                ),
+                                op=ComparisonFilter.OP_EQUALS,
+                                value=AttributeValue(val_str=self.batch),
+                            )
+                        ),
+                        filt,
+                    ]
+                )
+            ),
+            columns=[Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color"))],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color"))
+                )
+            ],
+            limit=100,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        if not response.column_values:
+            return []
+        return sorted(r.val_str for r in response.column_values[0].results)
+
+    def test_regexp_on_string_key(self) -> None:
+        assert self._execute(
+            TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name=self.ATTR),
+                    op=ComparisonFilter.OP_REGEXP,
+                    value=AttributeValue(val_str=r"db\..*"),
+                )
+            )
+        ) == ["red"]
+
+    def test_regexp_on_string_key_ignore_case(self) -> None:
+        assert self._execute(
+            TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name=self.ATTR),
+                    op=ComparisonFilter.OP_REGEXP,
+                    value=AttributeValue(val_str=r"DB\..*"),
+                    ignore_case=True,
+                )
+            )
+        ) == ["red"]
+
+    def test_regexp_on_array_key(self) -> None:
+        assert self._execute(
+            TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name=self.ARRAY_ATTR),
+                    op=ComparisonFilter.OP_REGEXP,
+                    value=AttributeValue(val_str="time.*"),
+                )
+            )
+        ) == ["red"]
+
+    def test_regexp_on_array_key_ignore_case(self) -> None:
+        assert self._execute(
+            TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name=self.ARRAY_ATTR),
+                    op=ComparisonFilter.OP_REGEXP,
+                    value=AttributeValue(val_str="TIME.*"),
+                    ignore_case=True,
+                )
+            )
+        ) == ["red"]
+
+    def test_regexp_empty_pattern_raises(self) -> None:
+        with pytest.raises(
+            BadSnubaRPCRequestException, match="REGEXP pattern must be a non-empty string"
+        ):
+            self._execute(
+                TraceItemFilter(
+                    comparison_filter=ComparisonFilter(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name=self.ATTR),
+                        op=ComparisonFilter.OP_REGEXP,
+                        value=AttributeValue(val_str=""),
+                    )
+                )
+            )
+
+    def test_regexp_non_string_pattern_raises(self) -> None:
+        with pytest.raises(
+            BadSnubaRPCRequestException, match="REGEXP pattern must be a non-empty string"
+        ):
+            self._execute(
+                TraceItemFilter(
+                    comparison_filter=ComparisonFilter(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name=self.ATTR),
+                        op=ComparisonFilter.OP_REGEXP,
+                        value=AttributeValue(val_double=1.5),
+                    )
+                )
+            )
+
+    def test_regexp_pattern_is_not_interpolated_into_sql(self) -> None:
+        # If PATTERN were concatenated into match(col, 'PATTERN'), `' --` closes
+        # the SQL string and comments out the rest of the statement (including
+        # match's closing paren) — a syntax-error / DoS injection. A dump-all
+        # payload like `') OR 1 --` needs a raw `)`, which RE2 rejects as an
+        # unmatched paren, so that vector isn't available on a bound pattern.
+        # Bound, this is just the regexp `db.query|' --`, which still matches
+        # the seeded row (proves ingest ran). Interpolated, the query fails.
+        assert self._execute(
+            TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name=self.ATTR),
+                    op=ComparisonFilter.OP_REGEXP,
+                    value=AttributeValue(val_str="db.query|' --"),
+                )
+            )
+        ) == ["red"]
 
 
 class TestSemverSortKey:
@@ -1736,12 +1991,87 @@ class TestAnyAttributeFilterOption:
         assert result.value is True
 
 
-class TestIndexedNameRedirect:
-    def test_organization_gate(self) -> None:
-        with override_options("snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: [42]}):
-            assert use_indexed_name_for_request(RequestMeta(organization_id=42))
-            assert not use_indexed_name_for_request(RequestMeta(organization_id=43))
+def _indexed_columns_config(
+    op_start: str = "2026-09-23", metric_start: str = "2026-09-23"
+) -> dict[str, Any]:
+    return {
+        "sentry.op": {
+            "span": {"indexed_column_name": "indexed_name", "indexed_start_date": op_start},
+        },
+        "sentry.metric_name": {
+            "metric": {"indexed_column_name": "indexed_name", "indexed_start_date": metric_start},
+        },
+    }
 
+
+def _ts(date: str, offset_seconds: int = 0) -> Timestamp:
+    start = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=UTC)
+    return Timestamp(seconds=int(start.timestamp()) + offset_seconds)
+
+
+SPAN = TraceItemType.TRACE_ITEM_TYPE_SPAN
+METRIC = TraceItemType.TRACE_ITEM_TYPE_METRIC
+LOG = TraceItemType.TRACE_ITEM_TYPE_LOG
+
+
+class TestIndexedColumnFor:
+    def test_requires_start_at_or_after_indexed_start_date(self) -> None:
+        with override_options("snuba", {INDEXED_COLUMNS_OPTION: _indexed_columns_config()}):
+            assert indexed_column_for(_ts("2026-09-23"), SPAN, "sentry.op") == "indexed_name"
+            assert indexed_column_for(_ts("2026-09-23", -1), SPAN, "sentry.op") is None
+            assert indexed_column_for(RequestMeta().start_timestamp, SPAN, "sentry.op") is None
+            assert indexed_column_for(None, SPAN, "sentry.op") is None
+
+    def test_each_column_has_its_own_start_date(self) -> None:
+        config = _indexed_columns_config(op_start="2026-09-23", metric_start="2026-09-25")
+        with override_options("snuba", {INDEXED_COLUMNS_OPTION: config}):
+            assert indexed_column_for(_ts("2026-09-24"), SPAN, "sentry.op") == "indexed_name"
+            assert indexed_column_for(_ts("2026-09-24"), METRIC, "sentry.metric_name") is None
+            assert (
+                indexed_column_for(_ts("2026-09-25"), METRIC, "sentry.metric_name")
+                == "indexed_name"
+            )
+
+    @pytest.mark.parametrize("start_date", ["23-09-2026", ""])
+    def test_malformed_start_date_disables_rewrite(self, start_date: str) -> None:
+        config = _indexed_columns_config(op_start=start_date)
+        with override_options("snuba", {INDEXED_COLUMNS_OPTION: config}):
+            assert indexed_column_for(_ts("2030-01-01"), SPAN, "sentry.op") is None
+
+    def test_same_column_indexed_per_item_type(self) -> None:
+        config: Any = {
+            "sentry.op": {
+                "span": {"indexed_column_name": "indexed_name", "indexed_start_date": "2026-09-23"},
+                "log": {"indexed_column_name": "indexed_name", "indexed_start_date": "2026-11-01"},
+            }
+        }
+        with override_options("snuba", {INDEXED_COLUMNS_OPTION: config}):
+            assert indexed_column_for(_ts("2026-10-01"), SPAN, "sentry.op") == "indexed_name"
+            assert indexed_column_for(_ts("2026-10-01"), LOG, "sentry.op") is None
+            assert indexed_column_for(_ts("2026-11-01"), LOG, "sentry.op") == "indexed_name"
+
+    def test_only_applies_to_its_item_type(self) -> None:
+        with override_options("snuba", {INDEXED_COLUMNS_OPTION: _indexed_columns_config()}):
+            assert indexed_column_for(_ts("2026-09-23"), METRIC, "sentry.op") is None
+            assert indexed_column_for(_ts("2026-09-23"), LOG, "sentry.op") is None
+            assert indexed_column_for(_ts("2026-09-23"), SPAN, "sentry.metric_name") is None
+
+    def test_unconfigured_column_not_indexed(self) -> None:
+        with override_options("snuba", {INDEXED_COLUMNS_OPTION: _indexed_columns_config()}):
+            assert indexed_column_for(_ts("2026-09-23"), SPAN, "sentry.name") is None
+
+    def test_schema_default_disables_rewrite(self) -> None:
+        assert indexed_column_for(_ts("2030-01-01"), SPAN, "sentry.op") is None
+
+    def test_unreadable_option_disables_rewrite(self) -> None:
+        def fake_get_option(key: str, default: object) -> object:
+            return default
+
+        with mock.patch("snuba.web.rpc.common.common.get_option", side_effect=fake_get_option):
+            assert indexed_column_for(_ts("2030-01-01"), SPAN, "sentry.op") is None
+
+
+class TestIndexedColumnsRedirect:
     def _filter(
         self,
         name: str = "sentry.op",
@@ -1761,13 +2091,23 @@ class TestIndexedNameRedirect:
     def _reads_indexed_name(
         self,
         item_filter: TraceItemFilter,
-        use_indexed_name: bool = True,
+        config: Any = None,
         item_type: TraceItemType.ValueType = TraceItemType.TRACE_ITEM_TYPE_SPAN,
+        index_name: str = "indexed_name",
+        start_timestamp: Timestamp | None = None,
     ) -> bool:
-        expr = trace_item_filters_to_expression(
-            item_type, item_filter, attribute_key_to_expression, use_indexed_name=use_indexed_name
-        )
-        reads_column = "indexed_name" in _collect_column_names(expr)
+        if config is None:
+            config = _indexed_columns_config()
+        with override_options("snuba", {INDEXED_COLUMNS_OPTION: config}):
+            expr = trace_item_filters_to_expression(
+                item_type,
+                item_filter,
+                attribute_key_to_expression,
+                start_timestamp=start_timestamp
+                if start_timestamp is not None
+                else _ts("2026-09-23"),
+            )
+        reads_column = index_name in _collect_column_names(expr)
         reads_bucket = "arrayElement" in _collect_function_names(expr)
         assert reads_column != reads_bucket, f"want exactly one read path, got {expr}"
         return reads_column
@@ -1785,15 +2125,33 @@ class TestIndexedNameRedirect:
 
     def test_metric_name_redirected_for_metrics(self) -> None:
         assert self._reads_indexed_name(
-            self._filter(name="sentry.metric.name"),
+            self._filter(name="sentry.metric_name"),
             item_type=TraceItemType.TRACE_ITEM_TYPE_METRIC,
         )
 
     def test_not_redirected_when_not_enabled(self) -> None:
-        assert not self._reads_indexed_name(self._filter(), use_indexed_name=False)
+        assert not self._reads_indexed_name(self._filter(), config={})
+
+    def test_not_redirected_before_index_start(self) -> None:
+        assert not self._reads_indexed_name(self._filter(), start_timestamp=_ts("2026-09-23", -1))
+
+    def test_redirected_to_configured_column(self) -> None:
+        assert self._reads_indexed_name(
+            self._filter(name="sentry.body"),
+            config={
+                "sentry.body": {
+                    "log": {
+                        "indexed_column_name": "indexed_body",
+                        "indexed_start_date": "1970-01-01",
+                    }
+                }
+            },
+            item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+            index_name="indexed_body",
+        )
 
     def test_not_redirected_for_other_key(self) -> None:
-        assert not self._reads_indexed_name(self._filter(name="sentry.metric.name"))
+        assert not self._reads_indexed_name(self._filter(name="sentry.metric_name"))
 
     def test_not_redirected_for_item_type_without_promoted_name(self) -> None:
         assert not self._reads_indexed_name(

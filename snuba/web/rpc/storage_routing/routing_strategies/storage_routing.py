@@ -26,6 +26,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_sdk import traces
 
 from snuba import environment, settings
+from snuba.clusters.load_info import LoadInfo, get_cluster_loadinfo
 from snuba.configs.configuration import (
     ConfigurableComponent,
     ConfigurableComponentData,
@@ -35,12 +36,13 @@ from snuba.configs.configuration import (
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
 from snuba.query.allocation_policies import (
+    MAX_THRESHOLD,
     AllocationPolicy,
     PolicyData,
     QueryResultOrError,
     QuotaAllowance,
-    get_active_allocation_policies,
 )
+from snuba.query.allocation_policies.resolver import get_active_allocation_policies
 from snuba.query.allocation_policies.utils import get_max_bytes_to_read
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import record_query
@@ -54,7 +56,6 @@ from snuba.web import QueryException, QueryResult
 from snuba.web.rpc.common.exceptions import RPCAllocationPolicyException
 from snuba.web.rpc.common.query_info import extract_query_info, extract_query_info_tags
 from snuba.web.rpc.storage_routing.common import extract_message_meta
-from snuba.web.rpc.storage_routing.load_retriever import LoadInfo, get_cluster_loadinfo
 
 _SAMPLING_IN_STORAGE_PREFIX = "sampling_in_storage_"
 _START_ESTIMATION_MARK = "start_sampling_in_storage_estimation"
@@ -364,10 +365,12 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             )
         return False
 
-    def get_allocation_policies(self) -> list[AllocationPolicy]:
+    def get_allocation_policies(
+        self, tenant_ids: dict[str, str | int] | None = None
+    ) -> list[AllocationPolicy]:
         # All routing strategies share allocation policies: they protect the same
         # resource (EAP). The list is configured via allocation_policies.
-        return get_active_allocation_policies(ResourceIdentifier("EAP"))
+        return get_active_allocation_policies(ResourceIdentifier("EAP"), tenant_ids)
 
     def get_delete_allocation_policies(self) -> list[AllocationPolicy]:
         return []
@@ -427,21 +430,34 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         return overrides
 
     def _get_combined_allocation_policies_recommendations(
-        self, policy_recommendations: list[QuotaAllowance]
+        self,
+        recommendations: dict[str, QuotaAllowance],
+        policies: list[AllocationPolicy],
+        load_info: LoadInfo | None,
     ) -> CombinedAllocationPoliciesRecommendations:
         # decides how to combine the recommendations from the allocation policies
         settings = {}
+        policy_recommendations = list(recommendations.values())
 
         max_bytes_to_read = get_max_bytes_to_read(policy_recommendations)
         if max_bytes_to_read != 0:
             settings["max_bytes_to_read"] = max_bytes_to_read
 
-        settings["max_threads"] = min(
-            [qa.max_threads for qa in policy_recommendations],
-        )
+        can_run = True
+        thread_cap = MAX_THRESHOLD
+        for policy in policies:
+            qa = recommendations[policy.class_name()]
+            decision = qa.decision(policy, load_info)
+            can_run = can_run and not decision.is_rejected
+            if decision.is_rejected:
+                thread_cap = 0
+            else:
+                thread_cap = min(thread_cap, qa.threads_for(decision, policy))
+
+        settings["max_threads"] = thread_cap
 
         return CombinedAllocationPoliciesRecommendations(
-            can_run=all(qa.can_run for qa in policy_recommendations),
+            can_run=can_run,
             is_throttled=any(qa.is_throttled for qa in policy_recommendations),
             settings=settings,
         )
@@ -451,7 +467,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         routing_context: RoutingContext,
     ) -> dict[str, QuotaAllowance]:
         recommendations: dict[str, QuotaAllowance] = {}
-        for allocation_policy in self.get_allocation_policies():
+        for allocation_policy in self.get_allocation_policies(routing_context.tenant_ids):
             allocation_policy_name = allocation_policy.class_name()
             with traces.start_span(
                 name=allocation_policy_name,
@@ -460,6 +476,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 recommendations[allocation_policy_name] = allocation_policy.get_quota_allowance(
                     routing_context.tenant_ids,
                     routing_context.query_id,
+                    routing_context.cluster_load_info,
                 )
                 # QuotaAllowance isn't a valid attribute value; serialize it.
                 span.set_attribute(
@@ -480,12 +497,15 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             try:
                 routing_context.timer.mark(_START_ESTIMATION_MARK)
 
+                routing_context.cluster_load_info = get_cluster_loadinfo()
                 routing_context.allocation_policies_recommendations = (
                     self._get_recommendations_from_allocation_policies(routing_context)
                 )
                 combined_allocation_policies_recommendations = (
                     self._get_combined_allocation_policies_recommendations(
-                        list(routing_context.allocation_policies_recommendations.values())
+                        routing_context.allocation_policies_recommendations,
+                        self.get_allocation_policies(routing_context.tenant_ids),
+                        routing_context.cluster_load_info,
                     )
                 )
 
@@ -496,12 +516,6 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                     clickhouse_settings=combined_allocation_policies_recommendations["settings"],
                     can_run=combined_allocation_policies_recommendations["can_run"],
                     is_throttled=combined_allocation_policies_recommendations["is_throttled"],
-                )
-
-                routing_context.cluster_load_info = (
-                    get_cluster_loadinfo()
-                    if get_option("storage_routing.enable_get_cluster_loadinfo", False)
-                    else None
                 )
 
                 self._update_routing_decision(routing_decision)
@@ -615,7 +629,9 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             query_result_or_error = QueryResultOrError(
                 query_result=routing_decision.routing_context.query_result, error=error
             )
-            for allocation_policy in self.get_allocation_policies():
+            for allocation_policy in self.get_allocation_policies(
+                routing_decision.routing_context.tenant_ids
+            ):
                 allocation_policy.update_quota_balance(
                     tenant_ids=routing_decision.routing_context.tenant_ids,
                     query_id=routing_decision.routing_context.query_id,

@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Sequence
+from typing import cast
 
-from sql_metadata import Parser, QueryType  # type: ignore[import-untyped]
+from sql_metadata import Parser, QueryType
 
 from snuba import settings
 from snuba.clickhouse.pool import ClickhousePool
@@ -17,7 +18,16 @@ from snuba.clusters.cluster import (
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.state.sentry_options import get_option
 from snuba.utils.serializable_exception import SerializableException
+
+# Hosts an operator has provisioned but not yet added to Snuba cluster config.
+# Admin tools that let a human type a host (copy-tables CREATE targets, manual
+# host entry in system queries) accept these in place of a cluster-membership
+# check. The option is shared by those tools on purpose: it is the single list
+# of hosts an operator vouches for, and both paths send the same ClickHouse
+# credentials to whatever answers, so widening one widens the other anyway.
+ADMIN_ALLOWED_HOSTS_OPTION = "admin.copy_tables_allowed_target_hosts"
 
 
 class InvalidNodeError(SerializableException):
@@ -36,6 +46,34 @@ def _node_connect_port(node: ClickhouseNode, cluster: ClickhouseCluster) -> int:
     if node.host_name == cluster.get_query_node().host_name:
         return cluster.get_port()
     return node.port if node.port is not None else DEFAULT_CLICKHOUSE_HTTP_PORT
+
+
+def split_host_port(raw: str) -> tuple[str, int | None]:
+    value = raw.strip()
+    if ":" in value:
+        host, port_s = value.rsplit(":", 1)
+        if port_s.isdigit():
+            return host, int(port_s)
+    return value, None
+
+
+def parse_host(raw: str) -> tuple[str, int]:
+    """Split ``host`` or ``host:port``; default port is 8123."""
+    host, port = split_host_port(raw)
+    return host, port if port is not None else DEFAULT_CLICKHOUSE_HTTP_PORT
+
+
+def host_is_allowlisted(host: str, port: int) -> bool:
+    """Whether ``host``/``port`` is on ``ADMIN_ALLOWED_HOSTS_OPTION``.
+
+    Hostname-only entries match any port; host:port entries must match both.
+    """
+    host_key = host.lower()
+    for entry in cast("list[str]", get_option(ADMIN_ALLOWED_HOSTS_OPTION, [])):
+        entry_host, entry_port = split_host_port(str(entry))
+        if entry_host.lower() == host_key and (entry_port is None or entry_port == port):
+            return True
+    return False
 
 
 def is_valid_node(
@@ -140,19 +178,32 @@ def _build_validated_pool(
     password: str,
     client_settings: ClickhouseClientSettings,
     known_nodes: Sequence[ClickhouseNode] | None = None,
+    validate_node: bool = True,
 ) -> ClickhousePool:
     # Single chokepoint for admin ClickhousePool acquisition. A pool ships the
     # user/password to the node (HTTP auth header), so an unvalidated host means
     # credentials reach whatever listener answers. All admin helpers must go
     # through here. The regression test
     # test_no_direct_clickhouse_pool_construction_in_admin enforces this.
-    _validate_node(clickhouse_host, clickhouse_port, cluster, storage_name, known_nodes=known_nodes)
-    # Query-endpoint traffic uses the cluster Envoy listen port. Replica
-    # (by-host) traffic uses 8123 on that node.
-    query_node = cluster.get_query_node()
-    envoy_port = cluster.get_port()
-    is_query_endpoint = clickhouse_host == query_node.host_name and clickhouse_port == envoy_port
-    connect_port = envoy_port if is_query_endpoint else DEFAULT_CLICKHOUSE_HTTP_PORT
+    #
+    # validate_node=False is reserved for hosts an operator explicitly
+    # allowlisted via ADMIN_ALLOWED_HOSTS_OPTION (copy-tables CREATE targets and
+    # manual host entry in system queries). Callers must check the allowlist
+    # themselves before passing it.
+    if validate_node:
+        _validate_node(
+            clickhouse_host, clickhouse_port, cluster, storage_name, known_nodes=known_nodes
+        )
+        # Query-endpoint traffic uses the cluster Envoy listen port. Replica
+        # (by-host) traffic uses 8123 on that node.
+        query_node = cluster.get_query_node()
+        envoy_port = cluster.get_port()
+        is_query_endpoint = (
+            clickhouse_host == query_node.host_name and clickhouse_port == envoy_port
+        )
+        connect_port = envoy_port if is_query_endpoint else DEFAULT_CLICKHOUSE_HTTP_PORT
+    else:
+        connect_port = clickhouse_port
     return build_pool(
         client_settings,
         ClickhouseNode(clickhouse_host, connect_port),
@@ -177,11 +228,10 @@ def get_ro_node_connection(
         ClickhouseClientSettings.QUERY.name,
         ClickhouseClientSettings.QUERYLOG.name,
         ClickhouseClientSettings.TRACING.name,
-        ClickhouseClientSettings.CARDINALITY_ANALYZER.name,
+        ClickhouseClientSettings.OUTCOMES_ANALYZER.name,
     }
     assert getattr(client_settings, "name", None) in allowed, (
-        "admin can only use QUERY, QUERYLOG, TRACING or CARDINALITY_ANALYZER "
-        "ClickhouseClientSettings"
+        "admin can only use QUERY, QUERYLOG, TRACING or OUTCOMES_ANALYZER ClickhouseClientSettings"
     )
 
     storage = _get_storage(storage_name)
@@ -245,11 +295,10 @@ def get_ro_cluster_node_connection(
         ClickhouseClientSettings.QUERY.name,
         ClickhouseClientSettings.QUERYLOG.name,
         ClickhouseClientSettings.TRACING.name,
-        ClickhouseClientSettings.CARDINALITY_ANALYZER.name,
+        ClickhouseClientSettings.OUTCOMES_ANALYZER.name,
     }
     assert getattr(client_settings, "name", None) in allowed, (
-        "admin can only use QUERY, QUERYLOG, TRACING or CARDINALITY_ANALYZER "
-        "ClickhouseClientSettings"
+        "admin can only use QUERY, QUERYLOG, TRACING or OUTCOMES_ANALYZER ClickhouseClientSettings"
     )
 
     if getattr(client_settings, "name", None) in {
@@ -305,13 +354,14 @@ def get_clusterless_node_connection(
     clickhouse_port: int,
     storage_name: str,
     client_settings: ClickhouseClientSettings,
+    validate_node: bool = True,
 ) -> ClickhousePool:
     storage = _get_storage(storage_name)
     cluster = storage.get_cluster()
     database = cluster.get_database()
 
     (clickhouse_user, clickhouse_password) = cluster.get_credentials()
-    connection = _build_validated_pool(
+    return _build_validated_pool(
         clickhouse_host,
         clickhouse_port,
         storage_name,
@@ -320,8 +370,8 @@ def get_clusterless_node_connection(
         clickhouse_user,
         clickhouse_password,
         client_settings,
+        validate_node=validate_node,
     )
-    return connection
 
 
 def get_ro_clusterless_node_connection(
@@ -329,6 +379,7 @@ def get_ro_clusterless_node_connection(
     clickhouse_port: int,
     storage_name: str,
     client_settings: ClickhouseClientSettings,
+    validate_node: bool = True,
 ) -> ClickhousePool:
     # Compare by name: same reload-safe rule as get_ro_node_connection.
     allowed = {
@@ -352,6 +403,7 @@ def get_ro_clusterless_node_connection(
         settings.CLICKHOUSE_READONLY_USER,
         settings.CLICKHOUSE_READONLY_PASSWORD,
         client_settings,
+        validate_node=validate_node,
     )
     return connection
 

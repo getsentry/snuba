@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Mutex;
 
 use futures::stream::BoxStream;
@@ -6,7 +7,6 @@ use sentry_arroyo::processing::stream::{
     MessageMetadata, OffsetCommitter, PipelineEnvelope, PullSource, StageResult,
 };
 use sentry_arroyo::types::{Partition, Topic};
-use std::sync::Arc;
 
 /// In-memory source for testing. Constructs envelopes from raw payloads
 /// with sequential offsets on partition 0.
@@ -26,7 +26,8 @@ impl VecSource {
                     offset: i as u64,
                     timestamp: chrono::Utc::now(),
                 };
-                StageResult::Emit(PipelineEnvelope::new(kp.clone(), md, Arc::new(kp)))
+                let offsets = HashMap::from([(md.partition, md.offset)]);
+                StageResult::Emit(PipelineEnvelope::new(kp.clone(), md, kp, offsets))
             })
             .collect();
 

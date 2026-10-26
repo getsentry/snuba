@@ -35,21 +35,16 @@ SUGGESTION = "scan less concurrent queries"
 
 
 class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
-    required_tenant_types: frozenset[str] = frozenset({"referrer"})
-
     """A case-by-case allocation policy for cross-org queries. All referrers affected by this policy have to be registered
     in this class's configuration through the `cross_org_referrer_limits` parameter. Example:
 
     ```yaml
         - name: CrossOrgQueryAllocationPolicy
-          args:
-            required_tenant_types:
-              - referrer
-            is_enforced: 0
-            cross_org_referrer_limits:
-              dynamic_sampling.counters.get_org_transaction_volumes:
-                max_threads: 4
-                concurrent_limit: 10
+          is_enforced: 0
+          cross_org_referrer_limits:
+            dynamic_sampling.counters.get_org_transaction_volumes:
+              max_threads: 4
+              concurrent_limit: 10
     ```
 
     Each referrer gets a concurrent limit (applied per referrer) and a max_threads limit (applied to every query made by that referrer).
@@ -69,13 +64,6 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
                 description="""override the concurrent limit for a referrer""",
                 value_type=int,
                 param_types={"referrer": str},
-                default=-1,
-            ),
-            Configuration(
-                name="referrer_max_threads_override",
-                description="""override the max_threads for a referrer, applies to every query made by that referrer""",
-                param_types={"referrer": str},
-                value_type=int,
                 default=-1,
             ),
         ]
@@ -108,14 +96,7 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
     def _get_max_threads(self, referrer: str) -> int:
         if not self._referrer_is_registered(referrer):
             return _UNREGISTERED_REFERRER_MAX_THREADS
-        thread_override = int(
-            self.get_config_value("referrer_max_threads_override", {"referrer": referrer})
-        )
-        return (
-            thread_override
-            if thread_override != -1
-            else int(self._registered_cross_org_referrers[referrer]["max_threads"])
-        )
+        return int(self._registered_cross_org_referrers[referrer]["max_threads"])
 
     def _get_concurrent_limit(self, referrer: str) -> int:
         if not self._referrer_is_registered(referrer):

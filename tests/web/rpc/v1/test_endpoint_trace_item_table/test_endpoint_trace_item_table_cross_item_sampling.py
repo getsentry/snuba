@@ -17,6 +17,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
 from snuba.web.rpc import RPCEndpoint
+from snuba.web.rpc.storage_routing.common import decode_routing_hint
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.base import BaseApiTest
 from tests.web.rpc.v1.test_utils import (
@@ -100,7 +101,10 @@ class TestTraceItemTableCrossItemSampling(BaseApiTest):
 
             endpoint = EndpointTraceItemTable()
             endpoint.routing_decision = mock_routing_decision
-            endpoint.execute(message)
+            response = endpoint.execute(message)
+
+            # The outer query read the full table, so that's the tier the hint points at
+            assert decode_routing_hint(response.routing_hint) == Tier.TIER_1
 
             # Verify storages were selected (should have at least 2 calls: inner + outer)
             assert len(storage_keys) >= 2, (

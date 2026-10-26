@@ -28,8 +28,8 @@ metric_id_test_cases = [
     pytest.param(
         LogicalQuery(
             from_clause=QueryEntity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -56,8 +56,8 @@ metric_id_test_cases = [
         {"c:transactions/duration@millisecond": 123456},
         LogicalQuery(
             from_clause=QueryEntity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -86,8 +86,8 @@ metric_id_test_cases = [
     pytest.param(
         LogicalQuery(
             from_clause=QueryEntity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -117,8 +117,8 @@ metric_id_test_cases = [
         },
         LogicalQuery(
             from_clause=QueryEntity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -147,8 +147,8 @@ metric_id_test_cases = [
     pytest.param(
         LogicalQuery(
             from_clause=QueryEntity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -208,8 +208,8 @@ metric_id_test_cases = [
         },
         LogicalQuery(
             from_clause=QueryEntity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+                EntityKey.METRICS_COUNTERS,
+                get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -272,7 +272,7 @@ def test_resolve_tag_value_mappings_processor(
     mappings: dict[str, str | int],
     expected_query: CompositeQuery[QueryEntity] | LogicalQuery,
 ) -> None:
-    resolve_mappings(query, mappings, get_dataset("generic_metrics"))
+    resolve_mappings(query, mappings, get_dataset("metrics"))
     assert query == expected_query
 
 
@@ -568,172 +568,6 @@ tag_test_cases = [
     pytest.param(
         LogicalQuery(
             from_clause=QueryEntity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
-            ),
-            selected_columns=[
-                SelectedExpression(
-                    "sum(c:transactions/duration@millisecond)",
-                    FunctionCall(
-                        "_snuba_aggregate_value",
-                        "sum",
-                        (Column("_snuba_value", None, "value"),),
-                    ),
-                ),
-            ],
-            condition=binary_condition(
-                "and",
-                binary_condition(
-                    "equals",
-                    Column(None, None, "event_type"),
-                    Literal(None, "transaction"),
-                ),
-                binary_condition("equals", Column(None, None, "transaction"), Literal(None, "t1")),
-            ),
-            granularity=60,
-            limit=1000,
-            offset=0,
-        ),
-        {"transaction": 999999, "event_type": 888888, "t1": 777777},
-        LogicalQuery(
-            from_clause=QueryEntity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
-            ),
-            selected_columns=[
-                SelectedExpression(
-                    "sum(c:transactions/duration@millisecond)",
-                    FunctionCall(
-                        "_snuba_aggregate_value",
-                        "sum",
-                        (Column("_snuba_value", None, "value"),),
-                    ),
-                ),
-            ],
-            granularity=60,
-            condition=binary_condition(
-                "and",
-                binary_condition(
-                    "equals",
-                    Column(None, None, "tags_raw[888888]"),
-                    Literal(None, "transaction"),
-                ),
-                binary_condition(
-                    "equals",
-                    Column(None, None, "tags_raw[999999]"),
-                    Literal(None, "t1"),
-                ),
-            ),
-            limit=1000,
-            offset=0,
-        ),
-        id="only resolve tag keys despite crossover",
-    ),
-    pytest.param(
-        LogicalQuery(
-            from_clause=QueryEntity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
-            ),
-            selected_columns=[
-                SelectedExpression(
-                    "(sum(user){status_code:500} / avg(duration){status_code:200}){foo:bar}",
-                    divide(
-                        FunctionCall(
-                            "_snuba_aggregate_value",
-                            "sumIf",
-                            (
-                                Column("_snuba_value", None, "value"),
-                                binary_condition(
-                                    "equals",
-                                    Column(None, None, "status_code"),
-                                    Literal(None, "500"),
-                                ),
-                            ),
-                        ),
-                        FunctionCall(
-                            "_snuba_aggregate_value",
-                            "avgIf",
-                            (
-                                Column("_snuba_value", None, "value"),
-                                binary_condition(
-                                    "equals",
-                                    Column(None, None, "status_code"),
-                                    Literal(None, "200"),
-                                ),
-                            ),
-                        ),
-                    ),
-                ),
-            ],
-            condition=binary_condition(
-                "equals",
-                Column(None, None, "foo"),
-                Literal(None, "bar"),
-            ),
-            granularity=60,
-            limit=1000,
-            offset=0,
-        ),
-        {
-            "user": 111111,
-            "duration": 222222,
-            "status_code": 333333,
-            "500": 444444,
-            "200": 555555,
-            "foo": 666666,
-            "bar": 777777,
-        },
-        LogicalQuery(
-            from_clause=QueryEntity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
-            ),
-            selected_columns=[
-                SelectedExpression(
-                    "(sum(user){status_code:500} / avg(duration){status_code:200}){foo:bar}",
-                    divide(
-                        FunctionCall(
-                            "_snuba_aggregate_value",
-                            "sumIf",
-                            (
-                                Column("_snuba_value", None, "value"),
-                                binary_condition(
-                                    "equals",
-                                    Column(None, None, "tags_raw[333333]"),
-                                    Literal(None, "500"),
-                                ),
-                            ),
-                        ),
-                        FunctionCall(
-                            "_snuba_aggregate_value",
-                            "avgIf",
-                            (
-                                Column("_snuba_value", None, "value"),
-                                binary_condition(
-                                    "equals",
-                                    Column(None, None, "tags_raw[333333]"),
-                                    Literal(None, "200"),
-                                ),
-                            ),
-                        ),
-                    ),
-                ),
-            ],
-            granularity=60,
-            condition=binary_condition(
-                "equals",
-                Column(None, None, "tags_raw[666666]"),
-                Literal(None, "bar"),
-            ),
-            limit=1000,
-            offset=0,
-        ),
-        id="resolving with a formula in generic",
-    ),
-    pytest.param(
-        LogicalQuery(
-            from_clause=QueryEntity(
                 EntityKey.METRICS_DISTRIBUTIONS,
                 get_entity(EntityKey.METRICS_DISTRIBUTIONS).get_data_model(),
             ),
@@ -842,12 +676,5 @@ def test_resolve_tag_key_mappings_processor(
     mappings: dict[str, str | int],
     expected_query: CompositeQuery[QueryEntity] | LogicalQuery,
 ) -> None:
-    from_clause = query.get_from_clause()
-    assert isinstance(from_clause, QueryEntity)
-    if from_clause.key.value.startswith("generic"):
-        dataset = get_dataset("generic_metrics")
-    else:
-        dataset = get_dataset("metrics")
-
-    resolve_mappings(query, mappings, dataset)
+    resolve_mappings(query, mappings, get_dataset("metrics"))
     assert query == expected_query

@@ -1,3 +1,4 @@
+use crate::timer;
 use crate::types::{AggregatedOutcomesBatch, TrackOutcome};
 use chrono::{DateTime, SecondsFormat, Utc};
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
@@ -8,7 +9,6 @@ use sentry_arroyo::processing::strategies::run_task_in_threads::{
 use sentry_arroyo::processing::strategies::{
     CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
 };
-use sentry_arroyo::timer;
 use sentry_arroyo::types::{Message, Topic, TopicOrPartition};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -87,7 +87,7 @@ impl TaskRunner<AggregatedOutcomesBatch, AggregatedOutcomesBatch, anyhow::Error>
                 // Pace produces to avoid flooding the producer queue with a single
                 // large batch all at once.
                 produced_count += 1;
-                if produced_count % throttle_batch_size == 0 {
+                if produced_count.is_multiple_of(throttle_batch_size) {
                     tokio::time::sleep(throttle_sleep).await;
                 }
             }

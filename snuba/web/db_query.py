@@ -26,16 +26,21 @@ from snuba.clickhouse.formatter.query import format_query_anonymized
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_dsl.accessors import get_time_range_estimate
 from snuba.clickhouse.query_profiler import generate_profile
+from snuba.clusters.load_info import get_cluster_loadinfo
 from snuba.configs.configuration import ResourceIdentifier
+from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
 from snuba.query import ProcessableQuery
 from snuba.query.allocation_policies import (
+    DEFAULT_PASSTHROUGH_POLICY,
     MAX_THRESHOLD,
     AllocationPolicy,
     AllocationPolicyViolations,
     QueryResultOrError,
     QuotaAllowance,
 )
+from snuba.query.allocation_policies.resolver import get_active_allocation_policies
 from snuba.query.allocation_policies.utils import get_max_bytes_to_read
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
@@ -579,24 +584,27 @@ def _raw_query(
 
 def _get_allocation_policies(
     query: Query | CompositeQuery[Table],
+    attribution_info: AttributionInfo,
 ) -> list[AllocationPolicy]:
     collector = _PolicyCollector()
     collector.visit(query)
-    return collector.policies
+    return [
+        policy
+        for storage_key in collector.storage_keys
+        for policy in get_active_allocation_policies(
+            ResourceIdentifier(storage_key), attribution_info.tenant_ids
+        )
+    ]
 
 
 class _PolicyCollector(DataSourceVisitor[None, Table], JoinVisitor[None, Table]):
-    """
-    Find all the allocation_policies for a query by traversing all the data sources
-    recursively, collect them into a list
-
-    """
+    """Collect storage keys from every Table in the query."""
 
     def __init__(self) -> None:
-        self.policies: list[AllocationPolicy] = []
+        self.storage_keys: list[StorageKey] = []
 
     def _visit_simple_source(self, data_source: Table) -> None:
-        self.policies.extend(data_source.allocation_policies)
+        self.storage_keys.append(data_source.storage_key)
 
     def _visit_join(self, data_source: JoinClause[Table]) -> None:
         return self.visit_join_clause(data_source)
@@ -688,7 +696,12 @@ def db_query(
         allocation policy be applied at the top level of the db_query process
     """
 
-    allocation_policies = _get_allocation_policies(clickhouse_query)
+    allocation_policies = _get_allocation_policies(clickhouse_query, attribution_info)
+    resource_identifier = (
+        allocation_policies[0].resource_identifier
+        if allocation_policies
+        else DEFAULT_PASSTHROUGH_POLICY.resource_identifier
+    )
     query_id = uuid.uuid4().hex
     result = None
     error = None
@@ -761,7 +774,7 @@ def db_query(
             result_or_error,
             attribution_info,
             dataset_name,
-            allocation_policies[0].resource_identifier,
+            resource_identifier,
         )
         for allocation_policy in allocation_policies:
             allocation_policy.update_quota_balance(
@@ -867,15 +880,23 @@ def _apply_allocation_policies_quota(
     rejection_quota_and_policy = None
     throttle_quota_and_policy = None
     min_threads_across_policies = MAX_THRESHOLD
+    load_info = None
+    if get_option("storage_routing.enable_get_cluster_loadinfo", False):
+        load_info = get_cluster_loadinfo(
+            get_storage(
+                StorageKey(allocation_policies[0].resource_identifier.value)
+            ).get_storage_set_key()
+        )
     with traces.start_span(
         name="_apply_allocation_policies_quota",
         attributes={SENTRY_OP: "allocation_policy"},
     ) as span:
         for allocation_policy in allocation_policies:
-            allowance = allocation_policy.get_quota_allowance(attribution_info.tenant_ids, query_id)
-            can_run &= allowance.can_run
+            allowance = allocation_policy.get_quota_allowance(
+                attribution_info.tenant_ids, query_id, load_info
+            )
+            decision = allowance.decision(allocation_policy, load_info)
             quota_allowances[allocation_policy.class_name()] = allowance
-            # QuotaAllowance isn't a valid attribute value; serialize it.
             span.set_attribute(
                 "quota_allowance",
                 json.dumps(
@@ -887,13 +908,17 @@ def _apply_allocation_policies_quota(
                     quota_allowance=allowance,
                     policy=allocation_policy,
                 )
-            min_threads_across_policies = min(min_threads_across_policies, allowance.max_threads)
-            if not can_run:
+            if decision.is_rejected:
+                can_run = False
+                min_threads_across_policies = 0
                 rejection_quota_and_policy = _QuotaAndPolicy(
                     quota_allowance=allowance,
                     policy=allocation_policy,
                 )
                 break
+            min_threads_across_policies = min(
+                min_threads_across_policies, allowance.threads_for(decision, allocation_policy)
+            )
 
         allowance_dicts = {
             key: quota_allowance.to_dict() for key, quota_allowance in quota_allowances.items()

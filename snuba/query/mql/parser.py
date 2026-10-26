@@ -723,10 +723,6 @@ METRICS_ENTITIES = {
     "s": EntityKey.METRICS_SETS,
 }
 
-GENERIC_ENTITIES = {
-    "c": EntityKey.GENERIC_METRICS_COUNTERS,
-}
-
 
 def build_formula_query_from_clause(
     parsed: InitialParseResult, dataset: Dataset
@@ -830,8 +826,8 @@ def convert_formula_to_query(
     """
     Look up all the referenced entities, and create a JoinClause for each of the entities
     referenced in the formula. Then map the correct table to each of the expressions in the formula.
-    E.g. sum(c:transactions/duration) / sum(c:transactions/duration_ms) will produce a JoinClause
-    with (c0: generic_metrics_counters) -[counters]-> (c1: generic_metrics_counters)
+    E.g. sum(c:sessions/session) / sum(c:sessions/session_error) will produce a JoinClause
+    with (c0: metrics_counters) -[counters]-> (c1: metrics_counters)
     Most formulas do not operate on multiple entities, but they get the same treatment as if they
     did in order to keep consistency. In that case the table is joined on itself.
     If a formula has only a single MRI and some scalars e.g. sum(c:transactions/duration) + 1, then
@@ -1021,12 +1017,7 @@ def select_entity(mri: str, dataset: Dataset) -> EntityKey:
     """
     Given an MRI, select the entity that it belongs to.
     """
-    if get_dataset_name(dataset) == "metrics":
-        if entity := METRICS_ENTITIES.get(mri[0]):
-            return entity
-    elif get_dataset_name(dataset) == "generic_metrics" and (
-        entity := GENERIC_ENTITIES.get(mri[0])
-    ):
+    if get_dataset_name(dataset) == "metrics" and (entity := METRICS_ENTITIES.get(mri[0])):
         return entity
 
     raise ParsingException(f"invalid metric type {mri[0]}")

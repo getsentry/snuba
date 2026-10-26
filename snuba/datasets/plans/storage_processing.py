@@ -26,7 +26,6 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.utils.storage_finder import StorageKeyFinder
 from snuba.query import ProcessableQuery
 from snuba.query import Query as AbstractQuery
-from snuba.query.allocation_policies import AllocationPolicy
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Expression, SubscriptableReference
 from snuba.query.processors.physical import ClickhouseQueryProcessor
@@ -46,7 +45,6 @@ TQuery = TypeVar("TQuery", bound=AbstractQuery)
 
 def get_query_data_source(
     relational_source: RelationalSource,
-    allocation_policies: list[AllocationPolicy],
     final: bool,
     sampling_rate: float | None,
     storage_key: StorageKey,
@@ -55,7 +53,6 @@ def get_query_data_source(
     return Table(
         table_name=relational_source.get_table_name(),
         schema=relational_source.get_columns(),
-        allocation_policies=allocation_policies,
         final=final,
         sampling_rate=sampling_rate,
         mandatory_conditions=relational_source.get_mandatory_conditions(),
@@ -136,7 +133,6 @@ def apply_storage_processors(
     query_plan.query.set_from_clause(
         get_query_data_source(
             storage.get_schema().get_data_source(),
-            allocation_policies=storage.get_allocation_policies(),
             final=query_plan.query.get_from_clause().final,
             sampling_rate=query_plan.query.get_from_clause().sampling_rate,
             storage_key=storage.get_storage_key(),

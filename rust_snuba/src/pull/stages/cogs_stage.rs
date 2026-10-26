@@ -37,12 +37,12 @@ pub struct CogsStage {
 
 impl CogsStage {
     pub fn new(
-        producer: impl Producer<KafkaPayload> + 'static,
+        producer: Arc<dyn Producer<KafkaPayload>>,
         destination: Topic,
         resource_id: String,
     ) -> Self {
         Self {
-            producer: Arc::new(producer),
+            producer,
             destination: TopicOrPartition::Topic(destination),
             resource_id,
             logged_warning: AtomicBool::new(false),

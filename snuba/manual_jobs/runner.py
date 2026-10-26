@@ -11,6 +11,7 @@ from snuba.manual_jobs.job_loader import _JobLoader
 from snuba.manual_jobs.job_logging import get_job_logger
 from snuba.manual_jobs.job_status import JobStatus
 from snuba.manual_jobs.redis import (
+    MANUAL_JOB_LOG_MAX_LINES,
     _acquire_job_lock,
     _build_job_log_key,
     _build_job_status_key,
@@ -143,7 +144,7 @@ def view_job_logs(job_id: str) -> Sequence[str]:
     job_logs_length = _redis_client.llen(name=_build_job_log_key(job_id))
     if job_logs_length == 0:
         return []
-    assert job_logs_length < 500, "Job logs are too long to display"
+    assert job_logs_length <= MANUAL_JOB_LOG_MAX_LINES, "Job logs are too long to display"
     job_logs = _redis_client.lrange(
         name=_build_job_log_key(job_id), start=0, end=job_logs_length - 1
     )

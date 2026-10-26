@@ -1,25 +1,23 @@
+from __future__ import annotations
+
 from collections.abc import Sequence
 
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.migrations import migration, operations
+from snuba.migrations import migration
 from snuba.migrations.operations import SqlOperation
-
-storage_set_name = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
-local_table_name = "eap_spans_local"
 
 
 class Migration(migration.ClickhouseNodeMigration):
+    """
+    Deprecated: This migration previously dropped the project_id index on eap_spans_local.
+    These tables are no longer used and have been removed.
+    """
+
     blocking = False
+    storage_set_key = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
 
     def forwards_ops(self) -> Sequence[SqlOperation]:
-        return [
-            operations.DropIndex(
-                storage_set=StorageSetKey.EVENTS_ANALYTICS_PLATFORM,
-                table_name="eap_spans_local",
-                index_name="bf_project_id",
-                target=operations.OperationTarget.LOCAL,
-            ),
-        ]
+        return []
 
     def backwards_ops(self) -> Sequence[SqlOperation]:
         return []

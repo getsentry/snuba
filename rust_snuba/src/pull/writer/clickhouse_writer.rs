@@ -13,9 +13,3 @@ use futures::future::BoxFuture;
 pub trait ClickHouseWriter: Send + Sync {
     fn write(&self, body: Vec<u8>) -> BoxFuture<'_, anyhow::Result<()>>;
 }
-
-impl<T: ClickHouseWriter> ClickHouseWriter for std::sync::Arc<T> {
-    fn write(&self, body: Vec<u8>) -> BoxFuture<'_, anyhow::Result<()>> {
-        (**self).write(body)
-    }
-}

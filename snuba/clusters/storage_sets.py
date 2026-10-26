@@ -29,9 +29,13 @@ _REGISTERED_STORAGE_SET_KEYS: dict[str, str] = {}
 
 class _StorageSetKey(type):
     def __getattr__(self, attr: str) -> StorageSetKey:
-        if attr not in _HARDCODED_STORAGE_SET_KEYS and attr not in _REGISTERED_STORAGE_SET_KEYS:
+        if attr.startswith("_"):
             raise AttributeError(attr)
 
+        # Cluster config registers the storage sets this process can reach.
+        # Historical migrations still name storage sets that may be absent from
+        # that config (snuba-admin listing groups is the usual case). Keep the
+        # identifier constructible; get_cluster() still fails if it is unmapped.
         return StorageSetKey(attr.lower())
 
     def __iter__(self) -> Iterator[StorageSetKey]:

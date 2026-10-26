@@ -3,6 +3,7 @@ from collections.abc import Mapping, Sequence
 from typing import Final, NamedTuple
 
 from sentry_conventions.attributes import ATTRIBUTE_METADATA
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.query.dsl import Functions as f
@@ -79,6 +80,37 @@ PROTO_TYPE_TO_ATTRIBUTE_COLUMN: Final[Mapping[AttributeKey.Type.ValueType, str]]
     AttributeKey.Type.TYPE_FLOAT: "attributes_float",
     AttributeKey.Type.TYPE_BOOLEAN: "attributes_bool",
 }
+
+# Nanosecond timestamps lose their last digits in Float64, so TYPE_INT reads of these keys
+# prefer the unbucketed attributes_int map and fall back to the float bucket (same
+# precedence as the details endpoint).
+PRECISE_INT_ATTRIBUTES: Final[frozenset[str]] = frozenset(
+    {
+        sentry_column("timestamp_precise"),
+        sentry_column("start_timestamp_precise"),
+        sentry_column("end_timestamp_precise"),
+    }
+)
+
+
+def is_precise_int_read(attr_key: AttributeKey) -> bool:
+    return attr_key.type == AttributeKey.Type.TYPE_INT and attr_key.name in PRECISE_INT_ATTRIBUTES
+
+
+def precise_int_read(
+    attribute_name: str, float_value: Expression, alias: str | None = None
+) -> Expression:
+    """``multiIf(has(mapKeys(attributes_int), name), attributes_int[name], float_value)``.
+    attributes_int is an unbucketed Map, so arrayElement, not SubscriptableReference."""
+    int_value = f.cast(
+        arrayElement(None, column("attributes_int"), literal(attribute_name)),
+        f"Nullable({PROTO_TYPE_TO_CLICKHOUSE_TYPE[AttributeKey.Type.TYPE_INT]})",
+    )
+    int_exists = map_key_exists(column("attributes_int"), literal(attribute_name))
+    if alias:
+        return f.multiIf(int_exists, int_value, float_value, alias=alias)
+    return f.multiIf(int_exists, int_value, float_value)
+
 
 # Element-typed array attribute types map 1:1 to a single typed array map column, so a
 # query on one of these reads exactly that column natively (no cross-column OR/merge).
@@ -368,6 +400,13 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
             alias=alias,
         )
 
+    if is_precise_int_read(attr_key):
+        return precise_int_read(
+            attr_key.name,
+            _generate_subscriptable_reference(attr_key.name, attr_key.type),
+            alias=alias,
+        )
+
     if attr_key.type in PROTO_TYPE_TO_ATTRIBUTE_COLUMN:
         if attr_key.name in ATTRIBUTES_TO_COALESCE:
             col_name = PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attr_key.type]
@@ -393,3 +432,18 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
     raise MalformedAttributeException(
         f"Attribute {attr_key.name} has an unknown type: {AttributeKey.Type.Name(attr_key.type)}"
     )
+
+
+def get_trace_item_type_name(item_type: TraceItemType.ValueType) -> str:
+    try:
+        full_name = TraceItemType.Name(item_type)
+
+        prefix = "TRACE_ITEM_TYPE_"
+        if not full_name.startswith(prefix):
+            raise ValueError(f"Unexpected TraceItemType name format: {full_name}")
+
+        return full_name[len(prefix) :].lower()
+    except ValueError as e:
+        raise ValueError(
+            f"Unknown TraceItemType value: {item_type}. Must be a valid TraceItemType enum value."
+        ) from e

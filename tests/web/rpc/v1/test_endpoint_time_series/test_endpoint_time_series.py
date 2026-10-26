@@ -1843,7 +1843,7 @@ class TestTimeSeriesApi(BaseApiTest):
         granularity_secs = 300
         query_duration = 60 * 30
 
-        # does not match the `url.path = "a"` filter
+        # does not match the `db.system.name = "postgresql"` filter
         store_spans_timeseries(
             BASE_TIME,
             1,
@@ -1851,22 +1851,22 @@ class TestTimeSeriesApi(BaseApiTest):
             metrics=[DummyMetric("gen_ai.usage.total_tokens", get_value=lambda x: 1)],
         )
 
-        # matches the `url.path = "a"` filter
+        # matches the `db.system.name = "postgresql"` filter
         store_spans_timeseries(
             BASE_TIME,
             1,
             3600,
             metrics=[DummyMetric("gen_ai.usage.total_tokens", get_value=lambda x: 1)],
-            attributes={"url.path": AnyValue(string_value="a")},
+            attributes={"db.system.name": AnyValue(string_value="postgresql")},
         )
 
-        # matches the `url.path = "a"` filter because it's coalesced using `http.target`
+        # matches the filter because `db.system` is coalesced with `db.system.name`
         store_spans_timeseries(
             BASE_TIME,
             1,
             3600,
             metrics=[DummyMetric("gen_ai.usage.total_tokens", get_value=lambda x: 1)],
-            attributes={"http.target": AnyValue(string_value="a")},
+            attributes={"db.system": AnyValue(string_value="postgresql")},
         )
 
         message = TimeSeriesRequest(
@@ -1894,9 +1894,9 @@ class TestTimeSeriesApi(BaseApiTest):
             ],
             filter=TraceItemFilter(
                 comparison_filter=ComparisonFilter(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="url.path"),
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="db.system.name"),
                     op=ComparisonFilter.OP_EQUALS,
-                    value=AttributeValue(val_str="a"),
+                    value=AttributeValue(val_str="postgresql"),
                 )
             ),
             granularity_secs=granularity_secs,

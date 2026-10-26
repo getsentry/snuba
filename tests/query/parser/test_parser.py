@@ -39,10 +39,10 @@ from snuba.query.mql.parser import parse_mql_query
 from snuba.query.snql.parser import parse_snql_query
 
 tags = NestedColumn("tags")
-tags_raw = NestedColumn("tags_raw")
+tags = NestedColumn("tags")
 from_distributions = QueryEntity(
-    EntityKey.GENERIC_METRICS_COUNTERS,
-    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+    EntityKey.METRICS_COUNTERS,
+    get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
 )
 
 
@@ -84,8 +84,8 @@ def test_mql() -> None:
     }
     expected = Query(
         QueryEntity(
-            EntityKey.GENERIC_METRICS_COUNTERS,
-            get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+            EntityKey.METRICS_COUNTERS,
+            get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
         ),
         selected_columns=[
             SelectedExpression(
@@ -128,7 +128,7 @@ def test_mql() -> None:
                 ),
                 and_cond(
                     f.equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
-                    in_cond(tags_raw["888"], f.tuple(literal("dist1"), literal("dist2"))),
+                    in_cond(tags["888"], f.tuple(literal("dist1"), literal("dist2"))),
                 ),
             ),
         ),
@@ -153,7 +153,7 @@ def test_mql() -> None:
         totals=False,
         limit=1000,
     )
-    actual = parse_mql_query(mql, context, get_dataset("generic_metrics"))
+    actual = parse_mql_query(mql, context, get_dataset("metrics"))
     eq, reason = actual.equals(expected)
     assert eq, reason
 
@@ -184,8 +184,8 @@ def test_mql_extrapolate() -> None:
     }
     expected = Query(
         QueryEntity(
-            EntityKey.GENERIC_METRICS_COUNTERS,
-            get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+            EntityKey.METRICS_COUNTERS,
+            get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
         ),
         selected_columns=[
             SelectedExpression(
@@ -228,7 +228,7 @@ def test_mql_extrapolate() -> None:
                 ),
                 and_cond(
                     f.equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
-                    in_cond(tags_raw["888"], f.tuple(literal("dist1"), literal("dist2"))),
+                    in_cond(tags["888"], f.tuple(literal("dist1"), literal("dist2"))),
                 ),
             ),
         ),
@@ -253,7 +253,7 @@ def test_mql_extrapolate() -> None:
         totals=False,
         limit=1000,
     )
-    actual = parse_mql_query(mql, context, get_dataset("generic_metrics"))
+    actual = parse_mql_query(mql, context, get_dataset("metrics"))
     eq, reason = actual.equals(expected)
     assert eq, reason
 
@@ -283,8 +283,8 @@ def test_mql_wildcards() -> None:
     }
     expected = Query(
         QueryEntity(
-            EntityKey.GENERIC_METRICS_COUNTERS,
-            get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+            EntityKey.METRICS_COUNTERS,
+            get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
         ),
         selected_columns=[
             SelectedExpression(
@@ -327,7 +327,7 @@ def test_mql_wildcards() -> None:
                 ),
                 and_cond(
                     f.equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
-                    f.like(tags_raw["42"], literal("before_wildcard_%")),
+                    f.like(tags["42"], literal("before_wildcard_%")),
                 ),
             ),
         ),
@@ -352,7 +352,7 @@ def test_mql_wildcards() -> None:
         limit=1000,
         totals=False,
     )
-    actual = parse_mql_query(mql, context, get_dataset("generic_metrics"))
+    actual = parse_mql_query(mql, context, get_dataset("metrics"))
     eq, reason = actual.equals(expected)
     assert eq, reason
 
@@ -382,8 +382,8 @@ def test_mql_negated_wildcards() -> None:
     }
     expected = Query(
         QueryEntity(
-            EntityKey.GENERIC_METRICS_COUNTERS,
-            get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+            EntityKey.METRICS_COUNTERS,
+            get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
         ),
         selected_columns=[
             SelectedExpression(
@@ -426,7 +426,7 @@ def test_mql_negated_wildcards() -> None:
                 ),
                 and_cond(
                     f.equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
-                    f.notLike(tags_raw["42"], literal("before_wildcard_%")),
+                    f.notLike(tags["42"], literal("before_wildcard_%")),
                 ),
             ),
         ),
@@ -451,14 +451,14 @@ def test_mql_negated_wildcards() -> None:
         limit=1000,
         totals=False,
     )
-    actual = parse_mql_query(mql, context, get_dataset("generic_metrics"))
+    actual = parse_mql_query(mql, context, get_dataset("metrics"))
     eq, reason = actual.equals(expected)
     assert eq, reason
 
 
 def test_formula_mql() -> None:
     mql_context = {
-        "entity": "generic_metrics_counters",
+        "entity": "metrics_counters",
         "start": "2023-11-23T18:30:00",
         "end": "2023-11-23T22:30:00",
         "rollup": {
@@ -516,11 +516,11 @@ def test_formula_mql() -> None:
     def tag_column(tag: str) -> SubscriptableReference:
         tag_val = cast("dict[str, int]", mql_context["indexer_mappings"]).get(tag)
         return SubscriptableReference(
-            alias=f"_snuba_tags_raw[{tag_val}]",
+            alias=f"_snuba_tags[{tag_val}]",
             column=Column(
-                alias="_snuba_tags_raw",
+                alias="_snuba_tags",
                 table_name=None,
-                column_name="tags_raw",
+                column_name="tags",
             ),
             key=Literal(alias=None, value=f"{tag_val}"),
         )
@@ -656,7 +656,7 @@ def test_formula_mql() -> None:
                             column("granularity", "c1", "_snuba_granularity"),
                             literal(60),
                         ),
-                        f.equals(NestedColumn("tags_raw", "c0")["222222"], literal("200")),
+                        f.equals(NestedColumn("tags", "c0")["222222"], literal("200")),
                     ),
                     and_cond(
                         f.equals(
@@ -681,10 +681,10 @@ def test_formula_mql() -> None:
         offset=0,
     )
 
-    generic_metrics = get_dataset(
-        "generic_metrics",
+    metrics_dataset = get_dataset(
+        "metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query = parse_mql_query(str(query_body), mql_context, metrics_dataset)
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -830,7 +830,7 @@ def test_recursion_error() -> None:
             "dist": 888,
         },
     }
-    parse_mql_query(mql, context, get_dataset("generic_metrics"))
+    parse_mql_query(mql, context, get_dataset("metrics"))
 
     def snql_conditions_with_default(*conditions: str) -> str:
         DEFAULT_TEST_QUERY_CONDITIONS = [

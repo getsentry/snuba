@@ -33,6 +33,7 @@ type CopyTableRequest = {
 
 type CopyTableResult = {
   source_host: string
+  target_host?: string
   tables: string
   dry_run: boolean
   cluster_name: string

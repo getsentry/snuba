@@ -225,7 +225,7 @@ def test_run_all_using_through() -> None:
     Using "through" allows migrating up to (including)
     a specified migration id (or prefix) for a given group.
 
-    `snuba migrations migrate generic_metrics 0003`
+    `snuba migrations migrate metrics 0003`
 
     Prefix must match exactly one migration id to be valid.
     """
@@ -235,9 +235,9 @@ def test_run_all_using_through() -> None:
         # using through requires a group
         runner.run_all(force=True, through="0001")
 
-    group = MigrationGroup.GENERIC_METRICS
-    all_generic_metrics = len(get_group_loader(group).get_migrations())
-    assert len(runner._get_pending_migrations_for_group(group=group)) == all_generic_metrics
+    group = MigrationGroup.METRICS
+    all_metrics = len(get_group_loader(group).get_migrations())
+    assert len(runner._get_pending_migrations_for_group(group=group)) == all_metrics
 
     with pytest.raises(MigrationError):
         # too many migrations id matches
@@ -248,15 +248,15 @@ def test_run_all_using_through() -> None:
         runner.run_all(force=True, group=group, through="9999")
 
     runner.run_all(force=True, group=group, through="0002")
-    assert len(runner._get_pending_migrations_for_group(group=group)) == (all_generic_metrics - 2)
+    assert len(runner._get_pending_migrations_for_group(group=group)) == (all_metrics - 2)
 
     # Running with --fake
-    # (generic_metric_sets_aggregation_mv was added in 0003)
+    # (metrics_counters_buckets_local was added in 0003)
     runner.run_all(force=True, group=group, through="0003", fake=True)
-    connection = get_cluster(StorageSetKey.GENERIC_METRICS_SETS).get_query_connection(
+    connection = get_cluster(StorageSetKey.METRICS).get_query_connection(
         ClickhouseClientSettings.MIGRATE
     )
-    assert connection.execute("SHOW TABLES LIKE 'generic_metric_sets_aggregation_mv'").results == []
+    assert connection.execute("SHOW TABLES LIKE 'metrics_counters_buckets_local'").results == []
 
 
 @pytest.mark.custom_clickhouse_db
@@ -266,15 +266,16 @@ def test_run_all_using_readiness() -> None:
     """
     runner = Runner()
 
-    group = MigrationGroup.GENERIC_METRICS
-    all_generic_metrics = len(get_group_loader(group).get_migrations())
-    assert len(runner._get_pending_migrations_for_group(group=group)) == all_generic_metrics
+    group = MigrationGroup.PROFILES
+    all_migrations = len(get_group_loader(group).get_migrations())
+    assert len(runner._get_pending_migrations_for_group(group=group)) == all_migrations
 
     # using different readiness wont change anything
     runner.run_all(force=True, group=group, readiness_states=[ReadinessState.LIMITED])
-    assert len(runner._get_pending_migrations_for_group(group=group)) == (all_generic_metrics)
+    assert len(runner._get_pending_migrations_for_group(group=group)) == all_migrations
 
-    # using correct readiness state runs the migration
+    # using correct readiness state runs the migration (and system, so the
+    # migrations table exists before the group runs)
     runner.run_all(force=True, group=group, readiness_states=[ReadinessState.COMPLETE])
     assert len(runner._get_pending_migrations_for_group(group=group)) == 0
 
@@ -317,6 +318,15 @@ def test_reverse_idempotency_all() -> None:
     """
     runner = Runner()
     groups = get_active_migration_groups()
+    # Snapshot only Snuba's databases: ClickHouse creates `system.*` log tables
+    # (e.g. `system.query_metric_log`) lazily in the background, which made the
+    # before/after comparison flaky. `system.tables` has no guaranteed row
+    # order, so order by table identity.
+    snuba_databases = ", ".join(sorted({f"'{cluster.get_database()}'" for cluster in CLUSTERS}))
+    snapshot_query = (
+        "SELECT database, name, create_table_query FROM system.tables "
+        f"WHERE database IN ({snuba_databases}) ORDER BY database, name"
+    )
     group_migrations = {
         group.value: runner._get_pending_migrations_for_group(group) for group in groups
     }
@@ -348,14 +358,6 @@ def test_reverse_idempotency_all() -> None:
                     ClickhouseClientSettings.MIGRATE
                 )
 
-                # `system.tables` has no guaranteed row order, and the
-                # reverse_twice() cycle in between can perturb the order rows
-                # are returned in (e.g. ON CLUSTER DDL re-registering tables).
-                # Order the snapshots so the comparison reflects the set of
-                # tables and their definitions, not the iteration order.
-                snapshot_query = (
-                    "SELECT create_table_query FROM system.tables ORDER BY create_table_query"
-                )
                 before_state = cluster_connection.execute(snapshot_query).results
                 reverse_twice()
                 after_state = cluster_connection.execute(snapshot_query).results

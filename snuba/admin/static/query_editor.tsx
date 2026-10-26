@@ -1,4 +1,5 @@
 import React, { useEffect, useState, ReactElement } from "react";
+import { createPortal } from "react-dom";
 
 import {
   Box,
@@ -8,16 +9,23 @@ import {
   Select,
   Stack,
   Text,
+  Tooltip,
 } from "@mantine/core";
 import { DateTimePicker } from "@mantine/dates";
 import { SQLEditor } from "SnubaAdmin/common/components/sql_editor";
 import { useLocalStorage } from "@mantine/hooks";
 import { CustomSelect } from "SnubaAdmin/select";
+import { splitHash } from "SnubaAdmin/clickhouse_queries/prefill";
 
 type PredefinedQuery = {
   name: string;
   sql: string;
   description: string;
+};
+
+type EnumOption = {
+  value: string;
+  label: string;
 };
 
 type QueryParamValues = {
@@ -29,6 +37,21 @@ type RelativeTimeUnit = "MINUTE" | "HOUR" | "DAY";
 
 const START_TIME_PARAM = "{{start_time}}";
 const END_TIME_PARAM = "{{end_time}}";
+const CATEGORY_PARAM = "{{category}}";
+const OUTCOME_PARAM = "{{outcome}}";
+const ORG_ID_PARAM = "{{org_id}}";
+const PROJECT_ID_PARAM = "{{project_id}}";
+const LIMIT_PARAM = "{{limit}}";
+
+const DEFAULT_PARAM_VALUES: QueryParamValues = {
+  [LIMIT_PARAM]: "100",
+};
+
+const NUMERIC_PARAMS = new Set([
+  ORG_ID_PARAM,
+  PROJECT_ID_PARAM,
+  LIMIT_PARAM,
+]);
 
 /** @private */
 export function formatAbsoluteDateTime(value: Date | null): string {
@@ -71,27 +94,38 @@ export function mergeQueryParamValues(
   newQueryParams: Set<string>,
   oldQueryParamValues: QueryParamValues
 ) {
-  return Array.from(newQueryParams).reduce(
-    (o, paramName) => ({
-      ...o,
-      [paramName]:
-        paramName in oldQueryParamValues ? oldQueryParamValues[paramName] : "",
-    }),
-    {}
-  );
+  return Array.from(newQueryParams).reduce((o, paramName) => {
+    if (paramName in oldQueryParamValues) {
+      return { ...o, [paramName]: oldQueryParamValues[paramName] };
+    }
+    if (paramName in DEFAULT_PARAM_VALUES) {
+      return { ...o, [paramName]: DEFAULT_PARAM_VALUES[paramName] };
+    }
+    return { ...o, [paramName]: "" };
+  }, {});
 }
 
 function QueryEditor(props: {
   onQueryUpdate: (query: string) => void;
   predefinedQueryOptions?: Array<PredefinedQuery>;
+  categoryOptions?: Array<EnumOption>;
+  outcomeOptions?: Array<EnumOption>;
+  // Replaces the saved query on mount, e.g. when opened from a link.
+  initialQuery?: string;
+  // Where to put the predefined query picker instead of above the editor.
+  // It's null until that element mounts, and the picker waits for it.
+  predefinedQuerySlot?: HTMLElement | null;
 }) {
   const [query, setQuery] = useState<string>("");
-  const hash = window.location.hash;
+  const hash = splitHash(window.location.hash).route;
 
   // Namespace the storage by the hash, which corresponds to the screen
   const [queryTemplate, setQueryTemplate] = useLocalStorage<string>({
     key: `${hash}-query-editor-query`,
     defaultValue: "",
+    // Read the saved query on the first render rather than in an effect, so
+    // the editor starts with it instead of receiving it as an undoable change
+    getInitialValueInEffect: false,
   });
 
   const [queryParamValues, setQueryParamValues] = useState<QueryParamValues>(
@@ -107,6 +141,12 @@ function QueryEditor(props: {
     useState<RelativeTimeUnit>("HOUR");
   const [absoluteStartTime, setAbsoluteStartTime] = useState<Date | null>(null);
   const [absoluteEndTime, setAbsoluteEndTime] = useState<Date | null>(null);
+
+  useEffect(() => {
+    if (props.initialQuery !== undefined) {
+      setQueryTemplate(props.initialQuery);
+    }
+  }, []);
 
   const variableRegex = /{{([a-zA-Z0-9_]+)}}/;
   const hasTimeRangeParams =
@@ -177,9 +217,11 @@ function QueryEditor(props: {
 
   function renderPredefinedQueriesSelectors() {
     return (
-      <div>
-        <label>Predefined query: </label>
-        <div style={predefinedQueryStyle}>
+      <div style={predefinedQueryStyle}>
+        <Text size="sm" fw={600} style={{ whiteSpace: "nowrap" }}>
+          Predefined query
+        </Text>
+        <div style={predefinedQuerySelectStyle}>
           <CustomSelect
             value={selectedPredefinedQuery?.name ?? "undefined"}
             onChange={(value) => {
@@ -303,6 +345,60 @@ function QueryEditor(props: {
     );
   }
 
+  function renderEnumParameter(
+    paramName: string,
+    label: string,
+    options: Array<{ value: string; label: string }>
+  ) {
+    return (
+      <Box key={paramName} mb="md" style={{ maxWidth: 420 }}>
+        <Select
+          label={label}
+          aria-label={label}
+          placeholder={`Select ${label.toLowerCase()}`}
+          searchable
+          clearable
+          data={options}
+          value={queryParamValues[paramName] || null}
+          onChange={(value) => updateQueryParameter(paramName, value ?? "")}
+          data-testid={`${label.toLowerCase()}-select`}
+        />
+      </Box>
+    );
+  }
+
+  function renderNumericParameter(paramName: string, label: string) {
+    const rawValue = queryParamValues[paramName];
+    const numericValue =
+      rawValue && Number.isFinite(Number(rawValue)) ? Number(rawValue) : "";
+
+    return (
+      <Box key={paramName} mb="md" style={{ maxWidth: 420 }}>
+        <NumberInput
+          label={label}
+          aria-label={label}
+          min={paramName === LIMIT_PARAM ? 1 : 0}
+          step={1}
+          precision={0}
+          hideControls={false}
+          value={numericValue}
+          placeholder={
+            paramName === LIMIT_PARAM ? "e.g. 100" : "e.g. 1"
+          }
+          onChange={(value) =>
+            updateQueryParameter(
+              paramName,
+              typeof value === "number" && Number.isInteger(value)
+                ? String(value)
+                : ""
+            )
+          }
+          data-testid="parameter-value"
+        />
+      </Box>
+    );
+  }
+
   function renderParameterSetters() {
     let setters: Array<ReactElement> = [];
     Object.keys(queryParamValues)
@@ -311,6 +407,34 @@ function QueryEditor(props: {
           paramName !== START_TIME_PARAM && paramName !== END_TIME_PARAM
       )
       .forEach((paramName) => {
+        if (paramName === CATEGORY_PARAM && (props.categoryOptions?.length ?? 0) > 0) {
+          setters.push(
+            renderEnumParameter(
+              paramName,
+              "Category",
+              props.categoryOptions ?? []
+            )
+          );
+          return;
+        }
+        if (paramName === OUTCOME_PARAM && (props.outcomeOptions?.length ?? 0) > 0) {
+          setters.push(
+            renderEnumParameter(
+              paramName,
+              "Outcome",
+              props.outcomeOptions ?? []
+            )
+          );
+          return;
+        }
+        if (NUMERIC_PARAMS.has(paramName)) {
+          const label =
+            paramName.match(variableRegex)?.[1]?.replace(/_/g, " ") ??
+            paramName;
+          setters.push(renderNumericParameter(paramName, label));
+          return;
+        }
+
         setters.push(
           <div key={paramName}>
             <div>
@@ -333,12 +457,36 @@ function QueryEditor(props: {
     return setters;
   }
 
+  const predefinedQueriesSelectors =
+    props.predefinedQueryOptions != null && renderPredefinedQueriesSelectors();
+  const description = selectedPredefinedQuery?.description;
+  // Moved into a toolbar, the picker shows its description on hover rather
+  // than as a line of text.
+  const inSlot = props.predefinedQuerySlot !== undefined;
+
   return (
     <form>
-      {props.predefinedQueryOptions != null &&
-        renderPredefinedQueriesSelectors()}
-      {selectedPredefinedQuery?.description ? (
-        <p>{selectedPredefinedQuery?.description}</p>
+      {!inSlot
+        ? predefinedQueriesSelectors
+        : props.predefinedQuerySlot &&
+          createPortal(
+            <Tooltip
+              label={description}
+              disabled={!description}
+              multiline
+              width={320}
+              withArrow
+            >
+              <div>
+                {predefinedQueriesSelectors}
+              </div>
+            </Tooltip>,
+            props.predefinedQuerySlot
+          )}
+      {!inSlot && description ? (
+        <Text size="sm" color="dimmed" mt={4}>
+          {selectedPredefinedQuery?.description}
+        </Text>
       ) : null}
 
       <Box my="md">
@@ -357,8 +505,15 @@ function QueryEditor(props: {
   );
 }
 
+// Label and picker on one line.
 const predefinedQueryStyle = {
-  display: "inline-block",
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+};
+
+const predefinedQuerySelectStyle = {
+  width: "20em",
 };
 
 const timeRangeStyle = {

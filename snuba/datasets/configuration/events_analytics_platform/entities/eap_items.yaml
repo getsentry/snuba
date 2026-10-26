@@ -107,6 +107,85 @@ storages:
   - storage: eap_item_co_occurring_attrs_ro
     is_writable: false
 
+  # eap_items_2: the ReplacingMergeTree(version) tables. Nothing selects these
+  # until the eap_items_2_tiers option lists a tier.
+  - storage: eap_items_2
+    is_writable: false
+    translation_mappers:
+      subscriptables:
+        - mapper: SubscriptableHashBucketMapper
+          args:
+            from_column_table: null
+            from_column_name: attributes_string
+            to_col_table: null
+            to_col_name: attributes_string
+            num_attribute_buckets: 40
+        - mapper: SubscriptableHashBucketMapper
+          args:
+            from_column_table: null
+            from_column_name: attributes_float
+            to_col_table: null
+            to_col_name: attributes_float
+            num_attribute_buckets: 40
+        - mapper: SubscriptableHashBucketMapper
+          args:
+            from_column_table: null
+            from_column_name: _hash_map_string
+            to_col_table: null
+            to_col_name: _hash_map_float
+            num_attribute_buckets: 40
+        - mapper: SubscriptableHashBucketMapper
+          args:
+            from_column_table: null
+            from_column_name: _hash_map_float
+            to_col_table: null
+            to_col_name: _hash_map_float
+            num_attribute_buckets: 40
+  - storage: eap_items_2_ro
+    is_writable: false
+    translation_mappers:
+      subscriptables:
+        - mapper: SubscriptableHashBucketMapper
+          args:
+            from_column_table: null
+            from_column_name: attributes_string
+            to_col_table: null
+            to_col_name: attributes_string
+            num_attribute_buckets: 40
+        - mapper: SubscriptableHashBucketMapper
+          args:
+            from_column_table: null
+            from_column_name: attributes_float
+            to_col_table: null
+            to_col_name: attributes_float
+            num_attribute_buckets: 40
+        - mapper: SubscriptableHashBucketMapper
+          args:
+            from_column_table: null
+            from_column_name: _hash_map_string
+            to_col_table: null
+            to_col_name: _hash_map_float
+            num_attribute_buckets: 40
+        - mapper: SubscriptableHashBucketMapper
+          args:
+            from_column_table: null
+            from_column_name: _hash_map_float
+            to_col_table: null
+            to_col_name: _hash_map_float
+            num_attribute_buckets: 40
+  - storage: eap_items_2_downsample_8
+    is_writable: false
+  - storage: eap_items_2_downsample_64
+    is_writable: false
+  - storage: eap_items_2_downsample_512
+    is_writable: false
+  - storage: eap_items_2_downsample_8_ro
+    is_writable: false
+  - storage: eap_items_2_downsample_64_ro
+    is_writable: false
+  - storage: eap_items_2_downsample_512_ro
+    is_writable: false
+
 storage_selector:
   selector: EAPItemsStorageSelector
 

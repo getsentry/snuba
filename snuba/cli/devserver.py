@@ -274,17 +274,6 @@ def devserver(*, bootstrap: bool, workers: bool, log_level: str) -> None:
                     f"--log-level={log_level}",
                 ],
             ),
-            (
-                "generic-metrics-counters-consumer",
-                [
-                    "snuba",
-                    "rust-consumer",
-                    "--storage=generic_metrics_counters_raw",
-                    "--consumer-group=snuba-gen-metrics-counters-consumers",
-                    *COMMON_RUST_CONSUMER_DEV_OPTIONS,
-                    f"--log-level={log_level}",
-                ],
-            ),
         ]
         if settings.ENABLE_METRICS_SUBSCRIPTIONS:
             if settings.SEPARATE_SCHEDULER_EXECUTOR_SUBSCRIPTIONS_DEV:
@@ -310,19 +299,6 @@ def devserver(*, bootstrap: bool, workers: bool, log_level: str) -> None:
                             "--entity=metrics_sets",
                             "--consumer-group=snuba-metrics-subscriptions-scheduler",
                             "--followed-consumer-group=snuba-metrics-consumers",
-                            "--auto-offset-reset=latest",
-                            f"--log-level={log_level}",
-                            "--schedule-ttl=10",
-                        ],
-                    ),
-                    (
-                        "subscriptions-scheduler-generic-metrics-counters",
-                        [
-                            "snuba",
-                            "subscriptions-scheduler",
-                            "--entity=generic_metrics_counters",
-                            "--consumer-group=snuba-generic-metrics-counters-subscriptions-schedulers",
-                            "--followed-consumer-group=snuba-gen-metrics-counters-consumers",
                             "--auto-offset-reset=latest",
                             f"--log-level={log_level}",
                             "--schedule-ttl=10",

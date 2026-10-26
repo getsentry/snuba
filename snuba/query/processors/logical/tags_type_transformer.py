@@ -8,7 +8,7 @@ from snuba.query.query_settings import QuerySettings
 class TagsTypeTransformer(LogicalQueryProcessor):
     """
     Converts string keys in subscriptable accesses to integers -- primarily
-    used by the metrics and generic_metrics entities
+    used by the metrics entities
     """
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
