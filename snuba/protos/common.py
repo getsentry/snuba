@@ -30,6 +30,7 @@ class MalformedAttributeException(Exception):
 class NormalizedColumn(NamedTuple):
     column_name: str
     types: Sequence[AttributeKey.Type.ValueType]
+    in_attribute_maps: bool = True
 
 
 def sentry_column(column_name: str) -> str:
@@ -51,7 +52,9 @@ NORMALIZED_COLUMNS_EAP_ITEMS: Final[Mapping[str, NormalizedColumn]] = {
         ],
     ),
     # trace_id gets converted from a uuid to a string in a storage processor
-    sentry_column("trace_id"): NormalizedColumn("trace_id", [AttributeKey.Type.TYPE_STRING]),
+    sentry_column("trace_id"): NormalizedColumn(
+        "trace_id", [AttributeKey.Type.TYPE_STRING], in_attribute_maps=False
+    ),
     sentry_column("item_id"): NormalizedColumn("item_id", [AttributeKey.Type.TYPE_STRING]),
     sentry_column("sampling_weight"): NormalizedColumn(
         "sampling_weight", [AttributeKey.Type.TYPE_DOUBLE]
@@ -130,7 +133,8 @@ ARRAY_TYPES: Final[frozenset[AttributeKey.Type.ValueType]] = frozenset(
 
 def array_element_column(attr_key: AttributeKey) -> str | None:
     """The single typed array column for an element-typed array key
-    (TYPE_ARRAY_STRING/INT/DOUBLE/BOOL), or None for the deprecated untyped TYPE_ARRAY."""
+    (TYPE_ARRAY_STRING/INT/DOUBLE/BOOL), or None for the deprecated untyped TYPE_ARRAY.
+    """
     return PROTO_ARRAY_TYPE_TO_COLUMN.get(attr_key.type)
 
 
@@ -258,7 +262,9 @@ TYPED_ARRAY_MAP_COLUMNS: tuple[str, ...] = (
 EMPTY_STRING_DEFAULT_COLUMNS: tuple[str, ...] = ("ai_conversation_id",)
 
 
-def type_array_typed_columns_select_expressions(attr_key: AttributeKey) -> list[FunctionCall]:
+def type_array_typed_columns_select_expressions(
+    attr_key: AttributeKey,
+) -> list[FunctionCall]:
     """Native ``arrayElement`` read per typed array map column, for a deprecated untyped
     ``TYPE_ARRAY`` SELECT whose element type is unknown. Arrays are homogeneous, so one
     sub-column is non-empty; the caller merges them back into one array
@@ -351,10 +357,13 @@ def type_array_typed_column_native_array(attr_key: AttributeKey, col: str) -> Fu
     return arrayElement(alias, column(col), literal(attr_key.name))
 
 
-def type_array_typed_element_column_native_array(attr_key: AttributeKey) -> FunctionCall:
+def type_array_typed_element_column_native_array(
+    attr_key: AttributeKey,
+) -> FunctionCall:
     """Native ``Array(T)`` read of an element-typed array key's single column
     (TYPE_ARRAY_STRING/INT/DOUBLE/BOOL), aliased with the label-mapping key. This is the
-    whole read path for such a key: one column, natively typed, no cross-column concat."""
+    whole read path for such a key: one column, natively typed, no cross-column concat.
+    """
     col = PROTO_ARRAY_TYPE_TO_COLUMN.get(attr_key.type)
     if col is None:
         raise MalformedAttributeException(

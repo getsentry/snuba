@@ -15,6 +15,7 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.protos.common import (
     ATTRIBUTES_TO_COALESCE,
+    NORMALIZED_COLUMNS_EAP_ITEMS,
     PROTO_ARRAY_TYPE_TO_COLUMN,
     PROTO_TYPE_TO_ATTRIBUTE_COLUMN,
 )
@@ -67,17 +68,20 @@ def _build_conditions(request: TraceItemAttributeValuesRequest) -> Expression:
             "use a typed array type (e.g. TYPE_ARRAY_STRING)"
         )
 
-    # Key existence via map_key_exists (has(mapKeys(col), key)); routed to the
-    # right bucket for the bucketed string/float maps and left as-is for the
-    # un-bucketed bool and array maps.
-    key_existence = combine_or_conditions(
-        [
-            map_key_exists(column(attributes_column), name)
-            for name in _map_key_names_for_existence_check(request.key)
-        ]
-    )
-
-    conditions: list[Expression] = [key_existence]
+    conditions: list[Expression] = []
+    normalized_column = NORMALIZED_COLUMNS_EAP_ITEMS.get(request.key.name)
+    if normalized_column is None or normalized_column.in_attribute_maps:
+        # Key existence via map_key_exists (has(mapKeys(col), key)); routed to the
+        # right bucket for the bucketed string/float maps and left as-is for the
+        # un-bucketed bool and array maps.
+        conditions.append(
+            combine_or_conditions(
+                [
+                    map_key_exists(column(attributes_column), name)
+                    for name in _map_key_names_for_existence_check(request.key)
+                ]
+            )
+        )
     if request.meta.trace_item_type:
         conditions.append(f.equals(column("item_type"), request.meta.trace_item_type))
 
