@@ -28,6 +28,7 @@ import {
   NodeOption,
   getAllNodes,
   getErrorDomElement,
+  getHostsForStorage,
   nodeMatchesSearch,
   nodeSearchMatch,
   nodeSelectItem,
@@ -51,6 +52,32 @@ import {
 type QueryState = Partial<QueryRequest>;
 
 const HISTORY_KEY = "clickhouse_queries";
+// Whether hosts are picked by storage, as before the node search.
+const BY_STORAGE_KEY = "system-queries-by-storage";
+
+function getSavedByStorage(): boolean {
+  try {
+    return localStorage.getItem(BY_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function saveByStorage(value: boolean) {
+  try {
+    localStorage.setItem(BY_STORAGE_KEY, String(value));
+  } catch {
+    // Not remembering the mode is fine.
+  }
+}
+
+// The storage's first node, to have a host ready as soon as a storage is
+// picked.
+function firstHost(nodeData: ClickhouseNodeData[], storage?: string) {
+  const [first] = getHostsForStorage(nodeData, storage);
+  return first ? parseHostPort(first.value) : {};
+}
+
 // What picking a node sets on the query: the node, and a storage that lists
 // it so the backend can find its cluster.
 function queryForNode(node: NodeOption, preferredStorage?: string) {
@@ -78,6 +105,7 @@ function QueryDisplay(props: {
   // flagged as missing.
   const [nodesLoaded, setNodesLoaded] = useState(false);
   const [manualHostInput, setManualHostInput] = useState<string>("");
+  const [byStorage, setByStorage] = useState(getSavedByStorage);
   const [query, setQuery] = useState<QueryState>({
     storage: prefill?.storage ?? getParamFromStorage("storage"),
     host: prefill?.host,
@@ -129,16 +157,39 @@ function QueryDisplay(props: {
         const saved = getParamFromStorage("host");
         const node = nodes.find((option) => option.value === saved);
         if (node) {
-          setQuery((prevQuery) => ({ ...prevQuery, ...queryForNode(node) }));
+          setQuery((prevQuery) => ({
+            ...prevQuery,
+            ...queryForNode(node, prevQuery.storage),
+          }));
         }
       }
     });
   }, []);
 
-  // Only for manual host entry, where the storage picks the cluster whose
-  // credentials are used.
+  // For picking hosts by storage, and for manual host entry, where the
+  // storage picks the cluster whose credentials are used.
   function selectStorage(storage: string) {
-    setQuery((prevQuery) => ({ ...prevQuery, storage }));
+    setQuery((prevQuery) => {
+      if (prevQuery.clusterless) {
+        // A typed host isn't replaced; it's up to the user.
+        return { ...prevQuery, storage };
+      }
+      const { host, port, ...rest } = prevQuery;
+      return { ...rest, storage, ...firstHost(nodeData, storage) };
+    });
+  }
+
+  function setHostEntry(value: string) {
+    setClusterlessHost(value === "manual");
+    if (value !== "manual") {
+      setByStorage(value === "storage");
+      saveByStorage(value === "storage");
+    }
+  }
+
+  // A host picked from the storage's own list keeps that storage.
+  function selectStorageHost(hostPort: string) {
+    setQuery((prevQuery) => ({ ...prevQuery, ...parseHostPort(hostPort) }));
   }
 
   function setSudo(value: boolean) {
@@ -236,9 +287,10 @@ function QueryDisplay(props: {
 
   // The first thing still needed before the query can run, if any. It's
   // flagged on its field and explains why Execute is disabled.
-  // Picking a node also sets its storage, so only manual entry asks for one.
+  // Searching nodes also sets the node's storage, so only the other ways of
+  // picking a host ask for one.
   const missing =
-    query.clusterless && !query.storage
+    (query.clusterless || byStorage) && !query.storage
       ? "storage"
       : !query.host || !query.port
       ? "host"
@@ -304,7 +356,7 @@ function QueryDisplay(props: {
             </PrefillWarning>
           )}
           <div style={targetRowStyle}>
-            {query.clusterless && (
+            {(query.clusterless || byStorage) && (
               <div style={targetFieldStyle}>
                 <Text size="sm" fw={600}>
                   Storage
@@ -362,25 +414,39 @@ function QueryDisplay(props: {
               ) : (
                 <>
                   <div style={flagged === "host" ? needsInputStyle : undefined}>
-                    <CustomSelect
-                      value={
-                        query.host && query.port
-                          ? `${query.host}:${query.port}`
-                          : ""
-                      }
-                      onChange={selectNode}
-                      name="host"
-                      options={nodeOptions.map(nodeSelectItem)}
-                      filter={(search, item) =>
-                        nodeMatchesSearch(search, item.value)
-                      }
-                      highlight={(search, value) =>
-                        nodeSearchMatch(search, value)?.indexes ?? null
-                      }
-                      sortOptions={(search) =>
-                        rankNodes(search, nodeOptions).map(nodeSelectItem)
-                      }
-                    />
+                    {byStorage ? (
+                      <CustomSelect
+                        disabled={!query.storage}
+                        value={
+                          query.host && query.port
+                            ? `${query.host}:${query.port}`
+                            : ""
+                        }
+                        onChange={selectStorageHost}
+                        name="host"
+                        options={getHostsForStorage(nodeData, query.storage)}
+                      />
+                    ) : (
+                      <CustomSelect
+                        value={
+                          query.host && query.port
+                            ? `${query.host}:${query.port}`
+                            : ""
+                        }
+                        onChange={selectNode}
+                        name="host"
+                        options={nodeOptions.map(nodeSelectItem)}
+                        filter={(search, item) =>
+                          nodeMatchesSearch(search, item.value)
+                        }
+                        highlight={(search, value) =>
+                          nodeSearchMatch(search, value)?.indexes ?? null
+                        }
+                        sortOptions={(search) =>
+                          rankNodes(search, nodeOptions).map(nodeSelectItem)
+                        }
+                      />
+                    )}
                   </div>
                   {flagged === "host" && (
                     <p style={needsInputHintStyle}>{missingHint.host}</p>
@@ -394,10 +460,13 @@ function QueryDisplay(props: {
               </Text>
               <SegmentedControl
                 aria-label="Host entry"
-                value={query.clusterless ? "manual" : "pick"}
-                onChange={(value) => setClusterlessHost(value === "manual")}
+                value={
+                  query.clusterless ? "manual" : byStorage ? "storage" : "search"
+                }
+                onChange={setHostEntry}
                 data={[
-                  { label: "Pick a node", value: "pick" },
+                  { label: "Search nodes", value: "search" },
+                  { label: "By storage", value: "storage" },
                   { label: "Manual", value: "manual" },
                 ]}
               />

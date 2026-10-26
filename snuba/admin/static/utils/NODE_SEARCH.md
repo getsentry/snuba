@@ -1,6 +1,6 @@
 # System Queries node search
 
-How the **Host** autocomplete in System Queries ("Pick a node" mode) finds, ranks and highlights ClickHouse nodes. The code is in [`clickhouse_node_utils.tsx`](clickhouse_node_utils.tsx) (`getAllNodes`, `nodeSearchMatch`, `rankNodes`), and the select it drives is `CustomSelect` in [`../select.tsx`](../select.tsx).
+How the **Host** autocomplete in System Queries ("Search nodes" mode) finds, ranks and highlights ClickHouse nodes. The code is in [`clickhouse_node_utils.tsx`](clickhouse_node_utils.tsx) (`getAllNodes`, `nodeSearchMatch`, `rankNodes`), and the select it drives is `CustomSelect` in [`../select.tsx`](../select.tsx).
 
 ## The node list
 
@@ -18,6 +18,8 @@ The backend still needs a storage, because the storage decides the cluster, whic
 3. the shortest storage name, with ties broken alphabetically.
 
 Manual host entry still shows a storage picker, since a typed host has no other way to name a cluster.
+
+"By storage" mode is the old way of picking a host, kept as an alternative: pick a storage, its first host fills in, and the host list shows only that storage's nodes. The page remembers whether you last used "Search nodes" or "By storage". Switching between them keeps the current host and storage.
 
 ## Words
 

@@ -306,6 +306,32 @@ describe("QueryDisplay opened from a link", () => {
     expect(screen.getByLabelText("Open editor")).toBeTruthy();
   });
 
+  it("picks hosts by storage, and remembers the mode", async () => {
+    let api = renderWithHash("#system-queries");
+    await waitFor(() => expect(api.getClickhouseNodes).toBeCalled());
+    fireEvent.click(screen.getByText("By storage"));
+    expect(screen.getByText("Storage")).toBeTruthy();
+    expect(screen.getAllByText("Select a storage to run the query.")).not.toHaveLength(0);
+    expect(localStorage.getItem("system-queries-by-storage")).toBe("true");
+
+    cleanup();
+    api = renderWithHash("#system-queries");
+    await waitFor(() => expect(api.getClickhouseNodes).toBeCalled());
+    expect(screen.getByText("Storage")).toBeTruthy();
+  });
+
+  it("keeps the node when switching to picking by storage", async () => {
+    const api = renderWithHash(
+      "#system-queries?query=SELECT%201&host=clickhouse-01%3A9000"
+    );
+    await waitFor(() => expect(api.getClickhouseNodes).toBeCalled());
+    await screen.findAllByDisplayValue("clickhouse-01:9000");
+
+    fireEvent.click(screen.getByText("By storage"));
+    expect(screen.getAllByDisplayValue("errors")).not.toHaveLength(0);
+    expect(screen.getAllByDisplayValue("clickhouse-01:9000")).not.toHaveLength(0);
+  });
+
   it("shows no warning without params", async () => {
     const api = renderWithHash("#system-queries");
     await waitFor(() => expect(api.getClickhouseNodes).toBeCalled());
