@@ -223,11 +223,36 @@ describe("QueryDisplay opened from a link", () => {
     expect(screen.queryByLabelText("Open editor")).toBeNull();
   });
 
-  it("fills in the first host for the saved storage", async () => {
-    localStorage.setItem("select-storage", "errors");
+  it("fills in the saved node", async () => {
+    localStorage.setItem("select-host", "clickhouse-01:9000");
     const api = renderWithHash("#system-queries");
     await waitFor(() => expect(api.getClickhouseNodes).toBeCalled());
     expect(await screen.findAllByDisplayValue("clickhouse-01:9000")).not.toHaveLength(0);
+  });
+
+  it("sends a storage that lists the linked node", async () => {
+    const api = renderWithHash(
+      "#system-queries?query=SELECT%201&storage=transactions&host=clickhouse-01%3A9000"
+    );
+    await waitFor(() => expect(api.getClickhouseNodes).toBeCalled());
+    await screen.findAllByDisplayValue("clickhouse-01:9000");
+
+    fireEvent.click(screen.getByText("Execute Query"));
+    await waitFor(() => expect(api.executeSystemQuery).toBeCalled());
+    expect(api.executeSystemQuery.mock.calls[0][0]).toMatchObject({
+      storage: "errors",
+      host: "clickhouse-01",
+      port: 9000,
+    });
+  });
+
+  it("only asks for a storage with manual host entry", async () => {
+    const api = renderWithHash("#system-queries");
+    await waitFor(() => expect(api.getClickhouseNodes).toBeCalled());
+    expect(screen.queryByText("Storage")).toBeNull();
+
+    fireEvent.click(screen.getByText("Manual"));
+    expect(screen.getByText("Storage")).toBeTruthy();
   });
 
   it("leaves the host empty for a link that doesn't name one", async () => {
