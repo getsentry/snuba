@@ -1,4 +1,10 @@
-import React, { createContext, forwardRef, useContext, useState } from "react";
+import React, {
+  createContext,
+  forwardRef,
+  useContext,
+  useRef,
+  useState,
+} from "react";
 import { Select, SelectItem, Group, Mark, Text } from '@mantine/core';
 
 type SelectProps = {
@@ -79,6 +85,20 @@ export function CustomSelect(props: SelectProps) {
   const {value, onChange, name, disabled, filter, highlight, sortOptions} =
     props;
   const [search, setSearch] = useState("");
+  // Focusing selects the text, so typing replaces the current value. A click
+  // that focuses ends in a mouseup, which would put the caret back, so the
+  // first mouseup after focusing is ignored.
+  const justFocused = useRef(false);
+  function selectAllOnFocus(event: React.FocusEvent<HTMLInputElement>) {
+    event.currentTarget.select();
+    justFocused.current = true;
+  }
+  function keepSelectionOnMouseUp(event: React.MouseEvent<HTMLInputElement>) {
+    if (justFocused.current) {
+      event.preventDefault();
+      justFocused.current = false;
+    }
+  }
   function updateStorage(value: string) {
     if (name) {
       localStorage.setItem(`select-${name}`, value);
@@ -117,6 +137,9 @@ export function CustomSelect(props: SelectProps) {
       data={options}
       filter={filter}
       onSearchChange={setSearch}
+      onFocus={selectAllOnFocus}
+      onMouseUp={keepSelectionOnMouseUp}
+      onBlur={() => (justFocused.current = false)}
       data-testid={"select"}
       />
     </HighlightContext.Provider>

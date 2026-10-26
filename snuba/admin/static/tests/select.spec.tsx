@@ -1,6 +1,6 @@
 import React from "react";
 import { it, expect, describe, afterEach } from "@jest/globals";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CustomSelect } from "SnubaAdmin/select";
 import {
@@ -77,6 +77,23 @@ describe("CustomSelect", () => {
       "snuba-generic-metrics-0-0:8123snuba-generic-metrics-0-0",
       "snuba-events-analytics-platform-0-0:8123snuba-events-analytics-platform-0-0",
     ]);
+  });
+
+  it("selects the current value on focus, so typing replaces it", async () => {
+    const input = renderSelect(options[0].value) as HTMLInputElement;
+    fireEvent.focus(input);
+    expect(input.selectionStart).toBe(0);
+    expect(input.selectionEnd).toBe(input.value.length);
+    expect(input.value).toBe(options[0].label);
+
+    // The mouseup that ends the focusing click keeps the selection.
+    const mouseUp = new MouseEvent("mouseup", { bubbles: true, cancelable: true });
+    input.dispatchEvent(mouseUp);
+    expect(mouseUp.defaultPrevented).toBe(true);
+    // Later clicks place the caret as usual.
+    const nextMouseUp = new MouseEvent("mouseup", { bubbles: true, cancelable: true });
+    input.dispatchEvent(nextMouseUp);
+    expect(nextMouseUp.defaultPrevented).toBe(false);
   });
 
   it("marks nothing while the box shows the selected item", async () => {
