@@ -26,3 +26,12 @@ schema:
   local_table_name: eap_item_co_occurring_attrs_1_local
   dist_table_name: eap_item_co_occurring_attrs_1_dist_ro
   partition_format: [retention_days, date]
+
+query_processors:
+  - processor: ClickhouseSettingsOverride
+    args:
+      overwrite_existing: false
+      settings:
+        max_execution_time: 25
+        timeout_before_checking_execution_speed: 0
+        distributed_product_mode: global
