@@ -565,6 +565,28 @@ def test_outcomes_based_routing_highest_accuracy_mode(store_outcomes_fixture: An
 
 @pytest.mark.eap
 @pytest.mark.redis_db
+def test_outcomes_based_routing_low_priority_mode_starts_at_tier_8(
+    store_outcomes_fixture: Any,
+) -> None:
+    strategy = OutcomesBasedRoutingStrategy()
+
+    request = TraceItemTableRequest(meta=_get_request_meta())
+    request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_LOW_PRIORITY
+    routing_decision = strategy.get_routing_decision(
+        RoutingContext(
+            in_msg=request,
+            timer=Timer("test"),
+            query_id=uuid.uuid4().hex,
+        )
+    )
+
+    assert routing_decision.tier == Tier.TIER_8
+    assert routing_decision.clickhouse_settings == {"max_threads": 10}
+    assert routing_decision.can_run
+
+
+@pytest.mark.eap
+@pytest.mark.redis_db
 def test_outcomes_based_routing_defaults_to_tier1_for_unspecified_item_type(
     store_outcomes_fixture: Any,
 ) -> None:

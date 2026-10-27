@@ -365,6 +365,14 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             )
         return False
 
+    def _is_low_priority_mode(self, in_msg_meta: RequestMeta) -> bool:
+        if in_msg_meta.HasField("downsampled_storage_config"):
+            return bool(
+                in_msg_meta.downsampled_storage_config.mode
+                == DownsampledStorageConfig.MODE_LOW_PRIORITY
+            )
+        return False
+
     def get_allocation_policies(
         self, tenant_ids: dict[str, str | int] | None = None
     ) -> list[AllocationPolicy]:

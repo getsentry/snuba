@@ -246,6 +246,8 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             return
 
         in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
+        if self._is_low_priority_mode(in_msg_meta):
+            routing_decision.tier = Tier.TIER_8
 
         standard_retention = get_retention_days_config()["standard"]
         requested_retention_days = in_msg_meta.standard_retention_days
