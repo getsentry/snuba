@@ -323,16 +323,22 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             scope.fingerprint = [fingerprint_key, exception_name]
             sentry_sdk.capture_exception(error)
 
-    def _get_default_routing_decision_tier(self) -> Tier:
+    def _get_initial_tier(self, routing_context: RoutingContext) -> Tier:
         tier_int = get_option("default_tier", 1)
 
         if tier_int == 512:
-            return Tier.TIER_512
-        if tier_int == 64:
-            return Tier.TIER_64
-        if tier_int == 8:
-            return Tier.TIER_8
-        return Tier.TIER_1
+            tier = Tier.TIER_512
+        elif tier_int == 64:
+            tier = Tier.TIER_64
+        elif tier_int == 8:
+            tier = Tier.TIER_8
+        else:
+            tier = Tier.TIER_1
+
+        # LOW_PRIORITY routes like NORMAL but is never allowed to read TIER_1.
+        if self._is_low_priority_mode(extract_message_meta(routing_context.in_msg)):
+            return max(tier, Tier.TIER_8)
+        return tier
 
     def additional_config_definitions(self) -> list[Configuration]:
         return self._overridden_additional_config_definitions
@@ -499,7 +505,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             OutcomesBasedRoutingStrategy,
         )
 
-        default_tier = self._get_default_routing_decision_tier()
+        initial_tier = self._get_initial_tier(routing_context)
 
         with traces.start_span(name="decide_tier", attributes={SENTRY_OP: "decide_tier"}) as span:
             try:
@@ -520,7 +526,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 routing_decision = RoutingDecision(
                     routing_context=routing_context,
                     strategy=self,
-                    tier=default_tier,
+                    tier=initial_tier,
                     clickhouse_settings=combined_allocation_policies_recommendations["settings"],
                     can_run=combined_allocation_policies_recommendations["can_run"],
                     is_throttled=combined_allocation_policies_recommendations["is_throttled"],
@@ -561,7 +567,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 routing_decision = RoutingDecision(
                     routing_context=routing_context,
                     strategy=OutcomesBasedRoutingStrategy(),
-                    tier=default_tier,
+                    tier=initial_tier,
                     can_run=True,
                 )
             span.set_attribute("decided_tier", routing_decision.tier.name)
