@@ -359,12 +359,10 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         )
 
     def _is_highest_accuracy_mode(self, in_msg_meta: RequestMeta) -> bool:
-        if in_msg_meta.HasField("downsampled_storage_config"):
-            return bool(
-                in_msg_meta.downsampled_storage_config.mode
-                == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
-            )
-        return False
+        return bool(
+            in_msg_meta.downsampled_storage_config.mode
+            == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
+        )
 
     def get_allocation_policies(
         self, tenant_ids: dict[str, str | int] | None = None
