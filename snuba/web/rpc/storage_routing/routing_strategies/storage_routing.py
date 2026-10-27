@@ -64,6 +64,7 @@ DEFAULT_STORAGE_ROUTING_CONFIG_PREFIX = "StorageRouting"
 MetricsBackendType = Callable[[str, int | float, dict[str, str] | None, str | None], None]
 RoutedRequestType = TimeSeriesRequest | TraceItemTableRequest
 ClickhouseQuerySettings = dict[str, Any]
+_TIER_BY_CONFIG_VALUE = {tier.value: tier for tier in Tier if tier != Tier.TIER_NO_TIER}
 
 
 class _OrgOverridableSetting(NamedTuple):
@@ -323,16 +324,16 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             scope.fingerprint = [fingerprint_key, exception_name]
             sentry_sdk.capture_exception(error)
 
-    def _get_default_routing_decision_tier(self) -> Tier:
-        tier_int = get_option("default_tier", 1)
+    def _get_initial_tier(self, routing_context: RoutingContext) -> Tier:
+        tier = _TIER_BY_CONFIG_VALUE.get(get_option("default_tier", 1), Tier.TIER_1)
 
-        if tier_int == 512:
-            return Tier.TIER_512
-        if tier_int == 64:
-            return Tier.TIER_64
-        if tier_int == 8:
-            return Tier.TIER_8
-        return Tier.TIER_1
+        # LOW_PRIORITY routes like NORMAL but is never allowed to read TIER_1.
+        if (
+            extract_message_meta(routing_context.in_msg).downsampled_storage_config.mode
+            == DownsampledStorageConfig.MODE_LOW_PRIORITY
+        ):
+            tier = max(tier, Tier.TIER_8)
+        return tier
 
     def additional_config_definitions(self) -> list[Configuration]:
         return self._overridden_additional_config_definitions
@@ -358,12 +359,10 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         )
 
     def _is_highest_accuracy_mode(self, in_msg_meta: RequestMeta) -> bool:
-        if in_msg_meta.HasField("downsampled_storage_config"):
-            return bool(
-                in_msg_meta.downsampled_storage_config.mode
-                == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
-            )
-        return False
+        return bool(
+            in_msg_meta.downsampled_storage_config.mode
+            == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
+        )
 
     def get_allocation_policies(
         self, tenant_ids: dict[str, str | int] | None = None
@@ -491,7 +490,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             OutcomesBasedRoutingStrategy,
         )
 
-        default_tier = self._get_default_routing_decision_tier()
+        initial_tier = self._get_initial_tier(routing_context)
 
         with traces.start_span(name="decide_tier", attributes={SENTRY_OP: "decide_tier"}) as span:
             try:
@@ -512,7 +511,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 routing_decision = RoutingDecision(
                     routing_context=routing_context,
                     strategy=self,
-                    tier=default_tier,
+                    tier=initial_tier,
                     clickhouse_settings=combined_allocation_policies_recommendations["settings"],
                     can_run=combined_allocation_policies_recommendations["can_run"],
                     is_throttled=combined_allocation_policies_recommendations["is_throttled"],
@@ -553,7 +552,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 routing_decision = RoutingDecision(
                     routing_context=routing_context,
                     strategy=OutcomesBasedRoutingStrategy(),
-                    tier=default_tier,
+                    tier=initial_tier,
                     can_run=True,
                 )
             span.set_attribute("decided_tier", routing_decision.tier.name)
