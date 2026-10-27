@@ -20,12 +20,15 @@ A resource listed under `resources` here ignores the legacy
 ```yaml
 allocation_policies.base:
   defaults:                     # inherited by every policy of every resource
-    enforce: false
-    max_threads: 16
+    max_threads: 16             # enforce is left out: it defaults to true
   resources:
-    transactions:               # storage key, or EAP for RPC routing
-      enforce: true             # inherited by every policy of this resource
-      thresholds:               # pardon ceilings, also inherited
+    errors:                     # storage key, or EAP for RPC routing
+      enforce: false            # measure only; inherited by every policy here
+      policies:
+        bytes_scanned_rejecting: {}
+        referrer_guard_rail: {}
+    transactions:
+      thresholds:               # pardon ceilings, inherited like enforce
         reject: { cluster_load: 0.5 }
       policies:                 # read queries
         bytes_scanned_window:
