@@ -101,6 +101,11 @@ pub struct ClickhouseConfig {
     pub user: String,
     pub password: String,
     pub database: String,
+    /// Mirrors the Python cluster `verify` setting: `None` (unset) and
+    /// `Some(true)` keep reqwest's default certificate verification, only
+    /// `Some(false)` disables it.
+    #[serde(default)]
+    pub verify: Option<bool>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -134,5 +139,19 @@ mod tests {
             topic_config.broker_config["queued.max.messages.kbytes"],
             "10000"
         );
+    }
+
+    #[test]
+    fn clickhouse_config_verify_defaults_to_none() {
+        let raw = r#"{"host": "h", "port": 9000, "secure": true, "user": "u", "password": "p", "database": "d"}"#;
+        let config: ClickhouseConfig = serde_json::from_str(raw).unwrap();
+        assert_eq!(config.verify, None);
+    }
+
+    #[test]
+    fn clickhouse_config_deserializes_verify() {
+        let raw = r#"{"host": "h", "port": 9000, "secure": true, "user": "u", "password": "p", "database": "d", "verify": false}"#;
+        let config: ClickhouseConfig = serde_json::from_str(raw).unwrap();
+        assert_eq!(config.verify, Some(false));
     }
 }
