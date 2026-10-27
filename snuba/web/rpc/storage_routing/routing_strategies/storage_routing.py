@@ -64,6 +64,7 @@ DEFAULT_STORAGE_ROUTING_CONFIG_PREFIX = "StorageRouting"
 MetricsBackendType = Callable[[str, int | float, dict[str, str] | None, str | None], None]
 RoutedRequestType = TimeSeriesRequest | TraceItemTableRequest
 ClickhouseQuerySettings = dict[str, Any]
+_TIER_BY_CONFIG_VALUE = {tier.value: tier for tier in Tier if tier != Tier.TIER_NO_TIER}
 
 
 class _OrgOverridableSetting(NamedTuple):
@@ -324,20 +325,14 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             sentry_sdk.capture_exception(error)
 
     def _get_initial_tier(self, routing_context: RoutingContext) -> Tier:
-        tier_int = get_option("default_tier", 1)
-
-        if tier_int == 512:
-            tier = Tier.TIER_512
-        elif tier_int == 64:
-            tier = Tier.TIER_64
-        elif tier_int == 8:
-            tier = Tier.TIER_8
-        else:
-            tier = Tier.TIER_1
+        tier = _TIER_BY_CONFIG_VALUE.get(get_option("default_tier", 1), Tier.TIER_1)
 
         # LOW_PRIORITY routes like NORMAL but is never allowed to read TIER_1.
-        if self._is_low_priority_mode(extract_message_meta(routing_context.in_msg)):
-            return max(tier, Tier.TIER_8)
+        if (
+            extract_message_meta(routing_context.in_msg).downsampled_storage_config.mode
+            == DownsampledStorageConfig.MODE_LOW_PRIORITY
+        ):
+            tier = max(tier, Tier.TIER_8)
         return tier
 
     def additional_config_definitions(self) -> list[Configuration]:
@@ -368,14 +363,6 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             return bool(
                 in_msg_meta.downsampled_storage_config.mode
                 == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
-            )
-        return False
-
-    def _is_low_priority_mode(self, in_msg_meta: RequestMeta) -> bool:
-        if in_msg_meta.HasField("downsampled_storage_config"):
-            return bool(
-                in_msg_meta.downsampled_storage_config.mode
-                == DownsampledStorageConfig.MODE_LOW_PRIORITY
             )
         return False
 
