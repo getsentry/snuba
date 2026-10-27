@@ -38,6 +38,10 @@ from snuba.web.rpc.common.common import (
     trace_item_filters_to_expression,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.common.histogram_aggregation import (
+    histogram_aware_aggregation,
+    is_histogram_aware_aggregation,
+)
 
 sampling_factor_column = column("sampling_factor")
 client_sample_rate_column = column("client_sample_rate")
@@ -1001,6 +1005,28 @@ def aggregation_to_expression(
     if aggregation.key.type in ARRAY_TYPES:
         return _array_aggregation_to_expression(
             aggregation, field, condition_in_aggregation, alias_dict
+        )
+
+    extrapolate = aggregation.extrapolation_mode in [
+        ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+        ExtrapolationMode.EXTRAPOLATION_MODE_CLIENT_ONLY,
+        ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY,
+    ]
+
+    # PoC (OTLP histograms): aggregations on `sentry.value` read bucket rows
+    # (bounds + counts) and skip exemplar rows. See histogram_aggregation.py.
+    if is_histogram_aware_aggregation(aggregation):
+        return histogram_aware_aggregation(
+            aggregation,
+            field,
+            field_exists,
+            condition_in_aggregation,
+            attribute_key_to_expression,
+            (
+                _get_sampling_weight_expression(use_sampling_factor, aggregation.extrapolation_mode)
+                if extrapolate
+                else None
+            ),
         )
 
     if aggregation.extrapolation_mode in [
