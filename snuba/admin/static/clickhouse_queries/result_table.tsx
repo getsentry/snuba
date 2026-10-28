@@ -101,21 +101,23 @@ function ResultTable(props: { columnNames: string[]; rows: unknown[][] }) {
                         {text === null ? (
                           <span style={nullStyle}>NULL</span>
                         ) : long ? (
-                          <div
-                            role="button"
-                            tabIndex={0}
-                            aria-expanded={open}
-                            title={open ? "Click to collapse" : text}
-                            style={open ? openValueStyle : clippedValueStyle}
-                            onClick={() => toggleCell(key)}
-                            onKeyDown={(evt) => {
-                              if (evt.key === "Enter" || evt.key === " ") {
-                                evt.preventDefault();
-                                toggleCell(key);
-                              }
-                            }}
-                          >
-                            {text}
+                          <div style={longValueBoxStyle}>
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              aria-expanded={open}
+                              title={open ? "Click to collapse" : text}
+                              style={open ? openValueStyle : clippedValueStyle}
+                              onClick={() => toggleCell(key)}
+                              onKeyDown={(evt) => {
+                                if (evt.key === "Enter" || evt.key === " ") {
+                                  evt.preventDefault();
+                                  toggleCell(key);
+                                }
+                              }}
+                            >
+                              {text}
+                            </div>
                           </div>
                         ) : (
                           text
@@ -209,22 +211,30 @@ const cornerStyle = {
   backgroundColor: COLORS.TABLE_HEADER_BG,
 };
 
-// Opening a value keeps its width and only adds lines. A wrappable value with
-// no set width would let the table squeeze its column to a sliver.
-const longValueWidth = `${CELL_MAX_CHARS}ch`;
+// A long value's column is at least this wide, so the table can't squeeze it
+// to a sliver, and takes any spare room the table has on top of that.
+const longValueBoxStyle = {
+  minWidth: `${CELL_MAX_CHARS}ch`,
+};
 
-const clippedValueStyle = {
-  width: longValueWidth,
-  overflow: "hidden",
-  textOverflow: "ellipsis",
+// No width of its own, so the full text doesn't widen the column, and opening
+// a value only adds lines. It then stretches to fill the box above.
+const longValueStyle = {
+  width: 0,
+  minWidth: "100%",
   cursor: "pointer",
 };
 
+const clippedValueStyle = {
+  ...longValueStyle,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+};
+
 const openValueStyle = {
-  width: longValueWidth,
+  ...longValueStyle,
   whiteSpace: "pre-wrap" as const,
   overflowWrap: "anywhere" as const,
-  cursor: "pointer",
 };
 
 const nullStyle = {
