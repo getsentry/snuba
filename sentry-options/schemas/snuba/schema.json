@@ -846,6 +846,16 @@
       "default": 10,
       "description": "Multiplier applied to max_concurrent_queries to size the subscription executor's pending-future queue before backpressure."
     },
+    "dogstatsd_client_aggregation": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, snuba's Python metrics backend shares one DogStatsD client per process with client-side buffering and aggregation turned on (flushed every 3 seconds), mirroring the Rust consumers' metrics-exporter-dogstatsd. Counts and gauges are aggregated per flush window and packets are batched, instead of one write to the agent socket per metric call. Read on the first metric emission, so flipping it takes effect on the next process restart."
+    },
+    "dogstatsd_max_samples_per_context": {
+      "type": "integer",
+      "default": 0,
+      "description": "Only used when dogstatsd_client_aggregation is true. Maximum number of timing, histogram and distribution samples the Python DogStatsD client keeps per metric context per flush window; the sample rate is adjusted to match. 0 (the default) leaves those metrics unaggregated (still buffered). Experimental in the datadog client. Read on the first metric emission, so changes take effect on the next process restart."
+    },
     "subscription_primary_task_builder": {
       "type": "string",
       "default": "jittered",
