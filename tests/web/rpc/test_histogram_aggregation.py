@@ -5,10 +5,16 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKey,
     ExtrapolationMode,
     Function,
+    Reliability,
 )
 
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
-from snuba.web.rpc.common.aggregation import aggregation_to_expression
+from snuba.web.rpc.common.aggregation import (
+    ExtrapolationContext,
+    PercentileExtrapolationContext,
+    aggregation_to_expression,
+    get_count_column,
+)
 from snuba.web.rpc.common.common import attribute_key_to_expression
 from snuba.web.rpc.common.histogram_aggregation import is_histogram_aware_aggregation
 
@@ -65,3 +71,32 @@ def test_other_keys_unchanged() -> None:
     sql = _sql(_agg(Function.FUNCTION_P95, key="sentry.duration"))
     assert "quantileTDigestWeightedIfOrNull" in sql
     assert "sumMapIf" not in sql
+
+
+def test_count_column_skips_exemplar_rows() -> None:
+    sql = get_count_column(_agg(Function.FUNCTION_P95), attribute_key_to_expression).accept(
+        ClickhouseExpressionFormatter()
+    )
+    assert "'exemplar'" in sql
+
+    other = get_count_column(
+        _agg(Function.FUNCTION_P95, key="sentry.duration"), attribute_key_to_expression
+    ).accept(ClickhouseExpressionFormatter())
+    assert "'exemplar'" not in other
+
+
+def test_null_percentile_over_exemplar_only_group_is_not_data_present() -> None:
+    context = ExtrapolationContext.from_row(
+        "agg",
+        {
+            "agg": None,
+            "__snuba_custom_column__confidence_interval$agg$function_type:p95,granularity:0.005,width:0.1": [
+                None
+            ],
+            "__snuba_custom_column__average_sample_rate$agg": 1.0,
+            "__snuba_custom_column__count$agg": 2,
+        },
+    )
+    assert isinstance(context, PercentileExtrapolationContext)
+    assert not context.is_data_present
+    assert context.reliability == Reliability.RELIABILITY_UNSPECIFIED

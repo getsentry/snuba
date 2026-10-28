@@ -93,6 +93,15 @@ def _or_default(attribute: Expression, default: Expression) -> Expression:
     return _if(get_field_existence_expression(attribute), attribute, default)
 
 
+def not_exemplar_condition(
+    attribute_key_to_expression: Callable[[AttributeKey], Expression],
+) -> Expression:
+    row_kind = attribute_key_to_expression(
+        AttributeKey(name=ROW_KIND, type=AttributeKey.TYPE_STRING)
+    )
+    return f.notEquals(f.ifNull(row_kind, literal("")), literal(ROW_KIND_EXEMPLAR))
+
+
 def histogram_aware_aggregation(
     aggregation: AttributeConditionalAggregation,
     field: Expression,
@@ -109,11 +118,10 @@ def histogram_aware_aggregation(
     alias = aggregation.label or None
     alias_dict = {"alias": alias} if alias else {}
 
-    row_kind = attribute_key_to_expression(
-        AttributeKey(name=ROW_KIND, type=AttributeKey.TYPE_STRING)
+    condition = and_cond(
+        and_cond(field_exists, condition_in_aggregation),
+        not_exemplar_condition(attribute_key_to_expression),
     )
-    not_exemplar = f.notEquals(f.ifNull(row_kind, literal("")), literal(ROW_KIND_EXEMPLAR))
-    condition = and_cond(and_cond(field_exists, condition_in_aggregation), not_exemplar)
 
     observations = f.toFloat64(
         _or_default(_double(BUCKET_COUNT, attribute_key_to_expression), literal(1.0))

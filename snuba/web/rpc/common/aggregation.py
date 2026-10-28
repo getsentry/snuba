@@ -41,6 +41,7 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.common.histogram_aggregation import (
     histogram_aware_aggregation,
     is_histogram_aware_aggregation,
+    not_exemplar_condition,
 )
 
 sampling_factor_column = column("sampling_factor")
@@ -187,7 +188,7 @@ class ExtrapolationContext(ABC):
 
     @property
     def is_data_present(self) -> bool:
-        return self.sample_count > 0
+        return self.sample_count > 0 and self.value is not None
 
     @property
     @abstractmethod
@@ -453,14 +454,15 @@ def get_count_column(
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
 ) -> Expression:
     field, field_exists = _resolve_field_and_existence(aggregation, attribute_key_to_expression)
-    return f.countIf(
-        field,
-        and_cond(
-            field_exists,
-            _get_condition_in_aggregation(aggregation, attribute_key_to_expression),
-        ),
-        alias=_get_count_column_alias(aggregation),
+    condition = and_cond(
+        field_exists,
+        _get_condition_in_aggregation(aggregation, attribute_key_to_expression),
     )
+    # Exemplar rows carry a sentry.value but are skipped by the histogram-aware
+    # aggregate; counting them here would mark NULL results as "data present".
+    if is_histogram_aware_aggregation(aggregation):
+        condition = and_cond(condition, not_exemplar_condition(attribute_key_to_expression))
+    return f.countIf(field, condition, alias=_get_count_column_alias(aggregation))
 
 
 def _get_possible_percentiles(percentile: float, granularity: float, width: float) -> list[float]:
