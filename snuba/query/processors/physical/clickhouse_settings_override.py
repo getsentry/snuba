@@ -4,7 +4,7 @@ from typing import Any
 from snuba.clickhouse.query import Query
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
-from snuba.state.sentry_options import get_option
+from snuba.state.sentry_options import get_mapped_option, get_option
 
 
 class ClickhouseSettingsOverride(ClickhouseQueryProcessor):
@@ -25,6 +25,9 @@ class ClickhouseSettingsOverride(ClickhouseQueryProcessor):
     if overwrite_existing == False:
         query_settings.clickhouse_settings = {"max_rows_to_group_by": 12345, "groupby_overflow_mode": "break"}
 
+    The `clickhouse_settings_override_overwrite_existing` sentry-option, keyed by storage, takes precedence
+    over `overwrite_existing` for that storage.
+
     """
 
     def __init__(self, settings: MutableMapping[str, Any], overwrite_existing: bool = True) -> None:
@@ -33,7 +36,12 @@ class ClickhouseSettingsOverride(ClickhouseQueryProcessor):
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         new_settings: MutableMapping[str, Any] = {}
-        if self.__overwrite_existing:
+        overwrite_existing = get_mapped_option(
+            "clickhouse_settings_override_overwrite_existing",
+            query.get_from_clause().storage_key.value,
+            self.__overwrite_existing,
+        )
+        if overwrite_existing:
             new_settings.update(query_settings.get_clickhouse_settings())
             new_settings.update(self.__settings)
         else:

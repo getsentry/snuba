@@ -146,3 +146,55 @@ def test_ignore_clickhouse_settings_overrides() -> None:
         "max_rows_to_group_by": 1000000,
     }
     assert settings.get_clickhouse_settings() == expected
+
+
+@pytest.mark.parametrize(
+    "option_value, storage_key, expected",
+    [
+        pytest.param(
+            {"eap_items": True},
+            "eap_items",
+            {"max_execution_time": 25, "timeout_before_checking_execution_speed": 0},
+            id="option overwrites for matching storage",
+        ),
+        pytest.param(
+            {"eap_items": True},
+            "other_storage",
+            {"max_execution_time": 30, "timeout_before_checking_execution_speed": 0},
+            id="option ignored for other storage",
+        ),
+        pytest.param(
+            {},
+            "eap_items",
+            {"max_execution_time": 30, "timeout_before_checking_execution_speed": 0},
+            id="no entry falls back to the arg",
+        ),
+    ],
+)
+def test_overwrite_existing_option_by_storage(
+    option_value: dict[str, str | int | float | bool],
+    storage_key: str,
+    expected: MutableMapping[str, Any],
+) -> None:
+    query = Query(
+        Table(
+            "eap_items",
+            ColumnSet([("timestamp", DateTime())]),
+            storage_key=StorageKey(storage_key),
+        ),
+        selected_columns=[
+            SelectedExpression(name="timestamp", expression=Column(None, None, "timestamp"))
+        ],
+    )
+    settings = HTTPQuerySettings()
+    settings.set_clickhouse_settings({"max_execution_time": 30})
+    overrides = {"max_execution_time": 25, "timeout_before_checking_execution_speed": 0}
+
+    with override_options(
+        "snuba", {"clickhouse_settings_override_overwrite_existing": option_value}
+    ):
+        ClickhouseSettingsOverride(overrides, overwrite_existing=False).process_query(
+            query, settings
+        )
+
+    assert settings.get_clickhouse_settings() == expected
