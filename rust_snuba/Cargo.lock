@@ -3271,6 +3271,7 @@ dependencies = [
  "num_enum",
  "openssl-sys",
  "pkg-config",
+ "zstd-sys",
 ]
 
 [[package]]
@@ -3949,9 +3950,9 @@ dependencies = [
 
 [[package]]
 name = "sentry_arroyo"
-version = "2.48.0"
+version = "2.49.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b962caedc7c28baaf90780020e464d1f2436c6c2a38008dcfd43d96536802ce"
+checksum = "fb0a3d013238e9248cce3c6a98e9cd7b9d13b47e121ccba85414da1e2dc17903"
 dependencies = [
  "async-stream",
  "chrono",
@@ -5734,9 +5735,9 @@ dependencies = [
 
 [[package]]
 name = "zstd-sys"
-version = "2.0.10+zstd.1.5.6"
+version = "2.1.2+zstd.1.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c253a4914af5bafc8fa8c86ee400827e83cf6ec01195ec1f1ed8441bf00d65aa"
+checksum = "481ada9c543b2323cbb7bbdbb5249177fbf0188ed959ed2c15e4b22421c84ed3"
 dependencies = [
  "cc",
  "pkg-config",
