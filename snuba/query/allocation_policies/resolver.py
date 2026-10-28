@@ -112,8 +112,8 @@ def get_active_allocation_policies(
 ) -> list[AllocationPolicy]:
     """Build the AllocationPolicy list configured for ``resource_identifier``.
 
-    A resource listed in the ``allocation_policies.base`` / ``.region`` options is
-    resolved from those (see policy_config.py and CONFIG.md); policies there that
+    A resource listed in the ``allocation_policies.region`` option is
+    resolved from it (see policy_config.py and CONFIG.md); policies there that
     limit delete queries are skipped. Otherwise this falls back to the legacy
     format below.
 
@@ -146,7 +146,7 @@ def get_active_delete_allocation_policies(
     tenant_ids: Mapping[str, str | int] | None = None,
 ) -> list[AllocationPolicy]:
     """Build the delete-query policies configured under ``delete_policies`` in the
-    ``allocation_policies.base`` / ``.region`` options. Empty when none are set."""
+    ``allocation_policies.region`` option. Empty when none are set."""
     resource = resource_identifier.value
     kwargs_by_class = resolve_policy_kwargs(resource, tenant_ids or {}, DELETE_POLICIES)
     return list(_construct_policies(kwargs_by_class or {}, resource, QueryType.DELETE))

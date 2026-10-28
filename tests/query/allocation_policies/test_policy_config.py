@@ -10,7 +10,7 @@ from snuba.configs.configuration import ResourceIdentifier
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import AllocationPolicy, PassthroughPolicy
-from snuba.query.allocation_policies.policy_config import BASE_KEY, REGION_KEY
+from snuba.query.allocation_policies.policy_config import REGION_KEY
 from snuba.query.allocation_policies.resolver import (
     get_active_allocation_policies,
     get_active_delete_allocation_policies,
@@ -19,11 +19,8 @@ from tests.query.allocation_policies.attachment import override_allocation_polic
 
 
 @contextmanager
-def override_policy_config(
-    base: dict[str, Any] | None = None,
-    region: dict[str, Any] | None = None,
-) -> Iterator[None]:
-    with override_options("snuba", {BASE_KEY: base or {}, REGION_KEY: region or {}}):
+def override_policy_config(config: dict[str, Any]) -> Iterator[None]:
+    with override_options("snuba", {REGION_KEY: config}):
         yield
 
 
@@ -127,7 +124,7 @@ def test_new_format_matches_legacy_transactions(tenant_ids: dict[str, str | int]
     resource = ResourceIdentifier("transactions")
     with override_allocation_policy({"transactions": _LEGACY_TRANSACTIONS}):
         legacy = _snapshot(get_active_allocation_policies(resource, tenant_ids))
-    with override_policy_config(base=_NEW_TRANSACTIONS):
+    with override_policy_config(_NEW_TRANSACTIONS):
         new = _snapshot(get_active_allocation_policies(resource, tenant_ids))
 
     assert new == legacy
@@ -146,7 +143,7 @@ def test_defaults_and_resource_settings_are_inherited() -> None:
             }
         },
     }
-    with override_policy_config(base=config):
+    with override_policy_config(config):
         policies = _snapshot(get_active_allocation_policies(ResourceIdentifier("errors")))
 
     assert policies["ConcurrentRateLimitAllocationPolicy"]["is_enforced"] == 0
@@ -171,7 +168,7 @@ def test_override_patches_one_field_and_keeps_the_rest() -> None:
             }
         }
     }
-    with override_policy_config(base=config):
+    with override_policy_config(config):
         policy = _snapshot(
             get_active_allocation_policies(
                 ResourceIdentifier("replays"), {"organization_id": 304281}
@@ -214,7 +211,7 @@ def test_more_specific_override_wins_regardless_of_order(reverse: bool) -> None:
         policies = get_active_allocation_policies(ResourceIdentifier("errors"), tenant_ids)
         return int(_snapshot(policies)["ConcurrentRateLimitAllocationPolicy"]["concurrent_limit"])
 
-    with override_policy_config(base=config):
+    with override_policy_config(config):
         assert limit({}) == 50
         assert limit({"referrer": "api.foo"}) == 1
         assert limit({"organization_id": 1}) == 2
@@ -238,7 +235,7 @@ def test_override_can_add_and_disable_policies() -> None:
             }
         }
     }
-    with override_policy_config(base=config):
+    with override_policy_config(config):
         for_org_1 = get_active_allocation_policies(
             ResourceIdentifier("errors"), {"organization_id": 1}
         )
@@ -256,51 +253,6 @@ def test_override_can_add_and_disable_policies() -> None:
     }
 
 
-def test_region_merges_over_base() -> None:
-    base = {
-        "defaults": {"enforce": False},
-        "resources": {
-            "errors": {
-                "policies": {"concurrent_rate_limit": {"concurrent_limit": 22}},
-                "overrides": [
-                    {
-                        "match": {"organization_id": [1]},
-                        "policies": {"concurrent_rate_limit": {"concurrent_limit": 5}},
-                    }
-                ],
-            }
-        },
-    }
-    region = {
-        "resources": {
-            "errors": {
-                "policies": {"concurrent_rate_limit": {"max_threads": 16}},
-                "overrides": [
-                    {
-                        "match": {"organization_id": [1]},
-                        "policies": {"concurrent_rate_limit": {"concurrent_limit": 7}},
-                    }
-                ],
-            },
-            "discover": {"policies": {"referrer_guard_rail": {}}},
-        }
-    }
-    with override_policy_config(base=base, region=region):
-        errors = _snapshot(get_active_allocation_policies(ResourceIdentifier("errors")))
-        errors_org_1 = _snapshot(
-            get_active_allocation_policies(ResourceIdentifier("errors"), {"organization_id": 1})
-        )
-        discover = _snapshot(get_active_allocation_policies(ResourceIdentifier("discover")))
-
-    assert errors["ConcurrentRateLimitAllocationPolicy"]["concurrent_limit"] == 22
-    assert errors["ConcurrentRateLimitAllocationPolicy"]["max_threads"] == 16
-    assert errors["ConcurrentRateLimitAllocationPolicy"]["is_enforced"] == 0
-    # Same specificity: the region override comes later and wins.
-    assert errors_org_1["ConcurrentRateLimitAllocationPolicy"]["concurrent_limit"] == 7
-    assert list(discover) == ["ReferrerGuardRailPolicy"]
-    assert discover["ReferrerGuardRailPolicy"]["is_enforced"] == 0
-
-
 def test_unlisted_resource_falls_back_to_legacy_option() -> None:
     legacy = {
         "errors": [
@@ -310,7 +262,7 @@ def test_unlisted_resource_falls_back_to_legacy_option() -> None:
     with (
         override_allocation_policy(legacy),
         override_policy_config(
-            base={"resources": {"transactions": {"policies": {"concurrent_rate_limit": {}}}}}
+            {"resources": {"transactions": {"policies": {"concurrent_rate_limit": {}}}}}
         ),
     ):
         errors = get_active_allocation_policies(ResourceIdentifier("errors"))
@@ -331,7 +283,7 @@ def test_unknown_policy_and_setting_are_dropped() -> None:
             }
         }
     }
-    with override_policy_config(base=config):
+    with override_policy_config(config):
         policies = _snapshot(get_active_allocation_policies(ResourceIdentifier("errors")))
 
     assert list(policies) == ["ConcurrentRateLimitAllocationPolicy"]
@@ -344,7 +296,7 @@ def test_int_option_value_is_cast_for_float_config() -> None:
             "errors": {"policies": {"referrer_guard_rail": {"throttle_requests_divider": 2}}}
         }
     }
-    with override_policy_config(base=config):
+    with override_policy_config(config):
         policy = _snapshot(get_active_allocation_policies(ResourceIdentifier("errors")))
 
     assert policy["ReferrerGuardRailPolicy"]["requests_throttle_divider"] == 2.0
@@ -360,7 +312,7 @@ def test_thresholds_are_inherited() -> None:
             }
         },
     }
-    with override_policy_config(base=config):
+    with override_policy_config(config):
         (policy,) = get_active_allocation_policies(ResourceIdentifier("errors"))
 
     assert policy.thresholds == {"reject": {"cluster_load": 0.5, "concurrent_queries": 10.0}}
@@ -370,7 +322,7 @@ def test_option_values_are_not_mutated() -> None:
     config = copy.deepcopy(_NEW_TRANSACTIONS)
     config["defaults"] = {"thresholds": {"reject": {"cluster_load": 0.5}}}
     expected = copy.deepcopy(config)
-    with override_policy_config(base=config):
+    with override_policy_config(config):
         get_active_allocation_policies(ResourceIdentifier("transactions"), {"project_id": 5868616})
 
     assert config == expected
@@ -392,7 +344,7 @@ def test_delete_policies_only_apply_to_deletes() -> None:
         }
     }
     resource = ResourceIdentifier("search_issues")
-    with override_policy_config(base=config):
+    with override_policy_config(config):
         reads = get_active_allocation_policies(resource)
         deletes = get_active_delete_allocation_policies(resource)
 
@@ -422,7 +374,7 @@ def test_storage_delete_policies_come_from_option() -> None:
         }
     }
     storage = get_writable_storage(StorageKey.SEARCH_ISSUES)
-    with override_policy_config(base=config):
+    with override_policy_config(config):
         (default,) = storage.get_delete_allocation_policies()
         (for_org_1,) = storage.get_delete_allocation_policies({"organization_id": 1})
 

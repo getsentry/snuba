@@ -1,16 +1,9 @@
 # Configuring allocation policies
 
-Allocation policies are configured in two sentry-options, managed in
-sentry-options-automator:
-
-| Option | Set in | Purpose |
-| --- | --- | --- |
-| `allocation_policies.base` | `default` target only | The baseline for every region |
-| `allocation_policies.region` | region targets | Only what differs in that region |
-
-snuba deep-merges `region` over `base`: maps merge key by key, `overrides`
-lists are appended after the base ones, any other value is replaced. Region
-files therefore never have to copy the baseline.
+Allocation policies are configured in the `allocation_policies.region`
+sentry-option, managed in sentry-options-automator. The `default` target sets
+it; a region that sets it replaces the default wholesale, so each region file
+holds its full config.
 
 A resource listed under `resources` here ignores the legacy
 `allocation_policies` option. Resources that aren't listed still use it.
@@ -18,7 +11,7 @@ A resource listed under `resources` here ignores the legacy
 ## Shape
 
 ```yaml
-allocation_policies.base:
+allocation_policies.region:
   defaults:                     # inherited by every policy of every resource
     max_threads: 16             # enforce is left out: it defaults to true
   resources:
@@ -56,7 +49,7 @@ For one query, most specific first:
 
 1. Matching `overrides`. A `match` checks `organization_id`, `project_id` and
    `referrer` (AND across keys, OR within a list). When several match, the one
-   with more matched keys wins; on a tie, the later one wins (region after base).
+   with more matched keys wins; on a tie, the later one wins.
 2. The policy's entry under `policies` / `delete_policies`.
 3. The resource's `enforce`, `pardonable`, `max_threads`, `thresholds`.
 4. `defaults`.

@@ -1,5 +1,5 @@
-"""Reads allocation policy config from the ``allocation_policies.base`` and
-``allocation_policies.region`` sentry-options and turns it into the per-policy
+"""Reads allocation policy config from the ``allocation_policies.region``
+sentry-option and turns it into the per-policy
 constructor kwargs that the policy classes already accept.
 
 The format is documented in CONFIG.md next to this file. This module only
@@ -19,7 +19,6 @@ from snuba.query.allocation_policies import (
 )
 from snuba.state.sentry_options import get_option
 
-BASE_KEY = "allocation_policies.base"
 REGION_KEY = "allocation_policies.region"
 
 POLICIES = "policies"
@@ -104,12 +103,10 @@ def matches(match: Mapping[str, Any], tenant_ids: Mapping[str, str | int]) -> bo
 
 
 def _get_config() -> dict[str, Any]:
-    base: dict[str, Any] = get_option(BASE_KEY, {})
-    region: dict[str, Any] = get_option(REGION_KEY, {})
-    if not isinstance(base, dict) or not isinstance(region, dict):
+    config: dict[str, Any] = get_option(REGION_KEY, {})
+    if not isinstance(config, dict):
         return {}
-    merged: dict[str, Any] = deep_merge(base, region)
-    return merged
+    return config
 
 
 def _pick_inherited(level: Mapping[str, Any]) -> dict[str, Any]:
@@ -174,8 +171,7 @@ def resolve_policy_kwargs(
     settings_by_policy: dict[str, Any] = dict(resource_config.get(kind, {}))
 
     # More matched keys win, so org+referrer beats org beats referrer whatever the
-    # file order. The sort is stable, so ties keep file order and region overrides
-    # (appended after base ones by deep_merge) win over base ones.
+    # file order. The sort is stable, so ties keep file order and the later one wins.
     matching = [
         override
         for override in resource_config.get("overrides", [])
