@@ -327,12 +327,15 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
     def _get_initial_tier(self, routing_context: RoutingContext) -> Tier:
         tier = _TIER_BY_CONFIG_VALUE.get(get_option("default_tier", 1), Tier.TIER_1)
 
-        # LOW_PRIORITY routes like NORMAL but is never allowed to read TIER_1.
+        # LOW_PRIORITY routes like NORMAL but never reads a tier finer than low_priority_tier.
         if (
             extract_message_meta(routing_context.in_msg).downsampled_storage_config.mode
             == DownsampledStorageConfig.MODE_LOW_PRIORITY
         ):
-            tier = max(tier, Tier.TIER_8)
+            low_priority_tier = _TIER_BY_CONFIG_VALUE.get(
+                get_option("low_priority_tier", 8), Tier.TIER_8
+            )
+            tier = max(tier, low_priority_tier)
         return tier
 
     def additional_config_definitions(self) -> list[Configuration]:
