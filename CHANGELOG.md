@@ -1,5 +1,96 @@
 # Changelog
 
+## 26.10.1
+
+### New Features ✨
+
+#### Admin
+
+- Search all nodes in System Queries instead of picking a storage by @onewland in [#8609](https://github.com/getsentry/snuba/pull/8609)
+- Add undo/redo to query editors by @garyxu-eng in [#8580](https://github.com/getsentry/snuba/pull/8580)
+- Make System Queries results readable and the editor easier to use by @MeredithAnya in [#8569](https://github.com/getsentry/snuba/pull/8569)
+- Bring the System Queries layout to the Querylog page by @onewland in [#8565](https://github.com/getsentry/snuba/pull/8565)
+- Put the System Queries editor in a sticky, closable panel by @onewland in [#8554](https://github.com/getsentry/snuba/pull/8554)
+- Reorganize the System Queries form into Where, What and How by @onewland in [#8550](https://github.com/getsentry/snuba/pull/8550)
+- Pre-fill System Queries from a link by @onewland in [#8549](https://github.com/getsentry/snuba/pull/8549)
+
+#### Eap
+
+- Read LOW_PRIORITY minimum tier from low_priority_tier option by @sentry-junior in [#8618](https://github.com/getsentry/snuba/pull/8618)
+- Start MODE_LOW_PRIORITY queries at TIER_8 by @pbhandari in [#8611](https://github.com/getsentry/snuba/pull/8611)
+- Allow add_block_offset/number_column job to run on eap_2 by @onewland in [#8613](https://github.com/getsentry/snuba/pull/8613)
+- Drop out of range data. by @tryangul in [#8566](https://github.com/getsentry/snuba/pull/8566)
+
+#### Other
+
+- (clickhouse) Skip past-retention partitions in attach-partitions by @onewland in [#8567](https://github.com/getsentry/snuba/pull/8567)
+- (eap-items) Point eap_items_dlq_replay at eap_items_2 tables by @sentry-junior in [#8575](https://github.com/getsentry/snuba/pull/8575)
+- (llm-proxy-cost) Make llm_proxy_cost_raw writable through its entity by @volokluev in [#8607](https://github.com/getsentry/snuba/pull/8607)
+
+### Bug Fixes 🐛
+
+#### Admin
+
+- Let long System Queries values use the full table width by @MeredithAnya in [#8617](https://github.com/getsentry/snuba/pull/8617)
+- Tidy the System Queries results table layout by @onewland in [#8589](https://github.com/getsentry/snuba/pull/8589)
+
+#### Other
+
+- (devservices) Expire ClickHouse system log tables after 1 day by @vaind in [#8548](https://github.com/getsentry/snuba/pull/8548)
+- (eap) Co-occuring attrs storages have no max_execution_time by @MeredithAnya in [#8614](https://github.com/getsentry/snuba/pull/8614)
+- (metrics) Drop duplicate snuba prefix from remaining metrics by @ElioDiNino in [#8564](https://github.com/getsentry/snuba/pull/8564)
+- (release) Keep uv.lock in sync with version bumps by @ElioDiNino in [#8553](https://github.com/getsentry/snuba/pull/8553)
+- (tests) Don't rely on row order in precise timestamp test by @ElioDiNino in [#8552](https://github.com/getsentry/snuba/pull/8552)
+- (util) Decode partition dates as UTC regardless of the host timezone by @RaphaelFakhri in [#8562](https://github.com/getsentry/snuba/pull/8562)
+
+### Documentation 📚
+
+- Refresh docs against current code by @sentry-junior in [#8555](https://github.com/getsentry/snuba/pull/8555)
+
+### Internal Changes 🔧
+
+#### Deps
+
+- Upgrade granian to 2.8.6 by @gi0baro in [#8616](https://github.com/getsentry/snuba/pull/8616)
+- Bump arroyo to 2.49.0 by @elramen in [#8588](https://github.com/getsentry/snuba/pull/8588)
+- Bump rustls from 0.23.45 to 0.23.46 in /rust_snuba by @dependabot in [#8612](https://github.com/getsentry/snuba/pull/8612)
+- Bump grpcio to 1.84.1 by @sentry-junior in [#8610](https://github.com/getsentry/snuba/pull/8610)
+- Bump actions/setup-python from 5.0.0 to 7.1.0 by @dependabot in [#8604](https://github.com/getsentry/snuba/pull/8604)
+- Bump filelock from 3.32.7 to 4.2.4 by @dependabot in [#8600](https://github.com/getsentry/snuba/pull/8600)
+- Bump astral-sh/setup-uv from 10.3.0 to 10.3.2 by @dependabot in [#8605](https://github.com/getsentry/snuba/pull/8605)
+- Bump brotli to 1.2.1 by @sentry-junior in [#8598](https://github.com/getsentry/snuba/pull/8598)
+- Bump virtualenv from 21.7.13 to 21.14.12 by @dependabot in [#8587](https://github.com/getsentry/snuba/pull/8587)
+- Bump certifi to 2026.10.19 by @sentry-junior in [#8574](https://github.com/getsentry/snuba/pull/8574)
+- Bump rustls-webpki from 0.103.15 to 0.103.16 in rust_snuba by @sentry-junior in [#8572](https://github.com/getsentry/snuba/pull/8572)
+- Bump webpki-root-certs from 1.0.1 to 1.0.10 in rust_snuba by @sentry-junior in [#8571](https://github.com/getsentry/snuba/pull/8571)
+- Bump astral-sh/setup-uv from 10.2.0 to 10.3.0 by @dependabot in [#8557](https://github.com/getsentry/snuba/pull/8557)
+- Bump getsentry/craft from 2.31.1 to 2.34.1 by @dependabot in [#8540](https://github.com/getsentry/snuba/pull/8540)
+
+#### Rollout
+
+- Switch gocd tracking logic to rollout in all regions by @dmajere in [#8608](https://github.com/getsentry/snuba/pull/8608)
+- Switch gocd tracking logic to rollout in s4s2 by @dmajere in [#8606](https://github.com/getsentry/snuba/pull/8606)
+
+#### Other
+
+- (clickhouse) Bump CLICKHOUSE_SERVER_MAX_VERSION to 26.8.10.6 by @MeredithAnya in [#8597](https://github.com/getsentry/snuba/pull/8597)
+- (codeowners) Use combined @getsentry/replay team by @sentry-junior in [#8579](https://github.com/getsentry/snuba/pull/8579)
+- (ddl-changes) Bump getsentry/action-migrations to v1.4.1 by @sentry-junior in [#8568](https://github.com/getsentry/snuba/pull/8568)
+- (migrations) Scope reverse idempotency snapshot to Snuba databases by @sentry-junior in [#8592](https://github.com/getsentry/snuba/pull/8592)
+- (rust) Cache cargo builds for clippy and Rust tests, drop unused protoc by @sentry-junior in [#8593](https://github.com/getsentry/snuba/pull/8593)
+- (rust_snuba) Switch to mainline Arroyo. Update metrics callsites … by @tryangul in [#8586](https://github.com/getsentry/snuba/pull/8586)
+- Bump sentry-conventions to 0.30.0 by @getsentry-bot in [#8615](https://github.com/getsentry/snuba/pull/8615)
+- Bump Python to 3.13.17 and copy uv from its image by @sentry-junior in [#8599](https://github.com/getsentry/snuba/pull/8599)
+- Skip rust_snuba builds and apt installs in lightweight jobs by @sentry-junior in [#8591](https://github.com/getsentry/snuba/pull/8591)
+- Bump sentry-conventions to 0.29.0 by @getsentry-bot in [#8596](https://github.com/getsentry/snuba/pull/8596)
+- Bump Python to 3.13.15 by @ElioDiNino in [#8583](https://github.com/getsentry/snuba/pull/8583)
+- Bump sentry-arroyo to 2.46.0 by @getsentry-bot in [#8551](https://github.com/getsentry/snuba/pull/8551)
+- Bump new development version by @sentry-release-bot[bot] in [49ae615d](https://github.com/getsentry/snuba/commit/49ae615db9fe5b9fbd976893e8c07727a9ebe6ce)
+
+### Other
+
+- this is terabyte by @dezzeddi in [#8601](https://github.com/getsentry/snuba/pull/8601)
+
 ## 26.10.0
 
 ### New Features ✨
