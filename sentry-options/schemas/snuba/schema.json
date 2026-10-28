@@ -164,6 +164,11 @@
       "default": 1,
       "description": "Default storage routing tier for EAP queries when no other tier is selected. Maps to a Tier enum value (e.g. 1, 8, 64, 512)."
     },
+    "low_priority_tier": {
+      "type": "integer",
+      "default": 8,
+      "description": "Minimum storage routing tier for EAP queries in LOW_PRIORITY mode. Maps to a Tier enum value (e.g. 1, 8, 64, 512)."
+    },
     "export_trace_items_default_page_size": {
       "type": "integer",
       "default": 10000,
