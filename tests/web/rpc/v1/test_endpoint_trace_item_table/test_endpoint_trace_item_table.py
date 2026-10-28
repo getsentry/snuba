@@ -4282,7 +4282,8 @@ class TestTraceItemTable(BaseApiTest):
             )
             response = EndpointTraceItemTable().execute(message)
             sql = response.meta.query_info[0].metadata.sql
-            assert "FROM eap_items_1_downsample_64_local" in sql
+            # suffix differs between local and distributed test modes
+            assert "FROM eap_items_1_downsample_64" in sql
 
     def test_downsampling_uses_hexintcolumnprocessor(self) -> None:
         items_storage = get_writable_storage(StorageKey("eap_items"))
