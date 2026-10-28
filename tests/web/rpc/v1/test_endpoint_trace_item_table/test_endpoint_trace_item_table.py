@@ -4249,6 +4249,41 @@ class TestTraceItemTable(BaseApiTest):
         )
         EndpointTraceItemTable().execute(best_effort_message)
 
+    def test_low_priority_mode_end_to_end(self) -> None:
+        from sentry_options.testing import override_options
+
+        items_storage = get_writable_storage(StorageKey("eap_items"))
+        msg_timestamp = BASE_TIME - timedelta(minutes=1)
+        messages = [
+            gen_item_message(
+                msg_timestamp,
+                attributes={"endtoend": AnyValue(string_value="endtoend")},
+            )
+            for _ in range(3600)
+        ]
+        write_raw_unprocessed_events(items_storage, messages)
+        with override_options("snuba", {"low_priority_tier": 64}):
+            message = TraceItemTableRequest(
+                meta=RequestMeta(
+                    project_ids=[1, 2, 3],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                    start_timestamp=START_TIMESTAMP,
+                    end_timestamp=END_TIMESTAMP,
+                    request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                    debug=True,
+                    downsampled_storage_config=DownsampledStorageConfig(
+                        mode=DownsampledStorageConfig.MODE_LOW_PRIORITY
+                    ),
+                ),
+                columns=[Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="endtoend"))],
+            )
+            response = EndpointTraceItemTable().execute(message)
+            sql = response.meta.query_info[0].metadata.sql
+            assert "FROM eap_items_1_downsample_64_local" in sql
+
     def test_downsampling_uses_hexintcolumnprocessor(self) -> None:
         items_storage = get_writable_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
