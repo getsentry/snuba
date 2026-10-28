@@ -1036,10 +1036,10 @@ wheels = [
 
 [[package]]
 name = "sentry-conventions"
-version = "0.29.0"
+version = "0.30.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_conventions-0.29.0-py3-none-any.whl", hash = "sha256:79372898935616667a8bf1a1840a97426fe980922ed8938b44a2457d1106a7c4" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_conventions-0.30.0-py3-none-any.whl", hash = "sha256:1046c502f1c45c170249dafe0beed0f6b29d46561c42ac484039ab8377e80d73" },
 ]
 
 [[package]]
@@ -1288,7 +1288,7 @@ requires-dist = [
     { name = "redis", specifier = ">=4.5.4" },
     { name = "rust-snuba", editable = "rust_snuba" },
     { name = "sentry-arroyo", specifier = ">=2.46.0" },
-    { name = "sentry-conventions", specifier = ">=0.29.0" },
+    { name = "sentry-conventions", specifier = ">=0.30.0" },
     { name = "sentry-kafka-schemas", specifier = ">=2.1.39" },
     { name = "sentry-options", specifier = ">=1.2.1" },
     { name = "sentry-protos", specifier = ">=0.80.0" },
