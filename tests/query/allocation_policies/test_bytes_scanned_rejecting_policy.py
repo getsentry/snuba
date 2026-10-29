@@ -289,21 +289,18 @@ def test_org_override_precedence(policy: BytesScannedRejectingPolicy) -> None:
 
 @pytest.mark.redis_db
 def test_org_max_bytes_to_read_cap(policy: BytesScannedRejectingPolicy) -> None:
-    """Per-org cap sets max_bytes_to_read and bypasses the sliding-window check."""
-    _configure_policy(policy)
+    """The cap sets max_bytes_to_read and bypasses the sliding-window check."""
+    capped = BytesScannedRejectingPolicy(
+        storage_key=ResourceIdentifier(StorageKey("errors")), max_bytes_to_read=500
+    )
+    _configure_policy(capped)
     tenant_ids: dict[str, str | int] = {
         "organization_id": 123,
         "referrer": "some_referrer",
     }
-    set_component_config(
-        policy,
-        "organization_max_bytes_to_read",
-        500,
-        {"organization_id": 123},
-    )
 
     # Exhaust the quota first; the cap should still let the query through.
-    policy.update_quota_balance(
+    capped.update_quota_balance(
         tenant_ids,
         QUERY_ID,
         QueryResultOrError(
@@ -315,12 +312,14 @@ def test_org_max_bytes_to_read_cap(policy: BytesScannedRejectingPolicy) -> None:
         ),
     )
 
-    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    allowance = capped.get_quota_allowance(tenant_ids, QUERY_ID)
     assert allowance.can_run
     assert allowance.max_bytes_to_read == 500
     assert allowance.max_threads == MAX_THREAD_NUMBER
     assert not allowance.is_throttled
 
+    # An uncapped policy is still subject to the sliding-window limit.
+    _configure_policy(policy)
     # An org without a cap configured is still subject to the sliding-window limit.
     other_org_tenant: dict[str, str | int] = {
         "organization_id": 456,
@@ -352,21 +351,18 @@ def test_org_cap_does_not_record_into_sliding_window(
     would reject queries against a window that silently filled up while
     the cap was active.
     """
-    _configure_policy(policy)
+    capped = BytesScannedRejectingPolicy(
+        storage_key=ResourceIdentifier(StorageKey("errors")), max_bytes_to_read=500
+    )
+    _configure_policy(capped)
     tenant_ids: dict[str, str | int] = {
         "organization_id": 123,
         "referrer": "some_referrer",
     }
-    set_component_config(
-        policy,
-        "organization_max_bytes_to_read",
-        500,
-        {"organization_id": 123},
-    )
 
     # While the cap is set, lots of bytes scanned must not be recorded.
     for _ in range(5):
-        policy.update_quota_balance(
+        capped.update_quota_balance(
             tenant_ids,
             QUERY_ID,
             QueryResultOrError(
@@ -378,53 +374,13 @@ def test_org_cap_does_not_record_into_sliding_window(
             ),
         )
 
-    # Remove the cap; the sliding window should be empty, so the next query
+    # Without the cap the sliding window should be empty, so the next query
     # is allowed under the normal org-referrer limit.
-    set_component_config(
-        policy,
-        "organization_max_bytes_to_read",
-        -1,
-        {"organization_id": 123},
-    )
+    _configure_policy(policy)
     allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
     assert allowance.can_run
     assert allowance.max_threads == MAX_THREAD_NUMBER
     assert not allowance.is_throttled
-
-
-@pytest.mark.redis_db
-def test_org_referrer_cap_beats_org_cap(policy: BytesScannedRejectingPolicy) -> None:
-    """(org_id, referrer) cap is more specific than the org_id cap and wins."""
-    _configure_policy(policy)
-    tenant_ids: dict[str, str | int] = {
-        "organization_id": 123,
-        "referrer": "some_referrer",
-    }
-    set_component_config(
-        policy,
-        "organization_max_bytes_to_read",
-        1000,
-        {"organization_id": 123},
-    )
-    set_component_config(
-        policy,
-        "organization_referrer_max_bytes_to_read",
-        200,
-        {"organization_id": 123, "referrer": "some_referrer"},
-    )
-
-    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
-    assert allowance.can_run
-    assert allowance.max_bytes_to_read == 200
-
-    # A different referrer falls back to the org-wide cap.
-    other_referrer: dict[str, str | int] = {
-        "organization_id": 123,
-        "referrer": "other_referrer",
-    }
-    allowance = policy.get_quota_allowance(other_referrer, QUERY_ID)
-    assert allowance.can_run
-    assert allowance.max_bytes_to_read == 1000
 
 
 @pytest.mark.redis_db
@@ -437,27 +393,18 @@ def test_org_caps_do_not_apply_to_project_queries(
     policy resolves those to the project_id branch. The org cap should only
     fire on org-keyed queries.
     """
-    _configure_policy(policy)
+    capped = BytesScannedRejectingPolicy(
+        storage_key=ResourceIdentifier(StorageKey("errors")), max_bytes_to_read=500
+    )
+    _configure_policy(capped)
     tenant_ids: dict[str, str | int] = {
         "organization_id": 123,
         "project_id": 12345,
         "referrer": "some_referrer",
     }
-    set_component_config(
-        policy,
-        "organization_max_bytes_to_read",
-        500,
-        {"organization_id": 123},
-    )
-    set_component_config(
-        policy,
-        "organization_referrer_max_bytes_to_read",
-        200,
-        {"organization_id": 123, "referrer": "some_referrer"},
-    )
 
     # Exhaust the project quota; the org cap must not let the query through.
-    policy.update_quota_balance(
+    capped.update_quota_balance(
         tenant_ids,
         QUERY_ID,
         QueryResultOrError(
@@ -468,7 +415,7 @@ def test_org_caps_do_not_apply_to_project_queries(
             error=None,
         ),
     )
-    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    allowance = capped.get_quota_allowance(tenant_ids, QUERY_ID)
     assert not allowance.can_run
     assert allowance.max_bytes_to_read == 0
 

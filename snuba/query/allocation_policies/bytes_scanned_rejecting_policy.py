@@ -93,18 +93,10 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                 param_types={"organization_id": int},
             ),
             Configuration(
-                "organization_referrer_max_bytes_to_read",
-                "Per-(organization_id, referrer) hard cap forwarded to clickhouse as max_bytes_to_read. Queries that match are allowed to run with this cap and bypass the sliding-window scan limit",
+                "max_bytes_to_read",
+                "Hard cap forwarded to clickhouse as max_bytes_to_read for org-keyed queries (no project_id). Queries it applies to run with this cap and bypass the sliding-window scan limit. Set it per org or referrer in a match block. Unset is -1",
                 int,
                 DEFAULT_OVERRIDE_LIMIT,
-                param_types={"organization_id": int, "referrer": str},
-            ),
-            Configuration(
-                "organization_max_bytes_to_read",
-                "Per-organization_id hard cap forwarded to clickhouse as max_bytes_to_read across any referrer. Queries that match are allowed to run with this cap and bypass the sliding-window scan limit",
-                int,
-                DEFAULT_OVERRIDE_LIMIT,
-                param_types={"organization_id": int},
             ),
             Configuration(
                 "project_referrer_scan_limit",
@@ -209,26 +201,10 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
             "customer tenant key is neither project_id or organization_id, this should never happen",
         )
 
-    def __get_organization_max_bytes_to_read(
-        self, org_id: str | int, referrer: str | int
-    ) -> int | None:
-        """Return a per-org max_bytes_to_read cap if one is configured.
-
-        Precedence: (organization_id, referrer) > organization_id.
-        Returns None when no cap applies.
-        """
-        org_referrer_cap = self.get_config_value(
-            "organization_referrer_max_bytes_to_read",
-            {"organization_id": org_id, "referrer": referrer},
-        )
-        if org_referrer_cap != DEFAULT_OVERRIDE_LIMIT:
-            return int(org_referrer_cap)
-        org_cap = self.get_config_value(
-            "organization_max_bytes_to_read",
-            {"organization_id": org_id},
-        )
-        if org_cap != DEFAULT_OVERRIDE_LIMIT:
-            return int(org_cap)
+    def __get_max_bytes_to_read(self) -> int | None:
+        cap = self.get_config_value("max_bytes_to_read")
+        if cap != DEFAULT_OVERRIDE_LIMIT:
+            return int(cap)
         return None
 
     def _get_quota_allowance(
@@ -270,7 +246,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
             )
 
         if customer_tenant_key == "organization_id":
-            org_cap = self.__get_organization_max_bytes_to_read(customer_tenant_value, referrer)
+            org_cap = self.__get_max_bytes_to_read()
             if org_cap is not None:
                 return QuotaAllowance(
                     can_run=True,
@@ -455,11 +431,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
         # max_bytes_to_read cap skip the sliding window entirely. Recording usage here
         # would silently fill the window, so removing the cap later would reject queries
         # against quota they never actually consumed.
-        if (
-            customer_tenant_key == "organization_id"
-            and self.__get_organization_max_bytes_to_read(customer_tenant_value, referrer)
-            is not None
-        ):
+        if customer_tenant_key == "organization_id" and self.__get_max_bytes_to_read() is not None:
             return
         scan_limit = self.__get_scan_limit(customer_tenant_key, customer_tenant_value, referrer)
         # we can assume that the requested quota was granted (because it was)
