@@ -28,7 +28,6 @@ from snuba.query.allocation_policies.bytes_scanned_window_policy import (
 from snuba.query.allocation_policies.concurrent_rate_limit import (
     ConcurrentRateLimitAllocationPolicy,
 )
-from snuba.query.allocation_policies.cross_org import CrossOrgQueryAllocationPolicy
 from snuba.query.allocation_policies.per_referrer import ReferrerGuardRailPolicy
 from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from tests.configs.component_config import (
@@ -504,7 +503,6 @@ class TestComponentNameBackwardsCompatibility:
             ReferrerGuardRailPolicy,
             ConcurrentRateLimitAllocationPolicy,
             BytesScannedRejectingPolicy,
-            CrossOrgQueryAllocationPolicy,
             BytesScannedWindowAllocationPolicy,
         ]
 
