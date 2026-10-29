@@ -386,6 +386,10 @@
                   "max_threads": {
                     "type": "integer",
                     "optional": true
+                  },
+                  "key_by": {
+                    "type": "string",
+                    "optional": true
                   }
                 },
                 "additionalProperties": {
