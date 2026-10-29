@@ -19,6 +19,13 @@ Aggregations on ``sentry.value`` are rewritten so that:
   to t-digest. Plain rows (SDK distributions, gauges, counters) are treated as a
   zero-width bucket ``[value, value]`` with count 1, so they keep working.
 
+Alternatively (``settings.OTLP_HISTOGRAM_POINTS_PER_BUCKET = k > 0``) every bucket
+row is expanded with ``arrayJoin`` into ``k`` evenly spaced points of weight
+``bucket_count / k`` and fed to the regular weighted aggregates. That keeps the
+existing t-digest percentiles and lets filters on ``sentry.value`` (``count_if``
+for heatmaps) see values spread across the bucket instead of the midpoint, at a
+resolution of ``bucket_width / k``. Plain rows keep a single point.
+
 This is not production code: it applies to every ``sentry.value`` aggregation
 (no proto flag), and the percentile path keeps one map entry per distinct
 ``(lower, upper)``, which for SDK distributions means one entry per distinct value.
@@ -34,8 +41,10 @@ from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, Function
 
+from snuba import settings
+from snuba.query.dsl import CurriedFunctions as cf
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import and_cond, literal
+from snuba.query.dsl import and_cond, literal, or_cond
 from snuba.query.expressions import Argument, Expression, FunctionCall, Lambda
 from snuba.web.rpc.common.common import get_field_existence_expression
 
@@ -102,6 +111,70 @@ def not_exemplar_condition(
     return f.notEquals(f.ifNull(row_kind, literal("")), literal(ROW_KIND_EXEMPLAR))
 
 
+def points_per_bucket() -> int:
+    return max(0, settings.OTLP_HISTOGRAM_POINTS_PER_BUCKET)
+
+
+# Every aggregate in a query must reference the exact same arrayJoin expression
+# (same alias) so ClickHouse de-duplicates it instead of taking a cartesian product.
+POINT_INDEX_ALIAS = "_hist_point"
+
+
+def point_index(k: int) -> Expression:
+    return f.arrayJoin(f.range(literal(k)), alias=POINT_INDEX_ALIAS)
+
+
+def is_bucket_row(attribute_key_to_expression: Callable[[AttributeKey], Expression]) -> Expression:
+    return get_field_existence_expression(_double(BUCKET_COUNT, attribute_key_to_expression))
+
+
+def expanded_value(
+    attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    field: Expression,
+    k: int,
+) -> Expression:
+    """``sentry.value`` as seen by the k-points mode: the i-th of ``k`` evenly spaced
+    points inside the bucket for bucket rows, the stored value otherwise."""
+    lower = f.toFloat64(_double(BUCKET_LOWER, attribute_key_to_expression))
+    upper = f.toFloat64(_double(BUCKET_UPPER, attribute_key_to_expression))
+    offset = f.divide(f.plus(f.toFloat64(point_index(k)), literal(0.5)), literal(float(k)))
+    return _if(
+        is_bucket_row(attribute_key_to_expression),
+        f.plus(lower, f.multiply(f.minus(upper, lower), offset)),
+        field,
+    )
+
+
+def point_condition(
+    attribute_key_to_expression: Callable[[AttributeKey], Expression], k: int
+) -> Expression:
+    """Plain rows are replicated ``k`` times by the arrayJoin; only keep their first copy."""
+    return or_cond(
+        is_bucket_row(attribute_key_to_expression),
+        f.equals(point_index(k), literal(0)),
+    )
+
+
+def expanding_attribute_key_to_expression(
+    attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    field: Expression,
+    k: int,
+) -> Callable[[AttributeKey], Expression]:
+    """Wraps ``attribute_key_to_expression`` so filters on ``sentry.value`` compare
+    against the expanded point value rather than the bucket midpoint."""
+    value = expanded_value(attribute_key_to_expression, field, k)
+
+    def resolve(key: AttributeKey) -> Expression:
+        if key.name == VALUE_ATTRIBUTE and key.type in (
+            AttributeKey.TYPE_DOUBLE,
+            AttributeKey.TYPE_FLOAT,
+        ):
+            return value
+        return attribute_key_to_expression(key)
+
+    return resolve
+
+
 def histogram_aware_aggregation(
     aggregation: AttributeConditionalAggregation,
     field: Expression,
@@ -133,6 +206,22 @@ def histogram_aware_aggregation(
     weight: Expression = sampling_weight if sampling_weight is not None else literal(1.0)
     weighted_observations = f.multiply(observations, weight)
 
+    k = points_per_bucket()
+    if k > 0:
+        return _k_points_aggregation(
+            aggregation,
+            field,
+            condition,
+            attribute_key_to_expression,
+            lower,
+            upper,
+            observations,
+            sum_share,
+            weight,
+            k,
+            alias,
+        )
+
     match aggregation.aggregate:
         case Function.FUNCTION_COUNT:
             return f.round(f.sumIfOrNull(weighted_observations, condition), **alias_dict)
@@ -151,6 +240,56 @@ def histogram_aware_aggregation(
 
     quantile = _PERCENTILES[aggregation.aggregate]
     return _interpolated_quantile(quantile, lower, upper, weighted_observations, condition, alias)
+
+
+def _k_points_aggregation(
+    aggregation: AttributeConditionalAggregation,
+    field: Expression,
+    condition: Expression,
+    attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    lower: Expression,
+    upper: Expression,
+    observations: Expression,
+    sum_share: Expression,
+    weight: Expression,
+    k: int,
+    alias: str | None,
+) -> Expression:
+    """Aggregate over ``k`` synthetic points per bucket row (see module docstring).
+
+    ``condition`` must already have been built with
+    :func:`expanding_attribute_key_to_expression` so value filters apply per point.
+    """
+    alias_dict = {"alias": alias} if alias else {}
+    is_bucket = is_bucket_row(attribute_key_to_expression)
+    condition = and_cond(condition, point_condition(attribute_key_to_expression, k))
+    value = expanded_value(attribute_key_to_expression, field, k)
+    per_point = _if(is_bucket, f.divide(observations, literal(float(k))), literal(1.0))
+    point_weight = f.multiply(per_point, weight)
+    point_sum = f.multiply(_if(is_bucket, f.divide(sum_share, literal(float(k))), field), weight)
+
+    match aggregation.aggregate:
+        case Function.FUNCTION_COUNT:
+            return f.round(f.sumIfOrNull(point_weight, condition), **alias_dict)
+        case Function.FUNCTION_SUM:
+            return f.sumIfOrNull(point_sum, condition, **alias_dict)
+        case Function.FUNCTION_AVG | Function.FUNCTION_AVERAGE:
+            return f.divide(
+                f.sumIfOrNull(point_sum, condition),
+                f.sumIfOrNull(point_weight, condition),
+                **alias_dict,
+            )
+        case Function.FUNCTION_MIN:
+            return f.minIfOrNull(lower, condition, **alias_dict)
+        case Function.FUNCTION_MAX:
+            return f.maxIfOrNull(upper, condition, **alias_dict)
+
+    quantile = _PERCENTILES[aggregation.aggregate]
+    # t-digest weights are integers; scale so small per-point weights survive rounding.
+    rounded_weight = f.cast(f.round(f.multiply(point_weight, literal(1000))), "UInt64")
+    return cf.quantileTDigestWeightedIfOrNull(quantile)(
+        value, rounded_weight, condition, **alias_dict
+    )
 
 
 def _interpolated_quantile(

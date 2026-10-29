@@ -18,6 +18,15 @@ from snuba.settings.validation import validate_settings
 # Sets will be converted to arrays.
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
+
+# PoC (OTLP histograms): expand every bucket row into this many evenly spaced
+# points before aggregating (arrayJoin), so t-digest percentiles, count_if on
+# sentry.value (heatmaps) and confidence intervals work on bucket rows.
+# 0 keeps the exact rank + in-bucket interpolation path.
+OTLP_HISTOGRAM_POINTS_PER_BUCKET = int(
+    os.environ.get("SNUBA_OTLP_HISTOGRAM_POINTS_PER_BUCKET", "0")
+)
+
 LOG_FORMAT = "%(asctime)s %(message)s"
 
 TESTING = False

@@ -100,3 +100,40 @@ def test_null_percentile_over_exemplar_only_group_is_not_data_present() -> None:
     assert isinstance(context, PercentileExtrapolationContext)
     assert not context.is_data_present
     assert context.reliability == Reliability.RELIABILITY_UNSPECIFIED
+
+
+def test_k_points_mode_expands_buckets_with_array_join(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from sentry_protos.snuba.v1.trace_item_filter_pb2 import ComparisonFilter, TraceItemFilter
+    from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeValue
+
+    from snuba import settings
+
+    monkeypatch.setattr(settings, "OTLP_HISTOGRAM_POINTS_PER_BUCKET", 10)
+
+    p95 = _sql(_agg(Function.FUNCTION_P95))
+    assert "arrayJoin(range(10))" in p95
+    assert "quantileTDigestWeightedIfOrNull" in p95
+    assert "sumMapIf" not in p95
+
+    # a filter on sentry.value is applied to the expanded point value
+    count_if = _agg(Function.FUNCTION_COUNT)
+    count_if.filter.CopyFrom(
+        TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(name="sentry.value", type=AttributeKey.TYPE_DOUBLE),
+                op=ComparisonFilter.OP_GREATER_THAN_OR_EQUALS,
+                value=AttributeValue(val_double=100.0),
+            )
+        )
+    )
+    sql = _sql(count_if)
+    # the arrayJoin is spelled out once and referenced by alias afterwards
+    assert sql.count("arrayJoin(range(10)) AS _hist_point") == 1
+    assert sql.count("_hist_point") >= 2
+    assert "greaterOrEquals(if(" in sql
+
+    count_column = get_count_column(count_if, attribute_key_to_expression).accept(
+        ClickhouseExpressionFormatter()
+    )
+    assert "arrayJoin(range(10)) AS _hist_point" in count_column
+    assert "equals(_hist_point, 0)" in count_column

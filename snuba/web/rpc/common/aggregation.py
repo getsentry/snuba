@@ -39,9 +39,12 @@ from snuba.web.rpc.common.common import (
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.common.histogram_aggregation import (
+    expanding_attribute_key_to_expression,
     histogram_aware_aggregation,
     is_histogram_aware_aggregation,
     not_exemplar_condition,
+    point_condition,
+    points_per_bucket,
 )
 
 sampling_factor_column = column("sampling_factor")
@@ -461,6 +464,18 @@ def get_count_column(
     # Exemplar rows carry a sentry.value but are skipped by the histogram-aware
     # aggregate; counting them here would mark NULL results as "data present".
     if is_histogram_aware_aggregation(aggregation):
+        k = points_per_bucket()
+        if k > 0:
+            # The arrayJoin multiplies every row of the query; filter on the
+            # expanded value and count plain rows once.
+            condition = and_cond(
+                field_exists,
+                _get_condition_in_aggregation(
+                    aggregation,
+                    expanding_attribute_key_to_expression(attribute_key_to_expression, field, k),
+                ),
+            )
+            condition = and_cond(condition, point_condition(attribute_key_to_expression, k))
         condition = and_cond(condition, not_exemplar_condition(attribute_key_to_expression))
     return f.countIf(field, condition, alias=_get_count_column_alias(aggregation))
 
@@ -1018,6 +1033,12 @@ def aggregation_to_expression(
     # PoC (OTLP histograms): aggregations on `sentry.value` read bucket rows
     # (bounds + counts) and skip exemplar rows. See histogram_aggregation.py.
     if is_histogram_aware_aggregation(aggregation):
+        k = points_per_bucket()
+        if k > 0:
+            condition_in_aggregation = _get_condition_in_aggregation(
+                aggregation,
+                expanding_attribute_key_to_expression(attribute_key_to_expression, field, k),
+            )
         return histogram_aware_aggregation(
             aggregation,
             field,
