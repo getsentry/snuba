@@ -78,15 +78,7 @@ class TestPerReferrerPolicy:
     @pytest.mark.redis_db
     def test_override(self):
         policy = ReferrerGuardRailPolicy.from_kwargs(
-            **{
-                "storage_key": "metrics_counters",
-            }
-        )
-        set_component_config(
-            policy,
-            "referrer_concurrent_override",
-            0,
-            {"referrer": "statistical_detectors"},
+            storage_key="metrics_counters", concurrent_limit=0
         )
 
         quota_allowance = policy.get_quota_allowance(
