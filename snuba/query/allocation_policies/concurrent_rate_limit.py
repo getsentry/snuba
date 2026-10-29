@@ -64,6 +64,50 @@ class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
     def rate_limit_name(self) -> str:
         raise NotImplementedError
 
+    # Template method: every concurrency policy counts in-flight queries the same way.
+    # Subclasses only choose the bucket and limit (_rate_limit_params), which queries
+    # they ignore (_pass_through_allowance, _skips_balance_update) and how a decision
+    # becomes an allowance (_allowance).
+    def _get_quota_allowance(
+        self, tenant_ids: dict[str, str | int], query_id: str
+    ) -> QuotaAllowance:
+        pass_through = self._pass_through_allowance(tenant_ids)
+        if pass_through is not None:
+            return pass_through
+        rate_limit_params = self._rate_limit_params(tenant_ids)
+        rate_limit_stats, can_run, why = self._is_within_rate_limit(query_id, rate_limit_params)
+        return self._allowance(tenant_ids, rate_limit_params, rate_limit_stats, can_run, why)
+
+    def _update_quota_balance(
+        self,
+        tenant_ids: dict[str, str | int],
+        query_id: str,
+        result_or_error: QueryResultOrError,
+    ) -> None:
+        if self._skips_balance_update(tenant_ids):
+            return
+        self._end_query(query_id, self._rate_limit_params(tenant_ids), result_or_error)
+
+    def _pass_through_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance | None:
+        """An allowance for queries this policy doesn't count, or None to count it."""
+        return None
+
+    def _skips_balance_update(self, tenant_ids: dict[str, str | int]) -> bool:
+        return False
+
+    def _rate_limit_params(self, tenant_ids: dict[str, str | int]) -> RateLimitParameters:
+        raise NotImplementedError
+
+    def _allowance(
+        self,
+        tenant_ids: dict[str, str | int],
+        rate_limit_params: RateLimitParameters,
+        rate_limit_stats: RateLimitStats,
+        can_run: bool,
+        why: str,
+    ) -> QuotaAllowance:
+        raise NotImplementedError
+
     def _is_within_rate_limit(
         self, query_id: str, rate_limit_params: RateLimitParameters
     ) -> tuple[RateLimitStats, bool, str]:
@@ -171,9 +215,10 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
         _, tenant_value = self._get_tenant_key_and_value(tenant_ids)
         return str(tenant_value)
 
-    def _get_quota_allowance(
-        self, tenant_ids: dict[str, str | int], query_id: str
-    ) -> QuotaAllowance:
+    def _rate_limit_params(self, tenant_ids: dict[str, str | int]) -> RateLimitParameters:
+        return self._get_rate_limit_params(tenant_ids)
+
+    def _pass_through_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance | None:
         if tenant_ids.get("referrer", "no_referrer") in _PASS_THROUGH_REFERRERS:
             return QuotaAllowance(
                 can_run=True,
@@ -198,33 +243,28 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
                 quota_unit=QUOTA_UNIT,
                 suggestion=CROSS_ORG_SUGGESTION,
             )
+        return None
 
-        rate_limit_params = self._get_rate_limit_params(tenant_ids)
-        rate_limit_stats, within_rate_limit, why = self._is_within_rate_limit(
-            query_id,
-            rate_limit_params,
-        )
+    def _skips_balance_update(self, tenant_ids: dict[str, str | int]) -> bool:
+        # Pass-through referrers still end their query; only cross-org queries skip it.
+        return self.is_cross_org_query(tenant_ids)
 
+    def _allowance(
+        self,
+        tenant_ids: dict[str, str | int],
+        rate_limit_params: RateLimitParameters,
+        rate_limit_stats: RateLimitStats,
+        can_run: bool,
+        why: str,
+    ) -> QuotaAllowance:
         return QuotaAllowance(
-            can_run=within_rate_limit,
-            max_threads=self.max_threads if within_rate_limit else 0,
+            can_run=can_run,
+            max_threads=self.max_threads if can_run else 0,
             explanation={"reason": why},
             is_throttled=False,
             throttle_threshold=typing.cast(int, rate_limit_params.concurrent_limit),
             rejection_threshold=typing.cast(int, rate_limit_params.concurrent_limit),
             quota_used=rate_limit_stats.concurrent,
             quota_unit=QUOTA_UNIT,
-            suggestion=NO_SUGGESTION if within_rate_limit else SUGGESTION,
+            suggestion=NO_SUGGESTION if can_run else SUGGESTION,
         )
-
-    def _update_quota_balance(
-        self,
-        tenant_ids: dict[str, str | int],
-        query_id: str,
-        result_or_error: QueryResultOrError,
-    ) -> None:
-        if self.is_cross_org_query(tenant_ids):
-            return
-        rate_limit_params = self._get_rate_limit_params(tenant_ids)
-        self._end_query(query_id, rate_limit_params, result_or_error)
-
