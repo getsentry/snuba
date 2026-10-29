@@ -596,3 +596,34 @@ def test_limit_bytes_read(
     assert allowance.is_throttled
     assert allowance.max_threads == MAX_THREAD_NUMBER // threads_throttle_divider
     assert allowance.max_bytes_to_read == int(scan_limit / max_bytes_to_read_scan_limit_divider)
+
+
+@pytest.mark.parametrize(
+    "scan_limit",
+    [
+        pytest.param(3 * 10**12, id="3 TB"),
+        pytest.param(10 * 10**12, id="10 TB"),
+        pytest.param(20 * 10**12, id="20 TB"),
+    ],
+)
+@pytest.mark.redis_db
+def test_large_scan_limit_does_not_throttle_unused_quota(
+    policy: BytesScannedRejectingPolicy, scan_limit: int
+) -> None:
+    tenant_ids: dict[str, str | int] = {
+        "organization_id": 123,
+        "referrer": "api.auth-token.events",
+    }
+    _configure_policy(policy)
+    set_component_config(
+        policy,
+        "referrer_all_organizations_scan_limit_override",
+        scan_limit,
+        {"referrer": "api.auth-token.events"},
+    )
+
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    assert allowance.can_run
+    assert not allowance.is_throttled
+    assert allowance.max_threads == MAX_THREAD_NUMBER
+    assert allowance.quota_used == 0
