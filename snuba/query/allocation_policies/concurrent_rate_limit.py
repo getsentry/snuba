@@ -278,4 +278,3 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
             return
         rate_limit_params, _ = self._get_rate_limit_params(tenant_ids)
         self._end_query(query_id, rate_limit_params, result_or_error)
-
