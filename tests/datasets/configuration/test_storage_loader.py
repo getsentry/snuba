@@ -79,7 +79,7 @@ deletion_processors:
 
 delete_allocation_policies:
   -
-    name: DeleteConcurrentRateLimitAllocationPolicy
+    name: ConcurrentRateLimitAllocationPolicy
 """
         with tempfile.TemporaryDirectory() as tmpdirname:
             filename = os.path.join(tmpdirname, "file.yaml")
@@ -127,7 +127,7 @@ delete_allocation_policies:
 
             assert len(delete_policies := storage.get_delete_allocation_policies()) == 1
             assert {p.class_name() for p in delete_policies} == {
-                "DeleteConcurrentRateLimitAllocationPolicy",
+                "ConcurrentRateLimitAllocationPolicy",
             }
 
     def test_column_parser(self) -> None:
