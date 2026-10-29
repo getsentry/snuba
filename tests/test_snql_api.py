@@ -28,7 +28,7 @@ from snuba.query.validation.validators import ColumnValidationMode
 from snuba.querylog.query_metadata import QueryStatus
 from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from tests.base import BaseApiTest
-from tests.configs.component_config import set_component_config
+from tests.query.allocation_policies.attachment import override_allocation_policy
 from tests.fixtures import get_raw_event, get_raw_transaction
 from tests.helpers import override_entity_column_validator, write_unprocessed_events
 
@@ -280,19 +280,19 @@ class TestSnQLApi(BaseApiTest):
         assert response.status_code == 400, data
 
     def test_project_rate_limiting(self) -> None:
-        from snuba.query.allocation_policies.concurrent_rate_limit import (
-            ConcurrentRateLimitAllocationPolicy,
-        )
+        # Only self.project_id gets a limit of 0, so project 2 must still run.
+        blocks = [
+            {
+                "match": {},
+                "policies": [{"name": "ConcurrentRateLimitAllocationPolicy"}],
+            },
+            {
+                "match": {"project_id": [self.project_id]},
+                "policies": [{"name": "ConcurrentRateLimitAllocationPolicy", "concurrent_limit": 0}],
+            },
+        ]
 
-        policy = ConcurrentRateLimitAllocationPolicy(
-            ResourceIdentifier(StorageKey("errors")),
-        )
-        set_component_config(policy, "project_override", 0, {"project_id": self.project_id})
-
-        with patch(
-            "snuba.web.db_query._get_allocation_policies",
-            return_value=[policy],
-        ):
+        with override_allocation_policy({"errors": blocks, "errors_ro": blocks}):
             response = self.post(
                 "/events/snql",
                 data=json.dumps(

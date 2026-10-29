@@ -362,7 +362,6 @@ def test_metrics_output() -> None:
                     "can_run": True,
                     "max_threads": 10,
                     "explanation": {
-                        "overrides": {},
                         "reason": "within limit",
                         "storage_key": "EAP",
                     },
