@@ -14,7 +14,6 @@ from snuba.query.allocation_policies import (
     AllocationPolicyViolations,
     InvalidTenantsForAllocationPolicy,
     QueryResultOrError,
-    QueryType,
     QuotaAllowance,
 )
 from snuba.state.rate_limit import (
@@ -229,12 +228,3 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
         rate_limit_params = self._get_rate_limit_params(tenant_ids)
         self._end_query(query_id, rate_limit_params, result_or_error)
 
-
-class DeleteConcurrentRateLimitAllocationPolicy(ConcurrentRateLimitAllocationPolicy):
-    @property
-    def rate_limit_name(self) -> str:
-        return "delete_concurrent_rate_limit_policy"
-
-    @property
-    def query_type(self) -> QueryType:
-        return QueryType.DELETE
