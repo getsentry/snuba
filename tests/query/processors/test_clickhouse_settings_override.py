@@ -146,3 +146,57 @@ def test_ignore_clickhouse_settings_overrides() -> None:
         "max_rows_to_group_by": 1000000,
     }
     assert settings.get_clickhouse_settings() == expected
+
+
+@pytest.mark.parametrize(
+    "option_value, storage_key, expected",
+    [
+        pytest.param(
+            {"eap_items": '{"max_execution_time": 10, "max_threads": 4}'},
+            "eap_items",
+            {
+                "max_execution_time": 10,
+                "timeout_before_checking_execution_speed": 0,
+                "max_threads": 4,
+            },
+            id="option settings overwrite query and processor settings",
+        ),
+        pytest.param(
+            {"eap_items": '{"max_execution_time": 10}'},
+            "other_storage",
+            {"max_execution_time": 30, "timeout_before_checking_execution_speed": 0},
+            id="option ignored for other storage",
+        ),
+        pytest.param(
+            {"eap_items": "not json"},
+            "eap_items",
+            {"max_execution_time": 30, "timeout_before_checking_execution_speed": 0},
+            id="invalid json is ignored",
+        ),
+    ],
+)
+def test_settings_override_by_storage_option(
+    option_value: dict[str, str | int | float | bool],
+    storage_key: str,
+    expected: MutableMapping[str, Any],
+) -> None:
+    query = Query(
+        Table(
+            "eap_items",
+            ColumnSet([("timestamp", DateTime())]),
+            storage_key=StorageKey(storage_key),
+        ),
+        selected_columns=[
+            SelectedExpression(name="timestamp", expression=Column(None, None, "timestamp"))
+        ],
+    )
+    settings = HTTPQuerySettings()
+    settings.set_clickhouse_settings({"max_execution_time": 30})
+    overrides = {"max_execution_time": 25, "timeout_before_checking_execution_speed": 0}
+
+    with override_options("snuba", {"clickhouse_settings_override_by_storage": option_value}):
+        ClickhouseSettingsOverride(overrides, overwrite_existing=False).process_query(
+            query, settings
+        )
+
+    assert settings.get_clickhouse_settings() == expected

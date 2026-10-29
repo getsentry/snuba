@@ -66,7 +66,7 @@ from snuba.state.cache.redis.backend import (
 )
 from snuba.state.quota import ResourceQuota
 from snuba.state.rate_limit import RateLimitExceeded
-from snuba.state.sentry_options import get_mapped_option, get_option
+from snuba.state.sentry_options import get_mapped_json_option, get_mapped_option, get_option
 from snuba.util import force_bytes
 from snuba.utils.codecs import ExceptionAwareCodec
 from snuba.utils.metrics.timer import Timer
@@ -387,21 +387,6 @@ def _query_settings_dict(option: str) -> Mapping[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _query_settings_override(option: str, name: str) -> Mapping[str, Any]:
-    """One entry of a dict-typed sentry-option whose values are JSON-object
-    strings ({"clickhouse_setting": "value"}), keyed by ``name`` (a query
-    prefix or referrer). sentry-options can't express dict-of-dict natively, so
-    the second level is a JSON string parsed here."""
-    raw = get_mapped_option(option, name, "")
-    if not raw:
-        return {}
-    try:
-        parsed = rapidjson.loads(raw)
-    except (TypeError, ValueError):
-        return {}
-    return parsed if isinstance(parsed, dict) else {}
-
-
 def _get_query_settings_from_config(
     override_prefix: str | None,
     async_override: bool,
@@ -429,12 +414,12 @@ def _get_query_settings_from_config(
 
     if override_prefix:
         clickhouse_query_settings.update(
-            _query_settings_override("query_settings_by_prefix", override_prefix)
+            get_mapped_json_option("query_settings_by_prefix", override_prefix)
         )
 
     if referrer:
         clickhouse_query_settings.update(
-            _query_settings_override("query_settings_by_referrer", referrer)
+            get_mapped_json_option("query_settings_by_referrer", referrer)
         )
 
     return clickhouse_query_settings

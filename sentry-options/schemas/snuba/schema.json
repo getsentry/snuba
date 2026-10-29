@@ -690,6 +690,14 @@
       "default": "",
       "description": "Comma/space-delimited ClickHouse setting names to strip from a query's settings override; empty keeps all."
     },
+    "clickhouse_settings_override_by_storage": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "Dict mapping storage name to a JSON-object string of ClickHouse query settings ({\"setting\": value}) applied by that storage's ClickhouseSettingsOverride processor. These overwrite both the processor's configured settings and settings already on the query. Storages with no entry are unchanged."
+    },
     "consistent_override": {
       "type": "string",
       "default": "",
