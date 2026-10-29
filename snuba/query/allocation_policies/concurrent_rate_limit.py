@@ -45,22 +45,14 @@ KEY_BY_TENANT = "tenant"
 KEY_BY_ORGANIZATION = "organization"
 KEY_BY_ORGANIZATION_REFERRER = "organization_referrer"
 _KEY_BY_VALUES = {KEY_BY_TENANT, KEY_BY_ORGANIZATION, KEY_BY_ORGANIZATION_REFERRER}
+# Never configured in any region. Changing it would move every count to new Redis keys.
+_RATE_LIMIT_SHARD_FACTOR = 1
 SUGGESTION = "A customer is sending too many queries to snuba. The customer may be abusing an API or the queries may be innefficient"
 
 
 class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
     def _additional_config_definitions(self) -> list[Configuration]:
         return [
-            Configuration(
-                name="rate_limit_shard_factor",
-                description="""number of shards that each redis set is supposed to have.
-                 increasing this value multiplies the number of redis keys by that
-                 factor, and (on average) reduces the size of each redis set. You probably don't need to change this
-                 unless you're scaling out redis for some reason
-                 """,
-                value_type=int,
-                default=1,
-            ),
             Configuration(
                 name="max_query_duration_s",
                 description="""maximum duration of a query in seconds. Queries that exceed this duration  are considered finished by the rate limiter. This reduces memory usage. If you turn this down lower than the actual timeout period, the system can start undercounting concurrent queries""",
@@ -81,18 +73,14 @@ class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
         # configuration parameter. It's used for the per-second caclulation but that calculation
         # is fundamentally flawed
         rate_history_s = 1
-        rate_limit_shard_factor = self.get_config_value("rate_limit_shard_factor")
         assert isinstance(rate_history_s, (int, float))
-        assert isinstance(rate_limit_shard_factor, int)
         assert rate_limit_params.concurrent_limit is not None, "concurrent_limit must be set"
-
-        assert rate_limit_shard_factor > 0
 
         rate_limit_stats = rate_limit_start_request(
             rate_limit_params,
             query_id,
             rate_history_s,
-            rate_limit_shard_factor,
+            _RATE_LIMIT_SHARD_FACTOR,
             rate_limit_prefix,
             self.get_config_value("max_query_duration_s"),
         )
@@ -115,8 +103,6 @@ class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
         # removes the current query from the rate limit bookkeeping so it is no longer counted
         # in rate limits
         rate_limit_prefix = f"{self.component_name()}.rate_limit"
-        rate_limit_shard_factor = self.get_config_value("rate_limit_shard_factor")
-
         was_rate_limited = result_or_error.error is not None and isinstance(
             result_or_error.error.__cause__,
             AllocationPolicyViolations,
@@ -124,7 +110,7 @@ class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
         rate_limit_finish_request(
             rate_limit_params,
             query_id,
-            rate_limit_shard_factor,
+            _RATE_LIMIT_SHARD_FACTOR,
             was_rate_limited,
             rate_limit_prefix,
             self.get_config_value("max_query_duration_s"),
