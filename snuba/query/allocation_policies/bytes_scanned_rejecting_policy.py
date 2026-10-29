@@ -136,18 +136,6 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                 int,
                 DEFAULT_THREADS_THROTTLE_DIVIDER,
             ),
-            Configuration(
-                "limit_bytes_instead_of_rejecting",
-                "instead of rejecting a query, limit its bytes with max_bytes_to_read on clickhouse",
-                int,
-                0,
-            ),
-            Configuration(
-                "max_bytes_to_read_scan_limit_divider",
-                "if limit_bytes_instead_of_rejecting is set and the scan limit is reached, scan_limit/ max_bytes_to_read_scan_limit_divider is how many bytes each query will be capped to",
-                float,
-                1.0,
-            ),
         ]
 
     def _are_tenant_ids_valid(self, tenant_ids: dict[str, str | int]) -> tuple[bool, str]:
@@ -315,40 +303,6 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
         granted_quota = granted_quotas[0]
         used_quota = scan_limit - granted_quota.granted
         if granted_quota.granted <= 0:
-            if self.get_config_value("limit_bytes_instead_of_rejecting"):
-                max_bytes_to_read = int(
-                    scan_limit / self.get_config_value("max_bytes_to_read_scan_limit_divider")
-                )
-                explanation[
-                    "reason"
-                ] = f"""{customer_tenant_key} {customer_tenant_value} is over the bytes scanned limit of {scan_limit} for referrer {referrer}.
-                The query will be limited to {max_bytes_to_read} bytes
-                """
-                explanation["granted_quota"] = granted_quota.granted
-                explanation["limit"] = scan_limit
-                # This is technically a high cardinality tag value however these rejections
-                # should not happen often therefore it should be safe to output these rejections as metris
-
-                self.metrics.increment(
-                    "bytes_scanned_limited",
-                    tags={"tenant": f"{customer_tenant_key}__{customer_tenant_value}__{referrer}"},
-                )
-                return QuotaAllowance(
-                    can_run=True,
-                    max_threads=max(
-                        1,
-                        self.max_threads // self.get_config_value("threads_throttle_divider"),
-                    ),
-                    max_bytes_to_read=max_bytes_to_read,
-                    explanation=explanation,
-                    is_throttled=True,
-                    throttle_threshold=throttle_threshold,
-                    rejection_threshold=scan_limit,
-                    quota_used=used_quota,
-                    quota_unit=QUOTA_UNIT,
-                    suggestion=SUGGESTION,
-                )
-
             explanation[
                 "reason"
             ] = f"""{customer_tenant_key} {customer_tenant_value} is over the bytes scanned limit of {scan_limit} for referrer {referrer}.
