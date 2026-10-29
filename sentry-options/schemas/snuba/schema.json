@@ -387,6 +387,10 @@
                     "type": "integer",
                     "optional": true
                   },
+                  "key_by": {
+                    "type": "string",
+                    "optional": true
+                  },
                   "cross_org_referrer_limits": {
                     "type": "object",
                     "additionalProperties": {

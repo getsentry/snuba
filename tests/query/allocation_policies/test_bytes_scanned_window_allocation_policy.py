@@ -156,7 +156,8 @@ def test_simple_config_values(policy: AllocationPolicy) -> None:
     config_params = policy.config_definitions()
     assert set(config_params.keys()) == {
         "org_limit_bytes_scanned",
-        "org_limit_bytes_scanned_override",
+        "bytes_limit",
+        "key_by",
         "throttled_thread_number",
         "is_enforced",
         "is_pardonable",
@@ -260,3 +261,58 @@ def test_cross_org(policy: AllocationPolicy) -> None:
     # make sure that this can be called with cross org queries
     # and nothing raises
     policy.update_quota_balance(tenant_ids, QUERY_ID, None)  # type: ignore[arg-type]
+
+
+def _record(policy: AllocationPolicy, tenant_ids: dict[str, int | str], bytes_scanned: int) -> None:
+    policy.update_quota_balance(
+        tenant_ids,
+        QUERY_ID,
+        QueryResultOrError(
+            query_result=QueryResult(
+                result={"profile": {"progress_bytes": bytes_scanned}},
+                extra={"stats": {}, "sql": "", "experiments": {}},
+            ),
+            error=None,
+        ),
+    )
+
+
+@pytest.mark.redis_db
+def test_bytes_limit_replaces_org_limit() -> None:
+    policy = BytesScannedWindowAllocationPolicy(storage_key=StorageKey("errors"), bytes_limit=50)
+    _configure_policy(policy)
+    tenant_ids: dict[str, int | str] = {"organization_id": 123, "referrer": "some_referrer"}
+    _record(policy, tenant_ids, 50)
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    assert allowance.is_throttled
+    assert allowance.max_threads == THROTTLED_THREAD_NUMBER
+    assert allowance.explanation["limit"] == 50
+
+
+@pytest.mark.parametrize(
+    ("key_by", "other_referrer_throttled"),
+    [
+        pytest.param("organization", True, id="organization: referrers share a window"),
+        pytest.param("organization_referrer", False, id="organization_referrer: one per referrer"),
+        pytest.param("typo", True, id="unknown value falls back to organization"),
+    ],
+)
+@pytest.mark.redis_db
+def test_key_by(key_by: str, other_referrer_throttled: bool) -> None:
+    policy = BytesScannedWindowAllocationPolicy(storage_key=StorageKey("errors"), key_by=key_by)
+    _configure_policy(policy)
+    _record(policy, {"organization_id": 123, "referrer": "a"}, ORG_SCAN_LIMIT)
+    assert policy.get_quota_allowance(
+        {"organization_id": 123, "referrer": "a"}, QUERY_ID
+    ).is_throttled
+    other = policy.get_quota_allowance({"organization_id": 123, "referrer": "b"}, QUERY_ID)
+    assert other.is_throttled == other_referrer_throttled
+
+
+def test_default_window_key_unchanged() -> None:
+    policy = BytesScannedWindowAllocationPolicy(storage_key=StorageKey("errors"))
+    # The default must keep today's Redis key, or every running window resets.
+    assert (
+        policy._BytesScannedWindowAllocationPolicy__get_window_prefix(123, "r")  # type: ignore[attr-defined]
+        == f"{policy.component_name()}-organization_id-123"
+    )
