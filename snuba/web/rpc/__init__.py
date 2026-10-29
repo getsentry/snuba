@@ -200,6 +200,9 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                     )
                 else:
                     error = QueryTimeoutException("Query timed out, this violates the EAP SLO")
+                # Keep the ClickHouse timeout as the cause so allocation policies can
+                # tell this was a timeout and charge their timeout penalty.
+                error.__cause__ = e.__cause__
             else:
                 if (
                     "error_code" in e.extra["stats"]
