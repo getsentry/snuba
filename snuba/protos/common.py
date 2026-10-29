@@ -30,7 +30,7 @@ class MalformedAttributeException(Exception):
 class NormalizedColumn(NamedTuple):
     column_name: str
     types: Sequence[AttributeKey.Type.ValueType]
-    in_attribute_maps: bool = True
+    is_attribute_backed: bool = True
 
 
 def sentry_column(column_name: str) -> str:
@@ -53,7 +53,7 @@ NORMALIZED_COLUMNS_EAP_ITEMS: Final[Mapping[str, NormalizedColumn]] = {
     ),
     # trace_id gets converted from a uuid to a string in a storage processor
     sentry_column("trace_id"): NormalizedColumn(
-        "trace_id", [AttributeKey.Type.TYPE_STRING], in_attribute_maps=False
+        "trace_id", [AttributeKey.Type.TYPE_STRING], is_attribute_backed=False
     ),
     sentry_column("item_id"): NormalizedColumn("item_id", [AttributeKey.Type.TYPE_STRING]),
     sentry_column("sampling_weight"): NormalizedColumn(
