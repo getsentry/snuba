@@ -152,26 +152,30 @@ def test_ignore_clickhouse_settings_overrides() -> None:
     "option_value, storage_key, expected",
     [
         pytest.param(
-            {"eap_items": True},
+            {"eap_items": '{"max_execution_time": 10, "max_threads": 4}'},
             "eap_items",
-            {"max_execution_time": 25, "timeout_before_checking_execution_speed": 0},
-            id="option overwrites for matching storage",
+            {
+                "max_execution_time": 10,
+                "timeout_before_checking_execution_speed": 0,
+                "max_threads": 4,
+            },
+            id="option settings overwrite query and processor settings",
         ),
         pytest.param(
-            {"eap_items": True},
+            {"eap_items": '{"max_execution_time": 10}'},
             "other_storage",
             {"max_execution_time": 30, "timeout_before_checking_execution_speed": 0},
             id="option ignored for other storage",
         ),
         pytest.param(
-            {},
+            {"eap_items": "not json"},
             "eap_items",
             {"max_execution_time": 30, "timeout_before_checking_execution_speed": 0},
-            id="no entry falls back to the arg",
+            id="invalid json is ignored",
         ),
     ],
 )
-def test_overwrite_existing_option_by_storage(
+def test_settings_override_by_storage_option(
     option_value: dict[str, str | int | float | bool],
     storage_key: str,
     expected: MutableMapping[str, Any],
@@ -190,9 +194,7 @@ def test_overwrite_existing_option_by_storage(
     settings.set_clickhouse_settings({"max_execution_time": 30})
     overrides = {"max_execution_time": 25, "timeout_before_checking_execution_speed": 0}
 
-    with override_options(
-        "snuba", {"clickhouse_settings_override_overwrite_existing": option_value}
-    ):
+    with override_options("snuba", {"clickhouse_settings_override_by_storage": option_value}):
         ClickhouseSettingsOverride(overrides, overwrite_existing=False).process_query(
             query, settings
         )
