@@ -535,7 +535,13 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                         load_info.to_dict() if load_info is not None else {}
                     )
                 case QuotaAllowanceDecision.REJECTED:
-                    self.metrics.increment("db_request_rejected", tags={"referrer": referrer})
+                    self.metrics.increment(
+                        "db_request_rejected",
+                        tags={
+                            "referrer": referrer,
+                            "org_id": str(tenant_ids.get("organization_id", "no_org_id")),
+                        },
+                    )
                 case QuotaAllowanceDecision.THROTTLED:
                     self.metrics.increment(
                         "db_request_throttled",
