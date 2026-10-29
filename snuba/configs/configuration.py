@@ -81,6 +81,10 @@ class Configuration:
     param_types: dict[str, type] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        # YAML writes 2 for 2.0; without this a float config set to a whole number
+        # raises when the policy is built.
+        if self.value_type is float and type(self.default) is int:
+            self.default = float(self.default)
         if type(self.default) is not self.value_type:
             raise ValueError(
                 f"Config item `{self.name}` expects type {self.value_type} got value `{self.default}` of type {type(self.default)}"
