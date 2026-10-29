@@ -257,7 +257,7 @@ jobs:
             docker load --input /tmp/docker-deps/deps.tar
           fi
           images=(
-            "ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.16.10001.altinitystable"
+            "ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.33.10002.altinitystable"
             "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:6.2.0"
             "ghcr.io/getsentry/image-mirror-confluentinc-cp-zookeeper:6.2.0"
             "ghcr.io/getsentry/docker-redis-cluster:7.0.10"
@@ -329,7 +329,7 @@ jobs:
             docker load --input /tmp/docker-deps/deps.tar
           fi
           images=(
-            "ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.16.10001.altinitystable"
+            "ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.33.10002.altinitystable"
             "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:6.2.0"
             "ghcr.io/getsentry/image-mirror-confluentinc-cp-zookeeper:6.2.0"
             "ghcr.io/getsentry/docker-redis-cluster:7.0.10"
@@ -522,6 +522,7 @@ jobs:
         version:
           [
             "altinity-clickhouse-server:25.8.16.10001.altinitystable",
+            "altinity-clickhouse-server:25.8.33.10002.altinitystable",
             "altinity-clickhouse-server:26.3.33.10001.altinitystable",
             "clickhouse-clickhouse-server:26.8.10.6",
           ]
