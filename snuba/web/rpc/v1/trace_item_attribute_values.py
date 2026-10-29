@@ -70,7 +70,7 @@ def _build_conditions(request: TraceItemAttributeValuesRequest) -> Expression:
 
     conditions: list[Expression] = []
     normalized_column = NORMALIZED_COLUMNS_EAP_ITEMS.get(request.key.name)
-    if normalized_column is None or normalized_column.in_attribute_maps:
+    if getattr(normalized_column, "in_attribute_maps", True):
         # Key existence via map_key_exists (has(mapKeys(col), key)); routed to the
         # right bucket for the bucketed string/float maps and left as-is for the
         # un-bucketed bool and array maps.
