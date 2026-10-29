@@ -1,15 +1,7 @@
 from __future__ import annotations
 
 import logging
-import time
 from typing import Any, cast
-
-from sentry_redis_tools.sliding_windows_rate_limiter import (
-    GrantedQuota,
-    Quota,
-    RedisSlidingWindowRateLimiter,
-    RequestedQuota,
-)
 
 from snuba.clickhouse.error_codes import ErrorCodes
 from snuba.clickhouse.errors import ClickhouseError
@@ -19,12 +11,11 @@ from snuba.query.allocation_policies import (
     MAX_THRESHOLD,
     NO_SUGGESTION,
     PASS_THROUGH_REFERRERS_SUGGESTION,
-    AllocationPolicy,
     InvalidTenantsForAllocationPolicy,
     QueryResultOrError,
     QuotaAllowance,
 )
-from snuba.redis import RedisClientKey, get_redis_client
+from snuba.query.allocation_policies.bytes_scanned_base import BaseBytesScannedPolicy
 
 logger = logging.getLogger("snuba.query.bytes_scanned_window_policy")
 
@@ -36,7 +27,6 @@ _PASS_THROUGH_REFERRERS = {
 
 
 UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY = int(1e12)
-_RATE_LIMITER = RedisSlidingWindowRateLimiter(get_redis_client(RedisClientKey.RATE_LIMITER))
 DEFAULT_OVERRIDE_LIMIT = -1
 TERABYTE = 10**12
 DEFAULT_BYTES_SCANNED_LIMIT = int(1.28 * TERABYTE)
@@ -47,7 +37,7 @@ QUOTA_UNIT = "bytes"
 SUGGESTION = "The feature, organization/project is scanning too many bytes, this usually means they are abusing that API"
 
 
-class BytesScannedRejectingPolicy(AllocationPolicy):
+class BytesScannedRejectingPolicy(BaseBytesScannedPolicy):
     """For every query that comes in, keep track of the amount of bytes scanned for every
         (project_id|organization_id, referrer)
     combination in the last 10 minutes (sliding window). If a specific combination scans too
@@ -55,9 +45,6 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
 
     cross-project queries use the organization_id, single project queries use the project_id
     """
-
-    WINDOW_SECONDS = 10 * 60
-    WINDOW_GRANULARITY_SECONDS = 60
 
     def _additional_config_definitions(self) -> list[Configuration]:
         # Overrides are checked in order of specificity; the first one set wins.
@@ -291,30 +278,16 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
         throttle_threshold = max(
             1, int(scan_limit // self.get_config_value("bytes_throttle_divider"))
         )
-        timestamp, granted_quotas = _RATE_LIMITER.check_within_quotas(
-            [
-                RequestedQuota(
-                    self.component_name(),
-                    # request a big number because we don't know how much we actually
-                    # will use in this query. this doesn't use up any quota, we just want to know how much is left
-                    UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY,
-                    [
-                        Quota(
-                            # TODO: Make window configurable but I don't know exactly how the rate limiter
-                            # reacts to such changes
-                            window_seconds=self.WINDOW_SECONDS,
-                            granularity_seconds=self.WINDOW_GRANULARITY_SECONDS,
-                            limit=scan_limit,
-                            prefix_override=f"{self.component_name()}-{customer_tenant_key}-{customer_tenant_value}-{referrer}",
-                        )
-                    ],
-                ),
-            ]
+        # request a big number because we don't know how much we actually
+        # will use in this query. this doesn't use up any quota, we just want to know how much is left
+        granted = self._granted_bytes(
+            f"{self.component_name()}-{customer_tenant_key}-{customer_tenant_value}-{referrer}",
+            scan_limit,
+            UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY,
         )
         explanation: dict[str, Any] = {}
-        granted_quota = granted_quotas[0]
-        used_quota = scan_limit - granted_quota.granted
-        if granted_quota.granted <= 0:
+        used_quota = scan_limit - granted
+        if granted <= 0:
             if self.get_config_value("limit_bytes_instead_of_rejecting"):
                 max_bytes_to_read = int(
                     scan_limit / self.get_config_value("max_bytes_to_read_scan_limit_divider")
@@ -324,7 +297,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                 ] = f"""{customer_tenant_key} {customer_tenant_value} is over the bytes scanned limit of {scan_limit} for referrer {referrer}.
                 The query will be limited to {max_bytes_to_read} bytes
                 """
-                explanation["granted_quota"] = granted_quota.granted
+                explanation["granted_quota"] = granted
                 explanation["limit"] = scan_limit
                 # This is technically a high cardinality tag value however these rejections
                 # should not happen often therefore it should be safe to output these rejections as metris
@@ -354,7 +327,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
             ] = f"""{customer_tenant_key} {customer_tenant_value} is over the bytes scanned limit of {scan_limit} for referrer {referrer}.
                 This policy is exceeded when a customer is abusing a specific feature in a way that puts load on clickhouse. If this is happening to
                 "many customers, that may mean the feature is written in an inefficient way"""
-            explanation["granted_quota"] = granted_quota.granted
+            explanation["granted_quota"] = granted
             explanation["limit"] = scan_limit
             # This is technically a high cardinality tag value however these rejections
             # should not happen often therefore it should be safe to output these rejections as metris
@@ -376,7 +349,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
             )
 
         # this checks to see if you reached the throttle threshold
-        if granted_quota.granted < scan_limit - throttle_threshold:
+        if granted < scan_limit - throttle_threshold:
             self.metrics.increment(
                 "bytes_scanned_queries_throttled",
                 tags={"referrer": str(tenant_ids.get("referrer", "no_referrer"))},
@@ -462,29 +435,9 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
         ):
             return
         scan_limit = self.__get_scan_limit(customer_tenant_key, customer_tenant_value, referrer)
-        # we can assume that the requested quota was granted (because it was)
-        # we just need to update the quota with however many bytes were consumed
-        _RATE_LIMITER.use_quotas(
-            [
-                RequestedQuota(
-                    f"{self.component_name()}-{customer_tenant_key}-{customer_tenant_value}",
-                    bytes_scanned,
-                    [
-                        Quota(
-                            window_seconds=self.WINDOW_SECONDS,
-                            granularity_seconds=self.WINDOW_GRANULARITY_SECONDS,
-                            limit=scan_limit,
-                            prefix_override=f"{self.component_name()}-{customer_tenant_key}-{customer_tenant_value}-{referrer}",
-                        )
-                    ],
-                )
-            ],
-            grants=[
-                GrantedQuota(
-                    f"{self.component_name()}-{customer_tenant_key}-{customer_tenant_value}",
-                    granted=bytes_scanned,
-                    reached_quotas=[],
-                )
-            ],
-            timestamp=int(time.time()),
+        self._record_bytes(
+            f"{self.component_name()}-{customer_tenant_key}-{customer_tenant_value}",
+            f"{self.component_name()}-{customer_tenant_key}-{customer_tenant_value}-{referrer}",
+            scan_limit,
+            bytes_scanned,
         )
