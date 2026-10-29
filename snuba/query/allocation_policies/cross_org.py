@@ -9,14 +9,13 @@ from snuba.query.allocation_policies import (
     MAX_THRESHOLD,
     NO_SUGGESTION,
     NO_UNITS,
-    QueryResultOrError,
     QuotaAllowance,
 )
 from snuba.query.allocation_policies.concurrent_rate_limit import (
     BaseConcurrentRateLimitAllocationPolicy,
 )
 from snuba.redis import RedisClientKey, get_redis_client
-from snuba.state.rate_limit import RateLimitParameters
+from snuba.state.rate_limit import RateLimitParameters, RateLimitStats
 from snuba.utils.serializable_exception import JsonSerializable
 
 DEFAULT_CONCURRENT_QUERIES_LIMIT = 22
@@ -113,11 +112,14 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
     def _referrer_is_registered(self, referrer: str) -> bool:
         return referrer in self._registered_cross_org_referrers
 
-    def _get_quota_allowance(
-        self, tenant_ids: dict[str, str | int], query_id: str
-    ) -> QuotaAllowance:
+    def _is_out_of_scope(self, tenant_ids: dict[str, str | int]) -> bool:
         referrer = str(tenant_ids.get("referrer", "no_referrer"))
-        if not self._referrer_is_registered(referrer) and not self.is_cross_org_query(tenant_ids):
+        return not self._referrer_is_registered(referrer) and not self.is_cross_org_query(
+            tenant_ids
+        )
+
+    def _pass_through_allowance(self, tenant_ids: dict[str, str | int]) -> QuotaAllowance | None:
+        if self._is_out_of_scope(tenant_ids):
             # This is not a cross org query and the referrer is not registered. This is outside the responsibility of this policy
             return QuotaAllowance(
                 can_run=True,
@@ -130,16 +132,27 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
                 quota_unit=NO_UNITS,
                 suggestion=NO_SUGGESTION,
             )
+        return None
 
-        concurrent_limit = self._get_concurrent_limit(referrer)
-        rate_limit_params = RateLimitParameters(
-            self.rate_limit_name, referrer, None, concurrent_limit
+    def _skips_balance_update(self, tenant_ids: dict[str, str | int]) -> bool:
+        return self._is_out_of_scope(tenant_ids)
+
+    def _rate_limit_params(self, tenant_ids: dict[str, str | int]) -> RateLimitParameters:
+        referrer = str(tenant_ids.get("referrer", "no_referrer"))
+        return RateLimitParameters(
+            self.rate_limit_name, referrer, None, self._get_concurrent_limit(referrer)
         )
-        rate_limit_stats, can_run, explanation = self._is_within_rate_limit(
-            query_id,
-            rate_limit_params,
-        )
-        decision_explanation: dict[str, JsonSerializable] = {"reason": explanation}
+
+    def _allowance(
+        self,
+        tenant_ids: dict[str, str | int],
+        rate_limit_params: RateLimitParameters,
+        rate_limit_stats: RateLimitStats,
+        can_run: bool,
+        why: str,
+    ) -> QuotaAllowance:
+        referrer = str(tenant_ids.get("referrer", "no_referrer"))
+        decision_explanation: dict[str, JsonSerializable] = {"reason": why}
         if not self._referrer_is_registered(referrer):
             decision_explanation["cross_org_query"] = (
                 f"This referrer is not registered for the current storage {self._resource_identifier.value}, if you want to increase its limits, register it in the yaml of the CrossOrgQueryAllocationPolicy"
@@ -156,21 +169,3 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
             quota_unit=QUOTA_UNIT,
             suggestion=NO_SUGGESTION if can_run else SUGGESTION,
         )
-
-    def _update_quota_balance(
-        self,
-        tenant_ids: dict[str, str | int],
-        query_id: str,
-        result_or_error: QueryResultOrError,
-    ) -> None:
-        referrer = str(tenant_ids.get("referrer", "no_referrer"))
-        if not self._referrer_is_registered(referrer) and not self.is_cross_org_query(tenant_ids):
-            return
-        rate_limit_params = RateLimitParameters(
-            self.rate_limit_name,
-            referrer,
-            None,
-            # limit number does not matter for ending a query so I just picked 22
-            22,
-        )
-        self._end_query(query_id, rate_limit_params, result_or_error)
