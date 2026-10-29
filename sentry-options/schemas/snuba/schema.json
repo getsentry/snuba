@@ -390,21 +390,6 @@
                   "key_by": {
                     "type": "string",
                     "optional": true
-                  },
-                  "cross_org_referrer_limits": {
-                    "type": "object",
-                    "additionalProperties": {
-                      "type": "object",
-                      "properties": {
-                        "max_threads": {
-                          "type": "integer"
-                        },
-                        "concurrent_limit": {
-                          "type": "integer"
-                        }
-                      }
-                    },
-                    "optional": true
                   }
                 },
                 "additionalProperties": {

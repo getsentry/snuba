@@ -31,7 +31,6 @@ query_processors:
 # Dedicated org-level outcomes entity for cross-org active-org discovery. Unlike the
 # shared `outcomes` entity it intentionally has an EMPTY validators list (no
 # EntityRequiredColumnValidator for org_id), so callers can group by org_id without a
-# per-org filter. Access is governed at the storage layer by
-# CrossOrgQueryAllocationPolicy.
+# per-org filter.
 validators: []
 validate_data_model: error

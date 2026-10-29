@@ -16,11 +16,6 @@ _POLICY_SPECS: list[dict[str, object]] = [
     {"name": "BytesScannedRejectingPolicy", "is_enforced": 0},
     {"name": "BytesScannedWindowAllocationPolicy", "is_enforced": 0},
     {"name": "ConcurrentRateLimitAllocationPolicy", "is_enforced": 0},
-    {
-        "name": "CrossOrgQueryAllocationPolicy",
-        "is_enforced": 0,
-        "cross_org_referrer_limits": {"some.referrer": {"max_threads": 2, "concurrent_limit": 4}},
-    },
     {"name": "DeleteConcurrentRateLimitAllocationPolicy", "is_enforced": 0},
     {"name": "PassthroughPolicy", "is_enforced": 0},
     {"name": "ReferrerGuardRailPolicy", "is_enforced": 0},
