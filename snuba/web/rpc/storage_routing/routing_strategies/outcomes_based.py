@@ -242,8 +242,19 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         self,
         routing_decision: RoutingDecision,
     ) -> None:
+        # estimation may only downsample further: never read a tier finer than the initial one
+        routing_decision.tier = max(
+            self._estimate_tier(routing_decision),
+            self._get_initial_tier(routing_decision.routing_context),
+        )
+
+    def _estimate_tier(
+        self,
+        routing_decision: RoutingDecision,
+    ) -> Tier:
+        tier = routing_decision.tier
         if not routing_decision.can_run:
-            return
+            return tier
 
         in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
 
@@ -261,7 +272,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             standard_retention_cutoff.timestamp() > in_msg_meta.start_timestamp.seconds
             and in_msg_meta.trace_item_type not in ITEM_TYPE_FULL_RETENTION
         ):
-            routing_decision.tier = Tier.TIER_8
+            tier = Tier.TIER_8
 
         set_current_span_attributes(
             {
@@ -277,7 +288,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             # if the type is specified and we don't know its outcome, route to Tier_1
             in_msg_meta.trace_item_type not in ITEM_TYPE_TO_OUTCOME_CATEGORY
         ):
-            return
+            return tier
 
         # if we're querying a short enough timeframe, don't bother estimating, route to tier 1 and call it a day
         start_ts = in_msg_meta.start_timestamp.seconds
@@ -289,7 +300,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
                 min_timerange_to_query_outcomes
             )
             routing_decision.routing_context.extra_info["time_range_secs"] = time_range_secs
-            return
+            return tier
 
         # see how many items this combo of orgs/projects has actually ingested for the timerange,
         # downsample if it's too many
@@ -305,19 +316,20 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             ingested_items > max_items_before_downsampling
             and ingested_items <= max_items_before_downsampling * 10
         ):
-            routing_decision.tier = Tier.TIER_8
+            tier = Tier.TIER_8
         elif (
             ingested_items > max_items_before_downsampling * 10
             and ingested_items <= max_items_before_downsampling * 100
         ):
-            routing_decision.tier = Tier.TIER_64
+            tier = Tier.TIER_64
         elif ingested_items > max_items_before_downsampling * 100:
-            routing_decision.tier = Tier.TIER_512
+            tier = Tier.TIER_512
 
         set_current_span_attributes(
             {
                 "ingested_items": ingested_items,
                 "max_items_before_downsampling": max_items_before_downsampling,
-                "tier": routing_decision.tier.name,
+                "tier": tier.name,
             }
         )
+        return tier
