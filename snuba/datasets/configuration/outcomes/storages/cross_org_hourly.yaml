@@ -35,5 +35,4 @@ query_processors:
 # shared outcomes_hourly storage over the same ClickHouse tables but intentionally
 # OMITS the OrgIdEnforcer mandatory_condition_checker so a query can scan across
 # organizations. The shared `outcomes` storage keeps OrgIdEnforcer; this storage is
-# reachable only via the dedicated `outcomes_cross_org_hourly` entity and is gated by
-# CrossOrgQueryAllocationPolicy (registered referrers only).
+# reachable only via the dedicated `outcomes_cross_org_hourly` entity.
