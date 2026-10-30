@@ -1,0 +1,4 @@
+# Runtime deps installed into the Flex Template / SDK container image.
+# apache-beam itself comes from the apache/beam_python3.11_sdk:2.75.0 base image.
+apache-beam[gcp]==2.75.0
+sentry-protos==0.76.0
