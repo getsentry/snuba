@@ -3,6 +3,7 @@ import itertools
 import json
 import pickle
 from collections.abc import MutableSequence
+from concurrent.futures import Future
 from datetime import datetime
 from pathlib import Path
 from pickle import PickleBuffer
@@ -10,11 +11,13 @@ from unittest.mock import Mock, call
 
 import pytest
 from arroyo.backends.kafka import KafkaPayload
+from arroyo.backends.kafka.commit import CommitCodec
 from arroyo.types import BrokerValue, Message, Partition, Topic
 
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.consumer import (
     BytesInsertBatch,
+    CommitLogConfig,
     InsertBatchWriter,
     LatencyRecorder,
     ProcessedMessageBatchWriter,
@@ -122,6 +125,39 @@ def test_streaming_consumer_strategy(tmpdir: Path) -> None:
         strategy.join()
 
     assert health_check_file.exists()
+
+
+def test_commit_log_produced_on_close() -> None:
+    commit_log_topic = Topic("commit-log")
+    partition = Partition(Topic("events"), 0)
+
+    def close_with(future: Future[BrokerValue[KafkaPayload]]) -> Mock:
+        producer = Mock()
+        producer.produce.return_value = future
+        writer = ProcessedMessageBatchWriter(
+            insert_batch_writer=InsertBatchWriter(
+                Mock(), MetricsWrapper(TestingMetricsBackend(), "insertions")
+            ),
+            commit_log_config=CommitLogConfig(producer, commit_log_topic, "group"),
+        )
+        writer.submit(
+            Message(BrokerValue(BytesInsertBatch([b"{}"], None), partition, 5, datetime.now()))
+        )
+        writer.close()
+        return producer
+
+    delivered: Future[BrokerValue[KafkaPayload]] = Future()
+    delivered.set_result(Mock())
+    producer = close_with(delivered)
+    destination, payload = producer.produce.call_args.args
+    commit = CommitCodec().decode(payload)
+    assert destination == commit_log_topic
+    assert (commit.group, commit.partition, commit.offset) == ("group", partition, 6)
+
+    failed: Future[BrokerValue[KafkaPayload]] = Future()
+    failed.set_exception(Exception("delivery failed"))
+    with pytest.raises(Exception, match="delivery failed"):
+        close_with(failed)
 
 
 def test_json_row_batch_pickle_simple() -> None:
