@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
+from concurrent.futures import Future
 from functools import partial
 from typing import (
     Any,
 )
 
 import simplejson as json
-from confluent_kafka import KafkaError, Producer
-from confluent_kafka import Message as KafkaMessage
+from arroyo.backends.kafka import KafkaPayload, KafkaProducer
+from arroyo.types import BrokerValue
+from arroyo.types import Topic as ArroyoTopic
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
 
 from snuba import environment, settings
@@ -20,7 +22,7 @@ from snuba.utils.streams.topics import Topic
 metrics = MetricsWrapper(environment.metrics, "state")
 logger = logging.getLogger("snuba.state")
 
-kfk: Producer | None = None
+kfk: KafkaProducer | None = None
 
 ratelimit_prefix = "snuba-ratelimit:"
 
@@ -32,10 +34,10 @@ max_query_duration_s = 60
 rate_lookback_s = 60
 
 
-def _kafka_producer() -> Producer:
+def _kafka_producer() -> KafkaProducer:
     global kfk
     if kfk is None:
-        kfk = Producer(
+        kfk = KafkaProducer(
             build_kafka_producer_configuration(
                 topic=Topic.QUERYLOG,
             )
@@ -55,7 +57,8 @@ def safe_dumps_default(value: Any) -> Any:
 safe_dumps = partial(json.dumps, for_json=True, default=safe_dumps_default)
 
 
-def _record_query_delivery_callback(error: KafkaError | None, message: KafkaMessage) -> None:
+def _record_query_delivery_callback(future: Future[BrokerValue[KafkaPayload]]) -> None:
+    error = future.exception()
     metrics.increment(
         "record_query.delivery_callback",
         tags={"status": "success" if error is None else "failure"},
@@ -72,12 +75,12 @@ def record_query(query_metadata: snuba_queries_v1.Querylog) -> None:
     try:
         producer = _kafka_producer()
         data = safe_dumps(query_metadata)
-        producer.poll(0)  # trigger queued delivery callbacks
-        producer.produce(
-            settings.KAFKA_TOPIC_MAP.get(Topic.QUERYLOG.value, Topic.QUERYLOG.value),
-            data.encode("utf-8"),
-            on_delivery=_record_query_delivery_callback,
+        future = producer.produce(
+            ArroyoTopic(settings.KAFKA_TOPIC_MAP.get(Topic.QUERYLOG.value, Topic.QUERYLOG.value)),
+            KafkaPayload(None, data.encode("utf-8"), []),
         )
+        assert isinstance(future, Future)  # use_simple_futures is off
+        future.add_done_callback(_record_query_delivery_callback)
     except Exception as ex:
         logger.exception("Could not record query due to error: %r", ex)
 
@@ -85,5 +88,6 @@ def record_query(query_metadata: snuba_queries_v1.Querylog) -> None:
 def flush_producer() -> None:
     global kfk
     if kfk is not None:
-        messages_remaining = kfk.flush()
-        logger.debug(f"{messages_remaining} querylog messages pending delivery")
+        # close() waits for in-flight messages to be delivered
+        kfk.close().result()
+        kfk = None

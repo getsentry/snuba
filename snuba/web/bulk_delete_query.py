@@ -1,12 +1,12 @@
 import logging
-import time
 from collections.abc import Mapping, MutableMapping, Sequence
-from threading import Thread
+from concurrent.futures import Future
 from typing import Any, TypedDict
 
 import rapidjson
-from confluent_kafka import KafkaError, Producer
-from confluent_kafka import Message as KafkaMessage
+from arroyo.backends.kafka import KafkaPayload, KafkaProducer
+from arroyo.types import BrokerValue
+from arroyo.types import Topic as ArroyoTopic
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
 from snuba import environment, settings
@@ -61,7 +61,7 @@ class DeleteQueryMessage(TypedDict, total=False):
     attribute_conditions_item_type: TraceItemType.ValueType | None
 
 
-PRODUCER_MAP: MutableMapping[str, Producer] = {}
+PRODUCER_MAP: MutableMapping[str, KafkaProducer] = {}
 STORAGE_TOPIC: Mapping[str, Topic] = {
     StorageKey.SEARCH_ISSUES.value: Topic.LW_DELETIONS_GENERIC_EVENTS,
     # TODO: remove EAP_ITEMS once every region's consumer runs --storage eap_items_2
@@ -74,10 +74,11 @@ class InvalidStorageTopic(Exception):
     pass
 
 
-def _get_kafka_producer(topic: Topic) -> Producer:
+def _get_kafka_producer(topic: Topic) -> KafkaProducer:
+    # KafkaProducer polls in its own thread, so delivery callbacks fire without manual flushing
     producer = PRODUCER_MAP.get(topic.value)
     if not producer:
-        producer = Producer(
+        producer = KafkaProducer(
             build_kafka_producer_configuration(
                 topic=topic,
             )
@@ -86,25 +87,8 @@ def _get_kafka_producer(topic: Topic) -> Producer:
     return producer
 
 
-def flush_producers() -> None:
-    """
-    It's not guaranteed that there will be a steady stream of
-    DELETE requests so we can call producer.flush() for any active
-    producers to make sure the delivery callbacks are called.
-    """
-
-    def _flush_producers() -> None:
-        while True:
-            for storage, producer in PRODUCER_MAP.items():
-                messages_remaining = producer.flush(5.0)
-                if messages_remaining:
-                    logger.debug(f"{messages_remaining} {storage} messages pending delivery")
-            time.sleep(1)
-
-    Thread(target=_flush_producers, name="flush_producers", daemon=True).start()
-
-
-def _delete_query_delivery_callback(error: KafkaError | None, message: KafkaMessage) -> None:
+def _delete_query_delivery_callback(future: Future[BrokerValue[KafkaPayload]]) -> None:
+    error = future.exception()
     metrics.increment(
         "delete_query.delivery_callback",
         tags={"status": "failure" if error else "success"},
@@ -114,15 +98,7 @@ def _delete_query_delivery_callback(error: KafkaError | None, message: KafkaMess
         logger.warning("Could not produce delete query due to error: %r", error)
 
 
-FLUSH_PRODUCERS_THREAD_STARTED = False
-
-
 def produce_delete_query(delete_query: DeleteQueryMessage) -> None:
-    global FLUSH_PRODUCERS_THREAD_STARTED
-    if not FLUSH_PRODUCERS_THREAD_STARTED:
-        FLUSH_PRODUCERS_THREAD_STARTED = True
-        flush_producers()
-
     storage_name = delete_query["storage_name"]
     topic = STORAGE_TOPIC.get(storage_name)
     if not topic:
@@ -130,12 +106,12 @@ def produce_delete_query(delete_query: DeleteQueryMessage) -> None:
     try:
         producer = _get_kafka_producer(topic)
         data = rapidjson.dumps(delete_query).encode("utf-8")
-        producer.poll(0)  # trigger queued delivery callbacks
-        producer.produce(
-            settings.KAFKA_TOPIC_MAP.get(topic.value, topic.value),
-            data,
-            on_delivery=_delete_query_delivery_callback,
+        future = producer.produce(
+            ArroyoTopic(settings.KAFKA_TOPIC_MAP.get(topic.value, topic.value)),
+            KafkaPayload(None, data, []),
         )
+        assert isinstance(future, Future)  # use_simple_futures is off
+        future.add_done_callback(_delete_query_delivery_callback)
     except Exception as ex:
         logger.exception("Could not produce delete query due to error: %r", ex)
 
