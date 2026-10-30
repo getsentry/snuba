@@ -52,8 +52,7 @@ from snuba.utils.metrics.util import set_current_span_attributes
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import import_submodules_in_directory
 from snuba.utils.sentry import SENTRY_OP
-from snuba.web import QueryException, QueryResult
-from snuba.web.rpc.common.exceptions import RPCAllocationPolicyException
+from snuba.web import QueryResult
 from snuba.web.rpc.common.query_info import extract_query_info, extract_query_info_tags
 from snuba.web.rpc.storage_routing.common import extract_message_meta
 
@@ -625,20 +624,24 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
     def update_allocation_policies_balances(
         self, routing_decision: RoutingDecision, error: Exception | None
     ) -> None:
-        if routing_decision.routing_context.query_result is not None or isinstance(
-            error, (QueryException, RPCAllocationPolicyException)
-        ):
-            query_result_or_error = QueryResultOrError(
-                query_result=routing_decision.routing_context.query_result, error=error
+        query_result = routing_decision.routing_context.query_result
+        if query_result is None and error is None:
+            # Some endpoints never record a query result, but every request took a
+            # concurrency slot in get_quota_allowance, so the policies must still run
+            # to release it. No bytes are known, so none are charged.
+            query_result = QueryResult(
+                {"profile": {"progress_bytes": 0}},
+                {"stats": {}, "sql": "", "experiments": {}},
             )
-            for allocation_policy in self.get_allocation_policies(
-                routing_decision.routing_context.tenant_ids
-            ):
-                allocation_policy.update_quota_balance(
-                    tenant_ids=routing_decision.routing_context.tenant_ids,
-                    query_id=routing_decision.routing_context.query_id,
-                    result_or_error=query_result_or_error,
-                )
+        query_result_or_error = QueryResultOrError(query_result=query_result, error=error)
+        for allocation_policy in self.get_allocation_policies(
+            routing_decision.routing_context.tenant_ids
+        ):
+            allocation_policy.update_quota_balance(
+                tenant_ids=routing_decision.routing_context.tenant_ids,
+                query_id=routing_decision.routing_context.query_id,
+                result_or_error=query_result_or_error,
+            )
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
         pass
