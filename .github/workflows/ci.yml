@@ -389,6 +389,17 @@ jobs:
           SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=${{ matrix.snuba_settings }} docker compose -f docker-compose.gcb.yml run --rm -e SNUBA_TEST_SHARD -e SNUBA_TEST_SHARD_TOTAL snuba-test
         if: ${{ matrix.snuba_settings == 'test' || matrix.snuba_settings  == 'test_distributed' }}
 
+      # Per-test timings for refreshing tests/ci_test_durations.json
+      # (see scripts/update-test-durations.py).
+      - name: Upload JUnit report
+        if: ${{ !cancelled() && (matrix.snuba_settings == 'test' || matrix.snuba_settings == 'test_distributed') }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: junit-${{ matrix.snuba_settings }}-${{ matrix.shard || 0 }}
+          path: .artifacts/tests/${{ matrix.snuba_settings }}/pytest.junit.xml
+          if-no-files-found: ignore
+          retention-days: 30
+
       - name: Docker Snuba Migrations tests
         run: |
           SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=test docker compose -f docker-compose.gcb.yml run --rm snuba-test-migrations
@@ -527,6 +538,12 @@ jobs:
             "clickhouse-clickhouse-server:26.8.10.6",
           ]
         test_type: [snuba-test, snuba-test-migrations]
+        # The ordinary tests dominate these lanes, so split them in two
+        # (balanced by tests/ci_test_durations.json). Migrations stay whole.
+        shard: [0, 1]
+        exclude:
+          - test_type: snuba-test-migrations
+            shard: 1
 
     steps:
       - name: Checkout code
@@ -572,6 +589,9 @@ jobs:
           docker network create --attachable cloudbuild
 
       - name: Docker Snuba Test other ClickHouse versions
+        env:
+          SNUBA_TEST_SHARD: ${{ matrix.shard }}
+          SNUBA_TEST_SHARD_TOTAL: ${{ matrix.test_type == 'snuba-test' && 2 || 1 }}
         run: |
           export CLICKHOUSE_IMAGE=ghcr.io/getsentry/image-mirror-${{matrix.version}}
           SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=test docker compose -f docker-compose.gcb.yml run --rm ${{ matrix.test_type }}
