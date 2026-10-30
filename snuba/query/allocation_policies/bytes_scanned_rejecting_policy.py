@@ -1,15 +1,7 @@
 from __future__ import annotations
 
 import logging
-import time
 from typing import Any, cast
-
-from sentry_redis_tools.sliding_windows_rate_limiter import (
-    GrantedQuota,
-    Quota,
-    RedisSlidingWindowRateLimiter,
-    RequestedQuota,
-)
 
 from snuba.clickhouse.error_codes import ErrorCodes
 from snuba.clickhouse.errors import ClickhouseError
@@ -19,12 +11,11 @@ from snuba.query.allocation_policies import (
     MAX_THRESHOLD,
     NO_SUGGESTION,
     PASS_THROUGH_REFERRERS_SUGGESTION,
-    AllocationPolicy,
     InvalidTenantsForAllocationPolicy,
     QueryResultOrError,
     QuotaAllowance,
 )
-from snuba.redis import RedisClientKey, get_redis_client
+from snuba.query.allocation_policies.bytes_scanned_base import BaseBytesScannedPolicy
 
 logger = logging.getLogger("snuba.query.bytes_scanned_window_policy")
 
@@ -36,7 +27,6 @@ _PASS_THROUGH_REFERRERS = {
 
 
 UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY = int(1e12)
-_RATE_LIMITER = RedisSlidingWindowRateLimiter(get_redis_client(RedisClientKey.RATE_LIMITER))
 DEFAULT_OVERRIDE_LIMIT = -1
 TERABYTE = 10**12
 DEFAULT_BYTES_SCANNED_LIMIT = int(1.28 * TERABYTE)
@@ -44,77 +34,52 @@ DEFAULT_TIMEOUT_PENALIZATION = DEFAULT_BYTES_SCANNED_LIMIT // 40
 DEFAULT_BYTES_THROTTLE_DIVIDER = 1.5
 DEFAULT_THREADS_THROTTLE_DIVIDER = 2
 QUOTA_UNIT = "bytes"
+KEY_BY_TENANT_REFERRER = "tenant_referrer"
+KEY_BY_ORGANIZATION_REFERRER = "organization_referrer"
+KEY_BY_ORGANIZATION = "organization"
+_KEY_BY_VALUES = {KEY_BY_TENANT_REFERRER, KEY_BY_ORGANIZATION_REFERRER, KEY_BY_ORGANIZATION}
 SUGGESTION = "The feature, organization/project is scanning too many bytes, this usually means they are abusing that API"
 
 
-class BytesScannedRejectingPolicy(AllocationPolicy):
+class BytesScannedRejectingPolicy(BaseBytesScannedPolicy):
     """For every query that comes in, keep track of the amount of bytes scanned for every
         (project_id|organization_id, referrer)
     combination in the last 10 minutes (sliding window). If a specific combination scans too
     many bytes, reject that query
 
-    cross-project queries use the organization_id, single project queries use the project_id
+    cross-project queries use the organization_id, single project queries use the project_id.
+    `key_by` can count the window per (organization_id, referrer) or per organization_id instead.
     """
 
-    WINDOW_SECONDS = 10 * 60
-    WINDOW_GRANULARITY_SECONDS = 60
-
     def _additional_config_definitions(self) -> list[Configuration]:
-        # Overrides are checked in order of specificity; the first one set wins.
-        # For organization_id queries:
-        #   (organization_id, referrer) > organization_id > (all orgs, referrer) > default
         return [
             Configuration(
-                "referrer_all_projects_scan_limit_override",
-                f"Specific referrer scan limit in the last {self.WINDOW_SECONDS / 60} mins, APPLIES TO ALL PROJECTS",
+                "scan_limit",
+                f"How many bytes a tenant (see key_by) can scan in the last {self.WINDOW_SECONDS / 60} mins before queries start getting rejected. Per-tenant values go in match blocks. Unset (-1) falls back to project_referrer_scan_limit or organization_referrer_scan_limit",
                 int,
                 DEFAULT_OVERRIDE_LIMIT,
-                param_types={"referrer": str},
             ),
             Configuration(
-                "referrer_all_organizations_scan_limit_override",
-                f"Specific referrer scan limit in the last {self.WINDOW_SECONDS / 60} mins, APPLIES TO ALL ORGANIZATIONS",
-                int,
-                DEFAULT_OVERRIDE_LIMIT,
-                param_types={"referrer": str},
+                "key_by",
+                f"Which tenant the scan window counts against: {KEY_BY_TENANT_REFERRER} (project_id if present, else organization_id, plus referrer), {KEY_BY_ORGANIZATION_REFERRER} or {KEY_BY_ORGANIZATION}. Queries without an organization_id use {KEY_BY_TENANT_REFERRER}",
+                str,
+                KEY_BY_TENANT_REFERRER,
             ),
             Configuration(
-                "organization_referrer_scan_limit_override",
-                f"Specific (organization_id, referrer) scan limit in the last {self.WINDOW_SECONDS / 60} mins",
+                "max_bytes_to_read",
+                "Hard cap forwarded to clickhouse as max_bytes_to_read for org-keyed queries (no project_id). Queries it applies to run with this cap and bypass the sliding-window scan limit. Set it per org or referrer in a match block. Unset is -1",
                 int,
                 DEFAULT_OVERRIDE_LIMIT,
-                param_types={"organization_id": int, "referrer": str},
-            ),
-            Configuration(
-                "organization_scan_limit_override",
-                f"Scan limit for a specific organization_id across any referrer in the last {self.WINDOW_SECONDS / 60} mins",
-                int,
-                DEFAULT_OVERRIDE_LIMIT,
-                param_types={"organization_id": int},
-            ),
-            Configuration(
-                "organization_referrer_max_bytes_to_read",
-                "Per-(organization_id, referrer) hard cap forwarded to clickhouse as max_bytes_to_read. Queries that match are allowed to run with this cap and bypass the sliding-window scan limit",
-                int,
-                DEFAULT_OVERRIDE_LIMIT,
-                param_types={"organization_id": int, "referrer": str},
-            ),
-            Configuration(
-                "organization_max_bytes_to_read",
-                "Per-organization_id hard cap forwarded to clickhouse as max_bytes_to_read across any referrer. Queries that match are allowed to run with this cap and bypass the sliding-window scan limit",
-                int,
-                DEFAULT_OVERRIDE_LIMIT,
-                param_types={"organization_id": int},
             ),
             Configuration(
                 "project_referrer_scan_limit",
-                f"DEFAULT: how many bytes can a project scan per referrer in the last {self.WINDOW_SECONDS / 60} mins before queries start getting rejected",
+                f"Used when scan_limit is unset: how many bytes a project can scan per referrer in the last {self.WINDOW_SECONDS / 60} mins before queries start getting rejected",
                 int,
                 DEFAULT_BYTES_SCANNED_LIMIT,
             ),
             Configuration(
                 "organization_referrer_scan_limit",
-                f"DEFAULT: how many bytes can an organization scan per referrer in the last {self.WINDOW_SECONDS / 60} mins before queries start getting rejected. Cross-project queries are limited by organization_id",
+                f"Used when scan_limit is unset: how many bytes an organization can scan per referrer in the last {self.WINDOW_SECONDS / 60} mins before queries start getting rejected. Cross-project queries are limited by organization_id",
                 int,
                 DEFAULT_BYTES_SCANNED_LIMIT * 2,
             ),
@@ -135,18 +100,6 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                 "max threads divided by this number is the number of threads we use to execute queries for a throttled (project_id|organization_id, referrer)",
                 int,
                 DEFAULT_THREADS_THROTTLE_DIVIDER,
-            ),
-            Configuration(
-                "limit_bytes_instead_of_rejecting",
-                "instead of rejecting a query, limit its bytes with max_bytes_to_read on clickhouse",
-                int,
-                0,
-            ),
-            Configuration(
-                "max_bytes_to_read_scan_limit_divider",
-                "if limit_bytes_instead_of_rejecting is set and the scan limit is reached, scan_limit/ max_bytes_to_read_scan_limit_divider is how many bytes each query will be capped to",
-                float,
-                1.0,
             ),
         ]
 
@@ -171,64 +124,38 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
             "tenant_ids must include organization_id or project id",
         )
 
-    def __get_scan_limit(
-        self,
-        customer_tenant_key: str,
-        customer_tenant_value: str | int,
-        referrer: str | int,
-    ) -> int:
-        if customer_tenant_key == "project_id":
-            override = self.get_config_value(
-                "referrer_all_projects_scan_limit_override", {"referrer": referrer}
-            )
-            if override == DEFAULT_OVERRIDE_LIMIT:
-                return int(self.get_config_value("project_referrer_scan_limit"))
-            return int(override)
-        if customer_tenant_key == "organization_id":
-            org_referrer_override = self.get_config_value(
-                "organization_referrer_scan_limit_override",
-                {"organization_id": customer_tenant_value, "referrer": referrer},
-            )
-            if org_referrer_override != DEFAULT_OVERRIDE_LIMIT:
-                return int(org_referrer_override)
-            org_override = self.get_config_value(
-                "organization_scan_limit_override",
-                {"organization_id": customer_tenant_value},
-            )
-            if org_override != DEFAULT_OVERRIDE_LIMIT:
-                return int(org_override)
-            all_orgs_referrer_override = self.get_config_value(
-                "referrer_all_organizations_scan_limit_override", {"referrer": referrer}
-            )
-            if all_orgs_referrer_override != DEFAULT_OVERRIDE_LIMIT:
-                return int(all_orgs_referrer_override)
-            return int(self.get_config_value("organization_referrer_scan_limit"))
-        raise InvalidTenantsForAllocationPolicy.from_args(
-            {customer_tenant_key: customer_tenant_value, "referrer": referrer},
-            self.__class__.__name__,
-            "customer tenant key is neither project_id or organization_id, this should never happen",
-        )
+    def __get_window_tenant(
+        self, tenant_ids: dict[str, str | int], referrer: str | int
+    ) -> tuple[str, str | int, str]:
+        """The (tenant key, tenant value, window prefix) this query counts against."""
+        key_by = self.get_config_value("key_by")
+        if key_by not in _KEY_BY_VALUES:
+            logger.warning("Unknown key_by %s on %s", key_by, self.component_name())
+            key_by = KEY_BY_TENANT_REFERRER
+        if key_by != KEY_BY_TENANT_REFERRER and "organization_id" in tenant_ids:
+            tenant_key: str = "organization_id"
+            tenant_value = tenant_ids["organization_id"]
+        else:
+            tenant_key, tenant_value = self._get_customer_tenant_key_and_value(tenant_ids)
+        prefix = f"{self.component_name()}-{tenant_key}-{tenant_value}"
+        # The org-only window drops the referrer; the other two keep today's key so
+        # existing windows carry over.
+        if key_by != KEY_BY_ORGANIZATION or tenant_key != "organization_id":
+            prefix = f"{prefix}-{referrer}"
+        return tenant_key, tenant_value, prefix
 
-    def __get_organization_max_bytes_to_read(
-        self, org_id: str | int, referrer: str | int
-    ) -> int | None:
-        """Return a per-org max_bytes_to_read cap if one is configured.
+    def __get_scan_limit(self, tenant_key: str) -> int:
+        scan_limit = int(self.get_config_value("scan_limit"))
+        if scan_limit != DEFAULT_OVERRIDE_LIMIT:
+            return scan_limit
+        if tenant_key == "project_id":
+            return int(self.get_config_value("project_referrer_scan_limit"))
+        return int(self.get_config_value("organization_referrer_scan_limit"))
 
-        Precedence: (organization_id, referrer) > organization_id.
-        Returns None when no cap applies.
-        """
-        org_referrer_cap = self.get_config_value(
-            "organization_referrer_max_bytes_to_read",
-            {"organization_id": org_id, "referrer": referrer},
-        )
-        if org_referrer_cap != DEFAULT_OVERRIDE_LIMIT:
-            return int(org_referrer_cap)
-        org_cap = self.get_config_value(
-            "organization_max_bytes_to_read",
-            {"organization_id": org_id},
-        )
-        if org_cap != DEFAULT_OVERRIDE_LIMIT:
-            return int(org_cap)
+    def __get_max_bytes_to_read(self) -> int | None:
+        cap = self.get_config_value("max_bytes_to_read")
+        if cap != DEFAULT_OVERRIDE_LIMIT:
+            return int(cap)
         return None
 
     def _get_quota_allowance(
@@ -270,7 +197,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
             )
 
         if customer_tenant_key == "organization_id":
-            org_cap = self.__get_organization_max_bytes_to_read(customer_tenant_value, referrer)
+            org_cap = self.__get_max_bytes_to_read()
             if org_cap is not None:
                 return QuotaAllowance(
                     can_run=True,
@@ -287,81 +214,32 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                     suggestion=NO_SUGGESTION,
                 )
 
-        scan_limit = self.__get_scan_limit(customer_tenant_key, customer_tenant_value, referrer)
+        tenant_key, tenant_value, window_prefix = self.__get_window_tenant(tenant_ids, referrer)
+        scan_limit = self.__get_scan_limit(tenant_key)
         throttle_threshold = max(
             1, int(scan_limit // self.get_config_value("bytes_throttle_divider"))
         )
-        timestamp, granted_quotas = _RATE_LIMITER.check_within_quotas(
-            [
-                RequestedQuota(
-                    self.component_name(),
-                    # request a big number because we don't know how much we actually
-                    # will use in this query. this doesn't use up any quota, we just want to know how much is left
-                    UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY,
-                    [
-                        Quota(
-                            # TODO: Make window configurable but I don't know exactly how the rate limiter
-                            # reacts to such changes
-                            window_seconds=self.WINDOW_SECONDS,
-                            granularity_seconds=self.WINDOW_GRANULARITY_SECONDS,
-                            limit=scan_limit,
-                            prefix_override=f"{self.component_name()}-{customer_tenant_key}-{customer_tenant_value}-{referrer}",
-                        )
-                    ],
-                ),
-            ]
+        # request a big number because we don't know how much we actually
+        # will use in this query. this doesn't use up any quota, we just want to know how much is left
+        granted = self._granted_bytes(
+            window_prefix, scan_limit, UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY
         )
         explanation: dict[str, Any] = {}
-        granted_quota = granted_quotas[0]
-        used_quota = scan_limit - granted_quota.granted
-        if granted_quota.granted <= 0:
-            if self.get_config_value("limit_bytes_instead_of_rejecting"):
-                max_bytes_to_read = int(
-                    scan_limit / self.get_config_value("max_bytes_to_read_scan_limit_divider")
-                )
-                explanation[
-                    "reason"
-                ] = f"""{customer_tenant_key} {customer_tenant_value} is over the bytes scanned limit of {scan_limit} for referrer {referrer}.
-                The query will be limited to {max_bytes_to_read} bytes
-                """
-                explanation["granted_quota"] = granted_quota.granted
-                explanation["limit"] = scan_limit
-                # This is technically a high cardinality tag value however these rejections
-                # should not happen often therefore it should be safe to output these rejections as metris
-
-                self.metrics.increment(
-                    "bytes_scanned_limited",
-                    tags={"tenant": f"{customer_tenant_key}__{customer_tenant_value}__{referrer}"},
-                )
-                return QuotaAllowance(
-                    can_run=True,
-                    max_threads=max(
-                        1,
-                        self.max_threads // self.get_config_value("threads_throttle_divider"),
-                    ),
-                    max_bytes_to_read=max_bytes_to_read,
-                    explanation=explanation,
-                    is_throttled=True,
-                    throttle_threshold=throttle_threshold,
-                    rejection_threshold=scan_limit,
-                    quota_used=used_quota,
-                    quota_unit=QUOTA_UNIT,
-                    suggestion=SUGGESTION,
-                )
-
+        used_quota = scan_limit - granted
+        if granted <= 0:
             explanation[
                 "reason"
-            ] = f"""{customer_tenant_key} {customer_tenant_value} is over the bytes scanned limit of {scan_limit} for referrer {referrer}.
+            ] = f"""{tenant_key} {tenant_value} is over the bytes scanned limit of {scan_limit} for referrer {referrer}.
                 This policy is exceeded when a customer is abusing a specific feature in a way that puts load on clickhouse. If this is happening to
                 "many customers, that may mean the feature is written in an inefficient way"""
-            explanation["granted_quota"] = granted_quota.granted
+            explanation["granted_quota"] = granted
             explanation["limit"] = scan_limit
             # This is technically a high cardinality tag value however these rejections
             # should not happen often therefore it should be safe to output these rejections as metris
 
             self.metrics.increment(
                 "bytes_scanned_rejection",
-                tags={"tenant": f"{customer_tenant_key}__{customer_tenant_value}__{referrer}"},
+                tags={"tenant": f"{tenant_key}__{tenant_value}__{referrer}"},
             )
             return QuotaAllowance(
                 can_run=False,
@@ -376,7 +254,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
             )
 
         # this checks to see if you reached the throttle threshold
-        if granted_quota.granted < scan_limit - throttle_threshold:
+        if granted < scan_limit - throttle_threshold:
             self.metrics.increment(
                 "bytes_scanned_queries_throttled",
                 tags={"referrer": str(tenant_ids.get("referrer", "no_referrer"))},
@@ -455,36 +333,13 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
         # max_bytes_to_read cap skip the sliding window entirely. Recording usage here
         # would silently fill the window, so removing the cap later would reject queries
         # against quota they never actually consumed.
-        if (
-            customer_tenant_key == "organization_id"
-            and self.__get_organization_max_bytes_to_read(customer_tenant_value, referrer)
-            is not None
-        ):
+        if customer_tenant_key == "organization_id" and self.__get_max_bytes_to_read() is not None:
             return
-        scan_limit = self.__get_scan_limit(customer_tenant_key, customer_tenant_value, referrer)
-        # we can assume that the requested quota was granted (because it was)
-        # we just need to update the quota with however many bytes were consumed
-        _RATE_LIMITER.use_quotas(
-            [
-                RequestedQuota(
-                    f"{self.component_name()}-{customer_tenant_key}-{customer_tenant_value}",
-                    bytes_scanned,
-                    [
-                        Quota(
-                            window_seconds=self.WINDOW_SECONDS,
-                            granularity_seconds=self.WINDOW_GRANULARITY_SECONDS,
-                            limit=scan_limit,
-                            prefix_override=f"{self.component_name()}-{customer_tenant_key}-{customer_tenant_value}-{referrer}",
-                        )
-                    ],
-                )
-            ],
-            grants=[
-                GrantedQuota(
-                    f"{self.component_name()}-{customer_tenant_key}-{customer_tenant_value}",
-                    granted=bytes_scanned,
-                    reached_quotas=[],
-                )
-            ],
-            timestamp=int(time.time()),
+        tenant_key, tenant_value, window_prefix = self.__get_window_tenant(tenant_ids, referrer)
+        scan_limit = self.__get_scan_limit(tenant_key)
+        self._record_bytes(
+            f"{self.component_name()}-{tenant_key}-{tenant_value}",
+            window_prefix,
+            scan_limit,
+            bytes_scanned,
         )

@@ -28,7 +28,6 @@ from snuba.query.validation.validators import ColumnValidationMode
 from snuba.querylog.query_metadata import QueryStatus
 from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from tests.base import BaseApiTest
-from tests.configs.component_config import set_component_config
 from tests.fixtures import get_raw_event, get_raw_transaction
 from tests.helpers import override_entity_column_validator, write_unprocessed_events
 
@@ -285,9 +284,8 @@ class TestSnQLApi(BaseApiTest):
         )
 
         policy = ConcurrentRateLimitAllocationPolicy(
-            ResourceIdentifier(StorageKey("errors")),
+            ResourceIdentifier(StorageKey("errors")), concurrent_limit=0
         )
-        set_component_config(policy, "project_override", 0, {"project_id": self.project_id})
 
         with patch(
             "snuba.web.db_query._get_allocation_policies",

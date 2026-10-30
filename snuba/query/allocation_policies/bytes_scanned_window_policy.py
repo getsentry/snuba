@@ -1,15 +1,7 @@
 from __future__ import annotations
 
 import logging
-import time
 from typing import Any, cast
-
-from sentry_redis_tools.sliding_windows_rate_limiter import (
-    GrantedQuota,
-    Quota,
-    RedisSlidingWindowRateLimiter,
-    RequestedQuota,
-)
 
 from snuba.configs.configuration import Configuration
 from snuba.query.allocation_policies import (
@@ -18,11 +10,10 @@ from snuba.query.allocation_policies import (
     NO_SUGGESTION,
     NO_UNITS,
     PASS_THROUGH_REFERRERS_SUGGESTION,
-    AllocationPolicy,
     QueryResultOrError,
     QuotaAllowance,
 )
-from snuba.redis import RedisClientKey, get_redis_client
+from snuba.query.allocation_policies.bytes_scanned_base import BaseBytesScannedPolicy
 
 logger = logging.getLogger("snuba.query.bytes_scanned_window_policy")
 
@@ -75,31 +66,34 @@ _PASS_THROUGH_REFERRERS = {
 
 
 UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY = int(1e10)
-_RATE_LIMITER = RedisSlidingWindowRateLimiter(get_redis_client(RedisClientKey.RATE_LIMITER))
 DEFAULT_OVERRIDE_LIMIT = -1
 DEFAULT_BYTES_SCANNED_LIMIT = 10000000
 QUOTA_UNIT = "bytes"
+KEY_BY_ORGANIZATION = "organization"
+KEY_BY_ORGANIZATION_REFERRER = "organization_referrer"
 SUGGESTION = "The feature, organization/project is scanning too many bytes, this usually means they are abusing that API"
 
 
-class BytesScannedWindowAllocationPolicy(AllocationPolicy):
-    WINDOW_SECONDS = 10 * 60
-    WINDOW_GRANULARITY_SECONDS = 60
-
+class BytesScannedWindowAllocationPolicy(BaseBytesScannedPolicy):
     def _additional_config_definitions(self) -> list[Configuration]:
         return [
             Configuration(
                 name="org_limit_bytes_scanned",
-                description="Number of bytes any org can scan in a 10 minute window.",
+                description="Used when bytes_limit is unset: number of bytes any org can scan in a 10 minute window.",
                 value_type=int,
                 default=DEFAULT_BYTES_SCANNED_LIMIT,
             ),
             Configuration(
-                name="org_limit_bytes_scanned_override",
-                description="Number of bytes a specific org can scan in a 10 minute window.",
+                name="bytes_limit",
+                description="Number of bytes a tenant (see key_by) can scan in a 10 minute window. Per-org values go in match blocks. Unset (-1) falls back to org_limit_bytes_scanned.",
                 value_type=int,
                 default=DEFAULT_OVERRIDE_LIMIT,
-                param_types={"org_id": int},
+            ),
+            Configuration(
+                name="key_by",
+                description=f"Which tenant the window counts against: {KEY_BY_ORGANIZATION} (default) or {KEY_BY_ORGANIZATION_REFERRER}.",
+                value_type=str,
+                default=KEY_BY_ORGANIZATION,
             ),
             Configuration(
                 name="throttled_thread_number",
@@ -178,39 +172,26 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
                 suggestion=NO_SUGGESTION,
             )
         if org_id is not None:
-            org_limit_bytes_scanned = self.__get_org_limit_bytes_scanned(org_id)
+            org_limit_bytes_scanned = self.__get_bytes_limit()
+            window_prefix = self.__get_window_prefix(org_id, referrer)
 
-            timestamp, granted_quotas = _RATE_LIMITER.check_within_quotas(
-                [
-                    RequestedQuota(
-                        self.component_name(),
-                        # request a big number because we don't know how much we actually
-                        # will use in this query. this doesn't use up any quota, we just want to know how much is left
-                        UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY,
-                        [
-                            Quota(
-                                # TODO: Make window configurable but I don't know exactly how the rate limiter
-                                # reacts to such changes
-                                window_seconds=self.WINDOW_SECONDS,
-                                granularity_seconds=self.WINDOW_GRANULARITY_SECONDS,
-                                limit=org_limit_bytes_scanned,
-                                prefix_override=f"{self.component_name()}-organization_id-{org_id}",
-                            )
-                        ],
-                    ),
-                ]
+            # request a big number because we don't know how much we actually
+            # will use in this query. this doesn't use up any quota, we just want to know how much is left
+            granted = self._granted_bytes(
+                window_prefix,
+                org_limit_bytes_scanned,
+                UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY,
             )
             num_threads = self.max_threads
             explanation: dict[str, Any] = {}
-            granted_quota = granted_quotas[0]
             is_throttled = False
-            if granted_quota.granted <= 0:
+            if granted <= 0:
                 is_throttled = True
                 explanation["reason"] = (
                     f"organization {org_id} is over the bytes scanned limit of {org_limit_bytes_scanned}"
                 )
                 explanation["is_enforced"] = self.is_enforced
-                explanation["granted_quota"] = granted_quota.granted
+                explanation["granted_quota"] = granted
                 explanation["limit"] = org_limit_bytes_scanned
 
                 if self.is_enforced:
@@ -223,7 +204,7 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
                 is_throttled=is_throttled,
                 throttle_threshold=org_limit_bytes_scanned,
                 rejection_threshold=MAX_THRESHOLD,
-                quota_used=org_limit_bytes_scanned - granted_quota.granted,
+                quota_used=org_limit_bytes_scanned - granted,
                 quota_unit=QUOTA_UNIT,
                 suggestion=SUGGESTION,
             )
@@ -276,45 +257,28 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         if bytes_scanned == 0:
             return
         if "organization_id" in tenant_ids:
-            org_limit_bytes_scanned = self.__get_org_limit_bytes_scanned(
-                tenant_ids.get("organization_id")
+            org_limit_bytes_scanned = self.__get_bytes_limit()
+            window_prefix = self.__get_window_prefix(
+                tenant_ids["organization_id"], tenant_ids.get("referrer", "no_referrer")
             )
-            # we can assume that the requested quota was granted (because it was)
-            # we just need to update the quota with however many bytes were consumed
-            _RATE_LIMITER.use_quotas(
-                [
-                    RequestedQuota(
-                        f"{self.component_name()}-organization_id-{tenant_ids['organization_id']}",
-                        bytes_scanned,
-                        [
-                            Quota(
-                                window_seconds=self.WINDOW_SECONDS,
-                                granularity_seconds=self.WINDOW_GRANULARITY_SECONDS,
-                                limit=org_limit_bytes_scanned,
-                                prefix_override=f"{self.component_name()}-organization_id-{tenant_ids['organization_id']}",
-                            )
-                        ],
-                    )
-                ],
-                grants=[
-                    GrantedQuota(
-                        f"{self.component_name()}-organization_id-{tenant_ids['organization_id']}",
-                        granted=bytes_scanned,
-                        reached_quotas=[],
-                    )
-                ],
-                timestamp=int(time.time()),
+            self._record_bytes(
+                f"{self.component_name()}-organization_id-{tenant_ids['organization_id']}",
+                window_prefix,
+                org_limit_bytes_scanned,
+                bytes_scanned,
             )
 
-    def __get_org_limit_bytes_scanned(self, org_id: Any) -> int:
-        """
-        Checks if org specific limit exists and returns that. Returns the "all" orgs
-        bytes scanned limit if specific one DNE.
-        """
-        org_limit_bytes_scanned = self.get_config_value(
-            "org_limit_bytes_scanned_override", {"org_id": int(org_id)}
-        )
-        if org_limit_bytes_scanned == DEFAULT_OVERRIDE_LIMIT:
-            org_limit_bytes_scanned = self.get_config_value("org_limit_bytes_scanned")
+    def __get_bytes_limit(self) -> int:
+        bytes_limit = int(self.get_config_value("bytes_limit"))
+        if bytes_limit != DEFAULT_OVERRIDE_LIMIT:
+            return bytes_limit
+        return int(self.get_config_value("org_limit_bytes_scanned"))
 
-        return int(org_limit_bytes_scanned)
+    def __get_window_prefix(self, org_id: Any, referrer: Any) -> str:
+        prefix = f"{self.component_name()}-organization_id-{org_id}"
+        key_by = self.get_config_value("key_by")
+        if key_by == KEY_BY_ORGANIZATION_REFERRER:
+            return f"{prefix}-{referrer}"
+        if key_by != KEY_BY_ORGANIZATION:
+            logger.warning("Unknown key_by %s on %s", key_by, self.component_name())
+        return prefix
