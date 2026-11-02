@@ -3,6 +3,9 @@ changelog:
   policy: auto
 versioning:
   policy: calver
+preReleaseCommand: bash scripts/bump-version.sh
+postReleaseBump:
+  version: "{{version}}.dev0"
 artifactProvider:
   name: none
 statusProvider:
