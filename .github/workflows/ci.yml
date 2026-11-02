@@ -117,7 +117,7 @@ jobs:
 
   rust-linting:
     name: "Linting - Rust"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04-arm
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -176,7 +176,7 @@ jobs:
 
   snuba-image:
     name: Build snuba CI image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04-arm
     timeout-minutes: 20
     permissions:
       contents: read
@@ -203,25 +203,23 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build snuba CI image
-        env:
-          IMAGE: ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }}
-          CACHE_REF: ghcr.io/getsentry/snuba-ci:buildcache
-          # Write the cache on master only; PRs read-only, so a cache miss never costs more than baseline.
-          PUSH_CACHE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
-        run: |
-          cache_to=""
-          if [ "$PUSH_CACHE" = "true" ]; then
-            cache_to="--cache-to type=registry,ref=${CACHE_REF},mode=max,image-manifest=true,oci-mediatypes=true"
-          fi
-          docker buildx build \
-            --platform linux/amd64 \
-            --file Dockerfile \
-            --target testing \
-            --tag "$IMAGE" \
-            --cache-from "type=registry,ref=${CACHE_REF}" \
-            $cache_to \
-            --output "type=docker,dest=/tmp/snuba-ci.tar" \
-            .
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: Dockerfile
+          target: testing
+          platforms: linux/arm64
+          tags: ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }}
+          outputs: type=docker,dest=/tmp/snuba-ci.tar
+          provenance: false
+          sbom: false
+          # The registry cache is written on master only; PRs read it. The
+          # image.yml arm64 build writes the gha cache for the stages that
+          # `testing` shares with `application`, including rust_snuba.
+          cache-from: |
+            type=registry,ref=ghcr.io/getsentry/snuba-ci:buildcache-arm64
+            type=gha,scope=snuba-arm64
+          cache-to: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' && 'type=registry,ref=ghcr.io/getsentry/snuba-ci:buildcache-arm64,mode=max,image-manifest=true,oci-mediatypes=true' || '' }}
 
       - name: Publish snuba-ci image to artifacts
         # we publish to github artifacts separately so that third-party
@@ -236,7 +234,7 @@ jobs:
 
   docker-deps:
     name: Warm Docker dependency image cache
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04-arm
     timeout-minutes: 15
     steps:
       - name: Checkout code
@@ -247,8 +245,8 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
         with:
           path: /tmp/docker-deps
-          key: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-${{ github.run_id }}
-          restore-keys: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-
+          key: docker-deps-${{ runner.arch }}-${{ hashFiles('docker-compose.gcb.yml') }}-${{ github.run_id }}
+          restore-keys: docker-deps-${{ runner.arch }}-${{ hashFiles('docker-compose.gcb.yml') }}-
 
       - name: Load and pull Docker dependency images
         id: load-pull
@@ -258,8 +256,7 @@ jobs:
           fi
           images=(
             "ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.33.10002.altinitystable"
-            "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:6.2.0"
-            "ghcr.io/getsentry/image-mirror-confluentinc-cp-zookeeper:6.2.0"
+            "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:7.5.0"
             "ghcr.io/getsentry/docker-redis-cluster:7.0.10"
           )
           pulled=0
@@ -280,12 +277,12 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
         with:
           path: /tmp/docker-deps
-          key: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-${{ github.run_id }}
+          key: docker-deps-${{ runner.arch }}-${{ hashFiles('docker-compose.gcb.yml') }}-${{ github.run_id }}
 
   tests:
     needs: [linting, snuba-image, docker-deps]
     name: Tests and code coverage
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04-arm
     timeout-minutes: 40
     strategy:
       matrix:
@@ -320,8 +317,8 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
         with:
           path: /tmp/docker-deps
-          key: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-${{ github.run_id }}
-          restore-keys: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-
+          key: docker-deps-${{ runner.arch }}-${{ hashFiles('docker-compose.gcb.yml') }}-${{ github.run_id }}
+          restore-keys: docker-deps-${{ runner.arch }}-${{ hashFiles('docker-compose.gcb.yml') }}-
 
       - name: Load Docker dependency images
         run: |
@@ -330,8 +327,7 @@ jobs:
           fi
           images=(
             "ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.33.10002.altinitystable"
-            "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:6.2.0"
-            "ghcr.io/getsentry/image-mirror-confluentinc-cp-zookeeper:6.2.0"
+            "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:7.5.0"
             "ghcr.io/getsentry/docker-redis-cluster:7.0.10"
           )
           for image in "${images[@]}"; do
@@ -353,8 +349,8 @@ jobs:
         run: |
           rustc=$(docker run --rm --user root --entrypoint rustc -w /usr/src/snuba/rust_snuba \
             ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} -vV | sed -n 's/^commit-hash: //p')
-          echo "prefix=rust-test-target-${rustc}-" >> "$GITHUB_OUTPUT"
-          echo "key=rust-test-target-${rustc}-${{ hashFiles('rust_snuba/Cargo.lock') }}" >> "$GITHUB_OUTPUT"
+          echo "prefix=rust-test-target-${{ runner.arch }}-${rustc}-" >> "$GITHUB_OUTPUT"
+          echo "key=rust-test-target-${{ runner.arch }}-${rustc}-${{ hashFiles('rust_snuba/Cargo.lock') }}" >> "$GITHUB_OUTPUT"
 
       - name: Restore Rust test build cache
         id: rust-target-cache
@@ -423,7 +419,7 @@ jobs:
 
   sentry:
     needs: [snuba-image, files-changed]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04-arm
     timeout-minutes: 60
     strategy:
       matrix:
@@ -514,7 +510,7 @@ jobs:
   clickhouse-versions:
     needs: [linting, snuba-image, docker-deps]
     name: Tests on multiple clickhouse versions
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04-arm
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -547,8 +543,8 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
         with:
           path: /tmp/docker-deps
-          key: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-${{ github.run_id }}
-          restore-keys: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-
+          key: docker-deps-${{ runner.arch }}-${{ hashFiles('docker-compose.gcb.yml') }}-${{ github.run_id }}
+          restore-keys: docker-deps-${{ runner.arch }}-${{ hashFiles('docker-compose.gcb.yml') }}-
 
       - name: Load Docker dependency images
         run: |
@@ -557,8 +553,7 @@ jobs:
           fi
           images=(
             "ghcr.io/getsentry/image-mirror-${{ matrix.version }}"
-            "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:6.2.0"
-            "ghcr.io/getsentry/image-mirror-confluentinc-cp-zookeeper:6.2.0"
+            "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:7.5.0"
             "ghcr.io/getsentry/docker-redis-cluster:7.0.10"
           )
           for image in "${images[@]}"; do
@@ -595,10 +590,9 @@ jobs:
           target: application
           load: true
           tags: snuba:test
-          # The registry cache is amd64-only (the snuba-image job builds it on
-          # x64). Also read the cache image.yml writes for this architecture.
+          # snuba-image writes the registry cache; image.yml writes the gha one.
           cache-from: |
-            type=registry,ref=ghcr.io/getsentry/snuba-ci:buildcache
+            type=registry,ref=ghcr.io/getsentry/snuba-ci:buildcache-arm64
             type=gha,scope=snuba-arm64
 
       - name: Verify --help works
