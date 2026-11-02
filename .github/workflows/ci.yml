@@ -12,7 +12,7 @@ concurrency:
 jobs:
   files-changed:
     name: detect what files changed
-    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-26.04-arm' || 'ubuntu-latest' }}
+    runs-on: ubuntu-26.04-arm
     timeout-minutes: 3
     # Map a step output to a job output
     outputs:
@@ -30,7 +30,7 @@ jobs:
 
   bump-version-test:
     name: "Test bump_version.py script"
-    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-26.04-arm' || 'ubuntu-latest' }}
+    runs-on: ubuntu-26.04-arm
     timeout-minutes: 6
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -50,7 +50,7 @@ jobs:
 
   linting:
     name: "pre-commit hooks" # (includes Python formatting + linting)
-    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-26.04-arm' || 'ubuntu-latest' }}
+    runs-on: ubuntu-26.04-arm
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -146,7 +146,7 @@ jobs:
 
   config-validation:
     name: "Dataset Config Validation"
-    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-26.04-arm' || 'ubuntu-latest' }}
+    runs-on: ubuntu-26.04-arm
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -413,7 +413,7 @@ jobs:
   admin-tests:
     needs: [linting]
     name: Front end tests for snuba admin
-    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-26.04-arm' || 'ubuntu-latest' }}
+    runs-on: ubuntu-26.04-arm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         name: Checkout code
@@ -579,7 +579,7 @@ jobs:
   image-smoke-test:
     name: Image smoke test
     needs: [snuba-image]
-    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-26.04-arm' || 'ubuntu-latest' }}
+    runs-on: ubuntu-26.04-arm
     timeout-minutes: 15
     steps:
       - name: Checkout code
@@ -595,11 +595,11 @@ jobs:
           target: application
           load: true
           tags: snuba:test
-          # The registry cache is amd64-only (master writes it). Also read the
-          # per-arch cache image.yml writes, so Arm pull requests hit it too.
+          # The registry cache is amd64-only (the snuba-image job builds it on
+          # x64). Also read the cache image.yml writes for this architecture.
           cache-from: |
             type=registry,ref=ghcr.io/getsentry/snuba-ci:buildcache
-            type=gha,scope=snuba-${{ runner.arch == 'ARM64' && 'arm64' || 'amd64' }}
+            type=gha,scope=snuba-arm64
 
       - name: Verify --help works
         run: docker run --rm snuba:test --help
@@ -636,7 +636,7 @@ jobs:
           fi
 
   validate-devservices-config:
-    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-26.04-arm' || 'ubuntu-24.04' }}
+    runs-on: ubuntu-26.04-arm
     needs: files-changed
     if: ${{ needs.files-changed.outputs.devservices_changes == 'true' }}
     steps:
