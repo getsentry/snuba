@@ -15,7 +15,7 @@ concurrency:
 jobs:
   cli-version:
     name: Determine sentry-options CLI version
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-26.04-arm' || 'ubuntu-latest' }}
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:

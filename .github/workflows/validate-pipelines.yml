@@ -12,7 +12,7 @@ concurrency:
 jobs:
     files-changed:
         name: files-changed
-        runs-on: ubuntu-latest
+        runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-26.04-arm' || 'ubuntu-latest' }}
         # Map a step output to a job output
         outputs:
             gocd: ${{ steps.changes.outputs.gocd }}
@@ -31,7 +31,7 @@ jobs:
         if: needs.files-changed.outputs.gocd == 'true'
         needs: files-changed
         name: Validate GoCD Pipelines
-        runs-on: ubuntu-latest
+        runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-26.04-arm' || 'ubuntu-latest' }}
 
         # required for google auth
         permissions:
