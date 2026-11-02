@@ -35,7 +35,6 @@ _PASS_THROUGH_REFERRERS = {
 }
 
 
-UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY = int(1e12)
 _RATE_LIMITER = RedisSlidingWindowRateLimiter(get_redis_client(RedisClientKey.RATE_LIMITER))
 DEFAULT_OVERRIDE_LIMIT = -1
 TERABYTE = 10**12
@@ -295,9 +294,10 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
             [
                 RequestedQuota(
                     self.component_name(),
-                    # request a big number because we don't know how much we actually
-                    # will use in this query. this doesn't use up any quota, we just want to know how much is left
-                    UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY,
+                    # This doesn't use up any quota, we just want to know how much is left.
+                    # The rate limiter grants min(requested, remaining), so requesting less
+                    # than scan_limit makes used_quota look high and throttles every query.
+                    scan_limit,
                     [
                         Quota(
                             # TODO: Make window configurable but I don't know exactly how the rate limiter
