@@ -26,7 +26,7 @@ from snuba.datasets.table_storage import (
     KafkaStreamLoader,
     build_kafka_stream_loader_from_settings,
 )
-from snuba.query.allocation_policies import AllocationPolicy
+from snuba.query.allocation_policies import QUERY_TYPE, AllocationPolicy, QueryType
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.expressions import Column, Literal
 from snuba.replacers.replacer_processor import ReplacerProcessor
@@ -108,6 +108,7 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
                     **{
                         **policy.get("args", {}),
                         "storage_key": storage_key.value,
+                        QUERY_TYPE: QueryType.DELETE,
                     }
                 )
                 for policy in config[DELETE_ALLOCATION_POLICIES]

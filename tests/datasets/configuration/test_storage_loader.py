@@ -20,6 +20,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.datasets.configuration.storage_builder import build_storage_from_config
 from snuba.datasets.configuration.utils import parse_columns
+from snuba.query.allocation_policies import QueryType
 from snuba.utils.schemas import AggregateFunction
 from tests.datasets.configuration.utils import ConfigurationTest
 
@@ -129,6 +130,12 @@ delete_allocation_policies:
             assert {p.class_name() for p in delete_policies} == {
                 "ConcurrentRateLimitAllocationPolicy",
             }
+            assert delete_policies[0].query_type is QueryType.DELETE
+            assert (
+                delete_policies[0].component_name()
+                == "test-storage.delete.ConcurrentRateLimitAllocationPolicy"
+            )
+            assert all(p.query_type is QueryType.SELECT for p in policies)
 
     def test_column_parser(self) -> None:
         serialized_columns: list[dict[str, Any]] = [

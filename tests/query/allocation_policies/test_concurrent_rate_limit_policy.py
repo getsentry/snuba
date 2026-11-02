@@ -10,6 +10,7 @@ from snuba.query.allocation_policies import (
     AllocationPolicyViolations,
     InvalidTenantsForAllocationPolicy,
     QueryResultOrError,
+    QueryType,
 )
 from snuba.query.allocation_policies.concurrent_rate_limit import (
     ConcurrentRateLimitAllocationPolicy,
@@ -348,3 +349,27 @@ def test_bad_tenants(policy: ConcurrentRateLimitAllocationPolicy):
 
         # does not raise
         policy.update_quota_balance(bad_tenant_ids, "1234", _RESULT_SUCCESS)
+
+
+@pytest.mark.redis_db
+def test_delete_policy_counts_and_configs_apart_from_reads(
+    policy: ConcurrentRateLimitAllocationPolicy,
+) -> None:
+    delete_policy = ConcurrentRateLimitAllocationPolicy(
+        storage_key=StorageKey("test"),
+        concurrent_limit=MAX_CONCURRENT_QUERIES,
+        query_type=QueryType.DELETE,
+    )
+    assert delete_policy.component_name() == "test.delete.ConcurrentRateLimitAllocationPolicy"
+
+    for i in range(MAX_CONCURRENT_QUERIES):
+        policy.get_quota_allowance(tenant_ids={"organization_id": 123}, query_id=f"abc{i}")
+    assert not policy.get_quota_allowance(
+        tenant_ids={"organization_id": 123}, query_id="read"
+    ).can_run
+    assert delete_policy.get_quota_allowance(
+        tenant_ids={"organization_id": 123}, query_id="delete"
+    ).can_run
+
+    set_component_config(policy, "concurrent_limit", 0)
+    assert delete_policy.get_config_value("concurrent_limit") == MAX_CONCURRENT_QUERIES

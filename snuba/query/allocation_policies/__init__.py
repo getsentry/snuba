@@ -29,6 +29,7 @@ from snuba.web import QueryResult
 IS_ENFORCED = "is_enforced"
 IS_PARDONABLE = "is_pardonable"
 MAX_THREADS = "max_threads"
+QUERY_TYPE = "query_type"
 NO_UNITS = "no_units"
 NO_SUGGESTION = "no_suggestion"
 CROSS_ORG_SUGGESTION = "cross org queries do not have limits"
@@ -385,6 +386,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         **kwargs: Any,
     ) -> None:
         self._resource_identifier = storage_key
+        self._query_type = QueryType(kwargs.get(QUERY_TYPE, QueryType.SELECT))
         thresholds = kwargs.get("thresholds") or {}
         self._thresholds: dict[str, dict[str, float]] = {
             action: {k: float(v) for k, v in ceilings.items()}
@@ -618,7 +620,16 @@ class AllocationPolicy(ConfigurableComponent, ABC):
 
     @property
     def query_type(self) -> QueryType:
-        return QueryType.SELECT
+        return self._query_type
+
+    def component_name(self) -> str:
+        # Redis counters and config overrides are keyed by component_name, so a delete
+        # policy would otherwise share them with the read policy of the same class on
+        # the same storage. The query type goes before the class name so the read
+        # policy's "{storage}.{class}." override prefix doesn't match delete keys.
+        if self._query_type is QueryType.DELETE:
+            return f"{self.resource_identifier.value}.{self._query_type.value}.{self.__class__.__name__}"
+        return super().component_name()
 
     def to_dict(self) -> PolicyData:
         base_data = super().to_dict()
