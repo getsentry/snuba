@@ -83,9 +83,12 @@ def get_counted_tenant(
         logger.warning("Unknown key_by %s on %s", key_by, policy.component_name())
         key_by = default
     if key_by in _BY_ORGANIZATION and "organization_id" not in tenant_ids:
+        # Org-based counting needs an organization_id; count like the default instead.
+        # BytesScannedWindowAllocationPolicy, whose default is org-based, only calls this
+        # with an organization_id.
         key_by = default
 
-    if key_by in _BY_ORGANIZATION and "organization_id" in tenant_ids:
+    if key_by in _BY_ORGANIZATION:
         key, value = "organization_id", tenant_ids["organization_id"]
     else:
         key, value = tenant_key_and_value(tenant_ids, policy.class_name())
