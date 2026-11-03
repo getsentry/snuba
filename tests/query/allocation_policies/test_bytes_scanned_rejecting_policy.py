@@ -621,33 +621,12 @@ def _record_scan(
 
 
 @pytest.mark.redis_db
-def test_scan_limit_applies_without_override(policy: BytesScannedRejectingPolicy) -> None:
-    _configure_policy(policy)
-    set_component_config(policy, "scan_limit", 50)
-    tenant_ids: dict[str, str | int] = {"organization_id": 123, "referrer": "r"}
-    _record_scan(policy, tenant_ids, 50)
-    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
-    assert not allowance.can_run
-    assert allowance.explanation["limit"] == 50
-
-
-@pytest.mark.redis_db
-def test_override_takes_precedence_over_scan_limit(policy: BytesScannedRejectingPolicy) -> None:
-    _configure_policy(policy)
-    set_component_config(policy, "scan_limit", 50)
-    set_component_config(policy, "organization_scan_limit_override", 500, {"organization_id": 123})
-    tenant_ids: dict[str, str | int] = {"organization_id": 123, "referrer": "r"}
-    _record_scan(policy, tenant_ids, 50)
-    assert policy.get_quota_allowance(tenant_ids, QUERY_ID).can_run
-
-
-@pytest.mark.redis_db
 def test_key_by_organization_shares_one_window() -> None:
     policy = BytesScannedRejectingPolicy(
         storage_key=ResourceIdentifier(StorageKey("errors")), key_by="organization"
     )
     _configure_policy(policy)
-    set_component_config(policy, "scan_limit", 100)
+    set_component_config(policy, "organization_referrer_scan_limit", 100)
     first: dict[str, str | int] = {"organization_id": 123, "project_id": 1, "referrer": "a"}
     second: dict[str, str | int] = {"organization_id": 123, "project_id": 2, "referrer": "b"}
     _record_scan(policy, first, 100)

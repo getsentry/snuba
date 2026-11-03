@@ -157,7 +157,6 @@ def test_simple_config_values(policy: AllocationPolicy) -> None:
     assert set(config_params.keys()) == {
         "org_limit_bytes_scanned",
         "org_limit_bytes_scanned_override",
-        "bytes_limit",
         "key_by",
         "throttled_thread_number",
         "is_enforced",
@@ -278,27 +277,6 @@ def _record_bytes(
             error=None,
         ),
     )
-
-
-@pytest.mark.redis_db
-def test_bytes_limit_replaces_org_limit() -> None:
-    policy = BytesScannedWindowAllocationPolicy(storage_key=StorageKey("errors"), bytes_limit=50)
-    _configure_policy(policy)
-    tenant_ids: dict[str, int | str] = {"organization_id": 123, "referrer": "some_referrer"}
-    _record_bytes(policy, tenant_ids, 50)
-    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
-    assert allowance.is_throttled
-    assert allowance.explanation["limit"] == 50
-
-
-@pytest.mark.redis_db
-def test_org_override_takes_precedence_over_bytes_limit() -> None:
-    policy = BytesScannedWindowAllocationPolicy(storage_key=StorageKey("errors"), bytes_limit=50)
-    _configure_policy(policy)
-    set_component_config(policy, "org_limit_bytes_scanned_override", 500, {"org_id": 123})
-    tenant_ids: dict[str, int | str] = {"organization_id": 123, "referrer": "some_referrer"}
-    _record_bytes(policy, tenant_ids, 50)
-    assert not policy.get_quota_allowance(tenant_ids, QUERY_ID).is_throttled
 
 
 @pytest.mark.parametrize(

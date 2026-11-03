@@ -108,12 +108,6 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
                 default=DEFAULT_OVERRIDE_LIMIT,
                 param_types={"org_id": int},
             ),
-            Configuration(
-                name="bytes_limit",
-                description="Number of bytes a tenant (see key_by) can scan in a 10 minute window. Per-org values go in match blocks. org_limit_bytes_scanned_override takes precedence. Unset (-1) falls back to org_limit_bytes_scanned.",
-                value_type=int,
-                default=DEFAULT_OVERRIDE_LIMIT,
-            ),
             key_by_config(ORGANIZATION, _KEY_BY_CHOICES),
             Configuration(
                 name="throttled_thread_number",
@@ -328,8 +322,6 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         org_limit_bytes_scanned = self.get_config_value(
             "org_limit_bytes_scanned_override", {"org_id": int(org_id)}
         )
-        if org_limit_bytes_scanned == DEFAULT_OVERRIDE_LIMIT:
-            org_limit_bytes_scanned = self.get_config_value("bytes_limit")
         if org_limit_bytes_scanned == DEFAULT_OVERRIDE_LIMIT:
             org_limit_bytes_scanned = self.get_config_value("org_limit_bytes_scanned")
 

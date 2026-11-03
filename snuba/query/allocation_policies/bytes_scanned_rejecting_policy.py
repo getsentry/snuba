@@ -70,8 +70,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
     def _additional_config_definitions(self) -> list[Configuration]:
         # Overrides are checked in order of specificity; the first one set wins.
         # For organization_id queries:
-        #   (organization_id, referrer) > organization_id > (all orgs, referrer) > scan_limit > default
-        # For project_id queries: (all projects, referrer) > scan_limit > default
+        #   (organization_id, referrer) > organization_id > (all orgs, referrer) > default
         return [
             Configuration(
                 "referrer_all_projects_scan_limit_override",
@@ -126,12 +125,6 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                 f"DEFAULT: how many bytes can an organization scan per referrer in the last {self.WINDOW_SECONDS / 60} mins before queries start getting rejected. Cross-project queries are limited by organization_id",
                 int,
                 DEFAULT_BYTES_SCANNED_LIMIT * 2,
-            ),
-            Configuration(
-                "scan_limit",
-                f"How many bytes a tenant (see key_by) can scan in the last {self.WINDOW_SECONDS / 60} mins before queries start getting rejected. Per-tenant values go in match blocks. The *_scan_limit_override settings take precedence. Unset (-1) falls back to project_referrer_scan_limit or organization_referrer_scan_limit",
-                int,
-                DEFAULT_OVERRIDE_LIMIT,
             ),
             key_by_config(TENANT_REFERRER, _KEY_BY_CHOICES),
             Configuration(
@@ -189,7 +182,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                 "referrer_all_projects_scan_limit_override", {"referrer": referrer}
             )
             if override == DEFAULT_OVERRIDE_LIMIT:
-                return self.__get_default_scan_limit("project_referrer_scan_limit")
+                return int(self.get_config_value("project_referrer_scan_limit"))
             return int(override)
         if customer_tenant_key == "organization_id":
             org_referrer_override = self.get_config_value(
@@ -209,18 +202,12 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
             )
             if all_orgs_referrer_override != DEFAULT_OVERRIDE_LIMIT:
                 return int(all_orgs_referrer_override)
-            return self.__get_default_scan_limit("organization_referrer_scan_limit")
+            return int(self.get_config_value("organization_referrer_scan_limit"))
         raise InvalidTenantsForAllocationPolicy.from_args(
             {customer_tenant_key: customer_tenant_value, "referrer": referrer},
             self.__class__.__name__,
             "customer tenant key is neither project_id or organization_id, this should never happen",
         )
-
-    def __get_default_scan_limit(self, fallback_config: str) -> int:
-        scan_limit = int(self.get_config_value("scan_limit"))
-        if scan_limit != DEFAULT_OVERRIDE_LIMIT:
-            return scan_limit
-        return int(self.get_config_value(fallback_config))
 
     def __get_organization_max_bytes_to_read(
         self, org_id: str | int, referrer: str | int
