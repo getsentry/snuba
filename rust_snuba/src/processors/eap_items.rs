@@ -165,6 +165,7 @@ fn process_eap_item(
         TraceItemType::UserSession => "sessions",
         TraceItemType::ProcessingError => "processing_errors",
         TraceItemType::WorkflowEngineEvaluation => "workflow_engine_evaluations",
+        TraceItemType::EnrichmentAttributes => "ai_agent_monitoring",
         TraceItemType::Unspecified => "null",
     }
     .to_string();
@@ -1765,10 +1766,10 @@ mod tests {
     }
 
     #[test]
-    fn test_row_binary_cogs_data() {
+    fn test_row_binary_enrichment_attributes_cogs_data() {
         let item_id = Uuid::new_v4();
         let mut trace_item = generate_trace_item(item_id);
-        trace_item.item_type = TraceItemType::Log.into();
+        trace_item.item_type = TraceItemType::EnrichmentAttributes.into();
 
         let mut payload_bytes = Vec::new();
         trace_item.encode(&mut payload_bytes).unwrap();
@@ -1786,7 +1787,10 @@ mod tests {
 
         assert!(batch.cogs_data.is_some());
         let cogs = batch.cogs_data.unwrap();
-        assert_eq!(cogs.data.get("our_logs"), Some(&(payload_len as u64)));
+        assert_eq!(
+            cogs.data.get("ai_agent_monitoring"),
+            Some(&(payload_len as u64))
+        );
     }
 
     #[test]
