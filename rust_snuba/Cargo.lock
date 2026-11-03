@@ -1641,7 +1641,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.5.6",
+ "socket2 0.4.10",
  "tokio",
  "tower-service",
  "tracing",
@@ -3531,7 +3531,7 @@ dependencies = [
  "sentry",
  "sentry-kafka-schemas",
  "sentry-options",
- "sentry_arroyo 2.43.1",
+ "sentry_arroyo",
  "sentry_protos",
  "sentry_usage_accountant",
  "seq-macro",
@@ -3975,32 +3975,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sentry_arroyo"
-version = "2.48.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b962caedc7c28baaf90780020e464d1f2436c6c2a38008dcfd43d96536802ce"
-dependencies = [
- "async-stream",
- "chrono",
- "coarsetime",
- "futures",
- "metrics",
- "once_cell",
- "parking_lot",
- "rand 0.8.6",
- "rdkafka",
- "sentry-core",
- "serde",
- "serde_json",
- "thiserror 1.0.58",
- "tokio",
- "tokio-stream",
- "tokio-util",
- "tracing",
- "uuid",
-]
-
-[[package]]
 name = "sentry_protos"
 version = "0.80.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4019,7 +3993,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9893113dbc7d8c93b69a1f81bd707af33d7636ee8a69ee622976dc3041ff7c97"
 dependencies = [
  "chrono",
- "sentry_arroyo 2.48.0",
+ "sentry_arroyo",
  "serde",
  "serde_json",
  "thiserror 1.0.58",
@@ -4396,7 +4370,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand 2.3.0",
- "getrandom 0.4.2",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.4",
  "windows-sys 0.61.2",
