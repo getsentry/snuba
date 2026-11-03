@@ -11,7 +11,11 @@ from sentry_redis_tools.sliding_windows_rate_limiter import (
     RequestedQuota,
 )
 
-from snuba.configs.configuration import Configuration
+from snuba.configs.configuration import (
+    CONFIGURABLE_COMPONENT_OVERRIDES_KEY,
+    Configuration,
+    ResourceIdentifier,
+)
 from snuba.query.allocation_policies import (
     CROSS_ORG_SUGGESTION,
     MAX_THRESHOLD,
@@ -23,6 +27,7 @@ from snuba.query.allocation_policies import (
     QuotaAllowance,
 )
 from snuba.redis import RedisClientKey, get_redis_client
+from snuba.state.sentry_options import get_option
 
 logger = logging.getLogger("snuba.query.bytes_scanned_window_policy")
 
@@ -86,7 +91,14 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
     WINDOW_SECONDS = 10 * 60
     WINDOW_GRANULARITY_SECONDS = 60
 
+    def __init__(self, storage_key: ResourceIdentifier, **kwargs: Any) -> None:
+        super().__init__(storage_key, **kwargs)
+        # Settings passed in by an allocation_policies match block.
+        self.__configured = frozenset(kwargs)
+
     def _additional_config_definitions(self) -> list[Configuration]:
+        # org_limit_bytes_scanned_override > set org_limit_bytes_scanned > set bytes_limit
+        # > default org_limit_bytes_scanned
         return [
             Configuration(
                 name="org_limit_bytes_scanned",
@@ -100,6 +112,12 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
                 value_type=int,
                 default=DEFAULT_OVERRIDE_LIMIT,
                 param_types={"org_id": int},
+            ),
+            Configuration(
+                name="bytes_limit",
+                description="Number of bytes an org can scan in a 10 minute window. Per-org values go in match blocks. When set, it replaces the org_limit_bytes_scanned default; an explicitly set org_limit_bytes_scanned and org_limit_bytes_scanned_override take precedence.",
+                value_type=int,
+                default=DEFAULT_BYTES_SCANNED_LIMIT,
             ),
             Configuration(
                 name="throttled_thread_number",
@@ -314,7 +332,12 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         org_limit_bytes_scanned = self.get_config_value(
             "org_limit_bytes_scanned_override", {"org_id": int(org_id)}
         )
-        if org_limit_bytes_scanned == DEFAULT_OVERRIDE_LIMIT:
-            org_limit_bytes_scanned = self.get_config_value("org_limit_bytes_scanned")
+        if org_limit_bytes_scanned != DEFAULT_OVERRIDE_LIMIT:
+            return int(org_limit_bytes_scanned)
+        if not self.__is_set("org_limit_bytes_scanned") and self.__is_set("bytes_limit"):
+            return int(self.get_config_value("bytes_limit"))
+        return int(self.get_config_value("org_limit_bytes_scanned"))
 
-        return int(org_limit_bytes_scanned)
+    def __is_set(self, config: str) -> bool:
+        overrides: dict[str, Any] = get_option(CONFIGURABLE_COMPONENT_OVERRIDES_KEY, {})
+        return config in self.__configured or self._build_config_key(config, {}) in overrides

@@ -157,6 +157,7 @@ def test_simple_config_values(policy: AllocationPolicy) -> None:
     assert set(config_params.keys()) == {
         "org_limit_bytes_scanned",
         "org_limit_bytes_scanned_override",
+        "bytes_limit",
         "throttled_thread_number",
         "is_enforced",
         "is_pardonable",
@@ -260,3 +261,56 @@ def test_cross_org(policy: AllocationPolicy) -> None:
     # make sure that this can be called with cross org queries
     # and nothing raises
     policy.update_quota_balance(tenant_ids, QUERY_ID, None)  # type: ignore[arg-type]
+
+
+def _record_bytes(
+    policy: AllocationPolicy, tenant_ids: dict[str, int | str], bytes_scanned: int
+) -> None:
+    policy.update_quota_balance(
+        tenant_ids,
+        QUERY_ID,
+        QueryResultOrError(
+            query_result=QueryResult(
+                result={"profile": {"progress_bytes": bytes_scanned}},
+                extra={"stats": {}, "sql": "", "experiments": {}},
+            ),
+            error=None,
+        ),
+    )
+
+
+_TENANT_IDS: dict[str, int | str] = {"organization_id": 123, "referrer": "some_referrer"}
+
+
+@pytest.mark.redis_db
+def test_bytes_limit_replaces_default_org_limit() -> None:
+    policy = BytesScannedWindowAllocationPolicy(storage_key=StorageKey("errors"), bytes_limit=50)
+    _record_bytes(policy, _TENANT_IDS, 50)
+    allowance = policy.get_quota_allowance(_TENANT_IDS, QUERY_ID)
+    assert allowance.is_throttled
+    assert allowance.explanation["limit"] == 50
+
+
+@pytest.mark.redis_db
+def test_set_org_limit_takes_precedence_over_bytes_limit() -> None:
+    policy = BytesScannedWindowAllocationPolicy(
+        storage_key=StorageKey("errors"), bytes_limit=50, org_limit_bytes_scanned=500
+    )
+    _record_bytes(policy, _TENANT_IDS, 50)
+    assert not policy.get_quota_allowance(_TENANT_IDS, QUERY_ID).is_throttled
+
+
+@pytest.mark.redis_db
+def test_org_override_takes_precedence_over_bytes_limit() -> None:
+    policy = BytesScannedWindowAllocationPolicy(storage_key=StorageKey("errors"), bytes_limit=50)
+    set_component_config(policy, "org_limit_bytes_scanned_override", 500, {"org_id": 123})
+    _record_bytes(policy, _TENANT_IDS, 50)
+    assert not policy.get_quota_allowance(_TENANT_IDS, QUERY_ID).is_throttled
+
+
+@pytest.mark.redis_db
+def test_bytes_limit_set_by_override_key() -> None:
+    policy = BytesScannedWindowAllocationPolicy(storage_key=StorageKey("errors"))
+    set_component_config(policy, "bytes_limit", 50)
+    _record_bytes(policy, _TENANT_IDS, 50)
+    assert policy.get_quota_allowance(_TENANT_IDS, QUERY_ID).is_throttled
