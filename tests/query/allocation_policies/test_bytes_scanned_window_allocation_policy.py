@@ -313,6 +313,8 @@ def test_default_window_key_unchanged() -> None:
     policy = BytesScannedWindowAllocationPolicy(storage_key=StorageKey("errors"))
     # The default must keep today's Redis key, or every running window resets.
     assert (
-        policy._BytesScannedWindowAllocationPolicy__get_window_prefix(123, "r")  # type: ignore[attr-defined]
+        policy._BytesScannedWindowAllocationPolicy__get_window_prefix(  # type: ignore[attr-defined]
+            {"organization_id": 123, "referrer": "r"}
+        )
         == f"{policy.component_name()}-organization_id-123"
     )

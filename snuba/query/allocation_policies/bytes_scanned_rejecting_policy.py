@@ -24,6 +24,14 @@ from snuba.query.allocation_policies import (
     QueryResultOrError,
     QuotaAllowance,
 )
+from snuba.query.allocation_policies.key_by import (
+    ORGANIZATION,
+    ORGANIZATION_REFERRER,
+    TENANT_REFERRER,
+    get_counted_tenant,
+    key_by_config,
+    tenant_key_and_value,
+)
 from snuba.redis import RedisClientKey, get_redis_client
 
 logger = logging.getLogger("snuba.query.bytes_scanned_window_policy")
@@ -43,10 +51,7 @@ DEFAULT_TIMEOUT_PENALIZATION = DEFAULT_BYTES_SCANNED_LIMIT // 40
 DEFAULT_BYTES_THROTTLE_DIVIDER = 1.5
 DEFAULT_THREADS_THROTTLE_DIVIDER = 2
 QUOTA_UNIT = "bytes"
-KEY_BY_TENANT_REFERRER = "tenant_referrer"
-KEY_BY_ORGANIZATION_REFERRER = "organization_referrer"
-KEY_BY_ORGANIZATION = "organization"
-_KEY_BY_VALUES = {KEY_BY_TENANT_REFERRER, KEY_BY_ORGANIZATION_REFERRER, KEY_BY_ORGANIZATION}
+_KEY_BY_CHOICES = {TENANT_REFERRER, ORGANIZATION_REFERRER, ORGANIZATION}
 SUGGESTION = "The feature, organization/project is scanning too many bytes, this usually means they are abusing that API"
 
 
@@ -71,12 +76,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                 int,
                 DEFAULT_OVERRIDE_LIMIT,
             ),
-            Configuration(
-                "key_by",
-                f"Which tenant the scan window counts against: {KEY_BY_TENANT_REFERRER} (project_id if present, else organization_id, plus referrer), {KEY_BY_ORGANIZATION_REFERRER} or {KEY_BY_ORGANIZATION}. Queries without an organization_id use {KEY_BY_TENANT_REFERRER}",
-                str,
-                KEY_BY_TENANT_REFERRER,
-            ),
+            key_by_config(TENANT_REFERRER, _KEY_BY_CHOICES),
             Configuration(
                 "organization_referrer_max_bytes_to_read",
                 "Per-(organization_id, referrer) hard cap forwarded to clickhouse as max_bytes_to_read. Queries that match are allowed to run with this cap and bypass the sliding-window scan limit",
@@ -142,39 +142,10 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
             return False, "no referrer"
         return True, ""
 
-    def _get_customer_tenant_key_and_value(
-        self, tenant_ids: dict[str, str | int]
-    ) -> tuple[str, str | int]:
-        # TODO: fold this into the above function
-        if "project_id" in tenant_ids:
-            return "project_id", tenant_ids["project_id"]
-        if "organization_id" in tenant_ids:
-            return "organization_id", tenant_ids["organization_id"]
-        raise InvalidTenantsForAllocationPolicy.from_args(
-            tenant_ids,
-            self.__class__.__name__,
-            "tenant_ids must include organization_id or project id",
-        )
-
-    def __get_window_tenant(
-        self, tenant_ids: dict[str, str | int], referrer: str | int
-    ) -> tuple[str, str | int, str]:
+    def __get_window_tenant(self, tenant_ids: dict[str, str | int]) -> tuple[str, str | int, str]:
         """The (tenant key, tenant value, window prefix) this query counts against."""
-        key_by = self.get_config_value("key_by")
-        if key_by not in _KEY_BY_VALUES:
-            logger.warning("Unknown key_by %s on %s", key_by, self.component_name())
-            key_by = KEY_BY_TENANT_REFERRER
-        if key_by != KEY_BY_TENANT_REFERRER and "organization_id" in tenant_ids:
-            tenant_key: str = "organization_id"
-            tenant_value = tenant_ids["organization_id"]
-        else:
-            tenant_key, tenant_value = self._get_customer_tenant_key_and_value(tenant_ids)
-        prefix = f"{self.component_name()}-{tenant_key}-{tenant_value}"
-        # The org-only window drops the referrer; the other two keep today's key so
-        # existing windows carry over.
-        if key_by != KEY_BY_ORGANIZATION or tenant_key != "organization_id":
-            prefix = f"{prefix}-{referrer}"
-        return tenant_key, tenant_value, prefix
+        tenant = get_counted_tenant(self, tenant_ids, TENANT_REFERRER, _KEY_BY_CHOICES)
+        return tenant.key, tenant.value, tenant.window_prefix(self.component_name())
 
     def __get_scan_limit(self, tenant_key: str) -> int:
         scan_limit = int(self.get_config_value("scan_limit"))
@@ -229,7 +200,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
         (
             customer_tenant_key,
             customer_tenant_value,
-        ) = self._get_customer_tenant_key_and_value(tenant_ids)
+        ) = tenant_key_and_value(tenant_ids, self.class_name())
         referrer = tenant_ids.get("referrer", "no_referrer")
         if referrer in _PASS_THROUGH_REFERRERS:
             return QuotaAllowance(
@@ -262,7 +233,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                     suggestion=NO_SUGGESTION,
                 )
 
-        tenant_key, tenant_value, window_prefix = self.__get_window_tenant(tenant_ids, referrer)
+        tenant_key, tenant_value, window_prefix = self.__get_window_tenant(tenant_ids)
         scan_limit = self.__get_scan_limit(tenant_key)
         throttle_threshold = max(
             1, int(scan_limit // self.get_config_value("bytes_throttle_divider"))
@@ -427,7 +398,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
         (
             customer_tenant_key,
             customer_tenant_value,
-        ) = self._get_customer_tenant_key_and_value(tenant_ids)
+        ) = tenant_key_and_value(tenant_ids, self.class_name())
         # Mirror the bypass in _get_quota_allowance: org-keyed queries running under a
         # max_bytes_to_read cap skip the sliding window entirely. Recording usage here
         # would silently fill the window, so removing the cap later would reject queries
@@ -438,7 +409,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
             is not None
         ):
             return
-        tenant_key, tenant_value, window_prefix = self.__get_window_tenant(tenant_ids, referrer)
+        tenant_key, tenant_value, window_prefix = self.__get_window_tenant(tenant_ids)
         scan_limit = self.__get_scan_limit(tenant_key)
         # we can assume that the requested quota was granted (because it was)
         # we just need to update the quota with however many bytes were consumed

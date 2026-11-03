@@ -240,7 +240,7 @@ def test_key_by_window(
         storage_key=ResourceIdentifier(StorageKey("errors")), key_by=key_by
     )
     tenant_key, tenant_value, prefix = policy._BytesScannedRejectingPolicy__get_window_tenant(  # type: ignore[attr-defined]
-        tenant_ids, tenant_ids["referrer"]
+        tenant_ids
     )
     # The default must keep today's Redis key, or every running window resets.
     assert (tenant_key, tenant_value, prefix) == (

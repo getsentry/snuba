@@ -22,6 +22,12 @@ from snuba.query.allocation_policies import (
     QueryResultOrError,
     QuotaAllowance,
 )
+from snuba.query.allocation_policies.key_by import (
+    ORGANIZATION,
+    ORGANIZATION_REFERRER,
+    get_counted_tenant,
+    key_by_config,
+)
 from snuba.redis import RedisClientKey, get_redis_client
 
 logger = logging.getLogger("snuba.query.bytes_scanned_window_policy")
@@ -79,8 +85,7 @@ _RATE_LIMITER = RedisSlidingWindowRateLimiter(get_redis_client(RedisClientKey.RA
 DEFAULT_OVERRIDE_LIMIT = -1
 DEFAULT_BYTES_SCANNED_LIMIT = 10000000
 QUOTA_UNIT = "bytes"
-KEY_BY_ORGANIZATION = "organization"
-KEY_BY_ORGANIZATION_REFERRER = "organization_referrer"
+_KEY_BY_CHOICES = {ORGANIZATION, ORGANIZATION_REFERRER}
 SUGGESTION = "The feature, organization/project is scanning too many bytes, this usually means they are abusing that API"
 
 
@@ -102,12 +107,7 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
                 value_type=int,
                 default=DEFAULT_OVERRIDE_LIMIT,
             ),
-            Configuration(
-                name="key_by",
-                description=f"Which tenant the window counts against: {KEY_BY_ORGANIZATION} (default) or {KEY_BY_ORGANIZATION_REFERRER}.",
-                value_type=str,
-                default=KEY_BY_ORGANIZATION,
-            ),
+            key_by_config(ORGANIZATION, _KEY_BY_CHOICES),
             Configuration(
                 name="throttled_thread_number",
                 description="Number of threads any throttled query gets assigned.",
@@ -186,7 +186,7 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
             )
         if org_id is not None:
             org_limit_bytes_scanned = self.__get_bytes_limit()
-            window_prefix = self.__get_window_prefix(org_id, referrer)
+            window_prefix = self.__get_window_prefix(tenant_ids)
 
             timestamp, granted_quotas = _RATE_LIMITER.check_within_quotas(
                 [
@@ -285,9 +285,7 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
             return
         if "organization_id" in tenant_ids:
             org_limit_bytes_scanned = self.__get_bytes_limit()
-            window_prefix = self.__get_window_prefix(
-                tenant_ids["organization_id"], tenant_ids.get("referrer", "no_referrer")
-            )
+            window_prefix = self.__get_window_prefix(tenant_ids)
             # we can assume that the requested quota was granted (because it was)
             # we just need to update the quota with however many bytes were consumed
             _RATE_LIMITER.use_quotas(
@@ -321,11 +319,6 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
             return bytes_limit
         return int(self.get_config_value("org_limit_bytes_scanned"))
 
-    def __get_window_prefix(self, org_id: Any, referrer: Any) -> str:
-        prefix = f"{self.component_name()}-organization_id-{org_id}"
-        key_by = self.get_config_value("key_by")
-        if key_by == KEY_BY_ORGANIZATION_REFERRER:
-            return f"{prefix}-{referrer}"
-        if key_by != KEY_BY_ORGANIZATION:
-            logger.warning("Unknown key_by %s on %s", key_by, self.component_name())
-        return prefix
+    def __get_window_prefix(self, tenant_ids: dict[str, str | int]) -> str:
+        tenant = get_counted_tenant(self, tenant_ids, ORGANIZATION, _KEY_BY_CHOICES)
+        return tenant.window_prefix(self.component_name())

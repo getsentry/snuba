@@ -9,7 +9,6 @@ from snuba.configs.configuration import ResourceIdentifier
 from snuba.datasets.storage import StorageKey
 from snuba.query.allocation_policies import (
     AllocationPolicyViolations,
-    InvalidTenantsForAllocationPolicy,
     QueryResultOrError,
 )
 from snuba.query.allocation_policies.concurrent_rate_limit import (
@@ -149,17 +148,6 @@ def test_update_quota_balance(policy: ConcurrentRateLimitAllocationPolicy) -> No
         assert policy.get_quota_allowance(
             tenant_ids={"organization_id": 123}, query_id=f"abc{i}"
         ).can_run
-
-
-def test_tenant_selection(policy: ConcurrentRateLimitAllocationPolicy):
-    tenant_ids: dict[str, int | str] = {"organization_id": 123, "project_id": 456}
-    assert policy._get_tenant_key_and_value(tenant_ids) == ("project_id", 456)
-    assert policy._get_tenant_key_and_value({"organization_id": 123}) == (
-        "organization_id",
-        123,
-    )
-    with pytest.raises(InvalidTenantsForAllocationPolicy):
-        policy._get_tenant_key_and_value({})
 
 
 @pytest.mark.parametrize(
