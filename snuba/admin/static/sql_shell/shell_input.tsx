@@ -1,6 +1,7 @@
 import React, { useLayoutEffect, useMemo, useRef, useEffect } from "react";
 import { EditorState, Compartment } from "@codemirror/state";
 import { EditorView, keymap, placeholder as cmPlaceholder } from "@codemirror/view";
+import { history, historyKeymap, isolateHistory } from "@codemirror/commands";
 import { sql } from "@codemirror/lang-sql";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
@@ -257,6 +258,8 @@ export function ShellInput({
 
   const extensions = useMemo(() => [
     customKeymap,
+    history(),
+    keymap.of(historyKeymap),
     updateListener,
     shellTheme,
     shellHighlighting,
@@ -303,6 +306,7 @@ export function ShellInput({
       view.dispatch({
         changes: { from: 0, to: currentValue.length, insert: value },
         selection: { anchor: value.length },
+        annotations: isolateHistory.of("full"),
       });
     }
   }, [value]);

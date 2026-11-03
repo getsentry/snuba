@@ -36,11 +36,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         name: Checkout code
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
-
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           enable-cache: false
 
@@ -67,11 +63,7 @@ jobs:
           client-id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
           private-key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
-
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           # we just cache the venv-dir directly in action-setup-venv
           enable-cache: false
@@ -81,7 +73,8 @@ jobs:
 
           cache-dependency-path: uv.lock
           # NOTE: can't pass --only-dev yet since we're missing some mypy stub packages
-          install-cmd: uv sync --frozen --active
+          # rust_snuba is skipped: none of the hooks import the compiled extension.
+          install-cmd: uv sync --frozen --active --no-install-package rust-snuba
 
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
         with:
@@ -130,17 +123,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         name: Checkout code
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
-
-      - name: Install protoc
-        uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
       # The runner's system Python can be newer than PyO3 supports.
-      - uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c # v5.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version-file: .python-version
 
@@ -148,6 +132,13 @@ jobs:
         run: |
           rustup toolchain install stable --profile minimal --no-self-update
           rustup component add clippy rustfmt --toolchain stable
+
+      # Keyed on the resolved rustc version and Cargo.lock. Only master saves,
+      # so PRs reuse master's dependency builds without churning the cache.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: rust_snuba
+          save-if: ${{ github.ref == 'refs/heads/master' }}
 
       - name: Run linter
         run: |
@@ -161,11 +152,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         name: Checkout code
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
-
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           # we just cache the venv-dir directly in action-setup-venv
           enable-cache: false
@@ -174,9 +161,16 @@ jobs:
         with:
 
           cache-dependency-path: uv.lock
-          install-cmd: uv sync --frozen --active
+          # The validator only needs snuba's Python deps, not the rust_snuba extension.
+          install-cmd: uv sync --frozen --active --no-default-groups --no-install-package rust-snuba
 
       - name: Validate configs
+        env:
+          # Schema validation only runs when VALIDATE_DATASET_YAMLS_ON_STARTUP is
+          # set, which the test settings do (same as the pre-commit hook).
+          SNUBA_SETTINGS: test
+          # Use the venv prepared above; a sync here would build rust_snuba.
+          UV_NO_SYNC: "1"
         run: |
           make validate-configs
 
@@ -263,7 +257,7 @@ jobs:
             docker load --input /tmp/docker-deps/deps.tar
           fi
           images=(
-            "ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.16.10001.altinitystable"
+            "ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.33.10002.altinitystable"
             "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:6.2.0"
             "ghcr.io/getsentry/image-mirror-confluentinc-cp-zookeeper:6.2.0"
             "ghcr.io/getsentry/docker-redis-cluster:7.0.10"
@@ -335,7 +329,7 @@ jobs:
             docker load --input /tmp/docker-deps/deps.tar
           fi
           images=(
-            "ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.16.10001.altinitystable"
+            "ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.33.10002.altinitystable"
             "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:6.2.0"
             "ghcr.io/getsentry/image-mirror-confluentinc-cp-zookeeper:6.2.0"
             "ghcr.io/getsentry/docker-redis-cluster:7.0.10"
@@ -350,10 +344,42 @@ jobs:
         run: |
           docker network create --attachable cloudbuild
 
+      # The CI image only ships the release build, so `cargo test` has to
+      # compile the test profile. Cache its target dir (outside the image, so
+      # the other test jobs don't download it), keyed on the image's rustc.
+      - name: Compute Rust test build cache key
+        id: rust-target-key
+        if: ${{ matrix.snuba_settings == 'test_rust' }}
+        run: |
+          rustc=$(docker run --rm --user root --entrypoint rustc -w /usr/src/snuba/rust_snuba \
+            ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} -vV | sed -n 's/^commit-hash: //p')
+          echo "prefix=rust-test-target-${rustc}-" >> "$GITHUB_OUTPUT"
+          echo "key=rust-test-target-${rustc}-${{ hashFiles('rust_snuba/Cargo.lock') }}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Rust test build cache
+        id: rust-target-cache
+        if: ${{ matrix.snuba_settings == 'test_rust' }}
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
+        with:
+          path: .rust-target
+          key: ${{ steps.rust-target-key.outputs.key }}
+          restore-keys: ${{ steps.rust-target-key.outputs.prefix }}
+
       - name: Docker Snuba Rust tests
         run: |
-          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=test docker compose -f docker-compose.gcb.yml run --rm snuba-test-rust
+          mkdir -p .rust-target
+          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=test docker compose -f docker-compose.gcb.yml run --rm \
+            -e CARGO_INCREMENTAL=0 \
+            -v "$PWD/.rust-target:/usr/src/snuba/rust_snuba/target" \
+            snuba-test-rust
         if: ${{ matrix.snuba_settings == 'test_rust' }}
+
+      - name: Save Rust test build cache
+        if: ${{ matrix.snuba_settings == 'test_rust' && github.ref == 'refs/heads/master' && steps.rust-target-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
+        with:
+          path: .rust-target
+          key: ${{ steps.rust-target-key.outputs.key }}
 
       - name: Docker Snuba tests
         env:
@@ -496,8 +522,9 @@ jobs:
         version:
           [
             "altinity-clickhouse-server:25.8.16.10001.altinitystable",
+            "altinity-clickhouse-server:25.8.33.10002.altinitystable",
             "altinity-clickhouse-server:26.3.33.10001.altinitystable",
-            "clickhouse-clickhouse-server:26.8.10.6",
+            "clickhouse-clickhouse-server:26.8.36.3",
           ]
         test_type: [snuba-test, snuba-test-migrations]
 

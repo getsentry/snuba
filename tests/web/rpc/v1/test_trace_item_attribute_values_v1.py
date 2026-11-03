@@ -1,3 +1,4 @@
+import uuid
 from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -287,6 +288,33 @@ class TestTraceItemAttributes(BaseApiTest):
             (AttributeValue(val_str=item_id), 1)
         ]
         assert not res.value_data[0].HasField("last_seen")
+
+    def test_trace_id_values(self) -> None:
+        trace_id = uuid.uuid4().hex
+        other_trace_id = uuid.uuid4().hex
+        items_storage = get_writable_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            items_storage,
+            [
+                gen_item_message(start_timestamp=BASE_TIME, trace_id=t)
+                for t in (trace_id, trace_id, other_trace_id)
+            ],
+        )
+        key = AttributeKey(name="sentry.trace_id", type=AttributeKey.TYPE_STRING)
+
+        response = AttributeValuesRequest().execute(
+            TraceItemAttributeValuesRequest(meta=COMMON_META, limit=1, key=key)
+        )
+        assert response.values == [trace_id]
+        assert response.counts == [2]
+
+        response = AttributeValuesRequest().execute(
+            TraceItemAttributeValuesRequest(
+                meta=COMMON_META, limit=10, key=key, value_substring_match=other_trace_id[:8]
+            )
+        )
+        assert response.values == [other_trace_id]
+        assert response.counts == [1]
 
     def test_deprecated_alias_attribute(self) -> None:
         """db.system.name request returns values stored only under deprecated key db.system."""

@@ -123,6 +123,9 @@ function QueryEditor(props: {
   const [queryTemplate, setQueryTemplate] = useLocalStorage<string>({
     key: `${hash}-query-editor-query`,
     defaultValue: "",
+    // Read the saved query on the first render rather than in an effect, so
+    // the editor starts with it instead of receiving it as an undoable change
+    getInitialValueInEffect: false,
   });
 
   const [queryParamValues, setQueryParamValues] = useState<QueryParamValues>(

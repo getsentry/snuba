@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Mutex;
 
 use futures::stream::BoxStream;
@@ -25,7 +26,8 @@ impl VecSource {
                     offset: i as u64,
                     timestamp: chrono::Utc::now(),
                 };
-                StageResult::Emit(PipelineEnvelope::new(kp.clone(), md, kp))
+                let offsets = HashMap::from([(md.partition, md.offset)]);
+                StageResult::Emit(PipelineEnvelope::new(kp.clone(), md, kp, offsets))
             })
             .collect();
 

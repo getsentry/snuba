@@ -1,4 +1,6 @@
-use sentry_arroyo::processing::stream::{MessageMetadata, PipelineEnvelope, StreamCollector};
+use sentry_arroyo::processing::stream::{
+    BoxError, MessageMetadata, PipelineEnvelope, PipelineExit, StreamCollector,
+};
 
 use crate::pull::batch::batch_metadata::BatchMetadata;
 
@@ -23,6 +25,18 @@ impl StreamCollector<BatchMetadata> for TestCollector {
     fn on_drop(&mut self, _metadata: &MessageMetadata) {}
 
     fn on_reject(&mut self, _metadata: &MessageMetadata) {}
+
+    fn on_fail(&mut self, _error: &BoxError) -> Result<(), BoxError> {
+        Ok(())
+    }
+
+    fn on_exit(&mut self, _reason: PipelineExit) -> Result<(), BoxError> {
+        Ok(())
+    }
+
+    fn after_each(&mut self) -> Result<(), BoxError> {
+        Ok(())
+    }
 
     fn on_complete(&mut self) -> Result<(), Box<dyn std::error::Error + Send>> {
         Ok(())
