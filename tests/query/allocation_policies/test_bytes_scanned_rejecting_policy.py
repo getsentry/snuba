@@ -696,3 +696,18 @@ def test_built_in_defaults_unchanged(
 ) -> None:
     _configure_without_default_limits(policy)
     assert policy.get_quota_allowance(tenant_ids, QUERY_ID).rejection_threshold == limit
+
+
+@pytest.mark.redis_db
+def test_match_block_values_follow_the_same_precedence() -> None:
+    tenant_ids: dict[str, str | int] = {"organization_id": 123, "project_id": 1, "referrer": "r"}
+    scan_only = BytesScannedRejectingPolicy(
+        storage_key=ResourceIdentifier(StorageKey("errors")), scan_limit=50
+    )
+    assert scan_only.get_quota_allowance(tenant_ids, QUERY_ID).rejection_threshold == 50
+    both = BytesScannedRejectingPolicy(
+        storage_key=ResourceIdentifier(StorageKey("errors")),
+        scan_limit=50,
+        project_referrer_scan_limit=500,
+    )
+    assert both.get_quota_allowance(tenant_ids, QUERY_ID).rejection_threshold == 500

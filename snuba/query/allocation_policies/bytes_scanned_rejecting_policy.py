@@ -13,7 +13,11 @@ from sentry_redis_tools.sliding_windows_rate_limiter import (
 
 from snuba.clickhouse.error_codes import ErrorCodes
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.configs.configuration import Configuration
+from snuba.configs.configuration import (
+    CONFIGURABLE_COMPONENT_OVERRIDES_KEY,
+    Configuration,
+    ResourceIdentifier,
+)
 from snuba.query.allocation_policies import (
     CROSS_ORG_SUGGESTION,
     MAX_THRESHOLD,
@@ -25,6 +29,7 @@ from snuba.query.allocation_policies import (
     QuotaAllowance,
 )
 from snuba.redis import RedisClientKey, get_redis_client
+from snuba.state.sentry_options import get_option
 
 logger = logging.getLogger("snuba.query.bytes_scanned_window_policy")
 
@@ -58,13 +63,20 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
     WINDOW_SECONDS = 10 * 60
     WINDOW_GRANULARITY_SECONDS = 60
 
+    def __init__(self, storage_key: ResourceIdentifier, **kwargs: Any) -> None:
+        super().__init__(storage_key, **kwargs)
+        # Settings passed in by an allocation_policies match block.
+        self.__configured = frozenset(kwargs)
+
     def _additional_config_definitions(self) -> list[Configuration]:
         # Overrides are checked in order of specificity; the first one set wins.
         # For organization_id queries:
         #   (organization_id, referrer) > organization_id > (all orgs, referrer)
-        #   > organization_referrer_scan_limit > scan_limit > built-in default
+        #   > set organization_referrer_scan_limit > set scan_limit
+        #   > default organization_referrer_scan_limit
         # For project_id queries:
-        #   (all projects, referrer) > project_referrer_scan_limit > scan_limit > built-in default
+        #   (all projects, referrer) > set project_referrer_scan_limit > set scan_limit
+        #   > default project_referrer_scan_limit
         return [
             Configuration(
                 "referrer_all_projects_scan_limit_override",
@@ -110,21 +122,21 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
             ),
             Configuration(
                 "project_referrer_scan_limit",
-                f"DEFAULT: how many bytes can a project scan per referrer in the last {self.WINDOW_SECONDS / 60} mins before queries start getting rejected. Unset (-1) uses scan_limit, then {DEFAULT_BYTES_SCANNED_LIMIT}",
+                f"DEFAULT: how many bytes can a project scan per referrer in the last {self.WINDOW_SECONDS / 60} mins before queries start getting rejected. An explicitly set scan_limit replaces this default",
                 int,
-                DEFAULT_OVERRIDE_LIMIT,
+                DEFAULT_BYTES_SCANNED_LIMIT,
             ),
             Configuration(
                 "organization_referrer_scan_limit",
-                f"DEFAULT: how many bytes can an organization scan per referrer in the last {self.WINDOW_SECONDS / 60} mins before queries start getting rejected. Cross-project queries are limited by organization_id. Unset (-1) uses scan_limit, then {DEFAULT_BYTES_SCANNED_LIMIT * 2}",
+                f"DEFAULT: how many bytes can an organization scan per referrer in the last {self.WINDOW_SECONDS / 60} mins before queries start getting rejected. Cross-project queries are limited by organization_id. An explicitly set scan_limit replaces this default",
                 int,
-                DEFAULT_OVERRIDE_LIMIT,
+                DEFAULT_BYTES_SCANNED_LIMIT * 2,
             ),
             Configuration(
                 "scan_limit",
-                f"How many bytes a project or organization can scan per referrer in the last {self.WINDOW_SECONDS / 60} mins before queries start getting rejected. Per-tenant values go in match blocks. Used when project_referrer_scan_limit / organization_referrer_scan_limit and the *_scan_limit_override settings are unset",
+                f"How many bytes a project or organization can scan per referrer in the last {self.WINDOW_SECONDS / 60} mins before queries start getting rejected. Per-tenant values go in match blocks. When set, it replaces the project_referrer_scan_limit / organization_referrer_scan_limit defaults; explicitly set values of those, and the *_scan_limit_override settings, take precedence",
                 int,
-                DEFAULT_OVERRIDE_LIMIT,
+                DEFAULT_BYTES_SCANNED_LIMIT,
             ),
             Configuration(
                 "clickhouse_timeout_bytes_scanned_penalization",
@@ -190,9 +202,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                 "referrer_all_projects_scan_limit_override", {"referrer": referrer}
             )
             if override == DEFAULT_OVERRIDE_LIMIT:
-                return self.__get_default_scan_limit(
-                    "project_referrer_scan_limit", DEFAULT_BYTES_SCANNED_LIMIT
-                )
+                return self.__get_default_scan_limit("project_referrer_scan_limit")
             return int(override)
         if customer_tenant_key == "organization_id":
             org_referrer_override = self.get_config_value(
@@ -212,21 +222,21 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
             )
             if all_orgs_referrer_override != DEFAULT_OVERRIDE_LIMIT:
                 return int(all_orgs_referrer_override)
-            return self.__get_default_scan_limit(
-                "organization_referrer_scan_limit", DEFAULT_BYTES_SCANNED_LIMIT * 2
-            )
+            return self.__get_default_scan_limit("organization_referrer_scan_limit")
         raise InvalidTenantsForAllocationPolicy.from_args(
             {customer_tenant_key: customer_tenant_value, "referrer": referrer},
             self.__class__.__name__,
             "customer tenant key is neither project_id or organization_id, this should never happen",
         )
 
-    def __get_default_scan_limit(self, tenant_config: str, built_in_default: int) -> int:
-        for config in (tenant_config, "scan_limit"):
-            value = int(self.get_config_value(config))
-            if value != DEFAULT_OVERRIDE_LIMIT:
-                return value
-        return built_in_default
+    def __is_set(self, config: str) -> bool:
+        overrides: dict[str, Any] = get_option(CONFIGURABLE_COMPONENT_OVERRIDES_KEY, {})
+        return config in self.__configured or self._build_config_key(config, {}) in overrides
+
+    def __get_default_scan_limit(self, tenant_config: str) -> int:
+        if not self.__is_set(tenant_config) and self.__is_set("scan_limit"):
+            return int(self.get_config_value("scan_limit"))
+        return int(self.get_config_value(tenant_config))
 
     def __get_organization_max_bytes_to_read(
         self, org_id: str | int, referrer: str | int
