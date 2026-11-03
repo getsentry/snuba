@@ -1,8 +1,11 @@
-minVersion: "2.21.4"
+minVersion: "3.9.0"
 changelog:
   policy: auto
 versioning:
   policy: calver
+preReleaseCommand: bash scripts/bump-version.sh
+postReleaseBump:
+  version: "{{version}}.dev0"
 artifactProvider:
   name: none
 statusProvider:
