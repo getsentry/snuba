@@ -165,7 +165,7 @@ fn process_eap_item(
         TraceItemType::UserSession => "sessions",
         TraceItemType::ProcessingError => "processing_errors",
         TraceItemType::WorkflowEngineEvaluation => "workflow_engine_evaluations",
-        TraceItemType::EnrichmentAttributes => "ai_agent_monitoring",
+        TraceItemType::EnrichmentAttributes => "telemetry_classifiers",
         TraceItemType::Unspecified => "null",
     }
     .to_string();
@@ -1788,7 +1788,7 @@ mod tests {
         assert!(batch.cogs_data.is_some());
         let cogs = batch.cogs_data.unwrap();
         assert_eq!(
-            cogs.data.get("ai_agent_monitoring"),
+            cogs.data.get("telemetry_classifiers"),
             Some(&(payload_len as u64))
         );
     }
