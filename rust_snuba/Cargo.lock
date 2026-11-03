@@ -1641,7 +1641,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.5.6",
+ "socket2 0.4.10",
  "tokio",
  "tower-service",
  "tracing",
@@ -3976,9 +3976,9 @@ dependencies = [
 
 [[package]]
 name = "sentry_protos"
-version = "0.80.0"
+version = "0.100.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34363839d2a495d3d21584efb5b02320bcefa0bbf32e2d5ac21a842a2030df3b"
+checksum = "4406285166d7561ef044a3b930b55590cd11ca0df1c934d1c86811be365a629b"
 dependencies = [
  "prost",
  "prost-types",
@@ -3988,16 +3988,15 @@ dependencies = [
 
 [[package]]
 name = "sentry_usage_accountant"
-version = "0.1.2"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88a60bb78d48a84d672855fa919d6ff462e243929f7106c89d7b08b8a818eea9"
+checksum = "9893113dbc7d8c93b69a1f81bd707af33d7636ee8a69ee622976dc3041ff7c97"
 dependencies = [
  "chrono",
- "rdkafka",
+ "sentry_arroyo",
  "serde",
  "serde_json",
  "thiserror 1.0.58",
- "tracing",
 ]
 
 [[package]]
@@ -4371,7 +4370,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand 2.3.0",
- "getrandom 0.4.2",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.4",
  "windows-sys 0.61.2",
