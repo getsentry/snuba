@@ -108,3 +108,23 @@ class TestPerReferrerPolicy:
             ).max_threads
             == 4
         )
+
+    @pytest.mark.redis_db
+    def test_throttle_threshold_follows_referrer_override(self) -> None:
+        policy = ReferrerGuardRailPolicy.from_kwargs(
+            **{
+                "storage_key": "metrics_counters",
+            }
+        )
+        set_component_config(policy, "max_threads", 4)
+        set_component_config(policy, "requests_throttle_divider", 2)
+        set_component_config(policy, "referrer_concurrent_override", 4, {"referrer": "r"})
+        tenant_ids: dict[str, str | int] = {"referrer": "r"}
+
+        # Threshold is 4 // 2 = 2, not the default 100 // 2 = 50.
+        first = policy.get_quota_allowance(tenant_ids=tenant_ids, query_id="1")
+        second = policy.get_quota_allowance(tenant_ids=tenant_ids, query_id="2")
+        third = policy.get_quota_allowance(tenant_ids=tenant_ids, query_id="3")
+        assert not first.is_throttled and not second.is_throttled
+        assert third.is_throttled and third.max_threads == 2
+        assert third.throttle_threshold == 2
