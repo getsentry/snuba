@@ -450,12 +450,17 @@ def test_is_not_enforced() -> None:
     rejected_metrics = get_recorded_metric_calls(
         "increment", "allocation_policy.db_request_rejected"
     )
-    assert len(rejected_metrics) == 2
+    assert len(rejected_metrics) == 1
     assert rejected_metrics[0].tags["policy_class"] == "RejectingEverythingAllocationPolicy"
     assert rejected_metrics[0].tags["is_enforced"] == "True"
     assert rejected_metrics[0].tags["org_id"] == "123"
     assert rejected_metrics[0].tags["project_id"] == "no_project_id"
-    assert rejected_metrics[1].tags["is_enforced"] == "False"
+    unenforced_metrics = get_recorded_metric_calls(
+        "increment", "allocation_policy.db_request_unenforced"
+    )
+    assert len(unenforced_metrics) == 1
+    assert unenforced_metrics[0].tags["policy_class"] == "RejectingEverythingAllocationPolicy"
+    assert unenforced_metrics[0].tags["is_enforced"] == "False"
     throttled_metrics = get_recorded_metric_calls(
         "increment", "allocation_policy.db_request_throttled"
     )

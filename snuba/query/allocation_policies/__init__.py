@@ -539,7 +539,10 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                         load_info.to_dict() if load_info is not None else {}
                     )
                 case QuotaAllowanceDecision.REJECTED:
-                    self.metrics.increment("db_request_rejected", tags=decision_tags)
+                    self.metrics.increment(
+                        "db_request_rejected" if self.is_enforced else "db_request_unenforced",
+                        tags=decision_tags,
+                    )
                 case QuotaAllowanceDecision.THROTTLED:
                     self.metrics.increment(
                         "db_request_throttled",
