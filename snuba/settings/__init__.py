@@ -181,6 +181,10 @@ REDIS_REINITIALIZE_STEPS = 10
 # default redis command timeout in seconds for redis commands (e.g. configs, rate limits) which are meant to be quick and fail-open
 REDIS_SOCKET_TIMEOUT = 0.1
 
+# The app connects as snuba through pgbouncer; migrations connect as snuba-migrations.
+SUBSCRIPTIONS_POSTGRES_URL = os.environ.get("SUBSCRIPTIONS_POSTGRES_URL")
+SUBSCRIPTIONS_POSTGRES_MIGRATIONS_URL = os.environ.get("SUBSCRIPTIONS_POSTGRES_MIGRATIONS_URL")
+
 
 class RedisClusters(TypedDict):
     cache: RedisClusterConfig | None

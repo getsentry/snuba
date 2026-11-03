@@ -8,6 +8,7 @@ from subprocess import call
 import click
 
 from snuba import settings
+from snuba.subscriptions.postgres.database import create_database_if_missing
 
 # Match honcho: SIGTERM, then SIGKILL if children do not exit (avoids indefinite
 # hang when a child ignores SIGTERM; see also PEP 475 / wait() retry after signals).
@@ -51,6 +52,13 @@ def devserver(*, bootstrap: bool, workers: bool, log_level: str) -> None:
         returncode = call(["snuba", "migrations", "migrate", "--force"])
         if returncode > 0:
             sys.exit(returncode)
+
+        migrations_url = settings.SUBSCRIPTIONS_POSTGRES_MIGRATIONS_URL
+        if migrations_url is not None:
+            create_database_if_missing(migrations_url)
+            returncode = call(["snuba", "subscriptions-postgres", "migrate"])
+            if returncode > 0:
+                sys.exit(returncode)
 
     daemons = [("api", ["snuba", "api"])]
 

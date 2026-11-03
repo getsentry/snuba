@@ -11,6 +11,8 @@ x-test-common: &test-common
       condition: service_started
     zookeeper:
       condition: service_started
+    postgres:
+      condition: service_healthy
   image: "$SNUBA_IMAGE"
   profiles: ["run_test"]
   volumes:
@@ -22,6 +24,7 @@ x-test-common: &test-common
     REDIS_HOST: "redis-cluster"
     REDIS_PORT: 7000
     REDIS_DB: 0
+    POSTGRES_HOST: postgres
     DEFAULT_BROKERS: "kafka:9092"
     SNUBA_TEST_SHARD: "${SNUBA_TEST_SHARD:-0}"
     SNUBA_TEST_SHARD_TOTAL: "${SNUBA_TEST_SHARD_TOTAL:-1}"
@@ -188,6 +191,16 @@ services:
       nofile:
         soft: 262144
         hard: 262144
+
+  postgres:
+    image: ghcr.io/getsentry/image-mirror-library-postgres:18-alpine
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
 
   # This is the same thing as https://github.com/Grokzen/docker-redis-cluster but mirrored
   redis-cluster:
