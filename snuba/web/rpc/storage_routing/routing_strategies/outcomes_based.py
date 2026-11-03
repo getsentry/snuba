@@ -63,7 +63,7 @@ def select_downgrade_level(
 
 
 def get_tier_from_downgrade_level(initial_tier: Tier, level: int) -> Tier:
-    ladder: list[Tier] = [tier for tier in Tier if tier != Tier.TIER_NO_TIER]
+    ladder = Tier.valid_tiers()
     idx = ladder.index(initial_tier)
     return ladder[min(idx + level, len(ladder) - 1)]
 
