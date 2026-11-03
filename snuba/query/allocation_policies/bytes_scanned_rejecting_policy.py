@@ -106,6 +106,12 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                 param_types={"organization_id": int},
             ),
             Configuration(
+                "max_bytes_to_read",
+                "Hard cap forwarded to clickhouse as max_bytes_to_read for organization_id queries (no project_id). Queries it applies to run with this cap and bypass the sliding-window scan limit. Set it per org or referrer in a match block. organization_referrer_max_bytes_to_read and organization_max_bytes_to_read take precedence. Unset is -1",
+                int,
+                DEFAULT_OVERRIDE_LIMIT,
+            ),
+            Configuration(
                 "project_referrer_scan_limit",
                 f"DEFAULT: how many bytes can a project scan per referrer in the last {self.WINDOW_SECONDS / 60} mins before queries start getting rejected",
                 int,
@@ -213,7 +219,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
     ) -> int | None:
         """Return a per-org max_bytes_to_read cap if one is configured.
 
-        Precedence: (organization_id, referrer) > organization_id.
+        Precedence: (organization_id, referrer) > organization_id > max_bytes_to_read.
         Returns None when no cap applies.
         """
         org_referrer_cap = self.get_config_value(
@@ -228,6 +234,9 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
         )
         if org_cap != DEFAULT_OVERRIDE_LIMIT:
             return int(org_cap)
+        cap = self.get_config_value("max_bytes_to_read")
+        if cap != DEFAULT_OVERRIDE_LIMIT:
+            return int(cap)
         return None
 
     def _get_quota_allowance(
