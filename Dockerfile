@@ -1,19 +1,18 @@
-ARG PYTHON_VERSION=3.13.15
+ARG PYTHON_VERSION=3.13.17
 
 FROM ghcr.io/getsentry/image-mirror-library-python:${PYTHON_VERSION}-slim-trixie AS build_base
 
 WORKDIR /usr/src/snuba
 
 ENV PATH="/.venv/bin:$PATH" UV_PROJECT_ENVIRONMENT=/.venv \
-		PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1 \
     UV_COMPILE_BYTECODE=1 UV_NO_CACHE=1
 
-RUN python3 -m pip install \
-		--index-url 'https://pypi.devinfra.sentry.io/simple' 'uv'
+COPY --from=ghcr.io/astral-sh/uv:0.13.5@sha256:32a7bb39b496babbd997b0a39a4d66c126bdaf5661b302bf6f06abda8deca6ff \
+    /uv /uvx /usr/local/bin/
 
 # We don't want uv-managed python, we want to use python from the image.
 # We only want to use uv to manage dependencies.
-RUN python3 -m venv "$UV_PROJECT_ENVIRONMENT"
+RUN python3 -m venv --without-pip "$UV_PROJECT_ENVIRONMENT"
 
 RUN set -ex; \
     \

@@ -5,6 +5,7 @@ The following version(s) of Clickhouse have been tested and are known to work
 with Snuba:
 
 - 25.8.16.10001 (Altinity Stable Build)
+- 25.8.33.10002 (Altinity Stable Build)
 
 Any version of Clikhouse used outside of this list could potentially work,
 but is not guaranteed to work. Some functionality might be broken. Use a

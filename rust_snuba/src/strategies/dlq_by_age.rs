@@ -33,9 +33,9 @@
 
 use std::time::Duration;
 
+use crate::counter;
 use chrono::{TimeDelta, Utc};
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
-use sentry_arroyo::counter;
 use sentry_arroyo::processing::strategies::{
     CommitRequest, InvalidMessage, InvalidMessageReason, ProcessingStrategy, StrategyError,
     SubmitError,

@@ -453,6 +453,8 @@ def test_is_not_enforced() -> None:
     assert len(rejected_metrics) == 2
     assert rejected_metrics[0].tags["policy_class"] == "RejectingEverythingAllocationPolicy"
     assert rejected_metrics[0].tags["is_enforced"] == "True"
+    assert rejected_metrics[0].tags["org_id"] == "123"
+    assert rejected_metrics[0].tags["project_id"] == "no_project_id"
     assert rejected_metrics[1].tags["is_enforced"] == "False"
     throttled_metrics = get_recorded_metric_calls(
         "increment", "allocation_policy.db_request_throttled"
@@ -460,6 +462,7 @@ def test_is_not_enforced() -> None:
     assert len(throttled_metrics) == 2, throttled_metrics
     assert throttled_metrics[0].tags["policy_class"] == "ThrottleEverythingAllocationPolicy"
     assert throttled_metrics[0].tags["is_enforced"] == "True"
+    assert throttled_metrics[0].tags["org_id"] == "123"
     assert throttled_metrics[1].tags["is_enforced"] == "False"
 
 
@@ -489,6 +492,7 @@ def test_is_pardonable_overrides_can_run_when_idle() -> None:
     )
     assert pardoned_metrics is not None
     assert len(pardoned_metrics) == 1
+    assert pardoned_metrics[0].tags["org_id"] == "123"
     rejected_metrics = get_recorded_metric_calls(
         "increment", "allocation_policy.db_request_rejected"
     )

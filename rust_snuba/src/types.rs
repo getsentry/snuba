@@ -3,9 +3,9 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
+use crate::timer;
 use chrono::{DateTime, Utc};
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
-use sentry_arroyo::timer;
 use sentry_protos::snuba::v1::TraceItemType;
 use serde::{Deserialize, Serialize};
 
@@ -153,12 +153,12 @@ impl LatencyRecorder {
         }
 
         timer!(
-            format_args!("{}.max_{}_ms", metric_prefix, metric_name),
+            format!("{}.max_{}_ms", metric_prefix, metric_name),
             self.max_value_ms(write_time)
         );
 
         timer!(
-            format_args!("{}.{}_ms", metric_prefix, metric_name),
+            format!("{}.{}_ms", metric_prefix, metric_name),
             self.avg_value_ms(write_time),
         );
     }
@@ -431,7 +431,7 @@ impl<R> BytesInsertBatch<R> {
     }
 
     pub fn emit_item_type_metrics(&self) {
-        use sentry_arroyo::counter;
+        use crate::counter;
 
         for (item_type, count) in &self.item_type_metrics.counts {
             counter!(

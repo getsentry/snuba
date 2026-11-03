@@ -113,7 +113,7 @@ def decode_part_str(part_str: str, partition_format: Sequence[PartSegment]) -> P
     if date_str and retention_days:
         return Part(
             part_str,
-            datetime.strptime(date_str, "%Y-%m-%d").astimezone(UTC),
+            datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=UTC),
             int(retention_days),
         )
 

@@ -1,12 +1,11 @@
 use std::time::Duration;
 
 use pyo3::prelude::*;
-use sentry_arroyo::metrics;
 use sentry_arroyo::processing::stream::{PipelineRunner, PullSource};
 
 use crate::config;
 use crate::logging::{setup_logging, setup_sentry};
-use crate::metrics::statsd::create_dogstatsd_backend;
+use crate::metrics::statsd::install_dogstatsd;
 
 use super::factories;
 use super::pipelines;
@@ -86,9 +85,7 @@ fn pull_consumer_impl(
             scope.set_tag("storage", &storage.name);
             scope.set_tag("consumer_group", consumer_group);
         });
-        if let Some(backend) = create_dogstatsd_backend(&env_config, "snuba.consumer", &tags) {
-            metrics::init(backend).unwrap();
-        }
+        install_dogstatsd(&env_config, "snuba.consumer", &tags);
     }
 
     let processor = match factories::resolve_processor(&processor_name) {

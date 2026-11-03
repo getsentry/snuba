@@ -1,5 +1,6 @@
 import logging
 import os
+from urllib.parse import unquote
 
 import sentry_sdk
 import structlog
@@ -160,6 +161,22 @@ def before_send(event: Event, hint: Hint) -> Event | None:
     return event
 
 
+def parse_otel_resource_attributes(raw: str | None) -> dict[str, str]:
+    """
+    Parse the OpenTelemetry ``OTEL_RESOURCE_ATTRIBUTES`` format: comma-separated
+    ``key=value`` pairs with optionally percent-encoded values. Whitespace is
+    trimmed and malformed entries (no ``=``, empty key or empty value) are
+    skipped.
+    """
+    attributes: dict[str, str] = {}
+    for entry in (raw or "").split(","):
+        key, sep, value = entry.partition("=")
+        key, value = key.strip(), unquote(value.strip())
+        if sep and key and value:
+            attributes[key] = value
+    return attributes
+
+
 def setup_sentry() -> None:
     sentry_sdk.init(
         dsn=settings.SENTRY_DSN,
@@ -185,6 +202,14 @@ def setup_sentry() -> None:
         # (start_span/start_transaction/update_current_span/scope.span).
         trace_lifecycle="stream",
     )
+
+    # Attach the pod's Kubernetes/GCP resource attributes (k8s.pod.name,
+    # k8s.node.name, cloud.account.id, ...) to every streamed span. Global scope
+    # attributes are applied to all spans (and logs/metrics) without overwriting
+    # attributes the span already has, and are not added to error events.
+    global_scope = sentry_sdk.get_global_scope()
+    for key, value in parse_otel_resource_attributes(os.getenv("OTEL_RESOURCE_ATTRIBUTES")).items():
+        global_scope.set_attribute(key, value)
 
     from snuba.state.sentry_options import init_options
 

@@ -215,7 +215,9 @@ function(region) {
             ],
           },
           'deploy-primary': {
-            timeout: 1200,
+            // Argo Rollout canary steps and analyses take longer than a
+            // plain rolling update.
+            timeout: 2400,
             elastic_profile_id: 'snuba',
             environment_variables: {
               LABEL_SELECTOR: 'service=snuba',

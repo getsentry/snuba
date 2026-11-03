@@ -7,16 +7,15 @@ use criterion::{black_box, BenchmarkGroup, BenchmarkId, Criterion, Throughput};
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use rust_snuba::{
-    BatchSizeCalculation, BrokerConfig, ClickhouseConfig, ConsumerStrategyFactoryV2,
-    DogStatsDBackend, EnvConfig, KafkaMessageMetadata, MessageProcessorConfig, ProcessingFunction,
-    ProcessingFunctionType, ProcessorConfig, StorageConfig, TopicConfig, PROCESSORS,
+    BatchSizeCalculation, BrokerConfig, ClickhouseConfig, ConsumerStrategyFactoryV2, EnvConfig,
+    KafkaMessageMetadata, MessageProcessorConfig, ProcessingFunction, ProcessingFunctionType,
+    ProcessorConfig, StorageConfig, TopicConfig, PROCESSORS,
 };
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::backends::local::broker::LocalBroker;
 use sentry_arroyo::backends::local::LocalConsumer;
 use sentry_arroyo::backends::storages::memory::MemoryMessageStorage;
 use sentry_arroyo::backends::ConsumerError;
-use sentry_arroyo::metrics;
 use sentry_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use sentry_arroyo::processing::strategies::ProcessingStrategyFactory;
 use sentry_arroyo::processing::{Callbacks, ConsumerState, RunError, StreamProcessor};
@@ -207,9 +206,6 @@ fn run_processor_bench(
 }
 
 fn main() {
-    // No exporter is installed, so the `metrics` facade discards everything this records.
-    metrics::init(DogStatsDBackend).unwrap();
-
     let mut c = Criterion::default().configure_from_args();
 
     for (python_class_name, topic_name, processor_fn_type) in PROCESSORS {

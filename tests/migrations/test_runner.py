@@ -318,6 +318,15 @@ def test_reverse_idempotency_all() -> None:
     """
     runner = Runner()
     groups = get_active_migration_groups()
+    # Snapshot only Snuba's databases: ClickHouse creates `system.*` log tables
+    # (e.g. `system.query_metric_log`) lazily in the background, which made the
+    # before/after comparison flaky. `system.tables` has no guaranteed row
+    # order, so order by table identity.
+    snuba_databases = ", ".join(sorted({f"'{cluster.get_database()}'" for cluster in CLUSTERS}))
+    snapshot_query = (
+        "SELECT database, name, create_table_query FROM system.tables "
+        f"WHERE database IN ({snuba_databases}) ORDER BY database, name"
+    )
     group_migrations = {
         group.value: runner._get_pending_migrations_for_group(group) for group in groups
     }
@@ -349,14 +358,6 @@ def test_reverse_idempotency_all() -> None:
                     ClickhouseClientSettings.MIGRATE
                 )
 
-                # `system.tables` has no guaranteed row order, and the
-                # reverse_twice() cycle in between can perturb the order rows
-                # are returned in (e.g. ON CLUSTER DDL re-registering tables).
-                # Order the snapshots so the comparison reflects the set of
-                # tables and their definitions, not the iteration order.
-                snapshot_query = (
-                    "SELECT create_table_query FROM system.tables ORDER BY create_table_query"
-                )
                 before_state = cluster_connection.execute(snapshot_query).results
                 reverse_twice()
                 after_state = cluster_connection.execute(snapshot_query).results
