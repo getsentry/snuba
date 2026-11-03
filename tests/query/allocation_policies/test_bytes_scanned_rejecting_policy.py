@@ -596,3 +596,48 @@ def test_limit_bytes_read(
     assert allowance.is_throttled
     assert allowance.max_threads == MAX_THREAD_NUMBER // threads_throttle_divider
     assert allowance.max_bytes_to_read == int(scan_limit / max_bytes_to_read_scan_limit_divider)
+
+
+def _record_scan(
+    policy: AllocationPolicy, tenant_ids: dict[str, str | int], bytes_scanned: int
+) -> None:
+    policy.update_quota_balance(
+        tenant_ids,
+        QUERY_ID,
+        QueryResultOrError(
+            query_result=QueryResult(
+                result={"profile": {"progress_bytes": bytes_scanned}},
+                extra={"stats": {}, "sql": "", "experiments": {}},
+            ),
+            error=None,
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    "tenant_ids",
+    [
+        pytest.param({"organization_id": 123, "referrer": "r"}, id="organization"),
+        pytest.param({"organization_id": 123, "project_id": 1, "referrer": "r"}, id="project"),
+    ],
+)
+@pytest.mark.redis_db
+def test_scan_limit_replaces_default_limits(
+    policy: BytesScannedRejectingPolicy, tenant_ids: dict[str, str | int]
+) -> None:
+    _configure_policy(policy)
+    set_component_config(policy, "scan_limit", 50)
+    _record_scan(policy, tenant_ids, 50)
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    assert not allowance.can_run
+    assert allowance.explanation["limit"] == 50
+
+
+@pytest.mark.redis_db
+def test_override_takes_precedence_over_scan_limit(policy: BytesScannedRejectingPolicy) -> None:
+    _configure_policy(policy)
+    set_component_config(policy, "scan_limit", 50)
+    set_component_config(policy, "organization_scan_limit_override", 500, {"organization_id": 123})
+    tenant_ids: dict[str, str | int] = {"organization_id": 123, "referrer": "r"}
+    _record_scan(policy, tenant_ids, 50)
+    assert policy.get_quota_allowance(tenant_ids, QUERY_ID).can_run
