@@ -49,6 +49,25 @@ from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
 )
 
 
+def select_downgrade_level(
+    ingested_items: int,
+    max_items_before_downsampling: int,
+    max_level: int = 4,
+) -> int:
+    level = 0
+    while ingested_items > max_items_before_downsampling * 10**level:
+        level += 1
+        if level >= max_level:
+            break
+    return level
+
+
+def get_tier_from_downgrade_level(initial_tier: Tier, level: int) -> Tier:
+    ladder: list[Tier] = [tier for tier in Tier if tier != Tier.TIER_NO_TIER]
+    idx = ladder.index(initial_tier)
+    return ladder[min(idx + level, len(ladder) - 1)]
+
+
 def project_id_and_org_conditions(meta: RequestMeta) -> Expression:
     return and_cond(
         in_cond(
@@ -312,18 +331,13 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         routing_decision.routing_context.extra_info["max_items_before_downsampling"] = (
             max_items_before_downsampling
         )
-        if (
-            ingested_items > max_items_before_downsampling
-            and ingested_items <= max_items_before_downsampling * 10
-        ):
-            tier = Tier.TIER_8
-        elif (
-            ingested_items > max_items_before_downsampling * 10
-            and ingested_items <= max_items_before_downsampling * 100
-        ):
-            tier = Tier.TIER_64
-        elif ingested_items > max_items_before_downsampling * 100:
-            tier = Tier.TIER_512
+        tier = max(
+            tier,
+            get_tier_from_downgrade_level(
+                self._get_initial_tier(routing_decision.routing_context),
+                select_downgrade_level(ingested_items, max_items_before_downsampling),
+            ),
+        )
 
         set_current_span_attributes(
             {
