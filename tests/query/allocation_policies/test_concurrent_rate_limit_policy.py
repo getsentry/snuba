@@ -348,3 +348,54 @@ def test_bad_tenants(policy: ConcurrentRateLimitAllocationPolicy):
 
         # does not raise
         policy.update_quota_balance(bad_tenant_ids, "1234", _RESULT_SUCCESS)
+
+
+@pytest.mark.parametrize(
+    ("key_by", "tenant_ids", "bucket"),
+    [
+        pytest.param("tenant", {"organization_id": 1, "project_id": 2}, "2", id="default, project"),
+        pytest.param("tenant", {"organization_id": 1}, "1", id="default, org"),
+        pytest.param(
+            "organization",
+            {"organization_id": 1, "project_id": 2, "referrer": "r"},
+            "organization_id__1",
+            id="organization",
+        ),
+        pytest.param(
+            "organization_referrer",
+            {"organization_id": 1, "project_id": 2, "referrer": "r"},
+            "organization_id__1|referrer__r",
+            id="organization_referrer",
+        ),
+        pytest.param("organization", {"project_id": 2}, "2", id="no org falls back"),
+        pytest.param("typo", {"organization_id": 1, "project_id": 2}, "2", id="unknown value"),
+    ],
+)
+def test_key_by_bucket(key_by: str, tenant_ids: dict[str, str | int], bucket: str) -> None:
+    policy = ConcurrentRateLimitAllocationPolicy(StorageKey("errors"), key_by=key_by)
+    # The default must keep today's bucket, or every running count resets.
+    params, overrides = policy._get_rate_limit_params(tenant_ids)
+    assert params.bucket == bucket
+    assert overrides == {}
+
+
+@pytest.mark.redis_db
+def test_key_by_organization_shares_one_count() -> None:
+    policy = ConcurrentRateLimitAllocationPolicy(
+        StorageKey("errors"), key_by="organization", concurrent_limit=1
+    )
+    assert policy.get_quota_allowance({"organization_id": 1, "project_id": 2}, "q1").can_run
+    assert not policy.get_quota_allowance({"organization_id": 1, "project_id": 3}, "q2").can_run
+    assert policy.get_quota_allowance({"organization_id": 9, "project_id": 3}, "q3").can_run
+
+
+def test_override_takes_precedence_over_key_by() -> None:
+    policy = ConcurrentRateLimitAllocationPolicy(
+        StorageKey("errors"), key_by="organization_referrer", concurrent_limit=10
+    )
+    set_component_config(policy, "project_override", 3, {"project_id": 2})
+    params, _ = policy._get_rate_limit_params(
+        {"organization_id": 1, "project_id": 2, "referrer": "r"}
+    )
+    assert params.bucket == "project_id__2"
+    assert params.concurrent_limit == 3

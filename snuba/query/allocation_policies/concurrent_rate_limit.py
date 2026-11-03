@@ -14,10 +14,17 @@ from snuba.query.allocation_policies import (
     PASS_THROUGH_REFERRERS_SUGGESTION,
     AllocationPolicy,
     AllocationPolicyViolations,
-    InvalidTenantsForAllocationPolicy,
     QueryResultOrError,
     QueryType,
     QuotaAllowance,
+)
+from snuba.query.allocation_policies.key_by import (
+    ORGANIZATION,
+    ORGANIZATION_REFERRER,
+    TENANT,
+    get_counted_tenant,
+    key_by_config,
+    tenant_key_and_value,
 )
 from snuba.state.rate_limit import (
     RateLimitParameters,
@@ -43,6 +50,7 @@ _PASS_THROUGH_REFERRERS = {
 }
 
 QUOTA_UNIT = "concurrent_queries"
+_KEY_BY_CHOICES = {TENANT, ORGANIZATION, ORGANIZATION_REFERRER}
 SUGGESTION = "A customer is sending too many queries to snuba. The customer may be abusing an API or the queries may be innefficient"
 
 
@@ -134,10 +142,11 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
         return super()._additional_config_definitions() + [
             Configuration(
                 name="concurrent_limit",
-                description="maximum amount of concurrent queries per tenant",
+                description="maximum amount of concurrent queries per tenant (see key_by). The *_override settings take precedence",
                 value_type=int,
                 default=DEFAULT_CONCURRENT_QUERIES_LIMIT,
             ),
+            key_by_config(TENANT, _KEY_BY_CHOICES),
             Configuration(
                 name="referrer_project_override",
                 description="override concurrent limit for a specific project, referrer combo",
@@ -189,15 +198,18 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
         return overrides
 
     def _get_tenant_key_and_value(self, tenant_ids: dict[str, str | int]) -> tuple[str, str | int]:
-        if "project_id" in tenant_ids:
-            return "project_id", tenant_ids["project_id"]
-        if "organization_id" in tenant_ids:
-            return "organization_id", tenant_ids["organization_id"]
-        raise InvalidTenantsForAllocationPolicy.from_args(
-            tenant_ids,
-            self.__class__.__name__,
-            "tenant_ids must include organization_id or project id",
-        )
+        return tenant_key_and_value(tenant_ids, self.class_name())
+
+    def _get_bucket(self, tenant_ids: dict[str, str | int]) -> str:
+        tenant = get_counted_tenant(self, tenant_ids, TENANT, _KEY_BY_CHOICES)
+        if tenant.key_by == TENANT:
+            return str(tenant.value)
+        # Same bucket names the organization_override and referrer_organization_override
+        # params use, so an org counted by key_by shares its count with those overrides.
+        bucket = f"organization_id__{tenant.value}"
+        if tenant.referrer is not None:
+            bucket += f"|referrer__{tenant.referrer}"
+        return bucket
 
     @property
     def rate_limit_name(self) -> str:
@@ -206,17 +218,18 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
     def _get_rate_limit_params(
         self, tenant_ids: dict[str, str | int]
     ) -> tuple[RateLimitParameters, dict[str, int]]:
-        tenant_key, tenant_value = self._get_tenant_key_and_value(tenant_ids)
         overrides = self._get_overrides(tenant_ids)
-        concurrent_limit = self.get_config_value("concurrent_limit")
         if overrides:
             concurrent_limit = min(overrides.values())
-            tenant_value = min(overrides, key=cast(Callable[[str], int], overrides.get))
+            bucket = min(overrides, key=cast(Callable[[str], int], overrides.get))
+        else:
+            concurrent_limit = self.get_config_value("concurrent_limit")
+            bucket = self._get_bucket(tenant_ids)
 
         return (
             RateLimitParameters(
                 self.rate_limit_name,
-                bucket=str(tenant_value),
+                bucket=bucket,
                 per_second_limit=None,
                 concurrent_limit=concurrent_limit,
             ),

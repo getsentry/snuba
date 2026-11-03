@@ -22,6 +22,12 @@ from snuba.query.allocation_policies import (
     QueryResultOrError,
     QuotaAllowance,
 )
+from snuba.query.allocation_policies.key_by import (
+    ORGANIZATION,
+    ORGANIZATION_REFERRER,
+    get_counted_tenant,
+    key_by_config,
+)
 from snuba.redis import RedisClientKey, get_redis_client
 
 logger = logging.getLogger("snuba.query.bytes_scanned_window_policy")
@@ -79,6 +85,7 @@ _RATE_LIMITER = RedisSlidingWindowRateLimiter(get_redis_client(RedisClientKey.RA
 DEFAULT_OVERRIDE_LIMIT = -1
 DEFAULT_BYTES_SCANNED_LIMIT = 10000000
 QUOTA_UNIT = "bytes"
+_KEY_BY_CHOICES = {ORGANIZATION, ORGANIZATION_REFERRER}
 SUGGESTION = "The feature, organization/project is scanning too many bytes, this usually means they are abusing that API"
 
 
@@ -101,6 +108,13 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
                 default=DEFAULT_OVERRIDE_LIMIT,
                 param_types={"org_id": int},
             ),
+            Configuration(
+                name="bytes_limit",
+                description="Number of bytes a tenant (see key_by) can scan in a 10 minute window. Per-org values go in match blocks. org_limit_bytes_scanned_override takes precedence. Unset (-1) falls back to org_limit_bytes_scanned.",
+                value_type=int,
+                default=DEFAULT_OVERRIDE_LIMIT,
+            ),
+            key_by_config(ORGANIZATION, _KEY_BY_CHOICES),
             Configuration(
                 name="throttled_thread_number",
                 description="Number of threads any throttled query gets assigned.",
@@ -194,7 +208,7 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
                                 window_seconds=self.WINDOW_SECONDS,
                                 granularity_seconds=self.WINDOW_GRANULARITY_SECONDS,
                                 limit=org_limit_bytes_scanned,
-                                prefix_override=f"{self.component_name()}-organization_id-{org_id}",
+                                prefix_override=self.__get_window_prefix(tenant_ids),
                             )
                         ],
                     ),
@@ -291,7 +305,7 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
                                 window_seconds=self.WINDOW_SECONDS,
                                 granularity_seconds=self.WINDOW_GRANULARITY_SECONDS,
                                 limit=org_limit_bytes_scanned,
-                                prefix_override=f"{self.component_name()}-organization_id-{tenant_ids['organization_id']}",
+                                prefix_override=self.__get_window_prefix(tenant_ids),
                             )
                         ],
                     )
@@ -315,6 +329,12 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
             "org_limit_bytes_scanned_override", {"org_id": int(org_id)}
         )
         if org_limit_bytes_scanned == DEFAULT_OVERRIDE_LIMIT:
+            org_limit_bytes_scanned = self.get_config_value("bytes_limit")
+        if org_limit_bytes_scanned == DEFAULT_OVERRIDE_LIMIT:
             org_limit_bytes_scanned = self.get_config_value("org_limit_bytes_scanned")
 
         return int(org_limit_bytes_scanned)
+
+    def __get_window_prefix(self, tenant_ids: dict[str, str | int]) -> str:
+        tenant = get_counted_tenant(self, tenant_ids, ORGANIZATION, _KEY_BY_CHOICES)
+        return tenant.window_prefix(self.component_name())
