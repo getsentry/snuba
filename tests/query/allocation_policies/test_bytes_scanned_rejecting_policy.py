@@ -8,6 +8,7 @@ from snuba.configs.configuration import ResourceIdentifier
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import AllocationPolicy, QueryResultOrError
 from snuba.query.allocation_policies.bytes_scanned_rejecting_policy import (
+    DEFAULT_BYTES_SCANNED_LIMIT,
     BytesScannedRejectingPolicy,
 )
 from snuba.web import QueryException, QueryResult
@@ -614,6 +615,11 @@ def _record_scan(
     )
 
 
+def _configure_without_default_limits(policy: AllocationPolicy) -> None:
+    set_component_config(policy, "is_enforced", 1)
+    set_component_config(policy, "max_threads", MAX_THREAD_NUMBER)
+
+
 @pytest.mark.parametrize(
     "tenant_ids",
     [
@@ -622,10 +628,10 @@ def _record_scan(
     ],
 )
 @pytest.mark.redis_db
-def test_scan_limit_replaces_default_limits(
+def test_scan_limit_applies_when_tenant_limits_unset(
     policy: BytesScannedRejectingPolicy, tenant_ids: dict[str, str | int]
 ) -> None:
-    _configure_policy(policy)
+    _configure_without_default_limits(policy)
     set_component_config(policy, "scan_limit", 50)
     _record_scan(policy, tenant_ids, 50)
     allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
@@ -633,11 +639,60 @@ def test_scan_limit_replaces_default_limits(
     assert allowance.explanation["limit"] == 50
 
 
+@pytest.mark.parametrize(
+    ("tenant_ids", "config"),
+    [
+        pytest.param(
+            {"organization_id": 123, "referrer": "r"},
+            "organization_referrer_scan_limit",
+            id="organization",
+        ),
+        pytest.param(
+            {"organization_id": 123, "project_id": 1, "referrer": "r"},
+            "project_referrer_scan_limit",
+            id="project",
+        ),
+    ],
+)
+@pytest.mark.redis_db
+def test_tenant_limit_takes_precedence_over_scan_limit(
+    policy: BytesScannedRejectingPolicy, tenant_ids: dict[str, str | int], config: str
+) -> None:
+    _configure_without_default_limits(policy)
+    set_component_config(policy, "scan_limit", 50)
+    set_component_config(policy, config, 500)
+    _record_scan(policy, tenant_ids, 50)
+    assert policy.get_quota_allowance(tenant_ids, QUERY_ID).can_run
+
+
 @pytest.mark.redis_db
 def test_override_takes_precedence_over_scan_limit(policy: BytesScannedRejectingPolicy) -> None:
-    _configure_policy(policy)
+    _configure_without_default_limits(policy)
     set_component_config(policy, "scan_limit", 50)
     set_component_config(policy, "organization_scan_limit_override", 500, {"organization_id": 123})
     tenant_ids: dict[str, str | int] = {"organization_id": 123, "referrer": "r"}
     _record_scan(policy, tenant_ids, 50)
     assert policy.get_quota_allowance(tenant_ids, QUERY_ID).can_run
+
+
+@pytest.mark.parametrize(
+    ("tenant_ids", "limit"),
+    [
+        pytest.param(
+            {"organization_id": 123, "referrer": "r"},
+            DEFAULT_BYTES_SCANNED_LIMIT * 2,
+            id="organization",
+        ),
+        pytest.param(
+            {"organization_id": 123, "project_id": 1, "referrer": "r"},
+            DEFAULT_BYTES_SCANNED_LIMIT,
+            id="project",
+        ),
+    ],
+)
+@pytest.mark.redis_db
+def test_built_in_defaults_unchanged(
+    policy: BytesScannedRejectingPolicy, tenant_ids: dict[str, str | int], limit: int
+) -> None:
+    _configure_without_default_limits(policy)
+    assert policy.get_quota_allowance(tenant_ids, QUERY_ID).rejection_threshold == limit
