@@ -28,9 +28,9 @@ from snuba.query.validation.validators import ColumnValidationMode
 from snuba.querylog.query_metadata import QueryStatus
 from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from tests.base import BaseApiTest
-from tests.query.allocation_policies.attachment import override_allocation_policy
 from tests.fixtures import get_raw_event, get_raw_transaction
 from tests.helpers import override_entity_column_validator, write_unprocessed_events
+from tests.query.allocation_policies.attachment import override_allocation_policy
 
 
 class MaxBytesPolicy123(AllocationPolicy):
@@ -288,7 +288,9 @@ class TestSnQLApi(BaseApiTest):
             },
             {
                 "match": {"project_id": [self.project_id]},
-                "policies": [{"name": "ConcurrentRateLimitAllocationPolicy", "concurrent_limit": 0}],
+                "policies": [
+                    {"name": "ConcurrentRateLimitAllocationPolicy", "concurrent_limit": 0}
+                ],
             },
         ]
 
