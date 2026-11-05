@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Getting started with Snuba &#8212; Snuba 26.11.0.dev0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=8faed7fb"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Snuba Architecture Overview" href="architecture/overview.html" />
+    <link rel="prev" title="Features:" href="index.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="getting-started-with-snuba">
+<h1>Getting started with Snuba<a class="headerlink" href="#getting-started-with-snuba" title="Link to this heading">¶</a></h1>
+<p>This guide starts Snuba in a Sentry development environment.</p>
+<section id="requirements">
+<h2>Requirements<a class="headerlink" href="#requirements" title="Link to this heading">¶</a></h2>
+<p>Snuba needs:</p>
+<ol class="arabic simple">
+<li><p>A ClickHouse server at <code class="docutils literal notranslate"><span class="pre">CLICKHOUSE_HOST</span></code> (default <code class="docutils literal notranslate"><span class="pre">127.0.0.1</span></code>).</p></li>
+<li><p>A Redis instance at <code class="docutils literal notranslate"><span class="pre">REDIS_HOST</span></code> (default <code class="docutils literal notranslate"><span class="pre">127.0.0.1</span></code>) on <code class="docutils literal notranslate"><span class="pre">REDIS_PORT</span></code>
+(default <code class="docutils literal notranslate"><span class="pre">6379</span></code>).</p></li>
+<li><p>A Kafka cluster at <code class="docutils literal notranslate"><span class="pre">DEFAULT_BROKERS</span></code> (default <code class="docutils literal notranslate"><span class="pre">127.0.0.1:9092</span></code>).</p></li>
+</ol>
+<p>Snuba assumes that everything runs on UTC. Other timezones cause timezone
+mismatches.</p>
+</section>
+<section id="start-snuba-with-sentry">
+<h2>Start Snuba with Sentry<a class="headerlink" href="#start-snuba-with-sentry" title="Link to this heading">¶</a></h2>
+<p>With a Sentry development environment set up, start the services from the
+Sentry repository:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">devservices</span> <span class="n">up</span>
+</pre></div>
+</div>
+<p>This runs Snuba in a container. To run Snuba from your Snuba checkout instead,
+switch it to local mode:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">devservices</span> <span class="n">toggle</span> <span class="n">snuba</span> <span class="n">local</span>
+</pre></div>
+</div>
+<p>To switch back to the container, run:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">devservices</span> <span class="n">toggle</span> <span class="n">snuba</span> <span class="n">containerized</span>
+</pre></div>
+</div>
+</section>
+<section id="start-only-snuba-s-dependencies">
+<h2>Start only Snuba’s dependencies<a class="headerlink" href="#start-only-snuba-s-dependencies" title="Link to this heading">¶</a></h2>
+<p>From the Snuba repository, start ClickHouse, Redis, and Kafka:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">devservices</span> <span class="n">up</span>
+</pre></div>
+</div>
+<p>Then start Snuba itself as described in <a class="reference internal" href="contributing/environment.html"><span class="doc">Snuba development environment</span></a>.</p>
+</section>
+<section id="query-clickhouse-directly">
+<h2>Query ClickHouse directly<a class="headerlink" href="#query-clickhouse-directly" title="Link to this heading">¶</a></h2>
+<p>To open a ClickHouse client (similar to <code class="docutils literal notranslate"><span class="pre">psql</span></code>), run:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">docker</span> <span class="n">exec</span> <span class="o">-</span><span class="n">it</span> <span class="n">snuba</span><span class="o">-</span><span class="n">clickhouse</span><span class="o">-</span><span class="mi">1</span> <span class="n">clickhouse</span><span class="o">-</span><span class="n">client</span>
+</pre></div>
+</div>
+<p>Errors are written to the <code class="docutils literal notranslate"><span class="pre">errors_local</span></code> table:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">select</span> <span class="n">count</span><span class="p">()</span> <span class="kn">from</span><span class="w"> </span><span class="nn">errors_local</span><span class="p">;</span>
+</pre></div>
+</div>
+</section>
+<section id="settings">
+<h2>Settings<a class="headerlink" href="#settings" title="Link to this heading">¶</a></h2>
+<p>Settings are in <code class="docutils literal notranslate"><span class="pre">snuba/settings/__init__.py</span></code>. To override them, set
+<code class="docutils literal notranslate"><span class="pre">SNUBA_SETTINGS</span></code> to a short name such as <code class="docutils literal notranslate"><span class="pre">test</span></code>, which loads
+<code class="docutils literal notranslate"><span class="pre">snuba/settings/settings_test.py</span></code>, or to an absolute path to a settings file.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">CLUSTERS</span></code>: The ClickHouse clusters, with the host, port, and storage sets
+for each. Each cluster also sets whether it is single node or distributed.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">REDIS_HOST</span></code>: The host Redis runs on.</p></li>
+</ul>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="index.html">
+              <img class="logo" src="_static/snuba.svg" alt="Logo of Snuba"/>
+            </a></p>
+<h1 class="logo"><a href="index.html">Snuba</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Getting started with Snuba</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture/overview.html">Snuba Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture/overview.html#snuba-within-a-sentry-deployment">Snuba within a Sentry Deployment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture/datamodel.html">Snuba Data Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture/slicing.html">Snuba Data Slicing (under development)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture/slicing.html#configuring-a-slice">Configuring a slice</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture/slicing.html#working-in-a-sliced-environment">Working in a Sliced Environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture/queryprocessing.html">Snuba Query Processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture/consumer.html">Snuba Consumers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="configuration/overview.html">Dataset Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="query/overview.html">Querying Snuba</a></li>
+<li class="toctree-l1"><a class="reference internal" href="language/snql.html">The SnQL query language</a></li>
+<li class="toctree-l1"><a class="reference internal" href="language/mql.html">The MQL query language</a></li>
+<li class="toctree-l1"><a class="reference internal" href="migrations/overview.html">Snuba migrations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="migrations/modes.html">Snuba migration modes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="contributing/environment.html">Snuba development environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="clickhouse/topology.html">ClickHouse Topology Best Practices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="clickhouse/schema_design.html">ClickHouse Schema Design Best Practices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="clickhouse/supported_versions.html">ClickHouse supported versions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="profiler.html">Profiling</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="index.html" title="previous chapter">Features:</a></li>
+      <li>Next: <a href="architecture/overview.html" title="next chapter">Snuba Architecture Overview</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2021, Sentry Team and Contributors.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.0.4</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/getstarted.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
