@@ -83,23 +83,37 @@ RespTuple = tuple[str, int, dict[Any, Any]]
 
 
 def truncate_dataset(dataset: Dataset) -> None:
+    # Entities can share a storage (every EAP entity uses the same tables), so
+    # truncate each table once per node.
+    truncated: set[tuple[str, int, str, str]] = set()
     for entity in dataset.get_all_entities():
         for storage in entity.get_all_storages():
+            schema = storage.get_schema()
+            if not isinstance(schema, TableSchema):
+                continue
+
             cluster = storage.get_cluster()
+            database = cluster.get_database()
+            table = schema.get_local_table_name()
             nodes = [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]
             for node in nodes:
+                key = (node.host_name, node.port, database, table)
+                if key in truncated:
+                    continue
+                truncated.add(key)
                 clickhouse = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
-
-                database = cluster.get_database()
-
-                schema = storage.get_schema()
-
-                if not isinstance(schema, TableSchema):
-                    return
-
-                table = schema.get_local_table_name()
-
                 clickhouse.command(f"TRUNCATE TABLE IF EXISTS {database}.{table}")
+
+
+def flush_redis() -> None:
+    # Use cases without their own Redis cluster share the default client, so
+    # flush each client once.
+    flushed: set[int] = set()
+    for redis_client in all_redis_clients():
+        if id(redis_client) in flushed:
+            continue
+        flushed.add(id(redis_client))
+        redis_client.flushdb()
 
 
 def _add_compression_attrs(response: Response) -> Response:
@@ -704,8 +718,7 @@ if application.debug or application.testing:
             )
 
         truncate_dataset(dataset)
-        for redis_client in all_redis_clients():
-            redis_client.flushdb()
+        flush_redis()
 
         return ("ok", 200, {"Content-Type": "text/plain"})
 
