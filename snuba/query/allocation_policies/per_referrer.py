@@ -67,7 +67,7 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
             ),
             Configuration(
                 name="requests_throttle_divider",
-                description="default_concurrent_request_per_referrer divided by this value will be the threshold at which we will decrease the number of threads (THROTTLED_THREADS) used to execute queries",
+                description="the referrer's concurrent limit (referrer_concurrent_override if set, else default_concurrent_request_per_referrer) divided by this value will be the threshold at which we will decrease the number of threads (THROTTLED_THREADS) used to execute queries",
                 value_type=float,
                 default=_REQUESTS_THROTTLE_DIVIDER,
             ),
@@ -104,10 +104,7 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
         num_threads = self.max_threads
         requests_throttle_threshold = max(
             1,
-            int(
-                self.get_config_value("default_concurrent_request_per_referrer")
-                // self.get_config_value("requests_throttle_divider")
-            ),
+            int(concurrent_limit // self.get_config_value("requests_throttle_divider")),
         )
 
         is_throttled = False
