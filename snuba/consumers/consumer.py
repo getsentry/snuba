@@ -15,6 +15,7 @@ from typing import (
 
 import rapidjson
 import sentry_sdk
+from arroyo.backends.abstract import Producer
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.backends.kafka.commit import CommitCodec
 from arroyo.commit import Commit as CommitLogCommit
@@ -23,7 +24,6 @@ from arroyo.types import BrokerValue, Message, Partition, Topic
 from confluent_kafka import KafkaError
 from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import Producer as ConfluentKafkaProducer
-from confluent_kafka import Producer as ConfluentProducer
 
 from snuba import environment
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder, ValuesRowEncoder
@@ -49,7 +49,7 @@ LOG_INVALID_MESSAGE_FREQ_SEC = 1
 
 
 class CommitLogConfig(NamedTuple):
-    producer: ConfluentProducer
+    producer: Producer[KafkaPayload]
     topic: Topic
     group_id: str
 
@@ -270,12 +270,6 @@ class ProcessedMessageBatchWriter:
             message.value.timestamp,
         )
 
-    def __commit_message_delivery_callback(
-        self, error: KafkaError | None, message: ConfluentMessage
-    ) -> None:
-        if error is not None:
-            raise Exception(error.str())
-
     def close(self) -> None:
         self.__closed = True
 
@@ -285,6 +279,7 @@ class ProcessedMessageBatchWriter:
             self.__replacement_batch_writer.close()
 
         if self.__commit_log_config is not None:
+            futures = []
             for partition, (
                 offset,
                 timestamp,
@@ -305,14 +300,14 @@ class ProcessedMessageBatchWriter:
                         received_p99,
                     )
                 )
-                self.__commit_log_config.producer.produce(
-                    self.__commit_log_config.topic.name,
-                    key=payload.key,
-                    value=payload.value,
-                    headers=cast("list[tuple[str, str | bytes | None]]", payload.headers),
-                    on_delivery=self.__commit_message_delivery_callback,
+                futures.append(
+                    self.__commit_log_config.producer.produce(
+                        self.__commit_log_config.topic, payload
+                    )
                 )
-                self.__commit_log_config.producer.poll(0.0)
+            # raises on delivery failure, so offsets are not committed past a missing commit log entry
+            for future in futures:
+                future.result()
         self.__offsets_to_produce.clear()
         self.__received_timestamps.clear()
 
@@ -419,6 +414,7 @@ class MultistorageCollector:
             step.close()
 
         if self.__commit_log_config is not None:
+            futures = []
             for partition, (offset, timestamp) in self.__offsets_to_produce.items():
                 payload = commit_codec.encode(
                     CommitLogCommit(
@@ -429,25 +425,16 @@ class MultistorageCollector:
                         None,
                     )
                 )
-                self.__commit_log_config.producer.produce(
-                    self.__commit_log_config.topic.name,
-                    key=payload.key,
-                    value=payload.value,
-                    headers=cast("list[tuple[str, str | bytes | None]]", payload.headers),
-                    on_delivery=self.__commit_message_delivery_callback,
+                futures.append(
+                    self.__commit_log_config.producer.produce(
+                        self.__commit_log_config.topic, payload
+                    )
                 )
-                self.__commit_log_config.producer.poll(0.0)
-
-            self.__commit_log_config.producer.flush()
+            for future in futures:
+                future.result()
 
         self.__messages = {}
         self.__offsets_to_produce.clear()
-
-    def __commit_message_delivery_callback(
-        self, error: KafkaError | None, message: ConfluentMessage
-    ) -> None:
-        if error is not None:
-            raise Exception(error.str())
 
 
 class MultistorageKafkaPayload(NamedTuple):

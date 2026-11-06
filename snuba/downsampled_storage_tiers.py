@@ -7,3 +7,7 @@ class Tier(IntEnum):
     TIER_8 = 8
     TIER_64 = 64
     TIER_512 = 512
+
+    @classmethod
+    def valid_tiers(cls) -> list["Tier"]:
+        return [tier for tier in cls if tier > 0]

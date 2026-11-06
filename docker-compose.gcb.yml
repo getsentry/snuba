@@ -85,7 +85,7 @@ services:
       KAFKA_LOG4J_ROOT_LOGLEVEL: "WARN"
       KAFKA_TOOLS_LOG4J_LOGLEVEL: "WARN"
   clickhouse:
-    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.16.10001.altinitystable}"
+    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.33.10002.altinitystable}"
     hostname: clickhouse.local
     extra_hosts:
       - "clickhouse.local:127.0.0.1"  # Add entry to /etc/hosts file
@@ -107,7 +107,7 @@ services:
   clickhouse-query:
     depends_on:
       - zookeeper
-    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.16.10001.altinitystable}"
+    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.33.10002.altinitystable}"
     hostname: clickhouse-query.local
     extra_hosts:
       - "clickhouse-query.local:127.0.0.1"  # Add entry to /etc/hosts file
@@ -123,7 +123,7 @@ services:
   clickhouse-01:
     depends_on:
       - zookeeper
-    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.16.10001.altinitystable}"
+    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.33.10002.altinitystable}"
     hostname: clickhouse-01.local
     extra_hosts:
       - "clickhouse-01.local:127.0.0.1"  # Add entry to /etc/hosts file
@@ -140,7 +140,7 @@ services:
   clickhouse-02:
     depends_on:
       - zookeeper
-    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.16.10001.altinitystable}"
+    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.33.10002.altinitystable}"
     hostname: clickhouse-02.local
     extra_hosts:
       - "clickhouse-02.local:127.0.0.1"  # Add entry to /etc/hosts file
@@ -157,7 +157,7 @@ services:
   clickhouse-03:
     depends_on:
       - zookeeper
-    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.16.10001.altinitystable}"
+    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.33.10002.altinitystable}"
     hostname: clickhouse-03.local
     extra_hosts:
       - "clickhouse-03.local:127.0.0.1"  # Add entry to /etc/hosts file
@@ -174,7 +174,7 @@ services:
   clickhouse-04:
     depends_on:
       - zookeeper
-    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.16.10001.altinitystable}"
+    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.33.10002.altinitystable}"
     hostname: clickhouse-04.local
     extra_hosts:
       - "clickhouse-04.local:127.0.0.1"  # Add entry to /etc/hosts file
@@ -189,11 +189,26 @@ services:
         soft: 262144
         hard: 262144
 
-  # This is the same thing as https://github.com/Grokzen/docker-redis-cluster but mirrored
   redis-cluster:
-    image: ghcr.io/getsentry/docker-redis-cluster:7.0.10
+    image: ghcr.io/getsentry/image-mirror-valkey-valkey:8.0.12
+    command:
+      - sh
+      - -c
+      - |
+        rm -f nodes-*.conf
+        for p in 7000 7001 7002; do
+          valkey-server --port $$p --protected-mode no --cluster-enabled yes \
+            --cluster-config-file nodes-$$p.conf --save '' &
+        done
+        for p in 7000 7001 7002; do until valkey-cli -p $$p ping >/dev/null 2>&1; do sleep 0.1; done; done
+        IP=$$(hostname -i | awk '{print $$1}')
+        valkey-cli --cluster create $$IP:7000 $$IP:7001 $$IP:7002 --cluster-yes
+        wait
     healthcheck:
-      test: ["CMD-SHELL", 'redis-cli -p 7000 cluster info | grep "cluster_slots_assigned:16384"']
+      test: ["CMD-SHELL", "valkey-cli -p 7000 cluster info | grep -q cluster_state:ok"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
 
 networks:
   default:
