@@ -1,12 +1,12 @@
 # System Queries node search
 
-How the **Host** autocomplete in System Queries ("Search nodes" mode) finds, ranks and highlights ClickHouse nodes. The code is in [`clickhouse_node_utils.tsx`](clickhouse_node_utils.tsx) (`getAllNodes`, `nodeSearchMatch`, `rankNodes`), and the select it drives is `CustomSelect` in [`../select.tsx`](../select.tsx).
+How the **Host** autocomplete in System Queries ("Search nodes" mode) finds, ranks and highlights ClickHouse nodes, and how storage lists are shortened. The code is in [`clickhouse_node_utils.tsx`](clickhouse_node_utils.tsx) (`getAllNodes`, `nodeSearchMatch`, `rankNodes`), and the select it drives is `CustomSelect` in [`../select.tsx`](../select.tsx).
 
 ## The node list
 
 - Every node of every storage in `/clickhouse_nodes` appears once, keyed by `host:port`. This includes local nodes, distributed nodes and query nodes.
 - The label is `host:port`, with `(distributed)` and/or `(query node)` appended where that applies. A node that is also local is never labelled distributed.
-- The line under the label lists the storages whose cluster includes the node, for example `errors, errors_ro, search_issues +4 more`.
+- The line under the label lists the storages whose cluster includes the node, for example `errors, errors_ro, search_issues +4 more`. Storages that share a top-level storage's nodes are folded into it (see [Storage lists](#storage-lists)).
 - A node counts as **distributed** for ranking only if it is distributed and nothing else: not local, and not a query node.
 
 ## Picking a node sets the storage
@@ -20,6 +20,22 @@ The backend still needs a storage, because the storage decides the cluster, whic
 Manual host entry still shows a storage picker, since a typed host has no other way to name a cluster.
 
 "By storage" mode is the old way of picking a host, kept as an alternative: pick a storage, its first host fills in, and the host list shows only that storage's nodes. The page remembers whether you last used "Search nodes" or "By storage". Switching between them keeps the current host and storage.
+
+## Storage lists
+
+Many storages are known to use the same nodes as a top-level storage. Storage lists show only the top-level storage. This applies to the storage line under each node and to the storage pickers in "By storage" and "Manual" modes.
+
+| Folded storages | Shown as | Why they share nodes |
+| --- | --- | --- |
+| Every `eap_items*` and `eap_item_*` storage (`eap_items_2`, the `downsample_*` ones, `eap_item_co_occurring_attrs`, …), except the `_ro` ones | `eap_items` | Known to use the same cluster. |
+| The `_ro` ones of those | `eap_items_ro` | Known to use the same cluster. |
+| `outcomes_hourly`, `outcomes_daily`, `outcomes_cross_org_hourly`, `llm_proxy_cost_raw` | `outcomes_raw` | They're all in the `outcomes` storage set, and a storage set belongs to exactly one cluster (asserted in `snuba/clusters/cluster.py`). |
+
+- A storage is folded into a top-level one only if that top-level storage is in the same list. On a node that lists `eap_items_2` but not `eap_items`, `eap_items_2` is shown.
+- The selected storage is always in the picker, even if it would be folded, so a shared link to `eap_items_downsample_8` still shows it.
+- Folding only affects what's listed. The storage sent with a query is still chosen from every storage that lists the node.
+
+The folding rule is `topLevelStorage` in `clickhouse_node_utils.tsx`.
 
 ## Words
 
@@ -38,10 +54,16 @@ A node matches if the search, with its separators removed, can be matched charac
 2. **Initials.** Any run of two or more consecutive host words can be typed as their first letters, for example `eap` for `events-analytics-platform`.
    - Every word in the run has to start with a letter. Number words and the port can't be part of a run.
    - Only one run per match.
-   - `eapt` would cover `events-analytics-platform-tier1`, but `eap-0-1` can't skip a `tier1` that sits in between.
-3. **A typed separator can skip the rest of a word.** If you type a separator and you're partway through a host word, the next character may jump to the start of the next host word. `err-1` matches `snuba-errors-1-0` as `err`…`1`.
-   - The jump covers only the rest of the current word. `snuba-1` doesn't match `snuba-errors-1-0`, because it would have to skip `errors`.
-   - Without a typed separator there's no jump. `err1` doesn't match `errors-1`.
+   - `eapt` covers `events-analytics-platform-tier1`. `eap-0-1` also matches it, but by skipping `tier1` (rule 3).
+3. **A typed separator can skip ahead.** Where you type a separator, the next character may skip:
+   - **the rest of the current host word**: `err-1` matches `snuba-errors-1-0` as `err`…`1`; and/or
+   - **one whole host word that starts with a letter**: `eap-1-1` matches `…-platform-arm-1-1` and `…-platform-mz-1-1`, skipping `arm` or `mz`.
+
+   Limits:
+   - At most one whole word per separator. `snuba-1` matches `snuba-errors-1-0` but not `snuba-generic-metrics-1-0`.
+   - Number words (shards, replicas, the port) are never skipped, so their positions still count. `eap-1` doesn't match `…-platform-0-1`.
+   - An initial from rule 2 stands for a word you typed, so it can't be skipped.
+   - Without a typed separator, nothing is skipped. `err1` doesn't match `errors-1`, and `eap11` doesn't match `…-arm-1-1`.
 4. **The match can start anywhere,** including mid-word, for example `m` in `platform`. These matches rank last; see below.
 
 An empty search matches every node.
@@ -58,6 +80,7 @@ The dropdown is re-sorted on every keystroke. Each node is scored by its best ma
    - The host starts a new word where you typed no separator. Initials typed together don't count.
    - You typed a separator where the host keeps going in the same word, without skipping (rule 3).
    - A typed separator skipped the rest of a word (rule 3).
+   - A typed separator skipped a whole word (rule 3). So `eap-1-1` lists `…-platform-1-1` before `…-platform-arm-1-1`.
    - The search ends partway through a host word.
 3. **Distributed nodes last.**
 4. **`host:port`, alphabetically.** Because `-` sorts before digits, `…-1-0` comes before `…-10-0`.
@@ -78,7 +101,10 @@ The comparison order means a closer match of a worse rank never beats a word-sta
 | `eap-1-1` | `…-platform-1-1` | initials | 0 | breaks line up |
 | `eap-1-1` | `…-platform-1-11` | initials | 1 | ends partway through `11` |
 | `eap-1` | `…-platform-10-0` | initials | 1 | ends partway through `10` |
+| `eap-1-1` | `…-platform-arm-1-1` | initials | 1 | skips `arm` |
+| `eap-arm-1-1` | `…-platform-arm-1-1` | initials | 0 | breaks line up |
 | `err-1` | `snuba-errors-1-0` | word start | 1 | skips the rest of `errors` |
+| `snuba-1` | `snuba-errors-1-0` | word start | 1 | skips `errors` |
 | `errors-1` | `snuba-errors-1-0` | word start | 0 | breaks line up |
 
 ## Highlighting

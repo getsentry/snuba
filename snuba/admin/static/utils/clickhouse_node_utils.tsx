@@ -51,6 +51,59 @@ export function getHostsForStorage(
   return hosts;
 }
 
+// Storages that are known to share their nodes with a top-level one, which
+// stands in for them in storage lists: every eap_items storage (downsampled,
+// co-occurring attributes, ...) uses eap_items' nodes, and the read-only
+// ones eap_items_ro's.
+const EAP_ITEMS_STORAGE = /^eap_items?(_|$)/;
+
+// The outcomes storage set. A storage set belongs to exactly one cluster
+// (snuba/clusters/cluster.py asserts it), so these have to share nodes.
+const OUTCOMES_STORAGES = new Set([
+  "outcomes_raw",
+  "outcomes_hourly",
+  "outcomes_daily",
+  "outcomes_cross_org_hourly",
+  "llm_proxy_cost_raw",
+]);
+
+function topLevelStorage(name: string): string {
+  if (OUTCOMES_STORAGES.has(name)) {
+    return "outcomes_raw";
+  }
+  if (!EAP_ITEMS_STORAGE.test(name)) {
+    return name;
+  }
+  return name.endsWith("_ro") ? "eap_items_ro" : "eap_items";
+}
+
+/**
+ * The storage names to list, with storages that share a top-level storage's
+ * nodes (see topLevelStorage) folded into it. A storage is only folded into
+ * a top-level one that's in the list, and `keep` (e.g. the selected storage)
+ * is always listed so a select can still show it.
+ *
+ * @param storageNames - All storage names
+ * @param keep - A storage name to always list
+ * @returns The storage names to list, sorted
+ */
+export function getStorageOptions(
+  storageNames: string[],
+  keep?: string
+): string[] {
+  const known = new Set(storageNames);
+  const options = new Set(
+    storageNames.map((name) => {
+      const topLevel = topLevelStorage(name);
+      return known.has(topLevel) ? topLevel : name;
+    })
+  );
+  if (keep && known.has(keep)) {
+    options.add(keep);
+  }
+  return Array.from(options).sort();
+}
+
 export type NodeOption = SelectItem & {
   value: string;
   label: string;
@@ -104,15 +157,17 @@ export function getAllNodes(nodeData: ClickhouseNodeData[]): NodeOption[] {
         ...(entry.query ? ["query node"] : []),
       ];
       const storages = Array.from(entry.storages).sort();
+      // Listed with the top-level storages that stand in for others.
+      const shown = getStorageOptions(storages);
       return {
         value: hostPort,
         label: roles.length
           ? `${hostPort} (${roles.join(", ")})`
           : hostPort,
         description:
-          storages.length > 3
-            ? `${storages.slice(0, 3).join(", ")} +${storages.length - 3} more`
-            : storages.join(", "),
+          shown.length > 3
+            ? `${shown.slice(0, 3).join(", ")} +${shown.length - 3} more`
+            : shown.join(", "),
         storages,
         distributed: entry.dist && !entry.local && !entry.query,
       };
@@ -271,9 +326,12 @@ type VariantMatch = { positions: number[]; boundaryMisses: number };
 
 /**
  * The closest match of the needle in the variant starting at `start`, or null.
- * The needle's characters are matched in order, and where a separator was
- * typed, the rest of the current host word may be skipped, so "err-1" finds
- * errors-1.
+ * The needle's characters are matched in order. Where a separator was typed,
+ * the rest of the current host word may be skipped, so "err-1" finds
+ * errors-1, and so may one whole word that starts with a letter, so
+ * "eap-1-1" finds events-analytics-platform-arm-1-1. Number words (shards,
+ * replicas, ports) are never skipped, so "eap-1" doesn't find
+ * events-analytics-platform-0-1.
  */
 function matchVariantFrom(
   variant: SearchVariant,
@@ -282,6 +340,13 @@ function matchVariantFrom(
   start: number
 ): VariantMatch | null {
   const { text, wordStarts, initials } = variant;
+  function nextWordStart(position: number): number {
+    let next = position + 1;
+    while (next < text.length && !wordStarts[next]) {
+      next++;
+    }
+    return next;
+  }
   function closest(a: VariantMatch | null, b: VariantMatch | null) {
     return a === null || (b !== null && b.boundaryMisses < a.boundaryMisses)
       ? b
@@ -312,13 +377,24 @@ function matchVariantFrom(
     const hostBreak =
       wordStarts[at] && !(initials[at] && initials[at - 1]);
     let best = take(at, hostBreak !== typedBreaks[k] ? 1 : 0);
-    if (typedBreaks[k] && !wordStarts[at]) {
+    if (typedBreaks[k]) {
       // Skip to the next word. Leaving a word unfinished is a miss.
-      let next = at + 1;
-      while (next < text.length && !wordStarts[next]) {
-        next++;
+      let wordStart = at;
+      let misses = 0;
+      if (!wordStarts[at]) {
+        wordStart = nextWordStart(at);
+        misses = 1;
+        best = closest(best, take(wordStart, misses));
       }
-      best = closest(best, take(next, 1));
+      // Skipping a whole word is a miss too. An initial stands in for a
+      // word that was typed, so it can't be skipped.
+      if (
+        wordStart < text.length &&
+        !initials[wordStart] &&
+        /[a-z]/.test(text[wordStart])
+      ) {
+        best = closest(best, take(nextWordStart(wordStart), misses + 1));
+      }
     }
     return best;
   }

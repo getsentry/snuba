@@ -1,6 +1,7 @@
 import { it, expect, describe } from "@jest/globals";
 import {
   getAllNodes,
+  getStorageOptions,
   nodeMatchesSearch,
   nodeSearchMatch,
   rankNodes,
@@ -52,6 +53,61 @@ describe("getAllNodes", () => {
   });
 });
 
+describe("getStorageOptions", () => {
+  const eap = [
+    "eap_items",
+    "eap_items_ro",
+    "eap_items_2",
+    "eap_items_2_ro",
+    "eap_items_downsample_8",
+    "eap_items_downsample_8_ro",
+    "eap_item_co_occurring_attrs",
+    "eap_item_co_occurring_attrs_ro",
+  ];
+
+  it("folds eap_items storages into eap_items and eap_items_ro", () => {
+    expect(getStorageOptions([...eap, "errors"])).toEqual([
+      "eap_items",
+      "eap_items_ro",
+      "errors",
+    ]);
+  });
+
+  it("folds the outcomes storage set into outcomes_raw", () => {
+    expect(
+      getStorageOptions([
+        "outcomes_raw",
+        "outcomes_hourly",
+        "outcomes_daily",
+        "outcomes_cross_org_hourly",
+        "llm_proxy_cost_raw",
+        "querylog",
+      ])
+    ).toEqual(["outcomes_raw", "querylog"]);
+  });
+
+  it("keeps the given storage", () => {
+    expect(getStorageOptions(eap, "eap_items_downsample_8")).toEqual([
+      "eap_items",
+      "eap_items_downsample_8",
+      "eap_items_ro",
+    ]);
+  });
+
+  it("only folds into a top-level storage that's listed", () => {
+    expect(getStorageOptions(["eap_items_2", "eap_items_2_ro", "eap_items_ro"])).toEqual([
+      "eap_items_2",
+      "eap_items_ro",
+    ]);
+  });
+
+  it("folds a node's storage list too", () => {
+    const [node] = getAllNodes(eap.map((name) => storage(name, ["h"])));
+    expect(node.description).toBe("eap_items, eap_items_ro");
+    expect(node.storages).toHaveLength(eap.length);
+  });
+});
+
 describe("storageForNode", () => {
   const [node] = getAllNodes([
     storage("errors_ro", ["h"]),
@@ -87,7 +143,8 @@ describe("nodeMatchesSearch", () => {
   it("matches words shortened to their initials", () => {
     expect(nodeMatchesSearch("eap", host)).toBe(true);
     expect(nodeMatchesSearch("snuba-eap-tier1", host)).toBe(true);
-    expect(nodeMatchesSearch("eap-0-1", host)).toBe(false);
+    // tier1 is skipped as a whole word.
+    expect(nodeMatchesSearch("eap-0-1", host)).toBe(true);
     expect(nodeMatchesSearch("eapt-0-1", host)).toBe(true);
     expect(nodeMatchesSearch("seap", host)).toBe(true);
     expect(nodeMatchesSearch("gm", host)).toBe(false);
@@ -133,8 +190,27 @@ describe("nodeSearchMatch", () => {
     expect(nodeSearchMatch("err-1", errors)?.rank).toBe(0);
     expect(nodeSearchMatch("err1", errors)).toBeNull();
     expect(nodeSearchMatch("sn-err-1-0", errors)).not.toBeNull();
-    // Only the rest of one word.
-    expect(nodeSearchMatch("snuba-1", errors)).toBeNull();
+    // The rest of one word, then at most one whole word.
+    expect(nodeSearchMatch("snuba-1", errors)).not.toBeNull();
+    expect(nodeSearchMatch("snuba-1", "snuba-generic-metrics-1-0:8123")).toBeNull();
+    expect(nodeSearchMatch("sn-1", errors)?.boundaryMisses).toBe(2);
+    expect(nodeSearchMatch("sn-1", "snuba-generic-metrics-1-0:8123")).toBeNull();
+  });
+
+  it("skips one whole word at a typed separator", () => {
+    const arm = "snuba-events-analytics-platform-arm-1-1:8123";
+    const mz = "snuba-events-analytics-platform-mz-1-1:8123";
+    expect(
+      nodeSearchMatch("eap-1-1", arm)?.indexes.map((idx) => arm[idx]).join("")
+    ).toBe("eap1-1");
+    expect(nodeSearchMatch("eap-1-1", mz)?.boundaryMisses).toBe(1);
+    expect(nodeSearchMatch("eap-arm-1-1", arm)?.boundaryMisses).toBe(0);
+    // Not without a typed separator.
+    expect(nodeSearchMatch("eap11", arm)).toBeNull();
+    // Number words aren't skipped.
+    expect(
+      nodeSearchMatch("eap-1", "snuba-events-analytics-platform-0-1:8123")
+    ).toBeNull();
   });
 
   it("prefers a match at the start of a word", () => {
@@ -209,6 +285,19 @@ describe("rankNodes", () => {
       rankNodes(search, shards).map((node) => node.value);
     expect(order("eap-11")[0]).toBe("snuba-events-analytics-platform-11-1:9000");
     expect(order("eap-1-1")[0]).toBe("snuba-events-analytics-platform-1-1:9000");
+  });
+
+  it("lists hosts without a skipped word first", () => {
+    const hosts = getAllNodes(
+      ["arm-1-1", "1-1", "mz-1-1"].map((shard) =>
+        storage("eap", [`snuba-events-analytics-platform-${shard}`])
+      )
+    );
+    expect(rankNodes("eap-1-1", hosts).map((node) => node.value)).toEqual([
+      "snuba-events-analytics-platform-1-1:9000",
+      "snuba-events-analytics-platform-arm-1-1:9000",
+      "snuba-events-analytics-platform-mz-1-1:9000",
+    ]);
   });
 
   it("lists word-start matches before mid-word ones", () => {
