@@ -1,5 +1,6 @@
-from collections.abc import Sequence
-from datetime import datetime, timedelta
+import time
+from collections.abc import Generator, Sequence
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sentry_options.testing import override_options
@@ -357,6 +358,41 @@ def test_query_overlaps_replacements_processor(
     enforcer._set_query_final(query_with_future_timestamp, True)
     enforcer.process_query(query_with_future_timestamp, HTTPQuerySettings())
     assert not query_with_future_timestamp.get_from_clause().final
+
+
+@pytest.fixture
+def local_timezone(monkeypatch: pytest.MonkeyPatch) -> Generator[None]:
+    # A zone west of UTC, where local time is behind UTC.
+    with monkeypatch.context() as m:
+        m.setenv("TZ", "America/Los_Angeles")
+        time.tzset()
+        yield
+    time.tzset()
+
+
+@pytest.mark.redis_db
+@pytest.mark.usefixtures("local_timezone")
+def test_recent_replacement_overlaps_query_in_local_timezone() -> None:
+    ProjectsQueryFlags.set_project_needs_final(
+        2,
+        ReplacerState.ERRORS,
+        ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
+    )
+
+    # Query time ranges are naive UTC datetimes.
+    now = datetime.now(UTC).replace(tzinfo=None)
+    query = ClickhouseQuery(
+        Table("my_table", ColumnSet([]), storage_key=StorageKey("mytable")),
+        condition=build_and(
+            build_in("project_id", [2]),
+            build_time_range(now - timedelta(hours=1), now + timedelta(hours=1)),
+        ),
+    )
+    PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS.value).process_query(
+        query, HTTPQuerySettings()
+    )
+
+    assert query.get_from_clause().final
 
 
 @pytest.mark.redis_db
