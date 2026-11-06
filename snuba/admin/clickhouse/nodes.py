@@ -23,6 +23,9 @@ class Node(TypedDict):
 
 class Storage(TypedDict):
     storage_name: str
+    # Storages in one storage set always share a cluster, so the admin lists
+    # them as one.
+    storage_set: str
     local_table_name: str
     local_nodes: Sequence[Node]
     dist_nodes: Sequence[Node]
@@ -77,6 +80,7 @@ def get_storage_info() -> Sequence[Storage]:
     return [
         {
             "storage_name": storage_key.value,
+            "storage_set": get_storage(storage_key).get_storage_set_key().value,
             "local_table_name": _get_local_table_name(storage_key),
             "local_nodes": _get_local_nodes(storage_key),
             "dist_nodes": _get_dist_nodes(storage_key),

@@ -51,57 +51,77 @@ export function getHostsForStorage(
   return hosts;
 }
 
-// Storages that are known to share their nodes with a top-level one, which
-// stands in for them in storage lists: every eap_items storage (downsampled,
-// co-occurring attributes, ...) uses eap_items' nodes, and the read-only
-// ones eap_items_ro's.
-const EAP_ITEMS_STORAGE = /^eap_items?(_|$)/;
-
-// The outcomes storage set. A storage set belongs to exactly one cluster
-// (snuba/clusters/cluster.py asserts it), so these have to share nodes.
-const OUTCOMES_STORAGES = new Set([
-  "outcomes_raw",
-  "outcomes_hourly",
-  "outcomes_daily",
-  "outcomes_cross_org_hourly",
-  "llm_proxy_cost_raw",
-]);
-
-function topLevelStorage(name: string): string {
-  if (OUTCOMES_STORAGES.has(name)) {
-    return "outcomes_raw";
-  }
-  if (!EAP_ITEMS_STORAGE.test(name)) {
-    return name;
-  }
-  return name.endsWith("_ro") ? "eap_items_ro" : "eap_items";
+// Orders storage names by how well they stand for their storage set: the
+// shortest first, then alphabetically.
+function compareRepresentatives(a: string, b: string): number {
+  return a.length - b.length || (a < b ? -1 : a > b ? 1 : 0);
 }
 
 /**
- * The storage names to list, with storages that share a top-level storage's
- * nodes (see topLevelStorage) folded into it. A storage is only folded into
- * a top-level one that's in the list, and `keep` (e.g. the selected storage)
- * is always listed so a select can still show it.
+ * The storage names to list, with one name per storage set. A storage set
+ * always belongs to a single cluster (snuba/clusters/cluster.py asserts it),
+ * so its storages share their nodes, and the set's shortest name stands in
+ * for the rest (eap_items for every eap_items_* storage, outcomes_raw for
+ * outcomes_hourly, ...). A storage without a known set is listed as is, and
+ * `keep` (e.g. the selected storage) is always listed so a select can still
+ * show it.
  *
- * @param storageNames - All storage names
+ * @param storageNames - The storage names to fold
+ * @param storageSetOf - Each storage's storage set, if known
  * @param keep - A storage name to always list
  * @returns The storage names to list, sorted
  */
-export function getStorageOptions(
+function foldStorages(
   storageNames: string[],
+  storageSetOf: (name: string) => string | undefined,
   keep?: string
 ): string[] {
-  const known = new Set(storageNames);
-  const options = new Set(
-    storageNames.map((name) => {
-      const topLevel = topLevelStorage(name);
-      return known.has(topLevel) ? topLevel : name;
-    })
-  );
-  if (keep && known.has(keep)) {
+  const bySet = new Map<string, string>();
+  const options = new Set<string>();
+  for (const name of storageNames) {
+    const storageSet = storageSetOf(name);
+    if (storageSet === undefined) {
+      options.add(name);
+      continue;
+    }
+    const current = bySet.get(storageSet);
+    if (current === undefined || compareRepresentatives(name, current) < 0) {
+      bySet.set(storageSet, name);
+    }
+  }
+  bySet.forEach((name) => options.add(name));
+  if (keep && storageNames.includes(keep)) {
     options.add(keep);
   }
   return Array.from(options).sort();
+}
+
+function storageSetLookup(
+  nodeData: ClickhouseNodeData[]
+): (name: string) => string | undefined {
+  const storageSets = new Map(
+    nodeData.map((nodeInfo) => [nodeInfo.storage_name, nodeInfo.storage_set])
+  );
+  return (name) => storageSets.get(name) ?? undefined;
+}
+
+/**
+ * The storages to offer in a storage picker, one per storage set (see
+ * foldStorages).
+ *
+ * @param nodeData - Array of ClickhouseNodeData
+ * @param keep - A storage name to always list, e.g. the selected one
+ * @returns The storage names to list, sorted
+ */
+export function getStorageOptions(
+  nodeData: ClickhouseNodeData[],
+  keep?: string
+): string[] {
+  return foldStorages(
+    nodeData.map((nodeInfo) => nodeInfo.storage_name),
+    storageSetLookup(nodeData),
+    keep
+  );
 }
 
 export type NodeOption = SelectItem & {
@@ -149,6 +169,7 @@ export function getAllNodes(nodeData: ClickhouseNodeData[]): NodeOption[] {
     }
   }
 
+  const storageSetOf = storageSetLookup(nodeData);
   return Array.from(byHostPort.entries())
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([hostPort, entry]) => {
@@ -157,8 +178,8 @@ export function getAllNodes(nodeData: ClickhouseNodeData[]): NodeOption[] {
         ...(entry.query ? ["query node"] : []),
       ];
       const storages = Array.from(entry.storages).sort();
-      // Listed with the top-level storages that stand in for others.
-      const shown = getStorageOptions(storages);
+      // Listed one per storage set.
+      const shown = foldStorages(storages, storageSetOf);
       return {
         value: hostPort,
         label: roles.length
@@ -195,9 +216,7 @@ export function storageForNode(node: NodeOption, preferred?: string): string {
   if (node.storages.includes("querylog")) {
     return "querylog";
   }
-  return [...node.storages].sort(
-    (a, b) => a.length - b.length || (a < b ? -1 : a > b ? 1 : 0)
-  )[0];
+  return [...node.storages].sort(compareRepresentatives)[0];
 }
 
 // Searchable text without separators, where each of its characters sits in

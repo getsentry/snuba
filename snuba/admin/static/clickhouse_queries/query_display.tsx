@@ -367,10 +367,7 @@ function QueryDisplay(props: {
                     value={query.storage || ""}
                     onChange={selectStorage}
                     name="storage"
-                    options={getStorageOptions(
-                      nodeData.map((storage) => storage.storage_name),
-                      query.storage
-                    )}
+                    options={getStorageOptions(nodeData, query.storage)}
                   />
                 </div>
                 {flagged === "storage" && (

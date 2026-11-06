@@ -54,55 +54,64 @@ describe("getAllNodes", () => {
 });
 
 describe("getStorageOptions", () => {
-  const eap = [
-    "eap_items",
-    "eap_items_ro",
-    "eap_items_2",
-    "eap_items_2_ro",
-    "eap_items_downsample_8",
-    "eap_items_downsample_8_ro",
-    "eap_item_co_occurring_attrs",
-    "eap_item_co_occurring_attrs_ro",
-  ];
+  // As in the storage configuration.
+  const storageSets: Record<string, string> = {
+    eap_items: "events_analytics_platform",
+    eap_items_2: "events_analytics_platform",
+    eap_items_downsample_8: "events_analytics_platform",
+    eap_item_co_occurring_attrs: "events_analytics_platform",
+    eap_items_ro: "events_analytics_platform_ro",
+    eap_items_2_ro: "events_analytics_platform_ro",
+    eap_items_downsample_8_ro: "events_analytics_platform_ro",
+    eap_item_co_occurring_attrs_ro: "events_analytics_platform_ro",
+    outcomes_raw: "outcomes",
+    outcomes_hourly: "outcomes",
+    outcomes_daily: "outcomes",
+    outcomes_cross_org_hourly: "outcomes",
+    llm_proxy_cost_raw: "outcomes",
+    errors: "events",
+  };
+  const withSets = (names: string[], host = "h") =>
+    names.map((name) => ({
+      ...storage(name, [host]),
+      storage_set: storageSets[name],
+    }));
+  const eap = Object.keys(storageSets).filter((name) => name.startsWith("eap"));
+  const outcomes = Object.keys(storageSets).filter(
+    (name) => storageSets[name] === "outcomes"
+  );
 
-  it("folds eap_items storages into eap_items and eap_items_ro", () => {
-    expect(getStorageOptions([...eap, "errors"])).toEqual([
+  it("lists the shortest storage of each storage set", () => {
+    expect(getStorageOptions(withSets([...eap, ...outcomes, "errors"]))).toEqual([
       "eap_items",
       "eap_items_ro",
       "errors",
+      "outcomes_raw",
     ]);
   });
 
-  it("folds the outcomes storage set into outcomes_raw", () => {
-    expect(
-      getStorageOptions([
-        "outcomes_raw",
-        "outcomes_hourly",
-        "outcomes_daily",
-        "outcomes_cross_org_hourly",
-        "llm_proxy_cost_raw",
-        "querylog",
-      ])
-    ).toEqual(["outcomes_raw", "querylog"]);
-  });
-
   it("keeps the given storage", () => {
-    expect(getStorageOptions(eap, "eap_items_downsample_8")).toEqual([
+    expect(getStorageOptions(withSets(eap), "eap_items_downsample_8")).toEqual([
       "eap_items",
       "eap_items_downsample_8",
       "eap_items_ro",
     ]);
   });
 
-  it("only folds into a top-level storage that's listed", () => {
-    expect(getStorageOptions(["eap_items_2", "eap_items_2_ro", "eap_items_ro"])).toEqual([
-      "eap_items_2",
-      "eap_items_ro",
-    ]);
+  it("picks from the storages it's given", () => {
+    expect(
+      getStorageOptions(withSets(["eap_items_2", "eap_items_downsample_8"]))
+    ).toEqual(["eap_items_2"]);
+  });
+
+  it("lists storages without a known set as they are", () => {
+    expect(
+      getStorageOptions([storage("querylog", ["h"]), storage("spans", ["h"])])
+    ).toEqual(["querylog", "spans"]);
   });
 
   it("folds a node's storage list too", () => {
-    const [node] = getAllNodes(eap.map((name) => storage(name, ["h"])));
+    const [node] = getAllNodes(withSets(eap));
     expect(node.description).toBe("eap_items, eap_items_ro");
     expect(node.storages).toHaveLength(eap.length);
   });

@@ -23,19 +23,27 @@ Manual host entry still shows a storage picker, since a typed host has no other 
 
 ## Storage lists
 
-Many storages are known to use the same nodes as a top-level storage. Storage lists show only the top-level storage. This applies to the storage line under each node and to the storage pickers in "By storage" and "Manual" modes.
+Storage lists show one storage per **storage set**. A storage set always belongs to exactly one cluster (asserted in `snuba/clusters/cluster.py`), so its storages share their nodes, and listing them all would only repeat the same nodes under different names. `/clickhouse_nodes` reports each storage's set. This applies to the storage line under each node and to the storage pickers in "By storage" and "Manual" modes.
 
-| Folded storages | Shown as | Why they share nodes |
+The shortest name in the set stands in for the rest, with ties broken alphabetically. With the current configuration:
+
+| Storage set | Shown as | Folded into it |
 | --- | --- | --- |
-| Every `eap_items*` and `eap_item_*` storage (`eap_items_2`, the `downsample_*` ones, `eap_item_co_occurring_attrs`, …), except the `_ro` ones | `eap_items` | Known to use the same cluster. |
-| The `_ro` ones of those | `eap_items_ro` | Known to use the same cluster. |
-| `outcomes_hourly`, `outcomes_daily`, `outcomes_cross_org_hourly`, `llm_proxy_cost_raw` | `outcomes_raw` | They're all in the `outcomes` storage set, and a storage set belongs to exactly one cluster (asserted in `snuba/clusters/cluster.py`). |
+| `events_analytics_platform` | `eap_items` | `eap_items_2`, the `downsample_*` storages, `eap_item_co_occurring_attrs`(`_v2`), `eap_items_dlq_replay` |
+| `events_analytics_platform_ro` | `eap_items_ro` | the `_ro` versions of those |
+| `outcomes` | `outcomes_raw` | `outcomes_hourly`, `outcomes_daily`, `outcomes_cross_org_hourly`, `llm_proxy_cost_raw` |
+| `metrics` | `metrics_raw` | `metrics_counters`, `metrics_distributions`, `metrics_sets`, `org_metrics_counters` |
+| `functions` | `functions` | `functions_raw` |
+| `replays` | `replays` | `replays_aggregated` |
 
-- A storage is folded into a top-level one only if that top-level storage is in the same list. On a node that lists `eap_items_2` but not `eap_items`, `eap_items_2` is shown.
+New storages are folded into their set automatically; nothing here needs updating.
+
+- The representative is chosen from the storages in that list. On a node that lists `eap_items_2` but not `eap_items`, `eap_items_2` is shown.
 - The selected storage is always in the picker, even if it would be folded, so a shared link to `eap_items_downsample_8` still shows it.
+- A storage whose set isn't reported is listed as it is.
 - Folding only affects what's listed. The storage sent with a query is still chosen from every storage that lists the node.
 
-The folding rule is `topLevelStorage` in `clickhouse_node_utils.tsx`.
+The folding is `foldStorages` in `clickhouse_node_utils.tsx`.
 
 ## Words
 
