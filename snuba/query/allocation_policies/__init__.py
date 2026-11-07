@@ -527,11 +527,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                 return passthrough.get_quota_allowance(tenant_ids, query_id, load_info)
 
             decision = allowance.decision(self, load_info)
-            decision_tags = {
-                "referrer": str(tenant_ids.get("referrer", "no_referrer")),
-                "org_id": str(tenant_ids.get("organization_id", "no_org_id")),
-                "project_id": str(tenant_ids.get("project_id", "no_project_id")),
-            }
+            decision_tags = {"referrer": str(tenant_ids.get("referrer", "no_referrer"))}
             match decision:
                 case QuotaAllowanceDecision.PARDONED:
                     self.metrics.increment("db_request_pardoned", tags=decision_tags)
@@ -539,7 +535,15 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                         load_info.to_dict() if load_info is not None else {}
                     )
                 case QuotaAllowanceDecision.REJECTED:
-                    self.metrics.increment("db_request_rejected", tags=decision_tags)
+                    # org_id and project_id are high cardinality, so only rejections carry them.
+                    self.metrics.increment(
+                        "db_request_rejected",
+                        tags={
+                            **decision_tags,
+                            "org_id": str(tenant_ids.get("organization_id", "no_org_id")),
+                            "project_id": str(tenant_ids.get("project_id", "no_project_id")),
+                        },
+                    )
                 case QuotaAllowanceDecision.THROTTLED:
                     self.metrics.increment(
                         "db_request_throttled",
