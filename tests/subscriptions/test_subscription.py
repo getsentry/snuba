@@ -342,6 +342,10 @@ class TestRPCSubscriptionCreator:
 
     def setup_method(self) -> None:
         self.dataset = get_dataset("events_analytics_platform")
+        # The creator reads the topic's partition count, so the topic must exist
+        # rather than rely on an earlier test having created it.
+        admin_client = AdminClient(get_default_kafka_configuration())
+        create_topics(admin_client, [SnubaTopic.ITEMS])
 
     @pytest.mark.eap
     @pytest.mark.redis_db
