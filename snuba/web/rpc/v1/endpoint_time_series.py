@@ -492,6 +492,7 @@ _VALID_GRANULARITY_SECS = {
     6 * 3600,
     12 * 3600,
     24 * 3600,  # hours
+    30 * 24 * 3600,  # days
 }
 
 # MAX 1 minute granularity over 7 days (10080 buckets) + additional buckets to allow for partial time buckets on

@@ -2205,6 +2205,7 @@ class TestUtils:
             (BASE_TIME, BASE_TIME + timedelta(hours=1), 0),
             (BASE_TIME + timedelta(hours=1), BASE_TIME, 0),
             (BASE_TIME, BASE_TIME + timedelta(hours=1), 3 * 3600),
+            (BASE_TIME, BASE_TIME + timedelta(days=7), 30 * 24 * 3600),
         ],
     )
     def test_bad_granularity(self, start_ts: datetime, end_ts: datetime, granularity: int) -> None:
@@ -2259,3 +2260,32 @@ class TestUtils:
         _validate_time_buckets(message)
         # add another bucket to fit into granularity_secs
         assert message.meta.end_timestamp.seconds == int(BASE_TIME.timestamp()) + 75
+
+    def test_thirty_day_granularity(self) -> None:
+        start = int(BASE_TIME.timestamp())
+        end = start + int(timedelta(days=90).total_seconds())
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=start),
+                end_timestamp=Timestamp(seconds=end),
+                debug=True,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+            ],
+            granularity_secs=30 * 24 * 3600,
+        )
+
+        _validate_time_buckets(message)
+        # 90 days divides evenly into three 30 day buckets
+        assert message.meta.end_timestamp.seconds == end
