@@ -599,6 +599,36 @@ def test_limit_bytes_read(
     assert allowance.max_bytes_to_read == int(scan_limit / max_bytes_to_read_scan_limit_divider)
 
 
+@pytest.mark.redis_db
+def test_max_bytes_to_read_caps_org_queries() -> None:
+    policy = BytesScannedRejectingPolicy(
+        storage_key=ResourceIdentifier(StorageKey("errors")), max_bytes_to_read=300
+    )
+    _configure_policy(policy)
+    org_query: dict[str, str | int] = {"organization_id": 123, "referrer": "r"}
+    assert policy.get_quota_allowance(org_query, QUERY_ID).max_bytes_to_read == 300
+    project_query: dict[str, str | int] = {"organization_id": 123, "project_id": 1, "referrer": "r"}
+    assert policy.get_quota_allowance(project_query, QUERY_ID).max_bytes_to_read != 300
+
+
+@pytest.mark.redis_db
+def test_per_org_caps_take_precedence_over_max_bytes_to_read() -> None:
+    policy = BytesScannedRejectingPolicy(
+        storage_key=ResourceIdentifier(StorageKey("errors")), max_bytes_to_read=300
+    )
+    _configure_policy(policy)
+    set_component_config(policy, "organization_max_bytes_to_read", 200, {"organization_id": 123})
+    tenant_ids: dict[str, str | int] = {"organization_id": 123, "referrer": "r"}
+    assert policy.get_quota_allowance(tenant_ids, QUERY_ID).max_bytes_to_read == 200
+    set_component_config(
+        policy,
+        "organization_referrer_max_bytes_to_read",
+        100,
+        {"organization_id": 123, "referrer": "r"},
+    )
+    assert policy.get_quota_allowance(tenant_ids, QUERY_ID).max_bytes_to_read == 100
+
+
 def _record_scan(
     policy: AllocationPolicy, tenant_ids: dict[str, str | int], bytes_scanned: int
 ) -> None:
