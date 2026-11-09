@@ -68,6 +68,7 @@ def get_node_for_table(admin_api: FlaskClient, storage_name: str) -> tuple[str, 
 
 
 @pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_clickhouse_nodes_include_storage_set(admin_api: FlaskClient) -> None:
     response = admin_api.get("/clickhouse_nodes")
     assert response.status_code == 200, response
