@@ -1641,7 +1641,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.5.6",
+ "socket2 0.4.10",
  "tokio",
  "tower-service",
  "tracing",
@@ -3271,6 +3271,7 @@ dependencies = [
  "num_enum",
  "openssl-sys",
  "pkg-config",
+ "zstd-sys",
 ]
 
 [[package]]
@@ -3611,9 +3612,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.45"
+version = "0.23.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"
+checksum = "48e13bd8c0e9365c43cfa5c9e8f9ad49d3c8444926c9aac819e0e4dc503c8fdf"
 dependencies = [
  "once_cell",
  "rustls-pki-types",
@@ -3949,9 +3950,9 @@ dependencies = [
 
 [[package]]
 name = "sentry_arroyo"
-version = "2.48.0"
+version = "2.49.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b962caedc7c28baaf90780020e464d1f2436c6c2a38008dcfd43d96536802ce"
+checksum = "fb0a3d013238e9248cce3c6a98e9cd7b9d13b47e121ccba85414da1e2dc17903"
 dependencies = [
  "async-stream",
  "chrono",
@@ -3975,9 +3976,9 @@ dependencies = [
 
 [[package]]
 name = "sentry_protos"
-version = "0.80.0"
+version = "0.100.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34363839d2a495d3d21584efb5b02320bcefa0bbf32e2d5ac21a842a2030df3b"
+checksum = "4406285166d7561ef044a3b930b55590cd11ca0df1c934d1c86811be365a629b"
 dependencies = [
  "prost",
  "prost-types",
@@ -3987,16 +3988,15 @@ dependencies = [
 
 [[package]]
 name = "sentry_usage_accountant"
-version = "0.1.2"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88a60bb78d48a84d672855fa919d6ff462e243929f7106c89d7b08b8a818eea9"
+checksum = "9893113dbc7d8c93b69a1f81bd707af33d7636ee8a69ee622976dc3041ff7c97"
 dependencies = [
  "chrono",
- "rdkafka",
+ "sentry_arroyo",
  "serde",
  "serde_json",
  "thiserror 1.0.58",
- "tracing",
 ]
 
 [[package]]
@@ -4370,7 +4370,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand 2.3.0",
- "getrandom 0.4.2",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.4",
  "windows-sys 0.61.2",
@@ -5734,9 +5734,9 @@ dependencies = [
 
 [[package]]
 name = "zstd-sys"
-version = "2.0.10+zstd.1.5.6"
+version = "2.1.2+zstd.1.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c253a4914af5bafc8fa8c86ee400827e83cf6ec01195ec1f1ed8441bf00d65aa"
+checksum = "481ada9c543b2323cbb7bbdbb5249177fbf0188ed959ed2c15e4b22421c84ed3"
 dependencies = [
  "cc",
  "pkg-config",

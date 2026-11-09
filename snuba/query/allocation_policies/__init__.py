@@ -527,19 +527,23 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                 return passthrough.get_quota_allowance(tenant_ids, query_id, load_info)
 
             decision = allowance.decision(self, load_info)
-            referrer = str(tenant_ids.get("referrer", "no_referrer"))
+            decision_tags = {
+                "referrer": str(tenant_ids.get("referrer", "no_referrer")),
+                "org_id": str(tenant_ids.get("organization_id", "no_org_id")),
+                "project_id": str(tenant_ids.get("project_id", "no_project_id")),
+            }
             match decision:
                 case QuotaAllowanceDecision.PARDONED:
-                    self.metrics.increment("db_request_pardoned", tags={"referrer": referrer})
+                    self.metrics.increment("db_request_pardoned", tags=decision_tags)
                     allowance.explanation["idle_pardon"] = (
                         load_info.to_dict() if load_info is not None else {}
                     )
                 case QuotaAllowanceDecision.REJECTED:
-                    self.metrics.increment("db_request_rejected", tags={"referrer": referrer})
+                    self.metrics.increment("db_request_rejected", tags=decision_tags)
                 case QuotaAllowanceDecision.THROTTLED:
                     self.metrics.increment(
                         "db_request_throttled",
-                        tags={"referrer": referrer, "max_threads": str(allowance.max_threads)},
+                        tags={**decision_tags, "max_threads": str(allowance.max_threads)},
                     )
                     span.set_attribute("db_request_throttled", True)
                 case QuotaAllowanceDecision.ALLOWED:

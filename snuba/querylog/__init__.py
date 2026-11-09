@@ -44,6 +44,7 @@ _ITEM_TYPE_TO_APP_FEATURE: dict[str, str] = {
     "TRACE_ITEM_TYPE_USER_SESSION": "sessions",
     "TRACE_ITEM_TYPE_PROCESSING_ERROR": "processing_errors",
     "TRACE_ITEM_TYPE_WORKFLOW_ENGINE_EVALUATION": "workflow_engine_evaluations",
+    "TRACE_ITEM_TYPE_ENRICHMENT_ATTRIBUTES": "telemetry_classifiers",
     "TRACE_ITEM_TYPE_UNSPECIFIED": "null",
 }
 

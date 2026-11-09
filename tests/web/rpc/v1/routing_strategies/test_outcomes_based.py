@@ -23,6 +23,8 @@ from snuba.web import QueryResult
 from snuba.web.rpc.storage_routing.common import extract_message_meta
 from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
     OutcomesBasedRoutingStrategy,
+    get_tier_from_downgrade_level,
+    select_downgrade_level,
 )
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingContext,
@@ -102,6 +104,38 @@ def _retention_days_override(
             "downsampled": {"default": downsampled_default, "max": downsampled_max},
         }
     }
+
+
+@pytest.mark.parametrize(
+    ("ingested_items", "max_items", "expected_level"),
+    [
+        (100, 100, 0),
+        (101, 100, 1),
+        (1_000, 100, 1),
+        (1_001, 100, 2),
+        (10_000, 100, 2),
+        (10_001, 100, 3),
+    ],
+)
+def test_select_downgrade_level(ingested_items: int, max_items: int, expected_level: int) -> None:
+    assert select_downgrade_level(ingested_items, max_items) == expected_level
+
+
+@pytest.mark.parametrize(
+    ("initial_tier", "level", "expected_tier"),
+    [
+        (Tier.TIER_1, 0, Tier.TIER_1),
+        (Tier.TIER_1, 1, Tier.TIER_8),
+        (Tier.TIER_1, 2, Tier.TIER_64),
+        (Tier.TIER_1, 3, Tier.TIER_512),
+        (Tier.TIER_8, 0, Tier.TIER_8),
+        (Tier.TIER_8, 1, Tier.TIER_64),
+        (Tier.TIER_8, 2, Tier.TIER_512),
+        (Tier.TIER_8, 3, Tier.TIER_512),
+    ],
+)
+def test_get_tier_from_downgrade_level(initial_tier: Tier, level: int, expected_tier: Tier) -> None:
+    assert get_tier_from_downgrade_level(initial_tier, level) == expected_tier
 
 
 @pytest.fixture
@@ -561,6 +595,107 @@ def test_outcomes_based_routing_highest_accuracy_mode(store_outcomes_fixture: An
     assert routing_decision.tier == Tier.TIER_1
     assert routing_decision.clickhouse_settings == {"max_threads": 10}
     assert routing_decision.can_run
+
+
+@pytest.mark.eap
+@pytest.mark.redis_db
+def test_outcomes_based_routing_low_priority_mode_starts_at_tier_8(
+    store_outcomes_fixture: Any,
+) -> None:
+    strategy = OutcomesBasedRoutingStrategy()
+
+    request = TraceItemTableRequest(meta=_get_request_meta())
+    request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_LOW_PRIORITY
+    routing_decision = strategy.get_routing_decision(
+        RoutingContext(
+            in_msg=request,
+            timer=Timer("test"),
+            query_id=uuid.uuid4().hex,
+        )
+    )
+
+    assert routing_decision.tier == Tier.TIER_8
+    assert routing_decision.clickhouse_settings == {"max_threads": 10}
+    assert routing_decision.can_run
+
+
+@pytest.mark.eap
+@pytest.mark.redis_db
+def test_outcomes_based_routing_low_priority_is_one_step_coarser_than_normal(
+    store_outcomes_fixture: Any,
+) -> None:
+    strategy = OutcomesBasedRoutingStrategy()
+
+    request = TraceItemTableRequest(meta=_get_request_meta())
+    request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_LOW_PRIORITY
+    with override_options(
+        "snuba",
+        {
+            "storage_routing_max_items_before_downsampling": {
+                "OutcomesBasedRoutingStrategy": 5_000_000
+            }
+        },
+    ):
+        routing_decision = strategy.get_routing_decision(
+            RoutingContext(
+                in_msg=request,
+                timer=Timer("test"),
+                query_id=uuid.uuid4().hex,
+            )
+        )
+
+    assert routing_decision.tier == Tier.TIER_64
+
+
+@pytest.mark.eap
+@pytest.mark.redis_db
+def test_outcomes_based_routing_low_priority_tier_is_configurable(
+    store_outcomes_fixture: Any,
+) -> None:
+    strategy = OutcomesBasedRoutingStrategy()
+
+    request = TraceItemTableRequest(meta=_get_request_meta())
+    request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_LOW_PRIORITY
+    with override_options("snuba", {"low_priority_tier": 64}):
+        routing_decision = strategy.get_routing_decision(
+            RoutingContext(
+                in_msg=request,
+                timer=Timer("test"),
+                query_id=uuid.uuid4().hex,
+            )
+        )
+
+    assert routing_decision.tier == Tier.TIER_64
+
+
+@pytest.mark.eap
+@pytest.mark.redis_db
+def test_outcomes_based_routing_low_priority_walks_from_configured_initial(
+    store_outcomes_fixture: Any,
+) -> None:
+    # initial TIER_64 + outcomes level 1 walks to TIER_512
+    strategy = OutcomesBasedRoutingStrategy()
+
+    request = TraceItemTableRequest(meta=_get_request_meta())
+    request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_LOW_PRIORITY
+    with override_options(
+        "snuba",
+        {
+            "low_priority_tier": 64,
+            "storage_routing_max_items_before_downsampling": {
+                "OutcomesBasedRoutingStrategy": 5_000_000
+            },
+        },
+    ):
+        routing_decision = strategy.get_routing_decision(
+            RoutingContext(
+                in_msg=request,
+                timer=Timer("test"),
+                query_id=uuid.uuid4().hex,
+            )
+        )
+
+    assert routing_decision.tier == Tier.TIER_512
 
 
 @pytest.mark.eap
