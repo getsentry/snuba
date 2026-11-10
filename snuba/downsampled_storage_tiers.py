@@ -21,5 +21,5 @@ class Tier(IntEnum):
         max_idx = len(ladder) - 1
         self_idx = ladder.index(self)
         next_idx = min(self_idx + 1, max_idx)
-        
+
         return ladder[next_idx]
