@@ -118,9 +118,9 @@ def test_exceeds_false_when_all_within() -> None:
     assert load_info.exceeds({"cluster_load": 90.0, "concurrent_queries": 100.0}) is False
 
 
-def test_exceeds_empty_thresholds_is_true() -> None:
-    # No thresholds configured => keep enforcing, so an idle cluster still "exceeds".
-    assert LoadInfo(cluster_load=1.0).exceeds({}) is True
+def test_exceeds_empty_thresholds_is_false() -> None:
+    # No ceilings configured => nothing is exceeded (vacuous).
+    assert LoadInfo(cluster_load=1.0).exceeds({}) is False
 
 
 def test_exceeds_true_when_field_negative() -> None:

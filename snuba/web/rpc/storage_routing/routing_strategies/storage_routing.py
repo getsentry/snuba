@@ -205,7 +205,7 @@ def load_exceeds_any_reject_threshold(
         return False
     for policy in policies:
         reject = policy.thresholds.get("reject") or {}
-        if reject and load_info.exceeds(reject):
+        if load_info.exceeds(reject):
             return True
     return False
 
