@@ -190,6 +190,25 @@ class CombinedAllocationPoliciesRecommendations(TypedDict):
     settings: dict[str, Any]
 
 
+_MODES_THAT_ALLOW_LOAD_DOWNSAMPLE = {
+    DownsampledStorageConfig.MODE_NORMAL,
+    DownsampledStorageConfig.MODE_LOW_PRIORITY,
+}
+
+
+def load_exceeds_any_reject_threshold(
+    policies: list[AllocationPolicy],
+    load_info: LoadInfo | None,
+) -> bool:
+    if load_info is None:
+        return False
+    for policy in policies:
+        reject = policy.thresholds.get("reject") or {}
+        if reject and load_info.exceeds(reject):
+            return True
+    return False
+
+
 def get_stats_dict(
     routing_decision: RoutingDecision,
 ) -> snuba_queries_v1._QueryMetadataStats:
@@ -521,6 +540,13 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 )
 
                 self._update_routing_decision(routing_decision)
+
+                mode = extract_message_meta(routing_context.in_msg).downsampled_storage_config.mode
+                if mode in _MODES_THAT_ALLOW_LOAD_DOWNSAMPLE and load_exceeds_any_reject_threshold(
+                    self.get_allocation_policies(routing_context.tenant_ids),
+                    routing_context.cluster_load_info,
+                ):
+                    routing_decision.tier = max(routing_decision.tier, Tier.TIER_512)
 
                 org_overrides = self._get_org_clickhouse_setting_overrides(
                     routing_context.tenant_ids

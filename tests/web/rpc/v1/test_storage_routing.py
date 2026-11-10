@@ -22,6 +22,7 @@ from snuba.query.allocation_policies import (
     NO_SUGGESTION,
     NO_UNITS,
     AllocationPolicy,
+    PassthroughPolicy,
     QueryResultOrError,
     QuotaAllowance,
 )
@@ -43,6 +44,7 @@ from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
     RoutingContext,
     RoutingDecision,
+    load_exceeds_any_reject_threshold,
 )
 from snuba.web.rpc.v1.endpoint_time_series import EndpointTimeSeries
 
@@ -853,3 +855,93 @@ def test_routing_hint_invalid(hint: str) -> None:
 
 def test_routing_hint_empty_is_tier_1() -> None:
     assert decode_routing_hint("") == Tier.TIER_1
+
+
+class SelectsTier8CannotRun(RoutingStrategySelectsTier8):
+    def _update_routing_decision(self, routing_decision: RoutingDecision) -> None:
+        super()._update_routing_decision(routing_decision)
+        routing_decision.can_run = False
+
+
+def _reject_policy() -> PassthroughPolicy:
+    return PassthroughPolicy(
+        ResourceIdentifier("EAP"),
+        thresholds={"reject": {"cluster_load": 1.0}},
+    )
+
+
+_HOT_LOAD = LoadInfo(cluster_load=2.0)
+_COLD_LOAD = LoadInfo(cluster_load=0.5)
+
+
+@pytest.mark.parametrize(
+    "policies, load, expected",
+    [
+        ([], _HOT_LOAD, False),
+        ("empty", _HOT_LOAD, False),
+        ("reject", None, False),
+        ("reject", _COLD_LOAD, False),
+        ("empty_and_reject", _HOT_LOAD, True),
+        ("reject", _HOT_LOAD, True),
+    ],
+)
+def test_load_exceeds_any_reject_threshold(
+    policies: list[AllocationPolicy] | str,
+    load: LoadInfo | None,
+    expected: bool,
+) -> None:
+    empty = PassthroughPolicy(ResourceIdentifier("EAP"))
+    reject = _reject_policy()
+    resolved: list[AllocationPolicy]
+    if policies == "empty":
+        resolved = [empty]
+    elif policies == "reject":
+        resolved = [reject]
+    elif policies == "empty_and_reject":
+        resolved = [empty, reject]
+    else:
+        resolved = []
+    assert load_exceeds_any_reject_threshold(resolved, load) is expected
+
+
+def _hot_reject_decision(
+    strategy: BaseRoutingStrategy, mode: DownsampledStorageConfig.Mode.ValueType
+) -> RoutingDecision:
+    ctx = deepcopy(ROUTING_CONTEXT)
+    in_msg = _get_in_msg()
+    in_msg.meta.downsampled_storage_config.mode = mode
+    ctx.in_msg = in_msg
+    with (
+        mock.patch.object(strategy, "get_allocation_policies", return_value=[_reject_policy()]),
+        mock.patch(
+            "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.get_cluster_loadinfo",
+            return_value=_HOT_LOAD,
+        ),
+    ):
+        return strategy.get_routing_decision(ctx)
+
+
+@pytest.mark.redis_db
+@pytest.mark.parametrize(
+    "mode, expected_tier",
+    [
+        (DownsampledStorageConfig.MODE_NORMAL, Tier.TIER_512),
+        (DownsampledStorageConfig.MODE_LOW_PRIORITY, Tier.TIER_512),
+        (DownsampledStorageConfig.MODE_HIGHEST_ACCURACY, Tier.TIER_1),
+        (DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME, Tier.TIER_1),
+        (DownsampledStorageConfig.MODE_UNSPECIFIED, Tier.TIER_1),
+    ],
+)
+def test_reject_threshold_downsample_respects_mode(
+    mode: DownsampledStorageConfig.Mode.ValueType, expected_tier: Tier
+) -> None:
+    decision = _hot_reject_decision(AlwaysTier1RoutingStrategy(), mode)
+    assert decision.tier == expected_tier
+    assert decision.can_run is True
+
+
+@pytest.mark.redis_db
+def test_reject_threshold_downsample_does_not_flip_can_run() -> None:
+    decision = _hot_reject_decision(SelectsTier8CannotRun(), DownsampledStorageConfig.MODE_NORMAL)
+    assert decision.tier == Tier.TIER_512
+    assert decision.can_run is False
