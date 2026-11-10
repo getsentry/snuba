@@ -9,7 +9,6 @@ IMAGE_TAG="${GO_REVISION_SNUBA_REPO}"
   --label-selector="${LABEL_SELECTOR}" \
   --image="us-docker.pkg.dev/sentryio/snuba-mr/image:${IMAGE_TAG}" \
   --container-name="snuba" \
-  --container-name="dlq-consumer" \
   --container-name="eap-items-subscriptions-executor" \
   --container-name="eap-items-subscriptions-scheduler" \
   --container-name="errors-replacer" \
