@@ -867,8 +867,8 @@ def test_routing_hint_empty_is_tier_1() -> None:
         (Tier.TIER_NO_TIER, Tier.TIER_1),
     ],
 )
-def test_next_coarser(start: Tier, expected: Tier) -> None:
-    assert start.next_coarser() == expected
+def test_lower(start: Tier, expected: Tier) -> None:
+    assert start.lower() == expected
 
 
 class SelectsTier8CannotRun(RoutingStrategySelectsTier8):

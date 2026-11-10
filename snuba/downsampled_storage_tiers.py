@@ -14,7 +14,7 @@ class Tier(IntEnum):
     def valid_tiers(cls) -> list[Tier]:
         return [tier for tier in cls if tier > 0]
 
-    def next_coarser(self) -> Tier:
+    def lower(self) -> Tier:
         ladder = self.valid_tiers()
         try:
             idx = ladder.index(self)

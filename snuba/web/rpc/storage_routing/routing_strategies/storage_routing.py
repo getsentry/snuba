@@ -548,7 +548,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                     routing_context.cluster_load_info,
                 )
                 if allows_downsample(mode) and cluster_over_reject:
-                    routing_decision.tier = routing_decision.tier.next_coarser()
+                    routing_decision.tier = routing_decision.tier.lower()
 
                 org_overrides = self._get_org_clickhouse_setting_overrides(
                     routing_context.tenant_ids
