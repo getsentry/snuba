@@ -857,6 +857,20 @@ def test_routing_hint_empty_is_tier_1() -> None:
     assert decode_routing_hint("") == Tier.TIER_1
 
 
+@pytest.mark.parametrize(
+    "start, expected",
+    [
+        (Tier.TIER_1, Tier.TIER_8),
+        (Tier.TIER_8, Tier.TIER_64),
+        (Tier.TIER_64, Tier.TIER_512),
+        (Tier.TIER_512, Tier.TIER_512),
+        (Tier.TIER_NO_TIER, Tier.TIER_1),
+    ],
+)
+def test_next_coarser(start: Tier, expected: Tier) -> None:
+    assert start.next_coarser() == expected
+
+
 class SelectsTier8CannotRun(RoutingStrategySelectsTier8):
     def _update_routing_decision(self, routing_decision: RoutingDecision) -> None:
         super()._update_routing_decision(routing_decision)
@@ -912,8 +926,8 @@ def _routing_decision_when_cluster_exceeds_reject(
 @pytest.mark.parametrize(
     "mode, expected_tier",
     [
-        (DownsampledStorageConfig.MODE_NORMAL, Tier.TIER_512),
-        (DownsampledStorageConfig.MODE_LOW_PRIORITY, Tier.TIER_512),
+        (DownsampledStorageConfig.MODE_NORMAL, Tier.TIER_8),
+        (DownsampledStorageConfig.MODE_LOW_PRIORITY, Tier.TIER_64),
         (DownsampledStorageConfig.MODE_HIGHEST_ACCURACY, Tier.TIER_1),
         (DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME, Tier.TIER_1),
         (DownsampledStorageConfig.MODE_UNSPECIFIED, Tier.TIER_1),
@@ -932,5 +946,5 @@ def test_reject_threshold_downsample_does_not_flip_can_run() -> None:
     decision = _routing_decision_when_cluster_exceeds_reject(
         SelectsTier8CannotRun(), DownsampledStorageConfig.MODE_NORMAL
     )
-    assert decision.tier == Tier.TIER_512
+    assert decision.tier == Tier.TIER_64
     assert decision.can_run is False
