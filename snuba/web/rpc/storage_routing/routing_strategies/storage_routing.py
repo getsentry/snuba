@@ -155,6 +155,7 @@ class RoutingDecision:
     can_run: bool | None = None
     time_window: TimeWindow | None = None
     is_throttled: bool | None = None
+    is_downsampled: bool = False
 
     def to_log_dict(self) -> dict[str, Any]:
         assert self.routing_context is not None
@@ -544,14 +545,11 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                     routing_context.cluster_load_info,
                 )
                 if allows_downsample(mode) and cluster_over_reject:
-                    routing_decision.tier = routing_decision.tier.lower()
-                    self._record_value_in_span_and_DD(
-                        routing_context,
-                        self.metrics.increment,
-                        "allocation_policy_downsample",
-                        1,
-                        tags={"tier": routing_decision.tier.name},
-                    )
+                    original_tier = routing_decision.tier
+                    if get_option("storage_routing.enable_allocation_policy_downsample", False):
+                        routing_decision.tier = routing_decision.tier.lower()
+                    routing_decision.is_downsampled = True
+                    routing_context.extra_info["original_tier"] = original_tier.name
 
                 org_overrides = self._get_org_clickhouse_setting_overrides(
                     routing_context.tenant_ids
@@ -609,6 +607,8 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             }
             if not routing_decision.can_run:
                 self.metrics.increment("rejected_query", tags=tags)
+            elif routing_decision.is_downsampled:
+                self.metrics.increment("downsampled_query", tags=tags)
             elif routing_decision.is_throttled:
                 self.metrics.increment("throttled_query", tags=tags)
             else:

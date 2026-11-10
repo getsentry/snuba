@@ -913,6 +913,7 @@ def _routing_decision_when_cluster_exceeds_reject(
     in_msg.meta.downsampled_storage_config.mode = mode
     ctx.in_msg = in_msg
     with (
+        override_options("snuba", {"storage_routing.enable_allocation_policy_downsample": True}),
         mock.patch.object(strategy, "get_allocation_policies", return_value=[_REJECT_POLICY]),
         mock.patch(
             "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.get_cluster_loadinfo",
@@ -939,6 +940,23 @@ def test_reject_threshold_downsample_respects_mode(
     decision = _routing_decision_when_cluster_exceeds_reject(AlwaysTier1RoutingStrategy(), mode)
     assert decision.tier == expected_tier
     assert decision.can_run is True
+
+
+def test_reject_threshold_downsample_off_by_default() -> None:
+    ctx = deepcopy(ROUTING_CONTEXT)
+    in_msg = _get_in_msg()
+    in_msg.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
+    ctx.in_msg = in_msg
+    strategy = AlwaysTier1RoutingStrategy()
+    with (
+        mock.patch.object(strategy, "get_allocation_policies", return_value=[_REJECT_POLICY]),
+        mock.patch(
+            "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.get_cluster_loadinfo",
+            return_value=_HOT_LOAD,
+        ),
+    ):
+        decision = strategy.get_routing_decision(ctx)
+    assert decision.tier == Tier.TIER_1
 
 
 @pytest.mark.redis_db
