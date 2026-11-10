@@ -29,6 +29,7 @@ import {
   getAllNodes,
   getErrorDomElement,
   getHostsForStorage,
+  getStorageOptions,
   nodeMatchesSearch,
   nodeSearchMatch,
   nodeSelectItem,
@@ -366,7 +367,7 @@ function QueryDisplay(props: {
                     value={query.storage || ""}
                     onChange={selectStorage}
                     name="storage"
-                    options={nodeData.map((storage) => storage.storage_name)}
+                    options={getStorageOptions(nodeData, query.storage)}
                   />
                 </div>
                 {flagged === "storage" && (

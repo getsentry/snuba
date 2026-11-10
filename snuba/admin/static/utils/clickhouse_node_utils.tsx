@@ -51,6 +51,79 @@ export function getHostsForStorage(
   return hosts;
 }
 
+// Orders storage names by how well they stand for their storage set: the
+// shortest first, then alphabetically.
+function compareRepresentatives(a: string, b: string): number {
+  return a.length - b.length || (a < b ? -1 : a > b ? 1 : 0);
+}
+
+/**
+ * The storage names to list, with one name per storage set. A storage set
+ * always belongs to a single cluster (snuba/clusters/cluster.py asserts it),
+ * so its storages share their nodes, and the set's shortest name stands in
+ * for the rest (eap_items for every eap_items_* storage, outcomes_raw for
+ * outcomes_hourly, ...). A storage without a known set is listed as is, and
+ * `keep` (e.g. the selected storage) is always listed so a select can still
+ * show it.
+ *
+ * @param storageNames - The storage names to fold
+ * @param storageSetOf - Each storage's storage set, if known
+ * @param keep - A storage name to always list
+ * @returns The storage names to list, sorted
+ */
+function foldStorages(
+  storageNames: string[],
+  storageSetOf: (name: string) => string | undefined,
+  keep?: string
+): string[] {
+  const bySet = new Map<string, string>();
+  const options = new Set<string>();
+  for (const name of storageNames) {
+    const storageSet = storageSetOf(name);
+    if (storageSet === undefined) {
+      options.add(name);
+      continue;
+    }
+    const current = bySet.get(storageSet);
+    if (current === undefined || compareRepresentatives(name, current) < 0) {
+      bySet.set(storageSet, name);
+    }
+  }
+  bySet.forEach((name) => options.add(name));
+  if (keep && storageNames.includes(keep)) {
+    options.add(keep);
+  }
+  return Array.from(options).sort();
+}
+
+function storageSetLookup(
+  nodeData: ClickhouseNodeData[]
+): (name: string) => string | undefined {
+  const storageSets = new Map(
+    nodeData.map((nodeInfo) => [nodeInfo.storage_name, nodeInfo.storage_set])
+  );
+  return (name) => storageSets.get(name) ?? undefined;
+}
+
+/**
+ * The storages to offer in a storage picker, one per storage set (see
+ * foldStorages).
+ *
+ * @param nodeData - Array of ClickhouseNodeData
+ * @param keep - A storage name to always list, e.g. the selected one
+ * @returns The storage names to list, sorted
+ */
+export function getStorageOptions(
+  nodeData: ClickhouseNodeData[],
+  keep?: string
+): string[] {
+  return foldStorages(
+    nodeData.map((nodeInfo) => nodeInfo.storage_name),
+    storageSetLookup(nodeData),
+    keep
+  );
+}
+
 export type NodeOption = SelectItem & {
   value: string;
   label: string;
@@ -96,6 +169,7 @@ export function getAllNodes(nodeData: ClickhouseNodeData[]): NodeOption[] {
     }
   }
 
+  const storageSetOf = storageSetLookup(nodeData);
   return Array.from(byHostPort.entries())
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([hostPort, entry]) => {
@@ -104,15 +178,17 @@ export function getAllNodes(nodeData: ClickhouseNodeData[]): NodeOption[] {
         ...(entry.query ? ["query node"] : []),
       ];
       const storages = Array.from(entry.storages).sort();
+      // Listed one per storage set.
+      const shown = foldStorages(storages, storageSetOf);
       return {
         value: hostPort,
         label: roles.length
           ? `${hostPort} (${roles.join(", ")})`
           : hostPort,
         description:
-          storages.length > 3
-            ? `${storages.slice(0, 3).join(", ")} +${storages.length - 3} more`
-            : storages.join(", "),
+          shown.length > 3
+            ? `${shown.slice(0, 3).join(", ")} +${shown.length - 3} more`
+            : shown.join(", "),
         storages,
         distributed: entry.dist && !entry.local && !entry.query,
       };
@@ -140,9 +216,7 @@ export function storageForNode(node: NodeOption, preferred?: string): string {
   if (node.storages.includes("querylog")) {
     return "querylog";
   }
-  return [...node.storages].sort(
-    (a, b) => a.length - b.length || (a < b ? -1 : a > b ? 1 : 0)
-  )[0];
+  return [...node.storages].sort(compareRepresentatives)[0];
 }
 
 // Searchable text without separators, where each of its characters sits in
@@ -271,9 +345,12 @@ type VariantMatch = { positions: number[]; boundaryMisses: number };
 
 /**
  * The closest match of the needle in the variant starting at `start`, or null.
- * The needle's characters are matched in order, and where a separator was
- * typed, the rest of the current host word may be skipped, so "err-1" finds
- * errors-1.
+ * The needle's characters are matched in order. Where a separator was typed,
+ * the rest of the current host word may be skipped, so "err-1" finds
+ * errors-1, and so may one whole word that starts with a letter, so
+ * "eap-1-1" finds events-analytics-platform-arm-1-1. Number words (shards,
+ * replicas, ports) are never skipped, so "eap-1" doesn't find
+ * events-analytics-platform-0-1.
  */
 function matchVariantFrom(
   variant: SearchVariant,
@@ -282,6 +359,13 @@ function matchVariantFrom(
   start: number
 ): VariantMatch | null {
   const { text, wordStarts, initials } = variant;
+  function nextWordStart(position: number): number {
+    let next = position + 1;
+    while (next < text.length && !wordStarts[next]) {
+      next++;
+    }
+    return next;
+  }
   function closest(a: VariantMatch | null, b: VariantMatch | null) {
     return a === null || (b !== null && b.boundaryMisses < a.boundaryMisses)
       ? b
@@ -312,13 +396,24 @@ function matchVariantFrom(
     const hostBreak =
       wordStarts[at] && !(initials[at] && initials[at - 1]);
     let best = take(at, hostBreak !== typedBreaks[k] ? 1 : 0);
-    if (typedBreaks[k] && !wordStarts[at]) {
+    if (typedBreaks[k]) {
       // Skip to the next word. Leaving a word unfinished is a miss.
-      let next = at + 1;
-      while (next < text.length && !wordStarts[next]) {
-        next++;
+      let wordStart = at;
+      let misses = 0;
+      if (!wordStarts[at]) {
+        wordStart = nextWordStart(at);
+        misses = 1;
+        best = closest(best, take(wordStart, misses));
       }
-      best = closest(best, take(next, 1));
+      // Skipping a whole word is a miss too. An initial stands in for a
+      // word that was typed, so it can't be skipped.
+      if (
+        wordStart < text.length &&
+        !initials[wordStart] &&
+        /[a-z]/.test(text[wordStart])
+      ) {
+        best = closest(best, take(nextWordStart(wordStart), misses + 1));
+      }
     }
     return best;
   }
