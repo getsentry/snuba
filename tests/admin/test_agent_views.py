@@ -12,6 +12,9 @@ from snuba.admin.auth import _set_roles, get_iam_roles_from_user
 from snuba.admin.auth_roles import DEFAULT_ROLES, ROLES
 from snuba.admin.user import AdminUser
 from snuba.clickhouse.pool import ClickhouseResult
+from snuba.datasets.schemas.tables import TableSchema
+from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.storage_key import StorageKey
 
 
 @pytest.fixture
@@ -148,8 +151,10 @@ def test_agent_system_query_rejects_non_system_tables(admin_api: FlaskClient) ->
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
 def test_agent_querylog_query(admin_api: FlaskClient) -> None:
+    schema = get_storage(StorageKey.QUERYLOG).get_schema()
+    assert isinstance(schema, TableSchema)
     status, data = _post_query(
-        admin_api, {"target": "querylog", "sql": "SELECT count() FROM querylog_local"}
+        admin_api, {"target": "querylog", "sql": f"SELECT count() FROM {schema.get_table_name()}"}
     )
     assert status == 200, data
     assert data["column_names"] == ["count()"]
