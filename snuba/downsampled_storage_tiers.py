@@ -18,5 +18,8 @@ class Tier(IntEnum):
         ladder = self.valid_tiers()
         if self not in ladder:
             return Tier.TIER_1
-        next_idx = min(ladder.index(self) + 1, len(ladder) - 1)
+        max_idx = len(ladder) - 1
+        self_idx = ladder.index(self)
+        next_idx = min(self_idx + 1, max_idx)
+        
         return ladder[next_idx]
