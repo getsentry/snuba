@@ -102,9 +102,7 @@ class QuotaAllowance:
             # exceed, so they pardon. Missing load info => keep rejecting.
             reject_thresholds = policy.thresholds.get("reject") or {}
             idle_pardon = (
-                policy.is_pardonable
-                and load_info is not None
-                and not load_info.exceeds(reject_thresholds)
+                policy.is_pardonable and load_info and not load_info.exceeds(reject_thresholds)
             )
             return (
                 QuotaAllowanceDecision.PARDONED if idle_pardon else QuotaAllowanceDecision.REJECTED
