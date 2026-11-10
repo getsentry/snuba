@@ -34,6 +34,25 @@ snuba admin
 
 The server should be running on <http://127.0.0.1:1219>
 
+## Agent query endpoint
+
+`POST /agent/query` runs read-only SQL for automation clients such as Junior. It
+uses the same validation as the System Queries and Querylog tools and never
+runs in sudo or clusterless mode. Responses are capped at 1000 rows.
+
+```json
+{"target": "system", "storage": "errors", "sql": "SELECT count() FROM system.parts"}
+{"target": "querylog", "sql": "SELECT count() FROM querylog_local"}
+```
+
+For `system`, `host` and `port` are optional and default to the storage's
+query node. List storages and nodes with `GET /clickhouse_nodes`.
+
+Clients call it through IAP as a Google service account. Bind the service
+account to `roles/AgentQueries` in the IAM policy with a
+`serviceAccount:<email>` member. A bound service account gets only its bound
+roles, not the default roles every person gets.
+
 ## Developing the JavaScript
 
 To start the yarn debug server and live reload your javascript changes.

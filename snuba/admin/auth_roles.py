@@ -86,6 +86,7 @@ TOOL_RESOURCES = {
     "rpc-endpoints": ToolResource("rpc-endpoints"),
     "clusters": ToolResource("clusters"),
     "eap-stats": ToolResource("eap-stats"),
+    "agent": ToolResource("agent"),
     "all": ToolResource("all"),
 }
 
@@ -184,6 +185,12 @@ ROLES = {
     "AllMigrationsExecutor": Role(
         name="AllMigrationsExecutor",
         actions={ExecuteAllAction(list(MIGRATIONS_RESOURCES.values()))},
+    ),
+    # For automation identities (e.g. Junior) that call the read-only /agent
+    # endpoints. Bind service accounts to this in the IAM policy.
+    "AgentQueries": Role(
+        name="agent-queries",
+        actions={InteractToolAction([TOOL_RESOURCES["agent"]])},
     ),
     "ClickhouseAdmin": Role(
         name="clickhouse-admin",

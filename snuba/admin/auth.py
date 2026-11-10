@@ -15,6 +15,7 @@ from snuba.admin.user import AdminUser
 from snuba.redis import RedisClientKey, get_redis_client
 
 USER_HEADER_KEY = "X-Goog-Authenticated-User-Email"
+SERVICE_ACCOUNT_EMAIL_SUFFIX = ".gserviceaccount.com"
 
 redis_client = get_redis_client(RedisClientKey.ADMIN_AUTH)
 
@@ -53,7 +54,7 @@ def get_iam_roles_from_user(user: AdminUser) -> Sequence[str]:
             for binding in policy["bindings"]:
                 role: str = binding["role"].split("roles/")[-1]
                 for member in binding["members"]:
-                    if f"user:{user.email}" == member:
+                    if member in (f"user:{user.email}", f"serviceAccount:{user.email}"):
                         iam_roles.append(role)
                         break
                     if member.startswith("group:"):
@@ -101,7 +102,12 @@ def _set_roles(user: AdminUser) -> AdminUser:
         except Exception as e:
             logger.exception(e)
 
-    user.roles = [*[ROLES[role] for role in iam_roles if role in ROLES], *DEFAULT_ROLES]
+    roles = [ROLES[role] for role in iam_roles if role in ROLES]
+    # A service account bound in the IAM policy gets only its bound roles, not
+    # the defaults every person gets, so automation stays least-privilege.
+    if not (roles and user.email.endswith(SERVICE_ACCOUNT_EMAIL_SUFFIX)):
+        roles.extend(DEFAULT_ROLES)
+    user.roles = roles
     return user
 
 

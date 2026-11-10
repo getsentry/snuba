@@ -59,7 +59,7 @@ def _get_nodes(storage_key: StorageKey, local: bool = True) -> Sequence[Node]:
         return []
 
 
-def _get_query_node(storage_key: StorageKey) -> Node | None:
+def get_query_node(storage_key: StorageKey) -> Node | None:
     try:
         cluster = get_storage(storage_key).get_cluster()
         query_node = cluster.get_query_node()
@@ -84,7 +84,7 @@ def get_storage_info() -> Sequence[Storage]:
             "local_table_name": _get_local_table_name(storage_key),
             "local_nodes": _get_local_nodes(storage_key),
             "dist_nodes": _get_dist_nodes(storage_key),
-            "query_node": _get_query_node(storage_key),
+            "query_node": get_query_node(storage_key),
         }
         for storage_key in sorted(get_all_storage_keys(), key=lambda storage_key: storage_key.value)
         if (
