@@ -863,13 +863,11 @@ class SelectsTier8CannotRun(RoutingStrategySelectsTier8):
         routing_decision.can_run = False
 
 
-def _reject_policy() -> PassthroughPolicy:
-    return PassthroughPolicy(
-        ResourceIdentifier("EAP"),
-        thresholds={"reject": {"cluster_load": 1.0}},
-    )
-
-
+_EMPTY_POLICY = PassthroughPolicy(ResourceIdentifier("EAP"))
+_REJECT_POLICY = PassthroughPolicy(
+    ResourceIdentifier("EAP"),
+    thresholds={"reject": {"cluster_load": 1.0}},
+)
 _HOT_LOAD = LoadInfo(cluster_load=2.0)
 _COLD_LOAD = LoadInfo(cluster_load=0.5)
 
@@ -878,33 +876,22 @@ _COLD_LOAD = LoadInfo(cluster_load=0.5)
     "policies, load, expected",
     [
         ([], _HOT_LOAD, False),
-        ("empty", _HOT_LOAD, False),
-        ("reject", None, False),
-        ("reject", _COLD_LOAD, False),
-        ("empty_and_reject", _HOT_LOAD, True),
-        ("reject", _HOT_LOAD, True),
+        ([_EMPTY_POLICY], _HOT_LOAD, False),
+        ([_REJECT_POLICY], None, False),
+        ([_REJECT_POLICY], _COLD_LOAD, False),
+        ([_EMPTY_POLICY, _REJECT_POLICY], _HOT_LOAD, True),
+        ([_REJECT_POLICY], _HOT_LOAD, True),
     ],
 )
 def test_load_exceeds_any_reject_threshold(
-    policies: list[AllocationPolicy] | str,
+    policies: list[AllocationPolicy],
     load: LoadInfo | None,
     expected: bool,
 ) -> None:
-    empty = PassthroughPolicy(ResourceIdentifier("EAP"))
-    reject = _reject_policy()
-    resolved: list[AllocationPolicy]
-    if policies == "empty":
-        resolved = [empty]
-    elif policies == "reject":
-        resolved = [reject]
-    elif policies == "empty_and_reject":
-        resolved = [empty, reject]
-    else:
-        resolved = []
-    assert load_exceeds_any_reject_threshold(resolved, load) is expected
+    assert load_exceeds_any_reject_threshold(policies, load) is expected
 
 
-def _hot_reject_decision(
+def _routing_decision_when_cluster_exceeds_reject(
     strategy: BaseRoutingStrategy, mode: DownsampledStorageConfig.Mode.ValueType
 ) -> RoutingDecision:
     ctx = deepcopy(ROUTING_CONTEXT)
@@ -912,7 +899,7 @@ def _hot_reject_decision(
     in_msg.meta.downsampled_storage_config.mode = mode
     ctx.in_msg = in_msg
     with (
-        mock.patch.object(strategy, "get_allocation_policies", return_value=[_reject_policy()]),
+        mock.patch.object(strategy, "get_allocation_policies", return_value=[_REJECT_POLICY]),
         mock.patch(
             "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.get_cluster_loadinfo",
             return_value=_HOT_LOAD,
@@ -935,13 +922,15 @@ def _hot_reject_decision(
 def test_reject_threshold_downsample_respects_mode(
     mode: DownsampledStorageConfig.Mode.ValueType, expected_tier: Tier
 ) -> None:
-    decision = _hot_reject_decision(AlwaysTier1RoutingStrategy(), mode)
+    decision = _routing_decision_when_cluster_exceeds_reject(AlwaysTier1RoutingStrategy(), mode)
     assert decision.tier == expected_tier
     assert decision.can_run is True
 
 
 @pytest.mark.redis_db
 def test_reject_threshold_downsample_does_not_flip_can_run() -> None:
-    decision = _hot_reject_decision(SelectsTier8CannotRun(), DownsampledStorageConfig.MODE_NORMAL)
+    decision = _routing_decision_when_cluster_exceeds_reject(
+        SelectsTier8CannotRun(), DownsampledStorageConfig.MODE_NORMAL
+    )
     assert decision.tier == Tier.TIER_512
     assert decision.can_run is False

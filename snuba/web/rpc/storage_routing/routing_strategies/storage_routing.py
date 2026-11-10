@@ -190,10 +190,11 @@ class CombinedAllocationPoliciesRecommendations(TypedDict):
     settings: dict[str, Any]
 
 
-_MODES_THAT_ALLOW_LOAD_DOWNSAMPLE = {
-    DownsampledStorageConfig.MODE_NORMAL,
-    DownsampledStorageConfig.MODE_LOW_PRIORITY,
-}
+def allows_downsample(mode: DownsampledStorageConfig.Mode.ValueType) -> bool:
+    return mode in (
+        DownsampledStorageConfig.MODE_NORMAL,
+        DownsampledStorageConfig.MODE_LOW_PRIORITY,
+    )
 
 
 def load_exceeds_any_reject_threshold(
@@ -542,10 +543,11 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 self._update_routing_decision(routing_decision)
 
                 mode = extract_message_meta(routing_context.in_msg).downsampled_storage_config.mode
-                if mode in _MODES_THAT_ALLOW_LOAD_DOWNSAMPLE and load_exceeds_any_reject_threshold(
+                cluster_over_reject = load_exceeds_any_reject_threshold(
                     self.get_allocation_policies(routing_context.tenant_ids),
                     routing_context.cluster_load_info,
-                ):
+                )
+                if allows_downsample(mode) and cluster_over_reject:
                     routing_decision.tier = max(routing_decision.tier, Tier.TIER_512)
 
                 org_overrides = self._get_org_clickhouse_setting_overrides(
