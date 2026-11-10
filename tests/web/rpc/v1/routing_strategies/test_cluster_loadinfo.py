@@ -119,7 +119,7 @@ def test_exceeds_false_when_all_within() -> None:
 
 
 def test_exceeds_empty_thresholds_is_false() -> None:
-    # No ceilings configured => nothing is exceeded (vacuous).
+    # No ceilings configured => nothing is exceeded
     assert LoadInfo(cluster_load=1.0).exceeds({}) is False
 
 

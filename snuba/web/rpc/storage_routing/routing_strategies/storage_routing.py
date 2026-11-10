@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 from abc import ABC
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import UTC
 from typing import (
@@ -198,16 +198,12 @@ def allows_downsample(mode: DownsampledStorageConfig.Mode.ValueType) -> bool:
 
 
 def load_exceeds_any_reject_threshold(
-    policies: list[AllocationPolicy],
+    policies: Iterable[AllocationPolicy],
     load_info: LoadInfo | None,
 ) -> bool:
     if load_info is None:
         return False
-    for policy in policies:
-        reject = policy.thresholds.get("reject") or {}
-        if load_info.exceeds(reject):
-            return True
-    return False
+    return any(load_info.exceeds(policy.thresholds.get("reject", {})) for policy in policies)
 
 
 def get_stats_dict(
@@ -549,6 +545,13 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 )
                 if allows_downsample(mode) and cluster_over_reject:
                     routing_decision.tier = routing_decision.tier.lower()
+                    self._record_value_in_span_and_DD(
+                        routing_context,
+                        self.metrics.increment,
+                        "allocation_policy_downsample",
+                        1,
+                        tags={"tier": routing_decision.tier.name},
+                    )
 
                 org_overrides = self._get_org_clickhouse_setting_overrides(
                     routing_context.tenant_ids

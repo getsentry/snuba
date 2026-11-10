@@ -16,8 +16,7 @@ class Tier(IntEnum):
 
     def lower(self) -> Tier:
         ladder = self.valid_tiers()
-        try:
-            idx = ladder.index(self)
-        except ValueError:
-            return ladder[0]
-        return ladder[min(idx + 1, len(ladder) - 1)]
+        if self not in ladder:
+            return Tier.TIER_1
+        next_idx = min(ladder.index(self) + 1, len(ladder) - 1)
+        return ladder[next_idx]
