@@ -4,7 +4,7 @@ import sys
 import time
 from collections.abc import Mapping, MutableMapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import sentry_sdk
@@ -317,7 +317,10 @@ class ProjectsQueryFlags:
                 [(_, timestamp)] = latest_exclude_groups
                 latest_replacements.add(timestamp)
 
-        return datetime.fromtimestamp(max(latest_replacements)) if latest_replacements else None
+        if not latest_replacements:
+            return None
+        # Query time ranges are naive UTC datetimes, so return the same.
+        return datetime.fromtimestamp(max(latest_replacements), UTC).replace(tzinfo=None)
 
     @staticmethod
     def _build_project_needs_final_key_and_type_key(
