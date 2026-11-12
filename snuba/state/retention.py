@@ -27,7 +27,7 @@ RetentionKind = Literal["standard", "downsampled"]
 # Mirrors the retention_days sentry-option default so a missing or empty option
 # cannot crash write- or query-path clamping.
 DEFAULT_RETENTION_DAYS: dict[str, dict[str, int]] = {
-    "standard": {"default": 30, "max": 90},
+    "standard": {"default": 30, "max": 396},
     "downsampled": {"default": 396, "max": 396},
 }
 
@@ -72,15 +72,15 @@ def enforce_retention_days(value: int | None, kind: RetentionKind = "standard") 
     """Write-path retention for ``kind``.
 
     Missing or non-positive values get the configured default. A supported
-    value is capped at the configured max. Any other value returns ``None``:
-    the message must not be ingested.
+    value up to the configured max is kept as is. Any other value (unsupported
+    or above max) returns ``None``: the message must not be ingested.
     """
     bucket = get_retention_days_config()[kind]
     if not isinstance(value, int) or value <= 0:
         return bucket["default"]
-    if value not in SUPPORTED_RETENTION_DAYS:
+    if value not in SUPPORTED_RETENTION_DAYS or value > bucket["max"]:
         return None
-    return min(value, bucket["max"])
+    return value
 
 
 def record_unsupported_retention(processor: str) -> None:

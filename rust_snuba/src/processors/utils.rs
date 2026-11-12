@@ -62,7 +62,7 @@ impl RetentionKind {
 
     fn default_max(self) -> u16 {
         match self {
-            Self::Standard => 90,
+            Self::Standard => 396,
             Self::Downsampled => 396,
         }
     }
@@ -89,25 +89,23 @@ pub const SUPPORTED_RETENTION_DAYS: [u16; 7] = [7, 30, 60, 90, 180, 366, 396];
 /// every processor (Rust and Python); the `processor` tag says which one.
 pub const DROPPED_UNSUPPORTED_RETENTION_METRIC: &str = "dropped_unsupported_retention";
 
-/// Missing/non-positive -> `kind`'s configured default. A supported value is
-/// capped at `kind`'s configured max. Any other value returns `None`: the
-/// message must not be ingested.
+/// Missing/non-positive -> `kind`'s configured default. A supported value up
+/// to `kind`'s configured max is kept as is. Any other value (unsupported or
+/// above max) returns `None`: the message must not be ingested.
 fn enforce_retention(value: Option<u16>, kind: RetentionKind) -> Option<u16> {
-    match value.filter(|&n| n > 0) {
-        None => Some(retention_option(kind, "default", kind.default_default())),
-        Some(value) if SUPPORTED_RETENTION_DAYS.contains(&value) => {
-            Some(value.min(retention_option(kind, "max", kind.default_max())))
-        }
-        Some(_) => None,
-    }
+    let Some(value) = value.filter(|&n| n > 0) else {
+        return Some(retention_option(kind, "default", kind.default_default()));
+    };
+    let max = retention_option(kind, "max", kind.default_max());
+    (SUPPORTED_RETENTION_DAYS.contains(&value) && value <= max).then_some(value)
 }
 
-/// Standard: missing/non-positive -> 30, unsupported -> `None`, else cap at 90.
+/// Standard: missing/non-positive -> 30; unsupported or above max (396) -> `None`.
 pub fn enforce_standard_retention(value: Option<u16>) -> Option<u16> {
     enforce_retention(value, RetentionKind::Standard)
 }
 
-/// Downsampled: missing/non-positive -> 396, unsupported -> `None`, else cap at 396.
+/// Downsampled: missing/non-positive -> 396; unsupported or above max (396) -> `None`.
 pub fn enforce_downsampled_retention(value: Option<u16>) -> Option<u16> {
     enforce_retention(value, RetentionKind::Downsampled)
 }
@@ -235,14 +233,9 @@ mod tests {
         init_options();
         assert_eq!(enforce_standard_retention(None), Some(30));
         assert_eq!(enforce_standard_retention(Some(0)), Some(30));
-        assert_eq!(enforce_standard_retention(Some(7)), Some(7));
-        assert_eq!(enforce_standard_retention(Some(30)), Some(30));
-        assert_eq!(enforce_standard_retention(Some(60)), Some(60));
-        assert_eq!(enforce_standard_retention(Some(90)), Some(90));
-        // Supported values above the configured max (90) are capped.
-        assert_eq!(enforce_standard_retention(Some(180)), Some(90));
-        assert_eq!(enforce_standard_retention(Some(366)), Some(90));
-        assert_eq!(enforce_standard_retention(Some(396)), Some(90));
+        for value in SUPPORTED_RETENTION_DAYS {
+            assert_eq!(enforce_standard_retention(Some(value)), Some(value));
+        }
     }
 
     #[test]
@@ -251,28 +244,6 @@ mod tests {
         for value in [1, 8, 14, 29, 31, 89, 100, 365, 367, 395, 397, 1000] {
             assert_eq!(enforce_standard_retention(Some(value)), None, "{value}");
         }
-    }
-
-    #[test]
-    fn test_standard_with_396_cap() {
-        init_options();
-        let _guard = override_options(&[(
-            "snuba",
-            "retention_days",
-            json!({
-                "standard": {"default": 30, "max": 396},
-                "downsampled": {"default": 396, "max": 396},
-            }),
-        )])
-        .unwrap();
-
-        for value in SUPPORTED_RETENTION_DAYS {
-            assert_eq!(enforce_standard_retention(Some(value)), Some(value));
-        }
-        assert_eq!(enforce_standard_retention(Some(365)), None);
-        assert_eq!(enforce_standard_retention(Some(400)), None);
-        assert_eq!(enforce_retentions(Some(396), None), Some((396, 396)));
-        assert_eq!(enforce_retentions(Some(396), Some(90)), Some((396, 396)));
     }
 
     #[test]
@@ -287,15 +258,15 @@ mod tests {
     fn test_downsampled_defaults() {
         init_options();
         assert_eq!(enforce_downsampled_retention(None), Some(396));
-        assert_eq!(enforce_downsampled_retention(Some(90)), Some(90));
-        assert_eq!(enforce_downsampled_retention(Some(366)), Some(366));
-        assert_eq!(enforce_downsampled_retention(Some(396)), Some(396));
+        for value in SUPPORTED_RETENTION_DAYS {
+            assert_eq!(enforce_downsampled_retention(Some(value)), Some(value));
+        }
         assert_eq!(enforce_downsampled_retention(Some(365)), None);
         assert_eq!(enforce_downsampled_retention(Some(420)), None);
     }
 
     #[test]
-    fn test_option_override() {
+    fn test_values_above_max_are_rejected() {
         init_options();
         let _guard = override_options(&[(
             "snuba",
@@ -310,9 +281,13 @@ mod tests {
         assert_eq!(enforce_standard_retention(None), Some(60));
         assert_eq!(enforce_standard_retention(Some(90)), Some(90));
         assert_eq!(enforce_standard_retention(Some(180)), Some(180));
-        assert_eq!(enforce_standard_retention(Some(366)), Some(180));
+        assert_eq!(enforce_standard_retention(Some(366)), None);
         assert_eq!(enforce_downsampled_retention(None), Some(180));
-        assert_eq!(enforce_downsampled_retention(Some(396)), Some(366));
+        assert_eq!(enforce_downsampled_retention(Some(366)), Some(366));
+        assert_eq!(enforce_downsampled_retention(Some(396)), None);
+        assert_eq!(enforce_retentions(Some(180), Some(366)), Some((180, 366)));
+        assert_eq!(enforce_retentions(Some(366), Some(366)), None);
+        assert_eq!(enforce_retentions(Some(90), Some(396)), None);
     }
 
     #[test]
@@ -324,7 +299,8 @@ mod tests {
         assert_eq!(enforce_retentions(Some(90), Some(30)), Some((90, 90)));
         assert_eq!(enforce_retentions(Some(90), Some(366)), Some((90, 366)));
         assert_eq!(enforce_retentions(Some(90), Some(396)), Some((90, 396)));
-        assert_eq!(enforce_retentions(Some(180), Some(60)), Some((90, 90)));
+        assert_eq!(enforce_retentions(Some(396), None), Some((396, 396)));
+        assert_eq!(enforce_retentions(Some(396), Some(90)), Some((396, 396)));
         // Either value unsupported: not ingested.
         assert_eq!(enforce_retentions(Some(14), Some(396)), None);
         assert_eq!(enforce_retentions(Some(100), Some(396)), None);
@@ -346,7 +322,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(enforce_standard_retention(None), Some(30));
-        assert_eq!(enforce_standard_retention(Some(180)), Some(90));
+        assert_eq!(enforce_standard_retention(Some(396)), Some(396));
         assert_eq!(enforce_downsampled_retention(None), Some(396));
         assert_eq!(enforce_downsampled_retention(Some(396)), Some(396));
     }

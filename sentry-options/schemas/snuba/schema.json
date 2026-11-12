@@ -33,7 +33,7 @@
     "eap_items_drop_invalid_timestamps": {
       "type": "boolean",
       "default": false,
-      "description": "When true, the eap-items consumer and the accepted outcomes consumer skip messages whose event timestamp is more than one week in the future or older than the item's retention_days (at most 90)."
+      "description": "When true, the eap-items consumer and the accepted outcomes consumer skip messages whose event timestamp is more than one week in the future or older than the item's retention_days."
     },
     "clickhouse_load_balancing": {
       "type": "object",
@@ -308,10 +308,10 @@
         }
       },
       "default": {
-        "standard": { "default": 30, "max": 90 },
+        "standard": { "default": 30, "max": 396 },
         "downsampled": { "default": 396, "max": 396 }
       },
-      "description": "Retention windows in days for standard and downsampled storage. standard.default (30) is the fallback when RequestMeta.standard_retention_days is unset/non-positive; standard.max (90) clamps positive request values. Only 7, 30, 60, 90, 180, 366 and 396 are accepted for standard and downsampled retention; items with any other value are not ingested. downsampled.default/max (396, 13 months) configure long-term downsampled retention."
+      "description": "Retention windows in days for standard and downsampled storage. standard.default (30) is the fallback when RequestMeta.standard_retention_days is unset/non-positive. Only 7, 30, 60, 90, 180, 366 and 396 are accepted for standard and downsampled retention, up to each kind's max (396, 13 months); items with any other value are not ingested. downsampled.default (396) is the fallback for long-term downsampled retention."
     },
     "storage_routing_config_override": {
       "type": "string",

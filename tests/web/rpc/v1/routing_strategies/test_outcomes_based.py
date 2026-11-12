@@ -287,8 +287,10 @@ def test_item_type_full_retention_occurrence() -> None:
     [
         (50, 60, {}, Tier.TIER_1),
         (70, 60, {}, Tier.TIER_8),
-        (50, 120, {}, Tier.TIER_1),
-        (100, 120, {}, Tier.TIER_8),
+        (100, 90, {}, Tier.TIER_8),
+        (150, 180, {}, Tier.TIER_1),
+        (200, 180, {}, Tier.TIER_8),
+        (380, 396, {}, Tier.TIER_1),
         # non-positive / unset falls back to the 30-day default
         (20, 0, {}, Tier.TIER_1),
         (20, None, {}, Tier.TIER_1),
