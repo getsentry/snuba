@@ -4,7 +4,12 @@ from unittest.mock import Mock, patch
 import pytest
 from sentry_options.testing import override_options
 
-from snuba.clusters.load_info import LoadInfo, get_cluster_loadinfo
+from snuba.clusters.load_info import (
+    LoadInfo,
+    _cluster_load_query_25_8,
+    _cluster_load_query_26_8,
+    get_cluster_loadinfo,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -128,3 +133,15 @@ def test_exceeds_true_when_field_negative() -> None:
     # keep enforcing rather than pardon on blind telemetry.
     assert LoadInfo(cluster_load=-1.0).exceeds({"cluster_load": 90.0}) is True
     assert LoadInfo(cluster_load=1.0).exceeds({"not_a_field": 0.0}) is True
+
+
+def test_cluster_load_query_25_8_uses_metric_name_suffix() -> None:
+    sql = _cluster_load_query_25_8("c", single_node=False)
+    assert "replaceAll(metric, 'OSNiceTimeCPU'" in sql
+    assert "key_values" not in sql
+
+
+def test_cluster_load_query_26_8_uses_map_length() -> None:
+    sql = _cluster_load_query_26_8("c", single_node=False)
+    assert "length(key_values) AS kv_len" in sql
+    assert "replaceAll" not in sql
