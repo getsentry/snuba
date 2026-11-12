@@ -106,7 +106,7 @@ class TransactionEvent:
                 "message": "/organizations/:orgId/issues/",
                 "group_id": None,
                 "group_ids": self.group_ids,
-                "retention_days": 23,
+                "retention_days": 30,
                 "data": {
                     "event_id": self.event_id,
                     "environment": self.environment,
@@ -275,7 +275,7 @@ class TransactionEvent:
             "http_referer": self.http_referer,
             "offset": meta.offset,
             "partition": meta.partition,
-            "retention_days": 23,
+            "retention_days": 30,
             "measurements.key": ["lcp", "lcp.elementSize"],
             "measurements.value": [32.129, 4242.0],
             "span_op_breakdowns.key": ["ops.db", "ops.http", "total.time"],
@@ -362,6 +362,16 @@ class TestTransactionsProcessor:
         payload = message.serialize()
         # Force an invalid event
         payload[2]["data"]["type"] = "error"
+
+        meta = KafkaMessageMetadata(offset=1, partition=2, timestamp=datetime(1970, 1, 1))
+        processor = TransactionsMessageProcessor()
+        assert processor.process_message(payload, meta) is None
+
+    def test_unsupported_retention_is_dropped(self) -> None:
+        message = self.__get_transaction_event()
+        payload = message.serialize()
+        # Below 30 days and not a supported bucket: not ingested.
+        payload[2]["retention_days"] = 14
 
         meta = KafkaMessageMetadata(offset=1, partition=2, timestamp=datetime(1970, 1, 1))
         processor = TransactionsMessageProcessor()

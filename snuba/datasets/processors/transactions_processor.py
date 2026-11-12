@@ -13,6 +13,7 @@ from snuba import environment, settings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import (
     EventTooOld,
+    UnsupportedRetention,
     enforce_retention,
     extract_base,
     extract_extra_contexts,
@@ -94,6 +95,9 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
                 datetime.utcfromtimestamp(data["timestamp"]),
             )
         except EventTooOld:
+            return None
+        except UnsupportedRetention:
+            metrics.increment("unsupported_retention")
             return None
 
         return event, retention_days

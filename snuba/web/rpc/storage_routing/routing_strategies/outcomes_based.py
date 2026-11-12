@@ -27,7 +27,7 @@ from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array
 from snuba.query.logical import Query
 from snuba.query.query_settings import OutcomesQuerySettings
 from snuba.request import Request as SnubaRequest
-from snuba.state.retention import get_retention_days_config
+from snuba.state.retention import query_standard_retention_days
 from snuba.state.sentry_options import get_mapped_option
 from snuba.utils.metrics.util import set_current_span_attributes
 from snuba.web.query import run_query
@@ -277,12 +277,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
 
         in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
 
-        standard_retention = get_retention_days_config()["standard"]
-        requested_retention_days = in_msg_meta.standard_retention_days
-        if requested_retention_days > 0:
-            standard_retention_days = min(requested_retention_days, standard_retention["max"])
-        else:
-            standard_retention_days = standard_retention["default"]
+        standard_retention_days = query_standard_retention_days(in_msg_meta.standard_retention_days)
         standard_retention_cutoff = datetime.now(tz=UTC) - timedelta(
             days=standard_retention_days + 1
         )

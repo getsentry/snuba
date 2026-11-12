@@ -15,6 +15,7 @@ use uuid::Uuid;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 
 use crate::config::ProcessorConfig;
+use crate::counter;
 use crate::processors::utils::{
     enforce_standard_retention, serialize_datetime64_ms, StringToIntDatetime64,
 };
@@ -67,7 +68,11 @@ pub fn process_message_with_replacement(
             row.partition = metadata.partition;
             row.offset = metadata.offset;
             row.message_timestamp = metadata.timestamp.timestamp() as u64;
-            row.retention_days = Some(enforce_standard_retention(row.retention_days));
+            let Some(retention_days) = enforce_standard_retention(row.retention_days) else {
+                counter!("errors.messages.dropped_unsupported_retention");
+                return Ok(InsertOrReplacement::Insert(InsertBatch::skip()));
+            };
+            row.retention_days = Some(retention_days);
 
             Ok(InsertOrReplacement::Insert(InsertBatch {
                 origin_timestamp,

@@ -6,6 +6,7 @@ use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+use crate::counter;
 use crate::{
     types::{InsertBatch, RowData},
     KafkaMessageMetadata, ProcessorConfig,
@@ -114,7 +115,10 @@ impl Parse for MetricsRawRow {
             generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
 
         let (tag_keys, tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
-        let retention_days = enforce_standard_retention(Some(from.retention_days));
+        let Some(retention_days) = enforce_standard_retention(Some(from.retention_days)) else {
+            counter!("release_health_metrics.messages.dropped_unsupported_retention");
+            return Ok(None);
+        };
 
         Ok(Some(MetricsRawRow {
             use_case_id: from.use_case_id,

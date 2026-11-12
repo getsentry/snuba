@@ -294,8 +294,13 @@ def test_item_type_full_retention_occurrence() -> None:
         (20, None, {}, Tier.TIER_1),
         (40, 0, {}, Tier.TIER_8),
         (40, None, {}, Tier.TIER_8),
-        (40, 90, _retention_days_override(standard_max=45), Tier.TIER_1),
-        (50, 90, _retention_days_override(standard_max=45), Tier.TIER_8),
+        # the cap is bucketed like the write path: 45 rounds down to 30
+        (25, 90, _retention_days_override(standard_max=45), Tier.TIER_1),
+        (40, 90, _retention_days_override(standard_max=45), Tier.TIER_8),
+        # requested values round down to a supported bucket: 89 -> 60, 120 -> 90
+        (55, 89, {}, Tier.TIER_1),
+        (70, 89, {}, Tier.TIER_8),
+        (85, 120, {}, Tier.TIER_1),
         (40, None, _retention_days_override(standard_default=45), Tier.TIER_1),
         (50, None, _retention_days_override(standard_default=45), Tier.TIER_8),
     ],

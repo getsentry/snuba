@@ -1,4 +1,5 @@
 use crate::config::ProcessorConfig;
+use crate::counter;
 use anyhow::Context;
 use chrono::DateTime;
 use schemars::JsonSchema;
@@ -23,7 +24,11 @@ pub fn process_message(
         partition: metadata.partition,
     };
 
-    row.profile.retention_days = Some(enforce_standard_retention(row.profile.retention_days));
+    let Some(retention_days) = enforce_standard_retention(row.profile.retention_days) else {
+        counter!("profiles.messages.dropped_unsupported_retention");
+        return Ok(InsertBatch::skip());
+    };
+    row.profile.retention_days = Some(retention_days);
 
     let origin_timestamp = DateTime::from_timestamp(row.profile.received, 0);
 
