@@ -284,6 +284,11 @@
       "default": false,
       "description": "When true, the storage routing strategy fetches ClickHouse cluster load info to inform routing decisions."
     },
+    "storage_routing.enable_allocation_policy_downsample": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, NORMAL and LOW_PRIORITY queries step one EAP downsample tier coarser if cluster load exceeds allocation-policy reject thresholds."
+    },
     "retention_days": {
       "type": "object",
       "properties": {
