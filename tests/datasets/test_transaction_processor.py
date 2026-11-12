@@ -4,7 +4,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from unittest.mock import ANY
+from unittest.mock import ANY, patch
 
 import pytest
 from sentry_options.testing import override_options
@@ -370,12 +370,16 @@ class TestTransactionsProcessor:
     def test_unsupported_retention_is_dropped(self) -> None:
         message = self.__get_transaction_event()
         payload = message.serialize()
-        # Below 30 days and not a supported bucket: not ingested.
-        payload[2]["retention_days"] = 14
+        # Not a supported value: not ingested, and never rounded.
+        payload[2]["retention_days"] = 89
 
         meta = KafkaMessageMetadata(offset=1, partition=2, timestamp=datetime(1970, 1, 1))
         processor = TransactionsMessageProcessor()
-        assert processor.process_message(payload, meta) is None
+        with patch(
+            "snuba.datasets.processors.transactions_processor.record_unsupported_retention"
+        ) as record:
+            assert processor.process_message(payload, meta) is None
+        record.assert_called_once_with("transactions")
 
     def test_missing_trace_context(self) -> None:
         message = self.__get_transaction_event()

@@ -30,6 +30,7 @@ from snuba.processor import (
     _ensure_valid_ip,
     _unicodify,
 )
+from snuba.state.retention import record_unsupported_retention
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.serializable_exception import SerializableException
 
@@ -338,7 +339,7 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
             metrics.increment("event_too_old")
             return None
         except UnsupportedRetention:
-            metrics.increment("unsupported_retention")
+            record_unsupported_retention("search_issues")
             return None
         except IndexError:
             metrics.increment("invalid_message")

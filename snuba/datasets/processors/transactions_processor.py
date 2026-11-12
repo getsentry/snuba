@@ -32,6 +32,7 @@ from snuba.processor import (
     _ensure_valid_ip,
     _unicodify,
 )
+from snuba.state.retention import record_unsupported_retention
 from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
@@ -97,7 +98,7 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         except EventTooOld:
             return None
         except UnsupportedRetention:
-            metrics.increment("unsupported_retention")
+            record_unsupported_retention("transactions")
             return None
 
         return event, retention_days

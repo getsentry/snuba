@@ -18,6 +18,7 @@ use crate::config::ProcessorConfig;
 use crate::counter;
 use crate::processors::utils::{
     enforce_standard_retention, serialize_datetime64_ms, StringToIntDatetime64,
+    DROPPED_UNSUPPORTED_RETENTION_METRIC,
 };
 use crate::types::{
     InsertBatch, InsertOrReplacement, KafkaMessageMetadata, ReplacementData, RowData,
@@ -69,7 +70,7 @@ pub fn process_message_with_replacement(
             row.offset = metadata.offset;
             row.message_timestamp = metadata.timestamp.timestamp() as u64;
             let Some(retention_days) = enforce_standard_retention(row.retention_days) else {
-                counter!("errors.messages.dropped_unsupported_retention");
+                counter!(DROPPED_UNSUPPORTED_RETENTION_METRIC, 1, "processor" => "errors");
                 return Ok(InsertOrReplacement::Insert(InsertBatch::skip()));
             };
             row.retention_days = Some(retention_days);

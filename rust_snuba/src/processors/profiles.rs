@@ -7,7 +7,7 @@ use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::processors::utils::enforce_standard_retention;
+use crate::processors::utils::{enforce_standard_retention, DROPPED_UNSUPPORTED_RETENTION_METRIC};
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
@@ -25,7 +25,7 @@ pub fn process_message(
     };
 
     let Some(retention_days) = enforce_standard_retention(row.profile.retention_days) else {
-        counter!("profiles.messages.dropped_unsupported_retention");
+        counter!(DROPPED_UNSUPPORTED_RETENTION_METRIC, 1, "processor" => "profiles");
         return Ok(InsertBatch::skip());
     };
     row.profile.retention_days = Some(retention_days);

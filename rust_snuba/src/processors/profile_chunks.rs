@@ -7,7 +7,9 @@ use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::processors::utils::{enforce_standard_retention, serialize_datetime64_us};
+use crate::processors::utils::{
+    enforce_standard_retention, serialize_datetime64_us, DROPPED_UNSUPPORTED_RETENTION_METRIC,
+};
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
@@ -23,7 +25,7 @@ pub fn process_message(
     chunk.offset = metadata.offset;
     chunk.partition = metadata.partition;
     let Some(retention_days) = enforce_standard_retention(chunk.retention_days) else {
-        counter!("profile_chunks.messages.dropped_unsupported_retention");
+        counter!(DROPPED_UNSUPPORTED_RETENTION_METRIC, 1, "processor" => "profile_chunks");
         return Ok(InsertBatch::skip());
     };
     chunk.retention_days = Some(retention_days);

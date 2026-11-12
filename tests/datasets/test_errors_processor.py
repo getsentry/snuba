@@ -47,7 +47,7 @@ class ErrorEvent:
     def serialize(self) -> tuple[int, str, Mapping[str, Any], dict[Never, Never]]:
         serialized_event: dict[str, Any] = {
             "organization_id": self.organization_id,
-            "retention_days": 58,
+            "retention_days": 60,
             "event_id": self.event_id,
             "group_id": self.group_id,
             "group_first_seen": (self.timestamp - timedelta(days=2)).strftime(
@@ -334,7 +334,7 @@ class ErrorEvent:
             "message_timestamp": int(self.timestamp.replace(tzinfo=UTC).timestamp()),
             "timestamp_ms": f"{int(self.timestamp.replace(tzinfo=UTC).timestamp())}"
             f".{self.timestamp.microsecond // 1000:03d}",
-            "retention_days": 30,  # 58 rounds down to the supported 30
+            "retention_days": 60,
             "deleted": 0,
             "group_id": self.group_id,
             "group_first_seen": int((self.timestamp - timedelta(days=2)).timestamp()),

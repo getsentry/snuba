@@ -17,7 +17,7 @@ use sentry_protos::snuba::v1::{ArrayValue, TraceItem, TraceItemType};
 use crate::config::ProcessorConfig;
 use crate::processors::utils::{
     enforce_retentions, get_drop_invalid_timestamps_enabled, out_of_valid_interval_secs,
-    SilencedDLQMessage,
+    SilencedDLQMessage, DROPPED_UNSUPPORTED_RETENTION_METRIC,
 };
 use crate::strategies::clickhouse::rowbinary;
 use crate::types::CogsData;
@@ -90,11 +90,11 @@ fn process_eap_item(
     let Some((retention_days, downsampled_retention_days)) = enforce_retentions(
         Some(u16::try_from(trace_item.retention_days).unwrap_or(u16::MAX)),
         Some(u16::try_from(trace_item.downsampled_retention_days).unwrap_or(u16::MAX)),
-        item_type,
     ) else {
         counter!(
-            "eap_items.messages.dropped_unsupported_retention",
+            DROPPED_UNSUPPORTED_RETENTION_METRIC,
             1,
+            "processor" => "eap_items",
             "item_type" => item_type_name(item_type)
         );
         return Ok(None);
@@ -917,7 +917,7 @@ mod tests {
         let item_id = Uuid::new_v4();
         let mut trace_item = generate_trace_item(item_id);
 
-        trace_item.downsampled_retention_days = 365;
+        trace_item.downsampled_retention_days = 366;
 
         let mut payload = Vec::new();
 
@@ -939,7 +939,7 @@ mod tests {
 
         let item: Item = serde_json::from_slice(&batch.rows.encoded_rows).unwrap();
 
-        assert_eq!(item.downsampled_retention_days, 365);
+        assert_eq!(item.downsampled_retention_days, 366);
     }
 
     #[test]
@@ -1468,53 +1468,28 @@ mod tests {
         let now = Utc::now().timestamp();
         assert_eq!(rows_inserted(&encode_with_timestamp(now, 7, 7)), (1, 1, 1));
         assert_eq!(
-            rows_inserted(&encode_with_timestamp(now, 30, 30)),
+            rows_inserted(&encode_with_timestamp(now, 30, 396)),
             (1, 1, 1)
         );
+        // Unset downsampled copies standard.
+        assert_eq!(rows_inserted(&encode_with_timestamp(now, 90, 0)), (1, 1, 1));
+        // Unsupported standard or downsampled value: not ingested.
         assert_eq!(
             rows_inserted(&encode_with_timestamp(now, 14, 14)),
+            (0, 0, 0)
+        );
+        assert_eq!(
+            rows_inserted(&encode_with_timestamp(now, 89, 396)),
             (0, 0, 0)
         );
         assert_eq!(
             rows_inserted(&encode_with_timestamp(now, 1, 396)),
             (0, 0, 0)
         );
-    }
-
-    fn processed_retention(item_type: TraceItemType, retention_days: u32) -> (u16, u16) {
-        let mut trace_item = generate_trace_item(Uuid::new_v4());
-        trace_item.item_type = item_type.into();
-        trace_item.retention_days = retention_days;
-        trace_item.downsampled_retention_days = 0;
-        let mut payload = Vec::new();
-        trace_item.encode(&mut payload).unwrap();
-        let metadata = KafkaMessageMetadata {
-            partition: 0,
-            offset: 1,
-            timestamp: Utc::now(),
-        };
-        let processed = process_eap_item(
-            KafkaPayload::new(None, None, Some(payload)),
-            &metadata,
-            &ProcessorConfig::default(),
-        )
-        .unwrap()
-        .unwrap();
-        (
-            processed.eap_item.retention_days.unwrap(),
-            processed.eap_item.downsampled_retention_days.unwrap(),
-        )
-    }
-
-    #[test]
-    fn test_preprod_retention_cap() {
-        init_options();
-        assert_eq!(processed_retention(TraceItemType::Preprod, 396), (396, 396));
-        assert_eq!(processed_retention(TraceItemType::Preprod, 500), (396, 396));
-        assert_eq!(processed_retention(TraceItemType::Preprod, 366), (366, 366));
-        // Other item types keep the option cap (90 by default) and are bucketed.
-        assert_eq!(processed_retention(TraceItemType::Span, 396), (90, 90));
-        assert_eq!(processed_retention(TraceItemType::Span, 89), (60, 60));
+        assert_eq!(
+            rows_inserted(&encode_with_timestamp(now, 30, 365)),
+            (0, 0, 0)
+        );
     }
 
     #[test]
@@ -1781,7 +1756,7 @@ mod tests {
     fn test_row_binary_downsampled_retention_days_extended() {
         let item_id = Uuid::new_v4();
         let mut trace_item = generate_trace_item(item_id);
-        trace_item.downsampled_retention_days = 365;
+        trace_item.downsampled_retention_days = 366;
 
         let mut payload = Vec::new();
         trace_item.encode(&mut payload).unwrap();
@@ -1796,7 +1771,7 @@ mod tests {
             .expect("The message should be processed");
 
         let row = &batch.rows[0];
-        assert_eq!(row.downsampled_retention_days, 365);
+        assert_eq!(row.downsampled_retention_days, 366);
     }
 
     #[test]
@@ -2130,7 +2105,7 @@ mod tests {
         trace_item.trace_id = trace_id.to_string();
         trace_item.client_sample_rate = 0.5;
         trace_item.server_sample_rate = 0.25;
-        trace_item.downsampled_retention_days = 365;
+        trace_item.downsampled_retention_days = 366;
         trace_item.attributes.insert(
             "str_attr".to_string(),
             AnyValue {

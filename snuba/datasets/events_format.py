@@ -12,7 +12,7 @@ from snuba.processor import (
     _ensure_valid_ip,
     _unicodify,
 )
-from snuba.state.retention import enforce_standard_retention_days
+from snuba.state.retention import enforce_retention_days
 from snuba.utils.serializable_exception import SerializableException
 
 
@@ -102,7 +102,7 @@ def extract_extra_contexts(
 
 
 def enforce_retention(retention_days: int | None, timestamp: datetime | None) -> int:
-    enforced = enforce_standard_retention_days(retention_days)
+    enforced = enforce_retention_days(retention_days)
     if enforced is None:
         raise UnsupportedRetention(f"unsupported retention_days: {retention_days}")
     retention_days = enforced

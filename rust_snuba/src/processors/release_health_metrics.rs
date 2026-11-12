@@ -12,7 +12,7 @@ use crate::{
     KafkaMessageMetadata, ProcessorConfig,
 };
 
-use super::utils::enforce_standard_retention;
+use super::utils::{enforce_standard_retention, DROPPED_UNSUPPORTED_RETENTION_METRIC};
 
 /// Generate a timeseries ID from the given parameters. Timeseries IDs are used to
 /// uniquely identify a timeseries in the database. This implemenation is based on
@@ -116,7 +116,11 @@ impl Parse for MetricsRawRow {
 
         let (tag_keys, tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
         let Some(retention_days) = enforce_standard_retention(Some(from.retention_days)) else {
-            counter!("release_health_metrics.messages.dropped_unsupported_retention");
+            counter!(
+                DROPPED_UNSUPPORTED_RETENTION_METRIC,
+                1,
+                "processor" => "release_health_metrics"
+            );
             return Ok(None);
         };
 

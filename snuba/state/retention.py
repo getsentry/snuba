@@ -3,9 +3,10 @@
 Caps and fallbacks come from the ``retention_days`` sentry-option
 (standard for tier-1, downsampled for long-term storage).
 
-Standard retention is bucketed to ``SUPPORTED_RETENTION_DAYS``. Tables are
-partitioned by ``(retention_days, toMonday(timestamp))``, so every distinct
-value adds a full set of partitions. Bucketing keeps that set bounded.
+Only ``SUPPORTED_RETENTION_DAYS`` may be written, for both standard and
+downsampled retention. Tables are partitioned by
+``(retention_days, toMonday(timestamp))``, so every distinct value adds a full
+set of partitions. Any other value is rejected, never rounded.
 """
 
 from __future__ import annotations
@@ -14,9 +15,12 @@ import logging
 from collections.abc import Mapping
 from typing import Any, Literal, cast
 
+from snuba import environment
 from snuba.state.sentry_options import get_option
+from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger(__name__)
+_consumer_metrics = MetricsWrapper(environment.metrics, "consumer")
 
 RetentionKind = Literal["standard", "downsampled"]
 
@@ -28,27 +32,12 @@ DEFAULT_RETENTION_DAYS: dict[str, dict[str, int]] = {
 }
 
 
-# Standard retention values that may be written. Partitions only ever exist for these.
-SUPPORTED_RETENTION_DAYS: tuple[int, ...] = (7, 30, 60, 90, 180, 366)
-# Values at or above this round down to the nearest supported value. Unsupported
-# values below it are rejected rather than rounded.
-MIN_ROUNDED_RETENTION_DAYS = 30
+# Retention values that may be written. Partitions only ever exist for these.
+SUPPORTED_RETENTION_DAYS: frozenset[int] = frozenset({7, 30, 60, 90, 180, 366, 396})
 
-
-def bucket_retention_days(
-    value: int, max_days: int, supported: tuple[int, ...] = SUPPORTED_RETENTION_DAYS
-) -> int | None:
-    """Cap ``value`` at ``max_days`` and round down to a supported value.
-
-    Returns ``None`` when the capped value is below
-    ``MIN_ROUNDED_RETENTION_DAYS`` and is not itself supported.
-    """
-    capped = min(value, max_days)
-    if capped in supported:
-        return capped
-    if capped < MIN_ROUNDED_RETENTION_DAYS:
-        return None
-    return max(days for days in supported if days <= capped)
+# Counter for messages dropped for an unsupported retention value. Shared with
+# the Rust consumers (snuba.consumer.<name>); the ``processor`` tag says which one.
+DROPPED_UNSUPPORTED_RETENTION_METRIC = "dropped_unsupported_retention"
 
 
 def _positive_int(value: object, fallback: int) -> int:
@@ -79,35 +68,21 @@ def get_retention_days_config() -> dict[str, dict[str, int]]:
     return {name: _retention_bucket(raw, name) for name in DEFAULT_RETENTION_DAYS}
 
 
-def clamp_retention_days(value: int | None, kind: RetentionKind = "standard") -> int:
-    """Apply ``kind``'s default for missing/non-positive values, else clamp to max."""
+def enforce_retention_days(value: int | None, kind: RetentionKind = "standard") -> int | None:
+    """Write-path retention for ``kind``.
+
+    Missing or non-positive values get the configured default. A supported
+    value is capped at the configured max. Any other value returns ``None``:
+    the message must not be ingested.
+    """
     bucket = get_retention_days_config()[kind]
     if not isinstance(value, int) or value <= 0:
         return bucket["default"]
+    if value not in SUPPORTED_RETENTION_DAYS:
+        return None
     return min(value, bucket["max"])
 
 
-def enforce_standard_retention_days(value: int | None) -> int | None:
-    """Write-path standard retention.
-
-    Missing or non-positive values get the configured default. Other values are
-    capped at the configured max and bucketed. ``None`` means the message must
-    not be ingested.
-    """
-    bucket = get_retention_days_config()["standard"]
-    if not isinstance(value, int) or value <= 0:
-        return bucket["default"]
-    return bucket_retention_days(value, bucket["max"])
-
-
-def query_standard_retention_days(value: int | None) -> int:
-    """Query-path standard retention, bucketed like the write path.
-
-    Unsupported values below ``MIN_ROUNDED_RETENTION_DAYS`` are never written,
-    so the requested value is used unchanged as the cutoff for them.
-    """
-    bucket = get_retention_days_config()["standard"]
-    if not isinstance(value, int) or value <= 0:
-        return bucket["default"]
-    bucketed = bucket_retention_days(value, bucket["max"])
-    return bucketed if bucketed is not None else min(value, bucket["max"])
+def record_unsupported_retention(processor: str) -> None:
+    """Count a message dropped by ``processor`` for an unsupported retention value."""
+    _consumer_metrics.increment(DROPPED_UNSUPPORTED_RETENTION_METRIC, tags={"processor": processor})

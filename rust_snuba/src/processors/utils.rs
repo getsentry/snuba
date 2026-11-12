@@ -1,7 +1,6 @@
 use chrono::{DateTime, NaiveDateTime, Utc};
 use schemars::JsonSchema;
 use sentry_options::options;
-use sentry_protos::snuba::v1::TraceItemType;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// One week in seconds. The eap_items table is partitioned by
@@ -80,99 +79,49 @@ fn retention_option(kind: RetentionKind, field: &str, fallback: u16) -> u16 {
         .unwrap_or(fallback)
 }
 
-/// Standard retention values that may be written. Tables are partitioned by
-/// `(retention_days, toMonday(timestamp))`, so every distinct value adds a full
-/// set of partitions. Bucketing keeps that set bounded.
-pub const SUPPORTED_RETENTION_DAYS: [u16; 6] = [7, 30, 60, 90, 180, 366];
+/// Retention values (standard and downsampled) that may be written. Tables are
+/// partitioned by `(retention_days, toMonday(timestamp))`, so every distinct
+/// value adds a full set of partitions. Any other value is rejected, never
+/// rounded.
+pub const SUPPORTED_RETENTION_DAYS: [u16; 7] = [7, 30, 60, 90, 180, 366, 396];
 
-/// Values at or above this round down to the nearest supported value.
-/// Unsupported values below it are rejected rather than rounded.
-pub const MIN_ROUNDED_RETENTION_DAYS: u16 = 30;
+/// Counter for messages dropped for an unsupported retention value. Shared by
+/// every processor (Rust and Python); the `processor` tag says which one.
+pub const DROPPED_UNSUPPORTED_RETENTION_METRIC: &str = "dropped_unsupported_retention";
 
-/// Preprod (Size Analysis) items are retained for 13 months. This is their own
-/// supported value and cap, regardless of the `retention_days` option.
-pub const PREPROD_RETENTION_DAYS: u16 = 396;
-
-const PREPROD_SUPPORTED_RETENTION_DAYS: [u16; 7] =
-    [7, 30, 60, 90, 180, 366, PREPROD_RETENTION_DAYS];
-
-/// Cap `value` at `max` and round down to the nearest value in `supported`.
-/// Returns `None` when the capped value is below `MIN_ROUNDED_RETENTION_DAYS`
-/// and is not itself supported.
-fn bucket_retention(value: u16, max: u16, supported: &[u16]) -> Option<u16> {
-    let capped = value.min(max);
-    if supported.contains(&capped) {
-        return Some(capped);
+/// Missing/non-positive -> `kind`'s configured default. A supported value is
+/// capped at `kind`'s configured max. Any other value returns `None`: the
+/// message must not be ingested.
+fn enforce_retention(value: Option<u16>, kind: RetentionKind) -> Option<u16> {
+    match value.filter(|&n| n > 0) {
+        None => Some(retention_option(kind, "default", kind.default_default())),
+        Some(value) if SUPPORTED_RETENTION_DAYS.contains(&value) => {
+            Some(value.min(retention_option(kind, "max", kind.default_max())))
+        }
+        Some(_) => None,
     }
-    if capped < MIN_ROUNDED_RETENTION_DAYS {
-        return None;
-    }
-    supported.iter().copied().filter(|&d| d <= capped).max()
 }
 
-fn clamp_retention(value: Option<u16>, kind: RetentionKind) -> u16 {
-    let Some(value) = value.filter(|&n| n > 0) else {
-        return retention_option(kind, "default", kind.default_default());
-    };
-    value.min(retention_option(kind, "max", kind.default_max()))
-}
-
-fn standard_default() -> u16 {
-    let kind = RetentionKind::Standard;
-    retention_option(kind, "default", kind.default_default())
-}
-
-fn standard_max() -> u16 {
-    let kind = RetentionKind::Standard;
-    retention_option(kind, "max", kind.default_max())
-}
-
-/// Standard: missing/non-positive -> configured default (30). Otherwise cap at
-/// the configured max (90) and round down to a supported value. `None` means
-/// the value is unsupported and the message must not be ingested.
+/// Standard: missing/non-positive -> 30, unsupported -> `None`, else cap at 90.
 pub fn enforce_standard_retention(value: Option<u16>) -> Option<u16> {
-    match value.filter(|&n| n > 0) {
-        None => Some(standard_default()),
-        Some(value) => bucket_retention(value, standard_max(), &SUPPORTED_RETENTION_DAYS),
-    }
+    enforce_retention(value, RetentionKind::Standard)
 }
 
-/// Like `enforce_standard_retention`, with per-item-type exceptions. Preprod
-/// also supports `PREPROD_RETENTION_DAYS` and is capped there.
-pub fn enforce_standard_retention_for_item_type(
-    value: Option<u16>,
-    item_type: TraceItemType,
-) -> Option<u16> {
-    if item_type != TraceItemType::Preprod {
-        return enforce_standard_retention(value);
-    }
-    match value.filter(|&n| n > 0) {
-        None => Some(standard_default()),
-        Some(value) => bucket_retention(
-            value,
-            PREPROD_RETENTION_DAYS,
-            &PREPROD_SUPPORTED_RETENTION_DAYS,
-        ),
-    }
+/// Downsampled: missing/non-positive -> 396, unsupported -> `None`, else cap at 396.
+pub fn enforce_downsampled_retention(value: Option<u16>) -> Option<u16> {
+    enforce_retention(value, RetentionKind::Downsampled)
 }
 
-/// Downsampled: missing/non-positive -> 396, otherwise cap at 396.
-pub fn enforce_downsampled_retention(value: Option<u16>) -> u16 {
-    clamp_retention(value, RetentionKind::Downsampled)
-}
-
-/// Enforce both windows for an EAP item. Standard is bucketed (see
-/// `enforce_standard_retention_for_item_type`); `None` means the item must not
-/// be ingested. Downsampled is at least standard; unset downsampled copies the
-/// standard value.
+/// Enforce both windows. `None` means either value is unsupported and the item
+/// must not be ingested. Downsampled is at least standard; unset downsampled
+/// copies the standard value.
 pub fn enforce_retentions(
     retention_days: Option<u16>,
     downsampled_retention_days: Option<u16>,
-    item_type: TraceItemType,
 ) -> Option<(u16, u16)> {
-    let retention_days = enforce_standard_retention_for_item_type(retention_days, item_type)?;
+    let retention_days = enforce_standard_retention(retention_days)?;
     let downsampled_retention_days = match downsampled_retention_days.filter(|&n| n > 0) {
-        Some(value) => enforce_downsampled_retention(Some(value)).max(retention_days),
+        Some(value) => enforce_downsampled_retention(Some(value))?.max(retention_days),
         None => retention_days,
     };
     Some((retention_days, downsampled_retention_days))
@@ -286,110 +235,44 @@ mod tests {
         init_options();
         assert_eq!(enforce_standard_retention(None), Some(30));
         assert_eq!(enforce_standard_retention(Some(0)), Some(30));
+        assert_eq!(enforce_standard_retention(Some(7)), Some(7));
         assert_eq!(enforce_standard_retention(Some(30)), Some(30));
         assert_eq!(enforce_standard_retention(Some(60)), Some(60));
-        assert_eq!(enforce_standard_retention(Some(89)), Some(60));
         assert_eq!(enforce_standard_retention(Some(90)), Some(90));
-        assert_eq!(enforce_standard_retention(Some(100)), Some(90));
+        // Supported values above the configured max (90) are capped.
+        assert_eq!(enforce_standard_retention(Some(180)), Some(90));
         assert_eq!(enforce_standard_retention(Some(366)), Some(90));
+        assert_eq!(enforce_standard_retention(Some(396)), Some(90));
     }
 
     #[test]
-    fn test_standard_below_rounding_threshold() {
+    fn test_standard_unsupported_values_rejected() {
         init_options();
-        // Supported values below 30 are kept; anything else below 30 is rejected.
-        assert_eq!(enforce_standard_retention(Some(7)), Some(7));
-        assert_eq!(enforce_standard_retention(Some(1)), None);
-        assert_eq!(enforce_standard_retention(Some(8)), None);
-        assert_eq!(enforce_standard_retention(Some(14)), None);
-        assert_eq!(enforce_standard_retention(Some(29)), None);
+        for value in [1, 8, 14, 29, 31, 89, 100, 365, 367, 395, 397, 1000] {
+            assert_eq!(enforce_standard_retention(Some(value)), None, "{value}");
+        }
     }
 
     #[test]
-    fn test_standard_buckets_with_366_cap() {
+    fn test_standard_with_396_cap() {
         init_options();
         let _guard = override_options(&[(
             "snuba",
             "retention_days",
             json!({
-                "standard": {"default": 30, "max": 366},
+                "standard": {"default": 30, "max": 396},
                 "downsampled": {"default": 396, "max": 396},
             }),
         )])
         .unwrap();
 
-        for (value, expected) in [
-            (7, Some(7)),
-            (14, None),
-            (30, Some(30)),
-            (45, Some(30)),
-            (60, Some(60)),
-            (89, Some(60)),
-            (90, Some(90)),
-            (120, Some(90)),
-            (180, Some(180)),
-            (365, Some(180)),
-            (366, Some(366)),
-            (396, Some(366)),
-            (1000, Some(366)),
-        ] {
-            assert_eq!(enforce_standard_retention(Some(value)), expected, "{value}");
+        for value in SUPPORTED_RETENTION_DAYS {
+            assert_eq!(enforce_standard_retention(Some(value)), Some(value));
         }
-    }
-
-    #[test]
-    fn test_preprod_retention() {
-        init_options();
-        let preprod = TraceItemType::Preprod;
-        assert_eq!(
-            enforce_standard_retention_for_item_type(None, preprod),
-            Some(30)
-        );
-        assert_eq!(
-            enforce_standard_retention_for_item_type(Some(7), preprod),
-            Some(7)
-        );
-        assert_eq!(
-            enforce_standard_retention_for_item_type(Some(14), preprod),
-            None
-        );
-        assert_eq!(
-            enforce_standard_retention_for_item_type(Some(30), preprod),
-            Some(30)
-        );
-        assert_eq!(
-            enforce_standard_retention_for_item_type(Some(90), preprod),
-            Some(90)
-        );
-        assert_eq!(
-            enforce_standard_retention_for_item_type(Some(366), preprod),
-            Some(366)
-        );
-        assert_eq!(
-            enforce_standard_retention_for_item_type(Some(390), preprod),
-            Some(366)
-        );
-        assert_eq!(
-            enforce_standard_retention_for_item_type(Some(396), preprod),
-            Some(396)
-        );
-        assert_eq!(
-            enforce_standard_retention_for_item_type(Some(1000), preprod),
-            Some(396)
-        );
-        // Other item types keep the option cap (90 by default).
-        assert_eq!(
-            enforce_standard_retention_for_item_type(Some(396), TraceItemType::Span),
-            Some(90)
-        );
-        assert_eq!(
-            enforce_retentions(Some(396), None, preprod),
-            Some((396, 396))
-        );
-        assert_eq!(
-            enforce_retentions(Some(396), Some(90), preprod),
-            Some((396, 396))
-        );
+        assert_eq!(enforce_standard_retention(Some(365)), None);
+        assert_eq!(enforce_standard_retention(Some(400)), None);
+        assert_eq!(enforce_retentions(Some(396), None), Some((396, 396)));
+        assert_eq!(enforce_retentions(Some(396), Some(90)), Some((396, 396)));
     }
 
     #[test]
@@ -403,10 +286,12 @@ mod tests {
     #[test]
     fn test_downsampled_defaults() {
         init_options();
-        assert_eq!(enforce_downsampled_retention(None), 396);
-        assert_eq!(enforce_downsampled_retention(Some(365)), 365);
-        assert_eq!(enforce_downsampled_retention(Some(396)), 396);
-        assert_eq!(enforce_downsampled_retention(Some(420)), 396);
+        assert_eq!(enforce_downsampled_retention(None), Some(396));
+        assert_eq!(enforce_downsampled_retention(Some(90)), Some(90));
+        assert_eq!(enforce_downsampled_retention(Some(366)), Some(366));
+        assert_eq!(enforce_downsampled_retention(Some(396)), Some(396));
+        assert_eq!(enforce_downsampled_retention(Some(365)), None);
+        assert_eq!(enforce_downsampled_retention(Some(420)), None);
     }
 
     #[test]
@@ -417,40 +302,34 @@ mod tests {
             "retention_days",
             json!({
                 "standard": {"default": 60, "max": 180},
-                "downsampled": {"default": 180, "max": 360},
+                "downsampled": {"default": 180, "max": 366},
             }),
         )])
         .unwrap();
 
         assert_eq!(enforce_standard_retention(None), Some(60));
-        assert_eq!(enforce_standard_retention(Some(100)), Some(90));
-        assert_eq!(enforce_standard_retention(Some(179)), Some(90));
-        assert_eq!(enforce_standard_retention(Some(200)), Some(180));
-        assert_eq!(enforce_downsampled_retention(None), 180);
-        assert_eq!(enforce_downsampled_retention(Some(365)), 360);
+        assert_eq!(enforce_standard_retention(Some(90)), Some(90));
+        assert_eq!(enforce_standard_retention(Some(180)), Some(180));
+        assert_eq!(enforce_standard_retention(Some(366)), Some(180));
+        assert_eq!(enforce_downsampled_retention(None), Some(180));
+        assert_eq!(enforce_downsampled_retention(Some(396)), Some(366));
     }
 
     #[test]
     fn test_retention_pair() {
         init_options();
-        let span = TraceItemType::Span;
-        assert_eq!(enforce_retentions(None, None, span), Some((30, 30)));
-        assert_eq!(enforce_retentions(Some(90), None, span), Some((90, 90)));
-        assert_eq!(enforce_retentions(Some(90), Some(0), span), Some((90, 90)));
-        assert_eq!(enforce_retentions(Some(90), Some(30), span), Some((90, 90)));
-        assert_eq!(
-            enforce_retentions(Some(90), Some(365), span),
-            Some((90, 365))
-        );
-        assert_eq!(
-            enforce_retentions(Some(90), Some(420), span),
-            Some((90, 396))
-        );
-        assert_eq!(
-            enforce_retentions(Some(100), Some(50), span),
-            Some((90, 90))
-        );
-        assert_eq!(enforce_retentions(Some(14), Some(396), span), None);
+        assert_eq!(enforce_retentions(None, None), Some((30, 30)));
+        assert_eq!(enforce_retentions(Some(90), None), Some((90, 90)));
+        assert_eq!(enforce_retentions(Some(90), Some(0)), Some((90, 90)));
+        assert_eq!(enforce_retentions(Some(90), Some(30)), Some((90, 90)));
+        assert_eq!(enforce_retentions(Some(90), Some(366)), Some((90, 366)));
+        assert_eq!(enforce_retentions(Some(90), Some(396)), Some((90, 396)));
+        assert_eq!(enforce_retentions(Some(180), Some(60)), Some((90, 90)));
+        // Either value unsupported: not ingested.
+        assert_eq!(enforce_retentions(Some(14), Some(396)), None);
+        assert_eq!(enforce_retentions(Some(100), Some(396)), None);
+        assert_eq!(enforce_retentions(Some(90), Some(365)), None);
+        assert_eq!(enforce_retentions(Some(90), Some(420)), None);
     }
 
     #[test]
@@ -467,9 +346,9 @@ mod tests {
         .unwrap();
 
         assert_eq!(enforce_standard_retention(None), Some(30));
-        assert_eq!(enforce_standard_retention(Some(100)), Some(90));
-        assert_eq!(enforce_downsampled_retention(None), 396);
-        assert_eq!(enforce_downsampled_retention(Some(420)), 396);
+        assert_eq!(enforce_standard_retention(Some(180)), Some(90));
+        assert_eq!(enforce_downsampled_retention(None), Some(396));
+        assert_eq!(enforce_downsampled_retention(Some(396)), Some(396));
     }
 
     const NOW_SECS: i64 = 2_000_000_000;
