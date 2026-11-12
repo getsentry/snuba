@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 from abc import ABC
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import UTC
 from typing import (
@@ -155,6 +155,7 @@ class RoutingDecision:
     can_run: bool | None = None
     time_window: TimeWindow | None = None
     is_throttled: bool | None = None
+    is_downsampled: bool = False
 
     def to_log_dict(self) -> dict[str, Any]:
         assert self.routing_context is not None
@@ -188,6 +189,22 @@ class CombinedAllocationPoliciesRecommendations(TypedDict):
     can_run: bool
     is_throttled: bool
     settings: dict[str, Any]
+
+
+def allows_downsample(mode: DownsampledStorageConfig.Mode.ValueType) -> bool:
+    return mode in (
+        DownsampledStorageConfig.MODE_NORMAL,
+        DownsampledStorageConfig.MODE_LOW_PRIORITY,
+    )
+
+
+def load_exceeds_any_reject_threshold(
+    policies: Iterable[AllocationPolicy],
+    load_info: LoadInfo | None,
+) -> bool:
+    if load_info is None:
+        return False
+    return any(load_info.exceeds(policy.thresholds.get("reject", {})) for policy in policies)
 
 
 def get_stats_dict(
@@ -522,6 +539,18 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
 
                 self._update_routing_decision(routing_decision)
 
+                mode = extract_message_meta(routing_context.in_msg).downsampled_storage_config.mode
+                cluster_over_reject = load_exceeds_any_reject_threshold(
+                    self.get_allocation_policies(routing_context.tenant_ids),
+                    routing_context.cluster_load_info,
+                )
+                if allows_downsample(mode) and cluster_over_reject:
+                    original_tier = routing_decision.tier
+                    if get_option("storage_routing.enable_allocation_policy_downsample", False):
+                        routing_decision.tier = routing_decision.tier.lower()
+                    routing_decision.is_downsampled = True
+                    routing_context.extra_info["original_tier"] = original_tier.name
+
                 org_overrides = self._get_org_clickhouse_setting_overrides(
                     routing_context.tenant_ids
                 )
@@ -578,6 +607,8 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             }
             if not routing_decision.can_run:
                 self.metrics.increment("rejected_query", tags=tags)
+            elif routing_decision.is_downsampled:
+                self.metrics.increment("downsampled_query", tags=tags)
             elif routing_decision.is_throttled:
                 self.metrics.increment("throttled_query", tags=tags)
             else:

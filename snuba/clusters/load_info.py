@@ -50,7 +50,7 @@ class LoadInfo:
 
     def exceeds(self, thresholds: dict[str, float]) -> bool:
         if not thresholds:
-            return True
+            return False
         return not all(
             0 <= getattr(self, name, -1) <= ceiling for name, ceiling in thresholds.items()
         )
