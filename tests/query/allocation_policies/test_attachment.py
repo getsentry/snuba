@@ -314,3 +314,37 @@ def test_eap_routing_strategy_uses_tenant_ids() -> None:
         "ReferrerGuardRailPolicy",
     ]
     assert [p.class_name() for p in for_org_2] == ["ConcurrentRateLimitAllocationPolicy"]
+
+
+def _names(tenant_ids: dict[str, str | int], blocks: list[dict[str, object]]) -> list[str]:
+    with override_allocation_policy({"EAP": blocks}):
+        policies = get_active_allocation_policies(ResourceIdentifier("EAP"), tenant_ids)
+    return [p.class_name() for p in policies]
+
+
+def test_per_key_policies_attach_side_by_side() -> None:
+    blocks: list[dict[str, object]] = [
+        {
+            "match": {},
+            "policies": [
+                {"name": "BytesScannedPerOrgRefPolicy"},
+                {"name": "BytesScannedPerRefPolicy"},
+            ],
+        }
+    ]
+    assert _names({"organization_id": 1}, blocks) == [
+        "BytesScannedPerOrgRefPolicy",
+        "BytesScannedPerRefPolicy",
+    ]
+
+
+@pytest.mark.parametrize(
+    "spec",
+    [
+        pytest.param(
+            {"name": "BytesScannedPerOrgPolicy", "enforce": "sometimes"}, id="bad enforce"
+        ),
+    ],
+)
+def test_invalid_policy_is_skipped(spec: dict[str, object]) -> None:
+    assert _names({}, [{"match": {}, "policies": [spec]}]) == ["PassthroughPolicy"]

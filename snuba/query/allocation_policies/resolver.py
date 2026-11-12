@@ -89,6 +89,11 @@ def _construct_policies(
             )
         except InvalidConfigKeyError:
             logger.warning("Unknown allocation policy %s for %s", name, resource)
+        except ValueError:
+            # A bad setting (e.g. an unknown enforce mode) must not fail the query.
+            logger.warning(
+                "Invalid allocation policy %s for %s: %r", name, resource, spec, exc_info=True
+            )
 
 
 def get_active_allocation_policies(

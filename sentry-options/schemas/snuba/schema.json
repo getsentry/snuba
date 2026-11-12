@@ -383,6 +383,10 @@
                     "type": "integer",
                     "optional": true
                   },
+                  "enforce": {
+                    "type": "string",
+                    "optional": true
+                  },
                   "max_threads": {
                     "type": "integer",
                     "optional": true
