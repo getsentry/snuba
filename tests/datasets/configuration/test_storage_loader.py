@@ -65,7 +65,7 @@ allocation_policies:
   -
     name: PassthroughPolicy
   -
-    name: BytesScannedWindowAllocationPolicy
+    name: ConcurrentRateLimitAllocationPolicy
 
 deletion_settings:
   is_enabled: 0
@@ -79,7 +79,7 @@ deletion_processors:
 
 delete_allocation_policies:
   -
-    name: DeleteConcurrentRateLimitAllocationPolicy
+    name: PassthroughPolicy
 """
         with tempfile.TemporaryDirectory() as tmpdirname:
             filename = os.path.join(tmpdirname, "file.yaml")
@@ -109,7 +109,7 @@ delete_allocation_policies:
             assert storage.required_time_column == "timestamp"
             assert len(policies := storage.get_allocation_policies()) == 2
             assert {p.class_name() for p in policies} == {
-                "BytesScannedWindowAllocationPolicy",
+                "ConcurrentRateLimitAllocationPolicy",
                 "PassthroughPolicy",
             }
             passthru = next(p for p in policies if p.class_name() == "PassthroughPolicy")
@@ -127,7 +127,7 @@ delete_allocation_policies:
 
             assert len(delete_policies := storage.get_delete_allocation_policies()) == 1
             assert {p.class_name() for p in delete_policies} == {
-                "DeleteConcurrentRateLimitAllocationPolicy",
+                "PassthroughPolicy",
             }
 
     def test_column_parser(self) -> None:

@@ -14,9 +14,7 @@ from tests.query.allocation_policies.attachment import (
 
 _POLICY_SPECS: list[dict[str, object]] = [
     {"name": "BytesScannedRejectingPolicy", "is_enforced": 0},
-    {"name": "BytesScannedWindowAllocationPolicy", "is_enforced": 0},
     {"name": "ConcurrentRateLimitAllocationPolicy", "is_enforced": 0},
-    {"name": "DeleteConcurrentRateLimitAllocationPolicy", "is_enforced": 0},
     {"name": "PassthroughPolicy", "is_enforced": 0},
     {"name": "ReferrerGuardRailPolicy", "is_enforced": 0},
 ]
