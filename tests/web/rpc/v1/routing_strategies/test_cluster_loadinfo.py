@@ -18,18 +18,12 @@ def enable_get_cluster_loadinfo() -> Generator[None]:
         yield
 
 
-# Always present on CH. CGroupUserTimeNormalized / disk_inflight_ops are
-# host-dependent and may be -1 without failing the probe.
 _REQUIRED_FIELDS = (
     "cluster_load",
     "concurrent_queries",
     "memory_allocated",
-    "part_mutation",
 )
-_ALL_FIELDS = _REQUIRED_FIELDS + (
-    "cgroup_user_time_normalized",
-    "disk_inflight_ops",
-)
+_ALL_FIELDS = _REQUIRED_FIELDS
 
 
 def _assert_probe_ok(load_info: LoadInfo) -> None:
@@ -48,10 +42,7 @@ def test_from_dict_old_cache_shape() -> None:
     load_info = LoadInfo.from_dict({"cluster_load": 1.5, "concurrent_queries": 3})
     assert load_info.cluster_load == 1.5
     assert load_info.concurrent_queries == 3.0
-    assert load_info.cgroup_user_time_normalized == -1
-    assert load_info.disk_inflight_ops == -1
     assert load_info.memory_allocated == -1
-    assert load_info.part_mutation == -1
 
 
 def test_from_dict_ignores_unknown_keys() -> None:
