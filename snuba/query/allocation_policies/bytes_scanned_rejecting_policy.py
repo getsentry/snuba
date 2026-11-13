@@ -22,7 +22,7 @@ from snuba.query.allocation_policies import (
 from snuba.query.allocation_policies.bytes_scanned_base import BaseBytesScannedPolicy
 from snuba.state.sentry_options import get_option
 
-logger = logging.getLogger("snuba.query.bytes_scanned_window_policy")
+logger = logging.getLogger("snuba.query.bytes_scanned_rejecting_policy")
 
 
 # we don't limit the amount of bytes subscriptions can scan at this time
