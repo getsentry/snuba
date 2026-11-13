@@ -18,6 +18,7 @@ from structlog.contextvars import bind_contextvars, clear_contextvars
 from werkzeug.exceptions import HTTPException
 
 from snuba import settings
+from snuba.admin.agent_views import agent
 from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.audit_log.base import AuditLog
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
@@ -82,6 +83,7 @@ from snuba.web.views import dataset_query
 logger = structlog.get_logger().bind(module=__name__)
 
 application = Flask(__name__, static_url_path="/static", static_folder="dist")
+application.register_blueprint(agent)
 
 runner = Runner()
 audit_log = AuditLog()
@@ -784,7 +786,7 @@ def eap_stats() -> Response:
 
 
 @application.route("/clickhouse_querylog_schema", methods=["GET"])
-@check_tool_perms(tools=[AdminTools.QUERYLOG])
+@check_tool_perms(tools=[AdminTools.QUERYLOG, AdminTools.AGENT])
 def clickhouse_querylog_schema() -> Response:
     try:
         result = describe_querylog_schema()
@@ -819,7 +821,7 @@ def clickhouse_querylog_schema() -> Response:
 
 
 @application.route("/clickhouse_nodes")
-@check_tool_perms(tools=[AdminTools.SYSTEM_QUERIES, AdminTools.QUERY_TRACING])
+@check_tool_perms(tools=[AdminTools.SYSTEM_QUERIES, AdminTools.QUERY_TRACING, AdminTools.AGENT])
 def clickhouse_nodes() -> Response:
     return Response(json.dumps(get_storage_info()), 200, {"Content-Type": "application/json"})
 
