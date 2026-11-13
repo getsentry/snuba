@@ -401,6 +401,7 @@ def _default_shape_tags(query_type: str) -> dict[str, str]:
         "has_or_filter": "false",
         "has_not_filter": "false",
         "has_like_filter": "false",
+        "has_regexp_filter": "false",
         "has_search_filter": "false",
     }
 
