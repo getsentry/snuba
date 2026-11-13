@@ -27,17 +27,9 @@ _RESULT = QueryResultOrError(
 class _CountingPolicy(KeyedAllocationPolicy):
     """Counts finished queries per key in memory."""
 
-    @property
-    def quota_unit(self) -> str:
-        return "queries"
-
-    @property
-    def default_limit(self) -> int:
-        return 2
-
-    @property
-    def suggestion(self) -> str:
-        return "too many queries"
+    quota_unit = "queries"
+    DEFAULT_LIMIT = 2
+    suggestion = "too many queries"
 
     @cached_property
     def counts(self) -> Counter[str]:

@@ -4,7 +4,7 @@ import inspect
 from abc import abstractmethod
 from collections.abc import Mapping
 from enum import StrEnum
-from typing import Any
+from typing import Any, ClassVar
 
 from snuba.configs.configuration import Configuration, ResourceIdentifier
 from snuba.query.allocation_policies import (
@@ -60,6 +60,13 @@ class KeyedAllocationPolicy(AllocationPolicy):
     - max_threads: threads granted when the query is allowed.
     """
 
+    # Unit of `limit` and usage, e.g. "bytes".
+    quota_unit: ClassVar[str]
+    # Limit used when the config sets none.
+    DEFAULT_LIMIT: ClassVar[int]
+    # Text returned to the caller when a query is rejected.
+    suggestion: ClassVar[str]
+
     def __init__(
         self,
         storage_key: ResourceIdentifier,
@@ -70,7 +77,7 @@ class KeyedAllocationPolicy(AllocationPolicy):
         thresholds: Mapping[str, Mapping[str, float]] | None = None,
     ) -> None:
         super().__init__(storage_key, thresholds=thresholds)
-        self._limit = setting("limit", self.default_limit if limit is None else limit, int)
+        self._limit = setting("limit", self.DEFAULT_LIMIT if limit is None else limit, int)
         self._max_threads = setting("max_threads", max_threads, int)
         if self._limit <= 0:
             raise AllocationPolicyError(f"limit must be positive, got {self._limit}")
@@ -89,62 +96,44 @@ class KeyedAllocationPolicy(AllocationPolicy):
             raise AllocationPolicyError(f"{cls.__name__} has no settings {sorted(unknown)}")
         return super().from_kwargs(storage_key=storage_key, **kwargs)
 
-    @property
-    @abstractmethod
-    def quota_unit(self) -> str:
-        """Unit of `limit` and usage, e.g. "bytes"."""
-
-    @property
-    @abstractmethod
-    def default_limit(self) -> int:
-        """Limit used when the config sets none."""
-
-    @property
-    @abstractmethod
-    def suggestion(self) -> str:
-        """Text returned to the caller when a query is rejected."""
-
     @abstractmethod
     def _key(self, tenant_ids: dict[str, str | int]) -> str:
         """The counter this query belongs to."""
 
     @abstractmethod
     def _check(self, key: str, query_id: str) -> int:
-        """Usage of `key` before the query runs. May also register the query
-        (e.g. as running), which `_record` then settles."""
+        """Return how much of `limit` `key` has already used. Read-only: must not record anything."""
 
     @abstractmethod
     def _record(self, key: str, query_id: str, result_or_error: QueryResultOrError) -> int:
         """Account for the query against `key` once it has finished. Returns the
         amount added to the key's usage, in quota_unit."""
 
+    # Overrides the runtime-config definitions in ConfigurableComponent. Refactor once
+    # the old dynamic policy config is removed.
     def _additional_config_definitions(self) -> list[Configuration]:
         return []
 
-    @property
-    def limit(self) -> int:
-        return self._limit
-
-    @property
-    def enforce(self) -> Enforce:
-        return self._enforce
-
+    # Overrides the runtime-config lookup in AllocationPolicy. Refactor once the old
+    # dynamic policy config is removed.
     @property
     def is_enforced(self) -> bool:
         return self._enforce is not Enforce.NEVER
 
+    # Overrides the runtime-config lookup in AllocationPolicy. Refactor once the old
+    # dynamic policy config is removed.
     @property
     def is_pardonable(self) -> bool:
         return self._enforce is Enforce.PARDON
 
+    # Overrides the runtime-config lookup in AllocationPolicy. Refactor once the old
+    # dynamic policy config is removed.
     @property
     def max_threads(self) -> int:
         return self._max_threads
 
-    def _storage_prefix(self, key: str) -> str:
-        """Redis prefix for `key`. component_name() is unique per storage and class."""
-        return f"{self.component_name()}-{key}"
-
+    # Abstract hook of the old AllocationPolicy base. Refactor once the old dynamic
+    # policy config is removed.
     def _get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
@@ -166,6 +155,8 @@ class KeyedAllocationPolicy(AllocationPolicy):
             self.suggestion,
         )
 
+    # Abstract hook of the old AllocationPolicy base. Refactor once the old dynamic
+    # policy config is removed.
     def _update_quota_balance(
         self,
         tenant_ids: dict[str, str | int],

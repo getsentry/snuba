@@ -20,12 +20,16 @@ from snuba.query.allocation_policies import (
     QuotaAllowanceDecision,
 )
 from snuba.query.allocation_policies.bytes_scanned_policy import (
+    TERABYTE,
     BytesScannedPerOrgPolicy,
     BytesScannedPerOrgRefPolicy,
     BytesScannedPerRefPolicy,
     BytesScannedPolicy,
 )
-from snuba.query.allocation_policies.keyed_allocation_policy import KeyedAllocationPolicy
+from snuba.query.allocation_policies.keyed_allocation_policy import (
+    Enforce,
+    KeyedAllocationPolicy,
+)
 from snuba.web import QueryException, QueryResult
 
 LIMIT = 1000
@@ -77,8 +81,8 @@ def _timeout(policy: AllocationPolicy, tenant_ids: dict[str, str | int]) -> int 
 
 def test_defaults() -> None:
     policy = BytesScannedPerOrgRefPolicy(storage_key=ResourceIdentifier(StorageKey("errors")))
-    assert policy.enforce == "always"
-    assert policy.limit == int(1.28 * 10**12)
+    assert policy._enforce is Enforce.ALWAYS
+    assert policy._limit == int(1.28 * TERABYTE)
     assert policy.max_threads == 10
     assert policy.is_enforced is True
     assert policy.is_pardonable is False

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Mapping
-from typing import Any, cast
+from typing import Any, ClassVar, Literal, cast
 
 from sentry_redis_tools.sliding_windows_rate_limiter import (
     GrantedQuota,
@@ -46,20 +46,12 @@ class BytesScannedPolicy(KeyedAllocationPolicy):
       timed out query reports no bytes scanned. At 0.025, 40 timeouts fill any key.
     """
 
-    @property
-    def quota_unit(self) -> str:
-        return "bytes"
-
-    @property
-    def default_limit(self) -> int:
-        return int(1.28 * TERABYTE)
-
-    @property
-    def suggestion(self) -> str:
-        return (
-            "This organization/referrer scanned too many bytes in the last 10 minutes. "
-            "This usually means a feature is querying inefficiently or is being abused."
-        )
+    quota_unit: ClassVar[Literal["bytes"]] = "bytes"
+    DEFAULT_LIMIT: ClassVar[int] = int(1.28 * TERABYTE)
+    suggestion: ClassVar[str] = (
+        "This organization/referrer scanned too many bytes in the last 10 minutes. "
+        "This usually means a feature is querying inefficiently or is being abused."
+    )
 
     def __init__(
         self,
@@ -89,7 +81,8 @@ class BytesScannedPolicy(KeyedAllocationPolicy):
             window_seconds=WINDOW_SECONDS,
             granularity_seconds=WINDOW_GRANULARITY_SECONDS,
             limit=self._limit,
-            prefix_override=self._storage_prefix(key),
+            # component_name() is unique per storage and class.
+            prefix_override=f"{self.component_name()}-{key}",
         )
 
     def _check(self, key: str, query_id: str) -> int:
