@@ -51,8 +51,10 @@ def _policy(key_by: str = "org_ref", **kwargs: Any) -> BytesScannedPolicy:
     )
 
 
-def _scan(policy: AllocationPolicy, tenant_ids: dict[str, str | int], progress_bytes: int) -> None:
-    policy.update_quota_balance(
+def _scan(
+    policy: AllocationPolicy, tenant_ids: dict[str, str | int], progress_bytes: int
+) -> int | None:
+    return policy.update_quota_balance(
         tenant_ids,
         QUERY_ID,
         QueryResultOrError(
@@ -65,10 +67,10 @@ def _scan(policy: AllocationPolicy, tenant_ids: dict[str, str | int], progress_b
     )
 
 
-def _timeout(policy: AllocationPolicy, tenant_ids: dict[str, str | int]) -> None:
+def _timeout(policy: AllocationPolicy, tenant_ids: dict[str, str | int]) -> int | None:
     error = QueryException()
     error.__cause__ = ClickhouseError("timeout", code=ErrorCodes.TIMEOUT_EXCEEDED)
-    policy.update_quota_balance(
+    return policy.update_quota_balance(
         tenant_ids, QUERY_ID, QueryResultOrError(query_result=None, error=error)
     )
 
@@ -129,7 +131,7 @@ def test_rejects_once_limit_is_scanned() -> None:
     assert allowance.can_run
     assert allowance.max_threads == MAX_THREADS
 
-    _scan(policy, TENANT_IDS, LIMIT)
+    assert _scan(policy, TENANT_IDS, LIMIT) == LIMIT
     allowance = policy.get_quota_allowance(TENANT_IDS, QUERY_ID)
     assert not allowance.can_run
     assert allowance.max_threads == 0
@@ -197,14 +199,14 @@ def test_missing_tenant_id_rejects(key_by: str, tenant_ids: dict[str, str | int]
 def test_cross_org_query_is_skipped() -> None:
     policy = _policy()
     tenant_ids: dict[str, str | int] = {"cross_org_query": 1, "referrer": "some_referrer"}
-    _scan(policy, tenant_ids, LIMIT * 100)
+    assert _scan(policy, tenant_ids, LIMIT * 100) == 0
     assert policy.get_quota_allowance(tenant_ids, QUERY_ID).can_run
 
 
 @pytest.mark.redis_db
 def test_timeout_counts_share_of_limit() -> None:
     policy = _policy(timeout_penalty=0.5)
-    _timeout(policy, TENANT_IDS)
+    assert _timeout(policy, TENANT_IDS) == LIMIT // 2
     assert policy.get_quota_allowance(TENANT_IDS, QUERY_ID).quota_used == LIMIT // 2
     _timeout(policy, TENANT_IDS)
     assert not policy.get_quota_allowance(TENANT_IDS, QUERY_ID).can_run
@@ -215,9 +217,10 @@ def test_other_errors_count_nothing() -> None:
     policy = _policy()
     error = QueryException()
     error.__cause__ = ClickhouseError("read timeout", code=-1)
-    policy.update_quota_balance(
+    recorded = policy.update_quota_balance(
         TENANT_IDS, QUERY_ID, QueryResultOrError(query_result=None, error=error)
     )
+    assert recorded == 0
     assert policy.get_quota_allowance(TENANT_IDS, QUERY_ID).quota_used == 0
 
 

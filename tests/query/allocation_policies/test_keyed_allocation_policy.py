@@ -46,8 +46,9 @@ class _CountingPolicy(KeyedAllocationPolicy):
     def _check(self, key: str, query_id: str) -> int:
         return self.counts[key]
 
-    def _record(self, key: str, query_id: str, result_or_error: QueryResultOrError) -> None:
+    def _record(self, key: str, query_id: str, result_or_error: QueryResultOrError) -> int:
         self.counts[key] += 1
+        return 1
 
 
 class _CountingPerOrg(_CountingPolicy):
@@ -91,7 +92,7 @@ def _policy(key_by: str = "org_ref", **kwargs: object) -> _CountingPolicy:
 )
 def test_keys(key_by: str, tenant_ids: dict[str, str | int], key: str) -> None:
     policy = _policy(key_by=key_by)
-    policy.update_quota_balance(tenant_ids, QUERY_ID, _RESULT)
+    assert policy.update_quota_balance(tenant_ids, QUERY_ID, _RESULT) == 1
     assert dict(policy.counts) == {key: 1}
 
 
@@ -111,7 +112,7 @@ def test_rejects_at_limit_with_subclass_unit() -> None:
 def test_cross_org_neither_checks_nor_records() -> None:
     policy = _policy(limit=1)
     tenant_ids: dict[str, str | int] = {"cross_org_query": 1}
-    policy.update_quota_balance(tenant_ids, QUERY_ID, _RESULT)
+    assert policy.update_quota_balance(tenant_ids, QUERY_ID, _RESULT) == 0
     assert not policy.counts
     assert policy.get_quota_allowance(tenant_ids, QUERY_ID).can_run
 

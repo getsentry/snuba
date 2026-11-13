@@ -114,8 +114,9 @@ class KeyedAllocationPolicy(AllocationPolicy):
         (e.g. as running), which `_record` then settles."""
 
     @abstractmethod
-    def _record(self, key: str, query_id: str, result_or_error: QueryResultOrError) -> None:
-        """Account for the query against `key` once it has finished."""
+    def _record(self, key: str, query_id: str, result_or_error: QueryResultOrError) -> int:
+        """Account for the query against `key` once it has finished. Returns the
+        amount added to the key's usage, in quota_unit."""
 
     def _additional_config_definitions(self) -> list[Configuration]:
         return []
@@ -170,10 +171,10 @@ class KeyedAllocationPolicy(AllocationPolicy):
         tenant_ids: dict[str, str | int],
         query_id: str,
         result_or_error: QueryResultOrError,
-    ) -> None:
+    ) -> int:
         if self.is_cross_org_query(tenant_ids):
-            return
-        self._record(self._key(tenant_ids), query_id, result_or_error)
+            return 0
+        return self._record(self._key(tenant_ids), query_id, result_or_error)
 
     def _allowance(
         self, can_run: bool, used: int, explanation: dict[str, Any], suggestion: str

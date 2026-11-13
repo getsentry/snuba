@@ -111,10 +111,10 @@ class BytesScannedPolicy(KeyedAllocationPolicy):
         progress_bytes = cast(Any, profile).get("progress_bytes")
         return int(progress_bytes) if isinstance(progress_bytes, (int, float)) else 0
 
-    def _record(self, key: str, query_id: str, result_or_error: QueryResultOrError) -> None:
+    def _record(self, key: str, query_id: str, result_or_error: QueryResultOrError) -> int:
         bytes_scanned = self._bytes_scanned(result_or_error)
         if bytes_scanned <= 0:
-            return
+            return 0
         request_name = self.component_name()
         # The query already ran, so record what it scanned as granted.
         _RATE_LIMITER.use_quotas(
@@ -122,6 +122,7 @@ class BytesScannedPolicy(KeyedAllocationPolicy):
             grants=[GrantedQuota(request_name, granted=bytes_scanned, reached_quotas=[])],
             timestamp=int(time.time()),
         )
+        return bytes_scanned
 
 
 class BytesScannedPerOrgPolicy(BytesScannedPolicy):
