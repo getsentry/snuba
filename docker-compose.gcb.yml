@@ -65,23 +65,29 @@ services:
       - "tests/migrations"
       - "--junit-xml"
       - "/.artifacts/${TEST_LOCATION:-tests}/${SNUBA_SETTINGS}/pytest.junit.xml"
+  # ClickHouse Keeper speaks the ZooKeeper protocol on zookeeper:2181. It runs
+  # from the ClickHouse image, which is multi-arch, so CI can run on arm64.
   zookeeper:
-    image: "ghcr.io/getsentry/image-mirror-confluentinc-cp-zookeeper:6.2.0"
-    environment:
-      ZOOKEEPER_CLIENT_PORT: "2181"
-      CONFLUENT_SUPPORT_METRICS_ENABLE: "false"
-      ZOOKEEPER_LOG4J_ROOT_LOGLEVEL: "WARN"
-      ZOOKEEPER_TOOLS_LOG4J_LOGLEVEL: "WARN"
+    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.33.10002.altinitystable}"
+    entrypoint: ["clickhouse-keeper", "--config-file=/etc/clickhouse-keeper/keeper_config.xml"]
+    volumes:
+      - ./config/clickhouse/keeper.xml:/etc/clickhouse-keeper/keeper_config.xml
+  # KRaft mode, like sentry-shared-kafka in devservices. 6.2.0 is amd64-only.
   kafka:
-    depends_on:
-      - zookeeper
-    image: "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:6.2.0"
+    image: "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:7.5.0"
     environment:
-      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_NODE_ID: "1"
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@127.0.0.1:29093"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:29093"
       KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
       CONFLUENT_SUPPORT_METRICS_ENABLE: "false"
-      KAFKA_LOG4J_LOGGERS: "kafka.cluster=WARN,kafka.controller=WARN,kafka.coordinator=WARN,kafka.log=WARN,kafka.server=WARN,kafka.zookeeper=WARN,state.change.logger=WARN"
+      KAFKA_LOG4J_LOGGERS: "kafka.cluster=WARN,kafka.controller=WARN,kafka.coordinator=WARN,kafka.log=WARN,kafka.server=WARN,state.change.logger=WARN"
       KAFKA_LOG4J_ROOT_LOGLEVEL: "WARN"
       KAFKA_TOOLS_LOG4J_LOGLEVEL: "WARN"
   clickhouse:

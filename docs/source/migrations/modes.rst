@@ -26,8 +26,9 @@ To run the distributed migration tests locally, run::
     make test-distributed-migrations
 
 The target builds a Snuba image and starts the ``multi_node`` profile of
-``docker-compose.gcb.yml``. That profile runs ZooKeeper, a query node, and four
-storage nodes, and runs the tests in ``test_distributed_migrations/``.
+``docker-compose.gcb.yml``. That profile runs ClickHouse Keeper in place of
+ZooKeeper, a query node, and four storage nodes, and runs the tests in
+``test_distributed_migrations/``.
 
 To run migrations against your own cluster, set ``SNUBA_SETTINGS=distributed``.
 This loads ``snuba/settings/settings_distributed.py``, which assigns every

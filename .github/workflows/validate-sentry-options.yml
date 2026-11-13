@@ -15,7 +15,7 @@ concurrency:
 jobs:
   cli-version:
     name: Determine sentry-options CLI version
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04-arm
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
