@@ -408,10 +408,7 @@
                   "properties": {
                     "cluster_load": { "type": "number", "optional": true },
                     "concurrent_queries": { "type": "number", "optional": true },
-                    "cgroup_user_time_normalized": { "type": "number", "optional": true },
-                    "disk_inflight_ops": { "type": "number", "optional": true },
-                    "memory_allocated": { "type": "number", "optional": true },
-                    "part_mutation": { "type": "number", "optional": true }
+                    "memory_allocated": { "type": "number", "optional": true }
                   }
                 }
               }
