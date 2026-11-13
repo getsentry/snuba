@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Snuba migrations &#8212; Snuba 26.11.0.dev0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=27fed22d" />
+    <script src="../_static/documentation_options.js?v=8faed7fb"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Snuba migration modes" href="modes.html" />
+    <link rel="prev" title="The MQL query language" href="../language/mql.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="snuba-migrations">
+<h1>Snuba migrations<a class="headerlink" href="#snuba-migrations" title="Link to this heading">¶</a></h1>
+<p>Migrations define and apply ClickHouse schema changes as the Snuba codebase changes. You manage them with the <code class="docutils literal notranslate"><span class="pre">snuba</span> <span class="pre">migrations</span></code> CLI.</p>
+<section id="types-of-migrations">
+<h2>Types of migrations<a class="headerlink" href="#types-of-migrations" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple">
+<li><p>ClickHouse node migrations (<code class="docutils literal notranslate"><span class="pre">ClickhouseNodeMigration</span></code>) run SQL statements on one or many ClickHouse nodes. Most migrations change the schema, such as adding or altering tables, and use this type.</p></li>
+<li><p>Code migrations (<code class="docutils literal notranslate"><span class="pre">CodeMigration</span></code>) run Python functions. Use them for data migrations or custom behavior that SQL cannot express. They are less common.</p></li>
+</ol>
+</section>
+<section id="migration-groups">
+<h2>Migration groups<a class="headerlink" href="#migration-groups" title="Link to this heading">¶</a></h2>
+<p>Migrations are organized into groups that usually correspond to a feature or a set of related tables. Groups are ordered, and every migration in a group runs before any migration in the next group. A migration can depend on changes from earlier groups, but not from later ones. The <code class="docutils literal notranslate"><span class="pre">system</span></code> group creates the table the migration system itself uses, and it must stay first.</p>
+<p>Each group is a directory in <code class="docutils literal notranslate"><span class="pre">snuba/snuba_migrations/</span></code>, except <code class="docutils literal notranslate"><span class="pre">system</span></code>, which lives in <code class="docutils literal notranslate"><span class="pre">snuba/migrations/system_migrations/</span></code>. The groups and their order are registered in <code class="docutils literal notranslate"><span class="pre">_REGISTERED_MIGRATION_GROUPS</span></code> in <code class="docutils literal notranslate"><span class="pre">snuba/migrations/groups.py</span></code>.</p>
+<p>Groups are mandatory by default. Groups listed in <code class="docutils literal notranslate"><span class="pre">OPTIONAL_GROUPS</span></code> in <code class="docutils literal notranslate"><span class="pre">snuba/migrations/groups.py</span></code> can be skipped with <code class="docutils literal notranslate"><span class="pre">settings.SKIPPED_MIGRATION_GROUPS</span></code>. In most cases, keep the default in <code class="docutils literal notranslate"><span class="pre">snuba/settings/__init__.py</span></code>.</p>
+</section>
+<section id="configure-settings-clusters">
+<h2>Configure settings.CLUSTERS<a class="headerlink" href="#configure-settings-clusters" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">settings.CLUSTERS</span></code> maps storage sets (groups of tables that must be colocated) to ClickHouse clusters. Every storage set must be assigned to one cluster.</p>
+<p>For each cluster, set <code class="docutils literal notranslate"><span class="pre">single_node</span></code> to <code class="docutils literal notranslate"><span class="pre">True</span></code> or <code class="docutils literal notranslate"><span class="pre">False</span></code>. If it is <code class="docutils literal notranslate"><span class="pre">False</span></code>, also set <code class="docutils literal notranslate"><span class="pre">cluster_name</span></code> and <code class="docutils literal notranslate"><span class="pre">distributed_cluster_name</span></code> to the ClickHouse cluster names in <code class="docutils literal notranslate"><span class="pre">system.clusters</span></code> where the data should be stored. For a single node cluster, keep the default configuration. For distributed mode, see <a class="reference internal" href="modes.html"><span class="doc">Snuba migration modes</span></a>.</p>
+</section>
+<section id="run-migrations">
+<h2>Run migrations<a class="headerlink" href="#run-migrations" title="Link to this heading">¶</a></h2>
+<section id="list-migrations">
+<h3>List migrations<a class="headerlink" href="#list-migrations" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">snuba</span> <span class="pre">migrations</span> <span class="pre">list</span></code> lists all migrations and their statuses.</p>
+</section>
+<section id="run-all-migrations">
+<h3>Run all migrations<a class="headerlink" href="#run-all-migrations" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">snuba</span> <span class="pre">migrations</span> <span class="pre">migrate</span> <span class="pre">--force</span></code> runs all pending migrations and brings the database to the latest state.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--force</span></code> also runs migrations marked blocking, which usually contain a data migration. Blocking migrations can take a long time. Stop any consumers that write to the affected table before you run them.</p></li>
+<li><p>Without <code class="docutils literal notranslate"><span class="pre">--force</span></code>, the command runs only if no pending migration is blocking.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">snuba</span> <span class="pre">devserver</span></code> runs this command on startup, so you do not need to run it yourself.</p></li>
+</ul>
+</section>
+<section id="run-a-single-migration">
+<h3>Run a single migration<a class="headerlink" href="#run-a-single-migration" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">snuba</span> <span class="pre">migrations</span> <span class="pre">run</span> <span class="pre">--group</span> <span class="pre">&lt;group&gt;</span> <span class="pre">--migration-id</span> <span class="pre">&lt;migration_id&gt;</span></code></p>
+<ul class="simple">
+<li><p>The command is allowed only if every earlier migration in that group is completed.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--dry-run</span></code> prints the migration’s SQL to stdout. It does not work for code migrations.</p></li>
+</ul>
+</section>
+<section id="reverse-a-single-migration">
+<h3>Reverse a single migration<a class="headerlink" href="#reverse-a-single-migration" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">snuba</span> <span class="pre">migrations</span> <span class="pre">reverse</span> <span class="pre">--group</span> <span class="pre">&lt;group&gt;</span> <span class="pre">--migration-id</span> <span class="pre">&lt;migration_id&gt;</span></code></p>
+<ul class="simple">
+<li><p>The command is allowed only if no later migration in that group is completed.</p></li>
+<li><p>If the migration is already marked completed, add <code class="docutils literal notranslate"><span class="pre">--force</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--dry-run</span></code> prints the migration’s SQL to stdout. It does not work for code migrations.</p></li>
+</ul>
+</section>
+<section id="fake-migrations">
+<h3>Fake migrations<a class="headerlink" href="#fake-migrations" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">snuba</span> <span class="pre">migrations</span> <span class="pre">migrate</span> <span class="pre">--fake</span></code> marks every migration as completed in the <code class="docutils literal notranslate"><span class="pre">migrations_local</span></code> table without running it.</p>
+<ul class="simple">
+<li><p>If you fake a blocking migration, add <code class="docutils literal notranslate"><span class="pre">--force</span></code>.</p></li>
+<li><p>To fake one migration, run <code class="docutils literal notranslate"><span class="pre">snuba</span> <span class="pre">migrations</span> <span class="pre">run</span></code> with <code class="docutils literal notranslate"><span class="pre">--fake</span></code>. Only that migration’s status changes.</p></li>
+</ul>
+</section>
+</section>
+<section id="write-migrations">
+<h2>Write migrations<a class="headerlink" href="#write-migrations" title="Link to this heading">¶</a></h2>
+<section id="generate-a-migration">
+<h3>Generate a migration<a class="headerlink" href="#generate-a-migration" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">snuba</span> <span class="pre">migrations</span> <span class="pre">generate</span></code> writes a migration for you. It supports only adding a column to an existing table.</p>
+<ol class="arabic simple">
+<li><p>Find the storage file for the table, at <code class="docutils literal notranslate"><span class="pre">snuba/datasets/configuration/&lt;dataset&gt;/storages/&lt;storage&gt;.yaml</span></code>. For example, <code class="docutils literal notranslate"><span class="pre">snuba/datasets/configuration/group_attributes/storages/group_attributes.yaml</span></code>.</p></li>
+<li><p>Edit the file. To add a column, add it to <code class="docutils literal notranslate"><span class="pre">schema.columns</span></code>. Leave the change uncommitted, because the command diffs the working tree against <code class="docutils literal notranslate"><span class="pre">HEAD</span></code>.</p></li>
+<li><p>From the repository root, run <code class="docutils literal notranslate"><span class="pre">snuba</span> <span class="pre">migrations</span> <span class="pre">generate</span> <span class="pre">path/to/storage.yaml</span></code>. The command writes the migration to <code class="docutils literal notranslate"><span class="pre">snuba/snuba_migrations/&lt;storage</span> <span class="pre">set&gt;/</span></code>.</p></li>
+<li><p>Commit the storage change and the generated migration together.</p></li>
+</ol>
+</section>
+<section id="add-a-migration-by-hand">
+<h3>Add a migration by hand<a class="headerlink" href="#add-a-migration-by-hand" title="Link to this heading">¶</a></h3>
+<ol class="arabic simple">
+<li><p>Pick the group for the migration.</p></li>
+<li><p>Add a file at <code class="docutils literal notranslate"><span class="pre">snuba/snuba_migrations/&lt;group&gt;/&lt;migration_id&gt;.py</span></code>. Prefix the migration ID with its zero-padded position in the group. For example, the fourth migration in a group starts with <code class="docutils literal notranslate"><span class="pre">0004_</span></code>.</p></li>
+<li><p>In the file, define a class named <code class="docutils literal notranslate"><span class="pre">Migration</span></code> that inherits from <code class="docutils literal notranslate"><span class="pre">ClickhouseNodeMigration</span></code> or <code class="docutils literal notranslate"><span class="pre">CodeMigration</span></code>.</p></li>
+</ol>
+<p>To create a new group:</p>
+<ol class="arabic simple">
+<li><p>Add the group to <code class="docutils literal notranslate"><span class="pre">MigrationGroup</span></code> in <code class="docutils literal notranslate"><span class="pre">snuba/migrations/groups.py</span></code>.</p></li>
+<li><p>Add a loader for the group to <code class="docutils literal notranslate"><span class="pre">snuba/migrations/group_loader.py</span></code>. The loader names the directory that holds the group’s migrations.</p></li>
+<li><p>Register the group in <code class="docutils literal notranslate"><span class="pre">_REGISTERED_MIGRATION_GROUPS</span></code>. Its position in that dict sets the order in which groups run.</p></li>
+<li><p>Set <code class="docutils literal notranslate"><span class="pre">readiness_state</span></code> to <code class="docutils literal notranslate"><span class="pre">ReadinessState.LIMITED</span></code>, so the migrations run automatically only in CI and local environments.</p></li>
+</ol>
+</section>
+<section id="add-an-sql-migration-clickhousenodemigration">
+<h3>Add an SQL migration (ClickhouseNodeMigration)<a class="headerlink" href="#add-an-sql-migration-clickhousenodemigration" title="Link to this heading">¶</a></h3>
+<p>Define <code class="docutils literal notranslate"><span class="pre">forwards_ops</span></code> and <code class="docutils literal notranslate"><span class="pre">backwards_ops</span></code>. Each returns a sequence of SQL operations for the forwards and backwards (reverse) migration, covering every ClickHouse layout a user may have.</p>
+<p>Each operation takes a <code class="docutils literal notranslate"><span class="pre">target</span></code> argument that says whether it applies to the local or the distributed table: <code class="docutils literal notranslate"><span class="pre">OperationTarget.LOCAL</span></code> or <code class="docutils literal notranslate"><span class="pre">OperationTarget.DISTRIBUTED</span></code>. The default is <code class="docutils literal notranslate"><span class="pre">OperationTarget.UNSET</span></code>, and the runner raises an error for an operation with an unset target.</p>
+<p>Apply <code class="docutils literal notranslate"><span class="pre">AddColumn</span></code> and <code class="docutils literal notranslate"><span class="pre">CreateTable</span></code> to local tables before distributed tables. Apply <code class="docutils literal notranslate"><span class="pre">DropColumn</span></code> to distributed tables first. Otherwise, the distributed table can briefly reference a column that does not exist. For example, to add <code class="docutils literal notranslate"><span class="pre">col1</span></code> to a local and a distributed table, <code class="docutils literal notranslate"><span class="pre">forwards_ops</span></code> returns:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="p">[</span>
+    <span class="n">AddColumn</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">OperationTarget</span><span class="o">.</span><span class="n">LOCAL</span><span class="p">,</span> <span class="o">...</span><span class="p">,</span> <span class="n">Column</span><span class="p">(</span><span class="s2">&quot;col1&quot;</span><span class="p">)),</span>
+    <span class="n">AddColumn</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">OperationTarget</span><span class="o">.</span><span class="n">DISTRIBUTED</span><span class="p">,</span> <span class="o">...</span><span class="p">,</span> <span class="n">Column</span><span class="p">(</span><span class="s2">&quot;col1&quot;</span><span class="p">)),</span>
+<span class="p">]</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">validate_migration_order</span></code> in <code class="docutils literal notranslate"><span class="pre">snuba/migrations/validator.py</span></code> checks for these ordering conflicts. <code class="docutils literal notranslate"><span class="pre">tests/migrations/test_validator.py</span></code> runs it for all migrations.</p>
+<p>If the forwards operations fail halfway, the backwards operations must restore the original state so you can retry the migration. For example, if the forwards migration creates a temporary table, the backwards migration drops it.</p>
+<p>After you add the migration, update the storage schema to match. A test fails if a column in the schema is missing from the database or differs from it after migrating.</p>
+</section>
+<section id="add-a-python-migration-codemigration">
+<h3>Add a Python migration (CodeMigration)<a class="headerlink" href="#add-a-python-migration-codemigration" title="Link to this heading">¶</a></h3>
+<p>Define <code class="docutils literal notranslate"><span class="pre">forwards_global</span></code> and <code class="docutils literal notranslate"><span class="pre">backwards_global</span></code>.</p>
+</section>
+<section id="mark-a-migration-blocking">
+<h3>Mark a migration blocking<a class="headerlink" href="#mark-a-migration-blocking" title="Link to this heading">¶</a></h3>
+<p>Mark a migration <code class="docutils literal notranslate"><span class="pre">blocking</span></code> if it cannot complete immediately, for example because it rewrites data. Run a blocking migration with the relevant consumer stopped, or use another strategy, such as dual writing, to avoid downtime while it runs.</p>
+</section>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="../index.html">
+              <img class="logo" src="../_static/snuba.svg" alt="Logo of Snuba"/>
+            </a></p>
+<h1 class="logo"><a href="../index.html">Snuba</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../getstarted.html">Getting started with Snuba</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/overview.html">Snuba Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/overview.html#snuba-within-a-sentry-deployment">Snuba within a Sentry Deployment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/datamodel.html">Snuba Data Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/slicing.html">Snuba Data Slicing (under development)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/slicing.html#configuring-a-slice">Configuring a slice</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/slicing.html#working-in-a-sliced-environment">Working in a Sliced Environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/queryprocessing.html">Snuba Query Processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/consumer.html">Snuba Consumers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../configuration/overview.html">Dataset Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../query/overview.html">Querying Snuba</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../language/snql.html">The SnQL query language</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../language/mql.html">The MQL query language</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Snuba migrations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="modes.html">Snuba migration modes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../contributing/environment.html">Snuba development environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/topology.html">ClickHouse Topology Best Practices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/schema_design.html">ClickHouse Schema Design Best Practices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/supported_versions.html">ClickHouse supported versions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profiler.html">Profiling</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="../language/mql.html" title="previous chapter">The MQL query language</a></li>
+      <li>Next: <a href="modes.html" title="next chapter">Snuba migration modes</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2021, Sentry Team and Contributors.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.0.4</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../_sources/migrations/overview.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Snuba development environment &#8212; Snuba 26.11.0.dev0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=27fed22d" />
+    <script src="../_static/documentation_options.js?v=8faed7fb"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="ClickHouse Topology Best Practices" href="../clickhouse/topology.html" />
+    <link rel="prev" title="Snuba migration modes" href="../migrations/modes.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="snuba-development-environment">
+<h1>Snuba development environment<a class="headerlink" href="#snuba-development-environment" title="Link to this heading">¶</a></h1>
+<p>This section explains how to run Snuba from source. To set up ClickHouse,
+Redis, and Kafka, see <a class="reference internal" href="../getstarted.html"><span class="doc">Getting started with Snuba</span></a>.</p>
+<section id="prerequisites">
+<h2>Prerequisites<a class="headerlink" href="#prerequisites" title="Link to this heading">¶</a></h2>
+<p>Set up the <a class="reference external" href="https://develop.sentry.dev/environment/">Sentry development environment</a>
+first.</p>
+<p>Install <code class="docutils literal notranslate"><span class="pre">uv</span></code>. <code class="docutils literal notranslate"><span class="pre">devenv</span> <span class="pre">sync</span></code> no longer installs it:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">brew</span> <span class="n">install</span> <span class="n">uv</span>
+</pre></div>
+</div>
+<p>If you use Homebrew on an Apple Silicon Mac, make the Homebrew development
+packages visible to the Rust build:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">export</span> <span class="n">CPATH</span><span class="o">=/</span><span class="n">opt</span><span class="o">/</span><span class="n">homebrew</span><span class="o">/</span><span class="n">include</span>
+<span class="n">export</span> <span class="n">LIBRARY_PATH</span><span class="o">=/</span><span class="n">opt</span><span class="o">/</span><span class="n">homebrew</span><span class="o">/</span><span class="n">lib</span>
+</pre></div>
+</div>
+</section>
+<section id="install-and-run">
+<h2>Install and run<a class="headerlink" href="#install-and-run" title="Link to this heading">¶</a></h2>
+<p>Clone the repository:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">git</span> <span class="n">clone</span> <span class="n">git</span><span class="nd">@github</span><span class="o">.</span><span class="n">com</span><span class="p">:</span><span class="n">getsentry</span><span class="o">/</span><span class="n">snuba</span><span class="o">.</span><span class="n">git</span>
+<span class="n">cd</span> <span class="n">snuba</span>
+</pre></div>
+</div>
+<p>Set up the environment. <code class="docutils literal notranslate"><span class="pre">direnv</span> <span class="pre">allow</span></code> puts <code class="docutils literal notranslate"><span class="pre">.venv</span></code> and <code class="docutils literal notranslate"><span class="pre">rustup</span></code> on your
+<code class="docutils literal notranslate"><span class="pre">PATH</span></code>. <code class="docutils literal notranslate"><span class="pre">devenv</span> <span class="pre">sync</span></code> installs <code class="docutils literal notranslate"><span class="pre">rustup</span></code>, <code class="docutils literal notranslate"><span class="pre">cmake</span></code>, and <code class="docutils literal notranslate"><span class="pre">protobuf</span></code> from
+<code class="docutils literal notranslate"><span class="pre">Brewfile</span></code>, syncs the Python virtual environment, and installs the
+pre-commit hooks:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">direnv</span> <span class="n">allow</span>
+<span class="n">devenv</span> <span class="n">sync</span>
+</pre></div>
+</div>
+<p>Build <code class="docutils literal notranslate"><span class="pre">rust_snuba</span></code>. <code class="docutils literal notranslate"><span class="pre">devenv</span> <span class="pre">sync</span></code> skips it because the build is slow:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">make</span> <span class="n">install</span><span class="o">-</span><span class="n">rs</span><span class="o">-</span><span class="n">dev</span>
+</pre></div>
+</div>
+<p>To rebuild <code class="docutils literal notranslate"><span class="pre">rust_snuba</span></code> on every change, run <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">watch-rust-snuba</span></code> instead.</p>
+<p>Start the Snuba API, which serves queries:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">snuba</span> <span class="n">api</span>
+</pre></div>
+</div>
+<p>Start the API and the consumers that ingest data from Kafka:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">snuba</span> <span class="n">devserver</span>
+</pre></div>
+</div>
+</section>
+<section id="run-tests">
+<h2>Run tests<a class="headerlink" href="#run-tests" title="Link to this heading">¶</a></h2>
+<p>Run the Python unit and integration tests:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">make</span> <span class="n">test</span>
+</pre></div>
+</div>
+<p>Run the Rust tests:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">make</span> <span class="n">test</span><span class="o">-</span><span class="n">rust</span>
+</pre></div>
+</div>
+<section id="run-sentry-tests-against-snuba">
+<h3>Run Sentry tests against Snuba<a class="headerlink" href="#run-sentry-tests-against-snuba" title="Link to this heading">¶</a></h3>
+<p>Make sure no Snuba container is running:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">docker</span> <span class="n">ps</span> <span class="o">-</span><span class="n">a</span> <span class="o">|</span> <span class="n">grep</span> <span class="n">snuba</span>
+</pre></div>
+</div>
+<p>Start your local Snuba API:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">git</span> <span class="n">checkout</span> <span class="n">your</span><span class="o">-</span><span class="n">snuba</span><span class="o">-</span><span class="n">branch</span>
+<span class="n">snuba</span> <span class="n">api</span>
+</pre></div>
+</div>
+<p>In another terminal, update Sentry and start Snuba’s dependencies:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cd</span> <span class="o">../</span><span class="n">sentry</span>
+<span class="n">git</span> <span class="n">checkout</span> <span class="n">master</span>
+<span class="n">git</span> <span class="n">pull</span>
+<span class="n">devservices</span> <span class="n">up</span>
+<span class="n">devservices</span> <span class="n">toggle</span> <span class="n">snuba</span> <span class="n">local</span>
+</pre></div>
+</div>
+<p>Then run the Sentry tests that cover your change. For example, the Sentry tests
+under <code class="docutils literal notranslate"><span class="pre">tests/snuba/</span></code> query Snuba:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">.</span><span class="n">venv</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">pytest</span> <span class="n">tests</span><span class="o">/</span><span class="n">snuba</span>
+</pre></div>
+</div>
+<p>These tests do not use Kafka, for performance. The Snuba test suite covers
+the Kafka paths.</p>
+</section>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="../index.html">
+              <img class="logo" src="../_static/snuba.svg" alt="Logo of Snuba"/>
+            </a></p>
+<h1 class="logo"><a href="../index.html">Snuba</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../getstarted.html">Getting started with Snuba</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/overview.html">Snuba Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/overview.html#snuba-within-a-sentry-deployment">Snuba within a Sentry Deployment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/datamodel.html">Snuba Data Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/slicing.html">Snuba Data Slicing (under development)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/slicing.html#configuring-a-slice">Configuring a slice</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/slicing.html#working-in-a-sliced-environment">Working in a Sliced Environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/queryprocessing.html">Snuba Query Processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/consumer.html">Snuba Consumers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../configuration/overview.html">Dataset Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../query/overview.html">Querying Snuba</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../language/snql.html">The SnQL query language</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../language/mql.html">The MQL query language</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../migrations/overview.html">Snuba migrations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../migrations/modes.html">Snuba migration modes</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Snuba development environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/topology.html">ClickHouse Topology Best Practices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/schema_design.html">ClickHouse Schema Design Best Practices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../clickhouse/supported_versions.html">ClickHouse supported versions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profiler.html">Profiling</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="../migrations/modes.html" title="previous chapter">Snuba migration modes</a></li>
+      <li>Next: <a href="../clickhouse/topology.html" title="next chapter">ClickHouse Topology Best Practices</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2021, Sentry Team and Contributors.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.0.4</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../_sources/contributing/environment.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
