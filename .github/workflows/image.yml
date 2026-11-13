@@ -34,6 +34,8 @@ jobs:
         platforms: linux/${{ matrix.platform }}
         dockerfile_path: 'Dockerfile'
         build_target: 'application'
+        build_args: |
+          SOURCE_COMMIT=${{ github.sha }}
         tag_suffix: -${{ matrix.platform }}
         ghcr: true
         tag_nightly: false
@@ -61,6 +63,8 @@ jobs:
           platforms: linux/amd64
           dockerfile_path: './Dockerfile'
           build_target: 'application'
+          build_args: |
+            SOURCE_COMMIT=${{ github.sha }}
           ghcr: false
           tag_nightly: false
           tag_latest: false
@@ -95,6 +99,8 @@ jobs:
         platforms: linux/${{ matrix.platform }}
         dockerfile_path: 'Dockerfile'
         build_target: 'application-debug'
+        build_args: |
+          SOURCE_COMMIT=${{ github.sha }}
         tag_suffix: -debug-${{ matrix.platform }}
         ghcr: true
         tag_nightly: false

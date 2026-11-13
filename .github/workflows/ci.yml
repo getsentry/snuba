@@ -257,7 +257,7 @@ jobs:
           images=(
             "ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.33.10002.altinitystable"
             "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:7.5.0"
-            "ghcr.io/getsentry/docker-redis-cluster:7.0.10"
+            "ghcr.io/getsentry/image-mirror-valkey-valkey:8.0.12"
           )
           pulled=0
           for image in "${images[@]}"; do
@@ -328,7 +328,7 @@ jobs:
           images=(
             "ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.33.10002.altinitystable"
             "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:7.5.0"
-            "ghcr.io/getsentry/docker-redis-cluster:7.0.10"
+            "ghcr.io/getsentry/image-mirror-valkey-valkey:8.0.12"
           )
           for image in "${images[@]}"; do
             if ! docker image inspect "$image" &>/dev/null; then
@@ -554,7 +554,7 @@ jobs:
           images=(
             "ghcr.io/getsentry/image-mirror-${{ matrix.version }}"
             "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:7.5.0"
-            "ghcr.io/getsentry/docker-redis-cluster:7.0.10"
+            "ghcr.io/getsentry/image-mirror-valkey-valkey:8.0.12"
           )
           for image in "${images[@]}"; do
             if ! docker image inspect "$image" &>/dev/null; then

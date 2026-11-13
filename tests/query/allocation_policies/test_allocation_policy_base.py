@@ -28,7 +28,6 @@ from snuba.query.allocation_policies.bytes_scanned_window_policy import (
 from snuba.query.allocation_policies.concurrent_rate_limit import (
     ConcurrentRateLimitAllocationPolicy,
 )
-from snuba.query.allocation_policies.cross_org import CrossOrgQueryAllocationPolicy
 from snuba.query.allocation_policies.per_referrer import ReferrerGuardRailPolicy
 from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from tests.configs.component_config import (
@@ -500,6 +499,21 @@ def test_is_pardonable_overrides_can_run_when_idle() -> None:
     assert len(rejected_metrics) == 1
 
 
+@pytest.mark.redis_db
+def test_idle_pardons_without_reject_thresholds() -> None:
+    reject_policy = RejectingEverythingAllocationPolicy(
+        StorageKey("some_storage"),
+        is_enforced=1,
+    )
+    idle = LoadInfo(cluster_load=0.0, concurrent_queries=0)
+    allowance = reject_policy.get_quota_allowance(
+        {"organization_id": 123, "referrer": "some_referrer"},
+        "deadbeef",
+        idle,
+    )
+    assert allowance.explanation["idle_pardon"] == idle.to_dict()
+
+
 class TestComponentNameBackwardsCompatibility:
     """Test that component_name() keeps the historical ``{storage}.{ClassName}`` shape."""
 
@@ -508,7 +522,6 @@ class TestComponentNameBackwardsCompatibility:
             ReferrerGuardRailPolicy,
             ConcurrentRateLimitAllocationPolicy,
             BytesScannedRejectingPolicy,
-            CrossOrgQueryAllocationPolicy,
             BytesScannedWindowAllocationPolicy,
         ]
 
