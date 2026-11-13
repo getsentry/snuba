@@ -1,7 +1,7 @@
 import contextlib
-import hashlib
 import json
 import os
+import statistics
 import traceback
 from collections.abc import Callable, Generator, Mapping, Sequence
 from typing import (
@@ -142,17 +142,42 @@ def create_databases() -> None:
             connection.command(f"CREATE DATABASE {database_name};")
 
 
+# Per-file test durations in seconds, keyed by SNUBA_SETTINGS. Only used to
+# balance CI shards; refresh with scripts/update-test-durations.py.
+CI_TEST_DURATIONS_PATH = os.path.join(os.path.dirname(__file__), "ci_test_durations.json")
+
+
+def _plan_shards(files: set[str], total: int) -> dict[str, int]:
+    """
+    Assign each test file to a shard, longest first onto the least-loaded
+    shard. Files without a recorded duration count as the median. Every shard
+    computes the same plan from the same collected files.
+    """
+    with open(CI_TEST_DURATIONS_PATH) as f:
+        known: dict[str, float] = json.load(f).get(os.environ.get("SNUBA_SETTINGS", ""), {})
+    default = statistics.median(known.values()) if known else 1.0
+    weights = {path: known.get(path, default) for path in files}
+    loads = [0.0] * total
+    plan = {}
+    for path in sorted(weights, key=lambda path: (-weights[path], path)):
+        shard = loads.index(min(loads))
+        plan[path] = shard
+        loads[shard] += weights[path]
+    return plan
+
+
 def pytest_collection_modifyitems(config: pytest.Config, items: list[Any]) -> None:
-    # Optional CI sharding by a stable hash of the test file (keeps a file's tests together); inert unless SNUBA_TEST_SHARD_TOTAL > 1.
+    # Optional CI sharding by test file (keeps a file's tests together), balanced
+    # by recorded durations; inert unless SNUBA_TEST_SHARD_TOTAL > 1.
     total = int(os.environ.get("SNUBA_TEST_SHARD_TOTAL", "1"))
     if total > 1:
         shard = int(os.environ.get("SNUBA_TEST_SHARD", "0"))
+        files = [item.nodeid.split("::", 1)[0] for item in items]
+        plan = _plan_shards(set(files), total)
         selected: list[Any] = []
         deselected: list[Any] = []
-        for item in items:
-            file_id = item.nodeid.split("::", 1)[0]
-            digest = int(hashlib.md5(file_id.encode()).hexdigest(), 16)
-            (selected if digest % total == shard else deselected).append(item)
+        for item, path in zip(items, files, strict=True):
+            (selected if plan[path] == shard else deselected).append(item)
         items[:] = selected
         config.hook.pytest_deselected(items=deselected)
 
