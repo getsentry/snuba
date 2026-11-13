@@ -297,7 +297,11 @@ def _enforce_max_rows(delete_query: Query, count_storage_key: StorageKey | None 
     if rows_to_delete == 0:
         raise NoRowsToDeleteException
     max_rows_allowed = get_storage(storage_key).get_deletion_settings().max_rows_to_delete
-    if get_option("enforce_max_rows_to_delete", True) and rows_to_delete > max_rows_allowed:
+    if (
+        get_option("enforce_max_rows_to_delete", True)
+        and not get_option("lightweight_delete_mode", "")
+        and rows_to_delete > max_rows_allowed
+    ):
         metrics.increment(
             "max_rows_exceeded",
             tags={"storage": storage_key.value},
