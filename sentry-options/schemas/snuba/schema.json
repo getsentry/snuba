@@ -390,6 +390,10 @@
                   "max_threads": {
                     "type": "integer",
                     "optional": true
+                  },
+                  "time_window": {
+                    "type": "integer",
+                    "optional": true
                   }
                 },
                 "additionalProperties": {

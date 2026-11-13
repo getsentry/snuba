@@ -27,28 +27,26 @@ _RATE_LIMITER = RedisSlidingWindowRateLimiter(get_redis_client(RedisClientKey.RA
 
 TERABYTE = 10**12
 DEFAULT_TIMEOUT_PENALTY = 0.025
-WINDOW_SECONDS = 10 * 60
+DEFAULT_TIME_WINDOW = 10 * 60
 WINDOW_GRANULARITY_SECONDS = 60
 
 
 class BytesScannedPolicy(KeyedAllocationPolicy):
-    """Rejects queries once a key has scanned `limit` bytes in a sliding 10-minute window.
+    """Rejects queries once a key has scanned `limit` bytes in a sliding `time_window`.
 
     Not usable on its own: config names one of the Per*Policy subclasses below,
     each of which picks the key.
 
-    Setting on top of KeyedAllocationPolicy:
+    Settings on top of KeyedAllocationPolicy:
 
+    - time_window: length of the sliding window, in seconds. Must be a positive
+      multiple of 60, the window's granularity. Defaults to 600 (10 minutes).
     - timeout_penalty: share of `limit` counted when ClickHouse times out, since a
       timed out query reports no bytes scanned. At 0.025, 40 timeouts fill any key.
     """
 
     quota_unit: ClassVar[Literal["bytes"]] = "bytes"
     DEFAULT_LIMIT: ClassVar[int] = int(1.28 * TERABYTE)
-    suggestion: ClassVar[str] = (
-        "This organization/referrer scanned too many bytes in the last 10 minutes. "
-        "This usually means a feature is querying inefficiently or is being abused."
-    )
 
     def __init__(
         self,
@@ -58,6 +56,7 @@ class BytesScannedPolicy(KeyedAllocationPolicy):
         enforce: Enforce | str = Enforce.ALWAYS,
         max_threads: int = DEFAULT_MAX_THREADS,
         thresholds: Mapping[str, Mapping[str, float]] | None = None,
+        time_window: int = DEFAULT_TIME_WINDOW,
         timeout_penalty: float = DEFAULT_TIMEOUT_PENALTY,
     ) -> None:
         super().__init__(
@@ -67,19 +66,34 @@ class BytesScannedPolicy(KeyedAllocationPolicy):
             max_threads=max_threads,
             thresholds=thresholds,
         )
+        self._time_window = setting("time_window", time_window, int)
+        if self._time_window <= 0 or self._time_window % WINDOW_GRANULARITY_SECONDS:
+            raise AllocationPolicyError(
+                f"time_window must be a positive multiple of {WINDOW_GRANULARITY_SECONDS} "
+                f"seconds, got {self._time_window}"
+            )
         self._timeout_penalty = setting("timeout_penalty", timeout_penalty, float)
         if not 0 <= self._timeout_penalty <= 1:
             raise AllocationPolicyError(
                 f"timeout_penalty must be in [0, 1], got {self._timeout_penalty}"
             )
 
+    @property
+    def suggestion(self) -> str:
+        return (
+            "This organization/referrer scanned too many bytes in the last "
+            f"{self._time_window} seconds. "
+            "This usually means a feature is querying inefficiently or is being abused."
+        )
+
     def _quota(self, key: str) -> Quota:
         return Quota(
-            window_seconds=WINDOW_SECONDS,
+            window_seconds=self._time_window,
             granularity_seconds=WINDOW_GRANULARITY_SECONDS,
             limit=self._limit,
-            # component_name() is unique per storage and class.
-            prefix_override=f"{self.component_name()}-{key}",
+            # component_name() is unique per storage and class. The window is in the
+            # prefix so blocks with different windows on one key never share a counter.
+            prefix_override=f"{self.component_name()}-{self._time_window}s-{key}",
         )
 
     def _check(self, key: str, query_id: str) -> int:

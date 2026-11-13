@@ -86,6 +86,8 @@ def test_defaults() -> None:
     assert policy.max_threads == 10
     assert policy.is_enforced is True
     assert policy.is_pardonable is False
+    assert policy._time_window == 600
+    assert policy._quota("org:1").window_seconds == 600
 
 
 @pytest.mark.parametrize(
@@ -94,6 +96,9 @@ def test_defaults() -> None:
         pytest.param({"enforce": "sometimes"}, id="unknown enforce"),
         pytest.param({"limit": 0}, id="zero limit"),
         pytest.param({"timeout_penalty": 2}, id="penalty above 1"),
+        pytest.param({"time_window": 0}, id="zero window"),
+        pytest.param({"time_window": -60}, id="negative window"),
+        pytest.param({"time_window": 90}, id="window not a multiple of 60"),
     ],
 )
 def test_invalid_settings_raise(kwargs: dict[str, Any]) -> None:
@@ -108,6 +113,7 @@ def test_invalid_settings_raise(kwargs: dict[str, Any]) -> None:
         pytest.param({"limit": "lots"}, id="non-numeric limit"),
         pytest.param({"max_threads": [4]}, id="list max_threads"),
         pytest.param({"timeout_penalty": "high"}, id="non-numeric penalty"),
+        pytest.param({"time_window": "long"}, id="non-numeric window"),
     ],
 )
 def test_from_kwargs_rejects_bad_config(kwargs: dict[str, Any]) -> None:
@@ -192,6 +198,38 @@ def test_key(key_by: str, key: str) -> None:
         "project_id": 99,
     }
     assert _policy(key_by=key_by)._key(tenant_ids) == key
+
+
+def test_time_window_reaches_quota() -> None:
+    policy = _policy(time_window=3600)
+    assert policy._quota("org:1").window_seconds == 3600
+    assert "3600 seconds" in policy.suggestion
+
+
+def test_time_window_in_prefix() -> None:
+    # Different windows on one key must not share a Redis counter.
+    short = _policy(key_by="ref", time_window=600)._quota("ref:some_referrer")
+    long = _policy(key_by="ref", time_window=3600)._quota("ref:some_referrer")
+    assert short.prefix_override != long.prefix_override
+    assert short.prefix_override is not None and "-600s-" in short.prefix_override
+
+
+@pytest.mark.redis_db
+def test_different_windows_count_separately() -> None:
+    short = _policy(key_by="ref", time_window=600)
+    long = _policy(key_by="ref", time_window=3600)
+    _scan(short, TENANT_IDS, LIMIT)
+    assert not short.get_quota_allowance(TENANT_IDS, QUERY_ID).can_run
+    assert long.get_quota_allowance(TENANT_IDS, QUERY_ID).can_run
+
+
+@pytest.mark.redis_db
+def test_rejection_suggestion_names_window() -> None:
+    policy = _policy(time_window=120)
+    _scan(policy, TENANT_IDS, LIMIT)
+    allowance = policy.get_quota_allowance(TENANT_IDS, QUERY_ID)
+    assert not allowance.can_run
+    assert "120 seconds" in allowance.suggestion
 
 
 @pytest.mark.redis_db

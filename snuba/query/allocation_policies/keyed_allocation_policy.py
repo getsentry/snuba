@@ -64,8 +64,6 @@ class KeyedAllocationPolicy(AllocationPolicy):
     quota_unit: ClassVar[str]
     # Limit used when the config sets none.
     DEFAULT_LIMIT: ClassVar[int]
-    # Text returned to the caller when a query is rejected.
-    suggestion: ClassVar[str]
 
     def __init__(
         self,
@@ -95,6 +93,11 @@ class KeyedAllocationPolicy(AllocationPolicy):
         if unknown:
             raise AllocationPolicyError(f"{cls.__name__} has no settings {sorted(unknown)}")
         return super().from_kwargs(storage_key=storage_key, **kwargs)
+
+    @property
+    @abstractmethod
+    def suggestion(self) -> str:
+        """Text returned to the caller when a query is rejected."""
 
     @abstractmethod
     def _key(self, tenant_ids: dict[str, str | int]) -> str:

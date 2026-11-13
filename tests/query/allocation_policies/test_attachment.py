@@ -2,6 +2,7 @@ import pytest
 
 from snuba.configs.configuration import ResourceIdentifier
 from snuba.query.allocation_policies import PassthroughPolicy
+from snuba.query.allocation_policies.bytes_scanned_policy import BytesScannedPolicy
 from snuba.query.allocation_policies.resolver import get_active_allocation_policies
 from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
     OutcomesBasedRoutingStrategy,
@@ -338,6 +339,24 @@ def test_per_key_policies_attach_side_by_side() -> None:
     ]
 
 
+def test_time_window_from_match_block() -> None:
+    blocks: list[dict[str, object]] = [
+        {"match": {}, "policies": [{"name": "BytesScannedPerRefPolicy"}]},
+        {
+            "match": {"organization_id": [1]},
+            "policies": [{"name": "BytesScannedPerRefPolicy", "time_window": 3600}],
+        },
+    ]
+    with override_allocation_policy({"EAP": blocks}):
+        org_1 = get_active_allocation_policies(ResourceIdentifier("EAP"), {"organization_id": 1})
+        org_2 = get_active_allocation_policies(ResourceIdentifier("EAP"), {"organization_id": 2})
+    windows = [
+        [p._time_window for p in policies if isinstance(p, BytesScannedPolicy)]
+        for policies in (org_1, org_2)
+    ]
+    assert windows == [[3600], [600]]
+
+
 @pytest.mark.parametrize(
     "spec",
     [
@@ -345,6 +364,7 @@ def test_per_key_policies_attach_side_by_side() -> None:
             {"name": "BytesScannedPerOrgPolicy", "enforce": "sometimes"}, id="bad enforce"
         ),
         pytest.param({"name": "BytesScannedPerOrgPolicy", "limit": 0}, id="zero limit"),
+        pytest.param({"name": "BytesScannedPerOrgPolicy", "time_window": 90}, id="bad window"),
         pytest.param({"name": "BytesScannedPerOrgPolicy", "is_enforced": 0}, id="unknown key"),
     ],
 )
