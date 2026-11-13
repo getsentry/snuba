@@ -668,7 +668,3 @@ DEFAULT_PASSTHROUGH_POLICY = _default_passthough_policy()
 import_submodules_in_directory(
     os.path.dirname(os.path.realpath(__file__)), "snuba.query.allocation_policies"
 )
-import_submodules_in_directory(
-    os.path.join(os.path.dirname(os.path.realpath(__file__)), "v2"),
-    "snuba.query.allocation_policies.v2",
-)

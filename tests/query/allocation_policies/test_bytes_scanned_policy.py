@@ -18,13 +18,13 @@ from snuba.query.allocation_policies import (
     QueryResultOrError,
     QuotaAllowanceDecision,
 )
-from snuba.query.allocation_policies.v2.base import KeyedAllocationPolicy
-from snuba.query.allocation_policies.v2.bytes_scanned_policy import (
+from snuba.query.allocation_policies.bytes_scanned_policy import (
     BytesScannedPerOrgPolicy,
     BytesScannedPerOrgRefPolicy,
     BytesScannedPerRefPolicy,
     BytesScannedPolicy,
 )
+from snuba.query.allocation_policies.keyed_allocation_policy import KeyedAllocationPolicy
 from snuba.web import QueryException, QueryResult
 
 LIMIT = 1000
@@ -233,9 +233,9 @@ def test_enforce_over_limit(
     assert allowance.decision(policy, load_info) is decision
 
 
-def test_resolver_import_registers_v2_policies() -> None:
+def test_resolver_import_registers_bytes_scanned_policies() -> None:
     """The resolver looks policies up by name, so importing it alone must register
-    every v2 policy. Runs in a fresh interpreter: this test module already imports
+    every BytesScannedPer* policy. Runs in a fresh interpreter: this test module already imports
     the classes, which would hide a missing registration."""
     code = (
         "import snuba.query.allocation_policies.resolver\n"

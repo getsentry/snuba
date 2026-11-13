@@ -14,7 +14,7 @@ from snuba.clickhouse.error_codes import ErrorCodes
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.configs.configuration import ResourceIdentifier
 from snuba.query.allocation_policies import QueryResultOrError
-from snuba.query.allocation_policies.v2.base import (
+from snuba.query.allocation_policies.keyed_allocation_policy import (
     KeyedAllocationPolicy,
     org_key,
     org_ref_key,

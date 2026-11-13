@@ -25,7 +25,7 @@ class Enforce(StrEnum):
 
 
 class KeyedAllocationPolicy(AllocationPolicy):
-    """Base for v2 policies: count usage per key, reject once a key reaches `limit`.
+    """Base for keyed policies: count usage per key, reject once a key reaches `limit`.
 
     A concrete policy combines two parts:
 

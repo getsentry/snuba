@@ -8,7 +8,7 @@ import pytest
 from snuba.configs.configuration import ResourceIdentifier
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import QueryResultOrError
-from snuba.query.allocation_policies.v2.base import (
+from snuba.query.allocation_policies.keyed_allocation_policy import (
     KeyedAllocationPolicy,
     org_key,
     org_ref_key,
