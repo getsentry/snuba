@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 from collections import Counter
+from functools import cached_property
 
 import pytest
 
@@ -38,9 +39,9 @@ class _CountingPolicy(KeyedAllocationPolicy):
     def suggestion(self) -> str:
         return "too many queries"
 
-    def __init__(self, storage_key: ResourceIdentifier, **kwargs: object) -> None:
-        super().__init__(storage_key, **kwargs)
-        self.counts: Counter[str] = Counter()
+    @cached_property
+    def counts(self) -> Counter[str]:
+        return Counter()
 
     def _check(self, key: str, query_id: str) -> int:
         return self.counts[key]

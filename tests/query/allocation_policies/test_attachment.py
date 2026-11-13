@@ -344,7 +344,12 @@ def test_per_key_policies_attach_side_by_side() -> None:
         pytest.param(
             {"name": "BytesScannedPerOrgPolicy", "enforce": "sometimes"}, id="bad enforce"
         ),
+        pytest.param({"name": "BytesScannedPerOrgPolicy", "limit": 0}, id="zero limit"),
+        pytest.param({"name": "BytesScannedPerOrgPolicy", "is_enforced": 0}, id="unknown key"),
     ],
 )
-def test_invalid_policy_is_skipped(spec: dict[str, object]) -> None:
+def test_invalid_policy_is_skipped(
+    spec: dict[str, object], caplog: pytest.LogCaptureFixture
+) -> None:
     assert _names({}, [{"match": {}, "policies": [spec]}]) == ["PassthroughPolicy"]
+    assert "Invalid allocation policy BytesScannedPerOrgPolicy" in caplog.text

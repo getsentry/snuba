@@ -143,6 +143,10 @@ class QuotaAllowance:
         )
 
 
+class AllocationPolicyError(Exception):
+    """A policy was configured with an unknown setting or an invalid value."""
+
+
 class InvalidTenantsForAllocationPolicy(SerializableException):
     """Individual policies can raise this exception if they are given invalid tenant_ids."""
 

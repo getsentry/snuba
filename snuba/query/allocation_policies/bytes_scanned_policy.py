@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Mapping
 from typing import Any, cast
 
 from sentry_redis_tools.sliding_windows_rate_limiter import (
@@ -13,12 +14,15 @@ from sentry_redis_tools.sliding_windows_rate_limiter import (
 from snuba.clickhouse.error_codes import ErrorCodes
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.configs.configuration import ResourceIdentifier
-from snuba.query.allocation_policies import QueryResultOrError
+from snuba.query.allocation_policies import AllocationPolicyError, QueryResultOrError
 from snuba.query.allocation_policies.keyed_allocation_policy import (
+    DEFAULT_MAX_THREADS,
+    Enforce,
     KeyedAllocationPolicy,
     org_key,
     org_ref_key,
     ref_key,
+    setting,
 )
 from snuba.redis import RedisClientKey, get_redis_client
 
@@ -57,11 +61,28 @@ class BytesScannedPolicy(KeyedAllocationPolicy):
             "This usually means a feature is querying inefficiently or is being abused."
         )
 
-    def __init__(self, storage_key: ResourceIdentifier, **kwargs: Any) -> None:
-        super().__init__(storage_key, **kwargs)
-        self._timeout_penalty = float(kwargs.get("timeout_penalty", DEFAULT_TIMEOUT_PENALTY))
+    def __init__(
+        self,
+        storage_key: ResourceIdentifier,
+        *,
+        limit: int | None = None,
+        enforce: Enforce | str = Enforce.ALWAYS,
+        max_threads: int = DEFAULT_MAX_THREADS,
+        thresholds: Mapping[str, Mapping[str, float]] | None = None,
+        timeout_penalty: float = DEFAULT_TIMEOUT_PENALTY,
+    ) -> None:
+        super().__init__(
+            storage_key,
+            limit=limit,
+            enforce=enforce,
+            max_threads=max_threads,
+            thresholds=thresholds,
+        )
+        self._timeout_penalty = setting("timeout_penalty", timeout_penalty, float)
         if not 0 <= self._timeout_penalty <= 1:
-            raise ValueError(f"timeout_penalty must be in [0, 1], got {self._timeout_penalty}")
+            raise AllocationPolicyError(
+                f"timeout_penalty must be in [0, 1], got {self._timeout_penalty}"
+            )
 
     def _quota(self, key: str) -> Quota:
         return Quota(

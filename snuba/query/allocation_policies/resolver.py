@@ -6,6 +6,7 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
     ALLOCATION_POLICY_KEY,
     AllocationPolicy,
+    AllocationPolicyError,
     PassthroughPolicy,
 )
 from snuba.state.sentry_options import get_mapped_option
@@ -82,14 +83,15 @@ def _construct_policies(
     resource: str,
 ) -> Iterator[AllocationPolicy]:
     for name, spec in specs_by_name.items():
+        settings = {key: value for key, value in spec.items() if key != "name"}
         try:
             yield AllocationPolicy.get_from_name(name).from_kwargs(
                 storage_key=resource,
-                **spec,
+                **settings,
             )
         except InvalidConfigKeyError:
             logger.warning("Unknown allocation policy %s for %s", name, resource)
-        except ValueError:
+        except AllocationPolicyError:
             # A bad setting (e.g. an unknown enforce mode) must not fail the query.
             logger.warning(
                 "Invalid allocation policy %s for %s: %r", name, resource, spec, exc_info=True

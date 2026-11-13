@@ -1,21 +1,33 @@
 from __future__ import annotations
 
+import inspect
 from abc import abstractmethod
+from collections.abc import Mapping
 from enum import StrEnum
 from typing import Any
 
 from snuba.configs.configuration import Configuration, ResourceIdentifier
 from snuba.query.allocation_policies import (
     CROSS_ORG_SUGGESTION,
-    MAX_THREADS,
     NO_SUGGESTION,
     AllocationPolicy,
+    AllocationPolicyError,
     InvalidTenantsForAllocationPolicy,
     QueryResultOrError,
     QuotaAllowance,
 )
 
 DEFAULT_MAX_THREADS = 10
+
+
+def setting[T: (int, float)](name: str, value: object, kind: type[T]) -> T:
+    """Convert a config value, raising AllocationPolicyError if it is not a number."""
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        raise AllocationPolicyError(f"{name} must be a number, got {value!r}")
+    try:
+        return kind(value)
+    except ValueError as err:
+        raise AllocationPolicyError(f"{name} must be a number, got {value!r}") from err
 
 
 class Enforce(StrEnum):
@@ -48,13 +60,34 @@ class KeyedAllocationPolicy(AllocationPolicy):
     - max_threads: threads granted when the query is allowed.
     """
 
-    def __init__(self, storage_key: ResourceIdentifier, **kwargs: Any) -> None:
-        super().__init__(storage_key, **kwargs)
-        self._limit = int(kwargs.get("limit", self.default_limit))
-        self._enforce = Enforce(kwargs.get("enforce", Enforce.ALWAYS))
-        self._max_threads = int(kwargs.get(MAX_THREADS, DEFAULT_MAX_THREADS))
+    def __init__(
+        self,
+        storage_key: ResourceIdentifier,
+        *,
+        limit: int | None = None,
+        enforce: Enforce | str = Enforce.ALWAYS,
+        max_threads: int = DEFAULT_MAX_THREADS,
+        thresholds: Mapping[str, Mapping[str, float]] | None = None,
+    ) -> None:
+        super().__init__(storage_key, thresholds=thresholds)
+        self._limit = setting("limit", self.default_limit if limit is None else limit, int)
+        self._max_threads = setting("max_threads", max_threads, int)
         if self._limit <= 0:
-            raise ValueError(f"limit must be positive, got {self._limit}")
+            raise AllocationPolicyError(f"limit must be positive, got {self._limit}")
+        try:
+            self._enforce = Enforce(enforce)
+        except ValueError as err:
+            raise AllocationPolicyError(
+                f"enforce must be one of {[e.value for e in Enforce]}, got {enforce!r}"
+            ) from err
+
+    @classmethod
+    def from_kwargs(cls, *, storage_key: str, **kwargs: Any) -> AllocationPolicy:
+        # Config can hold any key; reject the ones __init__ does not name.
+        unknown = set(kwargs) - set(inspect.signature(cls.__init__).parameters)
+        if unknown:
+            raise AllocationPolicyError(f"{cls.__name__} has no settings {sorted(unknown)}")
+        return super().from_kwargs(storage_key=storage_key, **kwargs)
 
     @property
     @abstractmethod

@@ -15,6 +15,7 @@ from snuba.configs.configuration import ResourceIdentifier
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
     AllocationPolicy,
+    AllocationPolicyError,
     QueryResultOrError,
     QuotaAllowanceDecision,
 )
@@ -90,8 +91,22 @@ def test_defaults() -> None:
     ],
 )
 def test_invalid_settings_raise(kwargs: dict[str, Any]) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(AllocationPolicyError):
         _policy(**kwargs)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        pytest.param({"is_enforced": 0}, id="unknown key"),
+        pytest.param({"limit": "lots"}, id="non-numeric limit"),
+        pytest.param({"max_threads": [4]}, id="list max_threads"),
+        pytest.param({"timeout_penalty": "high"}, id="non-numeric penalty"),
+    ],
+)
+def test_from_kwargs_rejects_bad_config(kwargs: dict[str, Any]) -> None:
+    with pytest.raises(AllocationPolicyError):
+        BytesScannedPerOrgPolicy.from_kwargs(storage_key="errors", **kwargs)
 
 
 @pytest.mark.parametrize("cls", list(_BY_KEY.values()))
