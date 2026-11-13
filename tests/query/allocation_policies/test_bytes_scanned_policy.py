@@ -287,6 +287,31 @@ def test_other_errors_count_nothing() -> None:
 
 
 @pytest.mark.parametrize(
+    "result",
+    [
+        pytest.param({}, id="no profile"),
+        pytest.param({"profile": None}, id="null profile"),
+        pytest.param({"profile": {}}, id="no progress_bytes"),
+        pytest.param({"profile": {"progress_bytes": None}}, id="null progress_bytes"),
+    ],
+)
+@pytest.mark.redis_db
+def test_missing_progress_bytes_counts_nothing(result: dict[str, Any]) -> None:
+    policy = _policy()
+    recorded = policy.update_quota_balance(
+        TENANT_IDS,
+        QUERY_ID,
+        QueryResultOrError(
+            query_result=QueryResult(
+                result=result, extra={"stats": {}, "sql": "", "experiments": {}}
+            ),
+            error=None,
+        ),
+    )
+    assert recorded == 0
+
+
+@pytest.mark.parametrize(
     ("enforce", "load_info", "can_run", "decision"),
     [
         pytest.param("always", IDLE, False, QuotaAllowanceDecision.REJECTED, id="always idle"),

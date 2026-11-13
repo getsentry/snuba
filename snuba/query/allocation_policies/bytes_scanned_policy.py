@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Mapping
-from typing import Any, ClassVar, Literal, cast
+from typing import ClassVar, Literal
 
 from sentry_redis_tools.sliding_windows_rate_limiter import (
     GrantedQuota,
@@ -105,15 +105,13 @@ class BytesScannedPolicy(KeyedAllocationPolicy):
         return self._limit - int(granted[0].granted)
 
     def _bytes_scanned(self, result_or_error: QueryResultOrError) -> int:
-        if result_or_error.error:
-            cause = result_or_error.error.__cause__
-            if isinstance(cause, ClickhouseError) and cause.code == ErrorCodes.TIMEOUT_EXCEEDED:
-                return int(self._limit * self._timeout_penalty)
+        if _is_timeout(result_or_error.error):
+            # A timed-out query reports no bytes, so it counts as a share of the limit.
+            return int(self._limit * self._timeout_penalty)
+        if result_or_error.error or result_or_error.query_result is None:
             return 0
-        assert result_or_error.query_result is not None
         profile = result_or_error.query_result.result.get("profile") or {}
-        progress_bytes = cast(Any, profile).get("progress_bytes")
-        return int(progress_bytes) if isinstance(progress_bytes, (int, float)) else 0
+        return int(profile.get("progress_bytes") or 0)
 
     def _record(self, key: str, query_id: str, result_or_error: QueryResultOrError) -> int:
         bytes_scanned = self._bytes_scanned(result_or_error)
@@ -127,6 +125,11 @@ class BytesScannedPolicy(KeyedAllocationPolicy):
             timestamp=int(time.time()),
         )
         return bytes_scanned
+
+
+def _is_timeout(error: Exception | None) -> bool:
+    cause = error.__cause__ if error else None
+    return isinstance(cause, ClickhouseError) and cause.code == ErrorCodes.TIMEOUT_EXCEEDED
 
 
 class BytesScannedPerOrgPolicy(BytesScannedPolicy):
