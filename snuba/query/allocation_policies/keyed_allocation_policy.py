@@ -44,8 +44,8 @@ class KeyedAllocationPolicy(AllocationPolicy):
     - what is counted: a subclass of this (e.g. BytesScannedPolicy) implements
       `_check` and `_record`;
     - what it is counted per: a concrete subclass of that (e.g.
-      BytesScannedPerOrgPolicy) implements `_key` with one of the key functions
-      below (org_key, ref_key, org_ref_key).
+      BytesScannedPerOrgPolicy) implements `_key`, reading tenant ids with
+      `_tenant`.
 
     Only the concrete subclasses are named in config.
 
@@ -99,6 +99,15 @@ class KeyedAllocationPolicy(AllocationPolicy):
     @abstractmethod
     def _key(self, tenant_ids: dict[str, str | int]) -> str:
         """The counter this query belongs to."""
+
+    def _tenant(self, tenant_ids: dict[str, str | int], field: str) -> str | int:
+        """Return tenant_ids[field], rejecting the query if it is missing."""
+        value = tenant_ids.get(field)
+        if value is None:
+            raise InvalidTenantsForAllocationPolicy.from_args(
+                tenant_ids, type(self).__name__, f"needs {field}"
+            )
+        return value
 
     @abstractmethod
     def _check(self, key: str, query_id: str) -> int:
@@ -191,27 +200,3 @@ class KeyedAllocationPolicy(AllocationPolicy):
             quota_unit=self.quota_unit,
             suggestion=suggestion,
         )
-
-
-def _tenant(tenant_ids: dict[str, str | int], field: str, policy: object) -> str | int:
-    value = tenant_ids.get(field)
-    if value is None:
-        raise InvalidTenantsForAllocationPolicy.from_args(
-            tenant_ids, type(policy).__name__, f"needs {field}"
-        )
-    return value
-
-
-def org_key(tenant_ids: dict[str, str | int], policy: object) -> str:
-    """One counter per organization, across all its referrers."""
-    return f"org:{_tenant(tenant_ids, 'organization_id', policy)}"
-
-
-def ref_key(tenant_ids: dict[str, str | int], policy: object) -> str:
-    """One counter per referrer, shared by all organizations."""
-    return f"ref:{_tenant(tenant_ids, 'referrer', policy)}"
-
-
-def org_ref_key(tenant_ids: dict[str, str | int], policy: object) -> str:
-    """One counter per organization and referrer."""
-    return f"{org_key(tenant_ids, policy)}|{ref_key(tenant_ids, policy)}"

@@ -4,17 +4,10 @@ import inspect
 from collections import Counter
 from functools import cached_property
 
-import pytest
-
 from snuba.configs.configuration import ResourceIdentifier
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import QueryResultOrError
-from snuba.query.allocation_policies.keyed_allocation_policy import (
-    KeyedAllocationPolicy,
-    org_key,
-    org_ref_key,
-    ref_key,
-)
+from snuba.query.allocation_policies.keyed_allocation_policy import KeyedAllocationPolicy
 from snuba.web import QueryResult
 
 QUERY_ID = "deadbeef"
@@ -45,47 +38,18 @@ class _CountingPolicy(KeyedAllocationPolicy):
 
 class _CountingPerOrg(_CountingPolicy):
     def _key(self, tenant_ids: dict[str, str | int]) -> str:
-        return org_key(tenant_ids, self)
+        return f"org:{self._tenant(tenant_ids, 'organization_id')}"
 
 
-class _CountingPerRef(_CountingPolicy):
-    def _key(self, tenant_ids: dict[str, str | int]) -> str:
-        return ref_key(tenant_ids, self)
+def _policy(**kwargs: object) -> _CountingPolicy:
+    return _CountingPerOrg(storage_key=ResourceIdentifier(StorageKey("errors")), **kwargs)
 
 
-class _CountingPerOrgRef(_CountingPolicy):
-    def _key(self, tenant_ids: dict[str, str | int]) -> str:
-        return org_ref_key(tenant_ids, self)
-
-
-_BY_KEY: dict[str, type[_CountingPolicy]] = {
-    "org": _CountingPerOrg,
-    "ref": _CountingPerRef,
-    "org_ref": _CountingPerOrgRef,
-}
-
-
-def _policy(key_by: str = "org_ref", **kwargs: object) -> _CountingPolicy:
-    return _BY_KEY[key_by](storage_key=ResourceIdentifier(StorageKey("errors")), **kwargs)
-
-
-@pytest.mark.parametrize(
-    ("key_by", "tenant_ids", "key"),
-    [
-        pytest.param("org", {"organization_id": 1, "referrer": "r"}, "org:1", id="org"),
-        pytest.param("ref", {"organization_id": 1, "referrer": "r"}, "ref:r", id="ref"),
-        pytest.param(
-            "org_ref",
-            {"organization_id": 1, "referrer": "r", "project_id": 5},
-            "org:1|ref:r",
-            id="org_ref ignores project",
-        ),
-    ],
-)
-def test_keys(key_by: str, tenant_ids: dict[str, str | int], key: str) -> None:
-    policy = _policy(key_by=key_by)
+def test_records_against_key() -> None:
+    policy = _policy()
+    tenant_ids: dict[str, str | int] = {"organization_id": 1, "referrer": "r"}
     assert policy.update_quota_balance(tenant_ids, QUERY_ID, _RESULT) == 1
-    assert dict(policy.counts) == {key: 1}
+    assert dict(policy.counts) == {"org:1": 1}
 
 
 def test_rejects_at_limit_with_subclass_unit() -> None:
@@ -126,16 +90,12 @@ def test_ignores_configurable_component_overrides() -> None:
     assert _policy(max_threads=4).max_threads == 4
 
 
-@pytest.mark.parametrize(
-    ("key_by", "tenant_ids"),
-    [
-        pytest.param("org", {"referrer": "r"}, id="org without org"),
-        pytest.param("ref", {"organization_id": 1}, id="ref without referrer"),
-        pytest.param("org_ref", {"organization_id": 1}, id="org_ref without referrer"),
-    ],
-)
-def test_missing_tenant_id_rejects(key_by: str, tenant_ids: dict[str, str | int]) -> None:
-    assert not _policy(key_by=key_by).get_quota_allowance(tenant_ids, QUERY_ID).can_run
+def test_missing_tenant_id_rejects() -> None:
+    policy = _policy()
+    allowance = policy.get_quota_allowance({"referrer": "r"}, QUERY_ID)
+    assert not allowance.can_run
+    assert allowance.explanation["__name__"] == "InvalidTenantsForAllocationPolicy"
+    assert not policy.counts
 
 
 def test_base_without_key_cannot_be_built() -> None:

@@ -19,9 +19,6 @@ from snuba.query.allocation_policies.keyed_allocation_policy import (
     DEFAULT_MAX_THREADS,
     Enforce,
     KeyedAllocationPolicy,
-    org_key,
-    org_ref_key,
-    ref_key,
     setting,
 )
 from snuba.redis import RedisClientKey, get_redis_client
@@ -119,15 +116,23 @@ class BytesScannedPolicy(KeyedAllocationPolicy):
 
 
 class BytesScannedPerOrgPolicy(BytesScannedPolicy):
+    """One counter per organization, across all its referrers."""
+
     def _key(self, tenant_ids: dict[str, str | int]) -> str:
-        return org_key(tenant_ids, self)
+        return f"org:{self._tenant(tenant_ids, 'organization_id')}"
 
 
 class BytesScannedPerRefPolicy(BytesScannedPolicy):
+    """One counter per referrer, shared by all organizations."""
+
     def _key(self, tenant_ids: dict[str, str | int]) -> str:
-        return ref_key(tenant_ids, self)
+        return f"ref:{self._tenant(tenant_ids, 'referrer')}"
 
 
 class BytesScannedPerOrgRefPolicy(BytesScannedPolicy):
+    """One counter per organization and referrer."""
+
     def _key(self, tenant_ids: dict[str, str | int]) -> str:
-        return org_ref_key(tenant_ids, self)
+        org = self._tenant(tenant_ids, "organization_id")
+        ref = self._tenant(tenant_ids, "referrer")
+        return f"org:{org}|ref:{ref}"

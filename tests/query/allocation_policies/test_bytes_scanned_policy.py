@@ -176,6 +176,24 @@ def test_key_by(
     assert policy.get_quota_allowance(other_key, QUERY_ID).can_run
 
 
+@pytest.mark.parametrize(
+    ("key_by", "key"),
+    [
+        pytest.param("org", "org:1", id="org"),
+        pytest.param("ref", "ref:some_referrer", id="ref"),
+        pytest.param("org_ref", "org:1|ref:some_referrer", id="org_ref ignores project_id"),
+    ],
+)
+def test_key(key_by: str, key: str) -> None:
+    # These strings name live Redis counters; changing them resets every key's usage.
+    tenant_ids: dict[str, str | int] = {
+        "organization_id": 1,
+        "referrer": "some_referrer",
+        "project_id": 99,
+    }
+    assert _policy(key_by=key_by)._key(tenant_ids) == key
+
+
 @pytest.mark.redis_db
 def test_per_key_policies_count_separately() -> None:
     org_ref = _policy(key_by="org_ref")
@@ -191,12 +209,14 @@ def test_per_key_policies_count_separately() -> None:
         pytest.param("org_ref", {"referrer": "some_referrer"}, id="org_ref without org"),
         pytest.param("org", {"referrer": "some_referrer"}, id="org without org"),
         pytest.param("ref", {"organization_id": 1}, id="ref without referrer"),
+        pytest.param("org_ref", {"organization_id": 1}, id="org_ref without referrer"),
     ],
 )
 @pytest.mark.redis_db
 def test_missing_tenant_id_rejects(key_by: str, tenant_ids: dict[str, str | int]) -> None:
     allowance = _policy(key_by=key_by).get_quota_allowance(tenant_ids, QUERY_ID)
     assert not allowance.can_run
+    assert allowance.explanation["__name__"] == "InvalidTenantsForAllocationPolicy"
 
 
 @pytest.mark.redis_db
