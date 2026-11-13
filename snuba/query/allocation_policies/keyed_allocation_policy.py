@@ -139,20 +139,30 @@ class KeyedAllocationPolicy(AllocationPolicy):
     ) -> QuotaAllowance:
         if self.is_cross_org_query(tenant_ids):
             # Cross-org queries have no single org to count against.
-            return self._allowance(True, 0, {"reason": "cross_org_query"}, CROSS_ORG_SUGGESTION)
+            return self._allowance(
+                can_run=True,
+                used=0,
+                explanation={"reason": "cross_org_query"},
+                suggestion=CROSS_ORG_SUGGESTION,
+            )
 
         key = self._key(tenant_ids)
         used = self._check(key, query_id)
         if used < self._limit:
-            return self._allowance(True, used, {"reason": "within_limit"}, NO_SUGGESTION)
+            return self._allowance(
+                can_run=True,
+                used=used,
+                explanation={"reason": "within_limit"},
+                suggestion=NO_SUGGESTION,
+            )
         return self._allowance(
-            False,
-            used,
-            {
+            can_run=False,
+            used=used,
+            explanation={
                 "reason": f"{key} is at {used} of its {self._limit} {self.quota_unit} limit",
                 "limit": self._limit,
             },
-            self.suggestion,
+            suggestion=self.suggestion,
         )
 
     # Abstract hook of the old AllocationPolicy base. Refactor once the old dynamic
@@ -168,7 +178,7 @@ class KeyedAllocationPolicy(AllocationPolicy):
         return self._record(self._key(tenant_ids), query_id, result_or_error)
 
     def _allowance(
-        self, can_run: bool, used: int, explanation: dict[str, Any], suggestion: str
+        self, *, can_run: bool, used: int, explanation: dict[str, Any], suggestion: str
     ) -> QuotaAllowance:
         return QuotaAllowance(
             can_run=can_run,
