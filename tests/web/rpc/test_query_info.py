@@ -253,6 +253,30 @@ def test_filter_profiles() -> None:
     assert info["filter_profile"] == "full_text_search"
     assert info["has_search_filter"] == "true"
 
+    regexp_search_filter = TraceItemFilter(
+        any_attribute_filter=AnyAttributeFilter(
+            op=AnyAttributeFilter.OP_REGEXP,
+            value=AttributeValue(val_str="foo.*"),
+        )
+    )
+    info = extract_query_info(TraceItemTableRequest(meta=_meta(), filter=regexp_search_filter))
+    assert info["filter_profile"] == "full_text_search"
+    assert info["has_search_filter"] == "true"
+    assert info["has_regexp_filter"] == "true"
+    assert info["has_like_filter"] == "false"
+
+    regexp_filter = TraceItemFilter(
+        comparison_filter=ComparisonFilter(
+            key=_str_attr("message"),
+            op=ComparisonFilter.OP_REGEXP,
+            value=AttributeValue(val_str="err.*"),
+        )
+    )
+    info = extract_query_info(TraceItemTableRequest(meta=_meta(), filter=regexp_filter))
+    assert info["filter_profile"] == "regexp"
+    assert info["has_regexp_filter"] == "true"
+    assert info["has_like_filter"] == "false"
+
     or_filter = TraceItemFilter(
         or_filter=OrFilter(
             filters=[
