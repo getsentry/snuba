@@ -14,7 +14,7 @@ from sentry_redis_tools.sliding_windows_rate_limiter import (
 from snuba.clickhouse.error_codes import ErrorCodes
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.configs.configuration import ResourceIdentifier
-from snuba.query.allocation_policies import AllocationPolicyError, QueryResultOrError
+from snuba.query.allocation_policies import QueryResultOrError
 from snuba.query.allocation_policies.keyed_allocation_policy import (
     DEFAULT_MAX_THREADS,
     Enforce,
@@ -38,8 +38,8 @@ class BytesScannedPolicy(KeyedAllocationPolicy):
 
     Settings on top of KeyedAllocationPolicy:
 
-    - time_window: length of the sliding window, in seconds. Must be a positive
-      multiple of 60, the window's granularity. Defaults to 600 (10 minutes).
+    - time_window: length of the sliding window, in seconds. Defaults to 600
+      (10 minutes).
     - timeout_penalty: share of `limit` counted when ClickHouse times out, since a
       timed out query reports no bytes scanned. At 0.025, 40 timeouts fill any key.
     """
@@ -66,16 +66,7 @@ class BytesScannedPolicy(KeyedAllocationPolicy):
             thresholds=thresholds,
         )
         self._time_window = time_window
-        if self._time_window <= 0 or self._time_window % WINDOW_GRANULARITY_SECONDS:
-            raise AllocationPolicyError(
-                f"time_window must be a positive multiple of {WINDOW_GRANULARITY_SECONDS} "
-                f"seconds, got {self._time_window}"
-            )
         self._timeout_penalty = timeout_penalty
-        if not 0 <= self._timeout_penalty <= 1:
-            raise AllocationPolicyError(
-                f"timeout_penalty must be in [0, 1], got {self._timeout_penalty}"
-            )
 
     @property
     def suggestion(self) -> str:

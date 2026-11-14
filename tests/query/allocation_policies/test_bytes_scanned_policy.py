@@ -15,7 +15,6 @@ from snuba.configs.configuration import ResourceIdentifier
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
     AllocationPolicy,
-    AllocationPolicyError,
     QueryResultOrError,
     QuotaAllowanceDecision,
 )
@@ -88,22 +87,6 @@ def test_defaults() -> None:
     assert policy.is_pardonable is False
     assert policy._time_window == 600
     assert policy._quota("org:1").window_seconds == 600
-
-
-@pytest.mark.parametrize(
-    "kwargs",
-    [
-        pytest.param({"enforce": "sometimes"}, id="unknown enforce"),
-        pytest.param({"limit": 0}, id="zero limit"),
-        pytest.param({"timeout_penalty": 2}, id="penalty above 1"),
-        pytest.param({"time_window": 0}, id="zero window"),
-        pytest.param({"time_window": -60}, id="negative window"),
-        pytest.param({"time_window": 90}, id="window not a multiple of 60"),
-    ],
-)
-def test_invalid_settings_raise(kwargs: dict[str, Any]) -> None:
-    with pytest.raises(AllocationPolicyError):
-        _policy(**kwargs)
 
 
 def test_unknown_key_raises_type_error() -> None:

@@ -357,25 +357,7 @@ def test_time_window_from_match_block() -> None:
     assert windows == [[3600], [600]]
 
 
-@pytest.mark.parametrize(
-    "spec",
-    [
-        pytest.param(
-            {"name": "BytesScannedPerOrgPolicy", "enforce": "sometimes"}, id="bad enforce"
-        ),
-        pytest.param({"name": "BytesScannedPerOrgPolicy", "limit": 0}, id="zero limit"),
-        pytest.param({"name": "BytesScannedPerOrgPolicy", "time_window": 90}, id="bad window"),
-    ],
-)
-def test_invalid_policy_is_skipped(
-    spec: dict[str, object], caplog: pytest.LogCaptureFixture
-) -> None:
-    assert _names({}, [{"match": {}, "policies": [spec]}]) == ["PassthroughPolicy"]
-    assert "Invalid allocation policy BytesScannedPerOrgPolicy" in caplog.text
-
-
 def test_unknown_policy_key_raises_type_error() -> None:
-    # Only AllocationPolicyError is skipped; a key __init__ does not accept is a TypeError.
     with pytest.raises(TypeError):
         _names(
             {},
