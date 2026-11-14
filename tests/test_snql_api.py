@@ -1018,7 +1018,7 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity events: Query column 'fsdfsd' does not exist",
+            "Validation failed for entity events: Tag keys (fsdfsd) not resolved",
             id="Invalid first Select column",
         ),
         pytest.param(
@@ -1028,7 +1028,7 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity events: query columns (fsdfsd, fake_col) do not exist",
+            "Validation failed for entity events: Tag keys (fake_col, fsdfsd) not resolved",
             id="Invalid multiple Select columns",
         ),
         pytest.param(
@@ -1038,7 +1038,7 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity groupedmessage: Query column 'fsdfsd' does not exist",
+            "Validation failed for entity groupedmessage: Tag keys (fsdfsd) not resolved",
             id="Invalid second Select column",
         ),
         pytest.param(
@@ -1048,7 +1048,7 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity groupedmessage: Query column 'fsdfsd' does not exist",
+            "Validation failed for entity groupedmessage: Tag keys (fsdfsd) not resolved",
             id="Invalid By column",
         ),
         pytest.param(
@@ -1059,7 +1059,7 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity groupedmessage: Query column 'fsdfsd' does not exist",
+            "Validation failed for entity groupedmessage: Tag keys (fsdfsd) not resolved",
             id="Invalid Where column",
         ),
         pytest.param(
@@ -1069,7 +1069,7 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity events: Query column 'status' does not exist",
+            "Validation failed for entity events: Tag keys (status) not resolved",
             id="Mismatched Select columns",
         ),
         pytest.param(
@@ -1079,12 +1079,11 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity events: Query column 'fdsdsf' does not exist",
+            "Validation failed for entity events: Tag keys (fdsdsf) not resolved",
             id="Invalid nested column",
         ),
     ]
 
-    @pytest.fixture()
     @pytest.mark.parametrize(
         "query, response_code, error_message", invalid_columns_composite_query_tests
     )
