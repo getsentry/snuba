@@ -585,7 +585,12 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         tenant_ids: dict[str, str | int],
         query_id: str,
         result_or_error: QueryResultOrError,
-    ) -> None:
+    ) -> int | None:
+        """Update the policy's quota after the query has run.
+
+        Returns what the policy recorded (e.g. bytes added to its usage), or
+        None if the policy records no amount or the update failed open.
+        """
         try:
             return self._update_quota_balance(tenant_ids, query_id, result_or_error)
         except InvalidTenantsForAllocationPolicy:
@@ -602,6 +607,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
             )
             if settings.RAISE_ON_ALLOCATION_POLICY_FAILURES:
                 raise
+        return None
 
     @abstractmethod
     def _update_quota_balance(
@@ -609,7 +615,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         tenant_ids: dict[str, str | int],
         query_id: str,
         result_or_error: QueryResultOrError,
-    ) -> None:
+    ) -> int | None:
         pass
 
     @property

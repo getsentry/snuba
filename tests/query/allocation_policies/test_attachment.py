@@ -2,6 +2,7 @@ import pytest
 
 from snuba.configs.configuration import ResourceIdentifier
 from snuba.query.allocation_policies import PassthroughPolicy
+from snuba.query.allocation_policies.bytes_scanned_policy import BytesScannedPolicy
 from snuba.query.allocation_policies.resolver import get_active_allocation_policies
 from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
     OutcomesBasedRoutingStrategy,
@@ -314,3 +315,51 @@ def test_eap_routing_strategy_uses_tenant_ids() -> None:
         "ReferrerGuardRailPolicy",
     ]
     assert [p.class_name() for p in for_org_2] == ["ConcurrentRateLimitAllocationPolicy"]
+
+
+def _names(tenant_ids: dict[str, str | int], blocks: list[dict[str, object]]) -> list[str]:
+    with override_allocation_policy({"EAP": blocks}):
+        policies = get_active_allocation_policies(ResourceIdentifier("EAP"), tenant_ids)
+    return [p.class_name() for p in policies]
+
+
+def test_per_key_policies_attach_side_by_side() -> None:
+    blocks: list[dict[str, object]] = [
+        {
+            "match": {},
+            "policies": [
+                {"name": "BytesScannedPerOrgRefPolicy"},
+                {"name": "BytesScannedPerRefPolicy"},
+            ],
+        }
+    ]
+    assert _names({"organization_id": 1}, blocks) == [
+        "BytesScannedPerOrgRefPolicy",
+        "BytesScannedPerRefPolicy",
+    ]
+
+
+def test_time_window_from_match_block() -> None:
+    blocks: list[dict[str, object]] = [
+        {"match": {}, "policies": [{"name": "BytesScannedPerRefPolicy"}]},
+        {
+            "match": {"organization_id": [1]},
+            "policies": [{"name": "BytesScannedPerRefPolicy", "time_window": 3600}],
+        },
+    ]
+    with override_allocation_policy({"EAP": blocks}):
+        org_1 = get_active_allocation_policies(ResourceIdentifier("EAP"), {"organization_id": 1})
+        org_2 = get_active_allocation_policies(ResourceIdentifier("EAP"), {"organization_id": 2})
+    windows = [
+        [p._time_window for p in policies if isinstance(p, BytesScannedPolicy)]
+        for policies in (org_1, org_2)
+    ]
+    assert windows == [[3600], [600]]
+
+
+def test_unknown_policy_key_raises_type_error() -> None:
+    with pytest.raises(TypeError):
+        _names(
+            {},
+            [{"match": {}, "policies": [{"name": "BytesScannedPerOrgPolicy", "is_enforced": 0}]}],
+        )
