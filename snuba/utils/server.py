@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import multiprocessing
+
 from granian import Granian
 from granian.constants import Interfaces
 
@@ -15,6 +17,12 @@ def serve(
     lifetime: int | None = None,
     max_rss: int | None = None,
 ) -> None:
+    # Granian starts workers with the global multiprocessing start method. Use
+    # spawn so workers don't inherit locks or half-imported modules from
+    # threads (e.g. the Sentry SDK's) that are running in this process when
+    # the workers start.
+    multiprocessing.set_start_method("spawn", force=True)
+
     host, port = bind.rsplit(":", maxsplit=1)
     server = Granian(
         target=module,
