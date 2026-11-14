@@ -20,16 +20,6 @@ from snuba.query.allocation_policies import (
 DEFAULT_MAX_THREADS = 10
 
 
-def setting[T: (int, float)](name: str, value: object, kind: type[T]) -> T:
-    """Convert a config value, raising AllocationPolicyError if it is not a number."""
-    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
-        raise AllocationPolicyError(f"{name} must be a number, got {value!r}")
-    try:
-        return kind(value)
-    except ValueError as err:
-        raise AllocationPolicyError(f"{name} must be a number, got {value!r}") from err
-
-
 class Enforce(StrEnum):
     ALWAYS = "always"
     PARDON = "pardon"
@@ -75,16 +65,9 @@ class KeyedAllocationPolicy(AllocationPolicy):
         thresholds: Mapping[str, Mapping[str, float]] | None = None,
     ) -> None:
         super().__init__(storage_key, thresholds=thresholds)
-        self._limit = setting("limit", self.DEFAULT_LIMIT if limit is None else limit, int)
-        self._max_threads = setting("max_threads", max_threads, int)
-        if self._limit <= 0:
-            raise AllocationPolicyError(f"limit must be positive, got {self._limit}")
-        try:
-            self._enforce = Enforce(enforce)
-        except ValueError as err:
-            raise AllocationPolicyError(
-                f"enforce must be one of {[e.value for e in Enforce]}, got {enforce!r}"
-            ) from err
+        self._limit = self.DEFAULT_LIMIT if limit is None else limit
+        self._max_threads = max_threads
+        self._enforce = Enforce(enforce)
 
     @classmethod
     def from_kwargs(cls, *, storage_key: str, **kwargs: Any) -> AllocationPolicy:

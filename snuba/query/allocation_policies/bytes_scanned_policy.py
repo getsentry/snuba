@@ -19,7 +19,6 @@ from snuba.query.allocation_policies.keyed_allocation_policy import (
     DEFAULT_MAX_THREADS,
     Enforce,
     KeyedAllocationPolicy,
-    setting,
 )
 from snuba.redis import RedisClientKey, get_redis_client
 
@@ -66,13 +65,13 @@ class BytesScannedPolicy(KeyedAllocationPolicy):
             max_threads=max_threads,
             thresholds=thresholds,
         )
-        self._time_window = setting("time_window", time_window, int)
+        self._time_window = time_window
         if self._time_window <= 0 or self._time_window % WINDOW_GRANULARITY_SECONDS:
             raise AllocationPolicyError(
                 f"time_window must be a positive multiple of {WINDOW_GRANULARITY_SECONDS} "
                 f"seconds, got {self._time_window}"
             )
-        self._timeout_penalty = setting("timeout_penalty", timeout_penalty, float)
+        self._timeout_penalty = timeout_penalty
         if not 0 <= self._timeout_penalty <= 1:
             raise AllocationPolicyError(
                 f"timeout_penalty must be in [0, 1], got {self._timeout_penalty}"

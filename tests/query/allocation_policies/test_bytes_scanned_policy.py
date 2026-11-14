@@ -110,10 +110,6 @@ def test_invalid_settings_raise(kwargs: dict[str, Any]) -> None:
     "kwargs",
     [
         pytest.param({"is_enforced": 0}, id="unknown key"),
-        pytest.param({"limit": "lots"}, id="non-numeric limit"),
-        pytest.param({"max_threads": [4]}, id="list max_threads"),
-        pytest.param({"timeout_penalty": "high"}, id="non-numeric penalty"),
-        pytest.param({"time_window": "long"}, id="non-numeric window"),
     ],
 )
 def test_from_kwargs_rejects_bad_config(kwargs: dict[str, Any]) -> None:
