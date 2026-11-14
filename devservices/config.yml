@@ -73,6 +73,7 @@ services:
       - 127.0.0.1:1219:1219
     command:
       - devserver
+      - --${SNUBA_NO_BOOTSTRAP:+no-}bootstrap
       - --${SNUBA_NO_WORKERS:+no-workers}
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:1218/health_envoy')"]
