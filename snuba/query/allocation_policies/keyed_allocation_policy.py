@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import inspect
 from abc import abstractmethod
 from collections.abc import Mapping
 from enum import StrEnum
@@ -11,7 +10,6 @@ from snuba.query.allocation_policies import (
     CROSS_ORG_SUGGESTION,
     NO_SUGGESTION,
     AllocationPolicy,
-    AllocationPolicyError,
     InvalidTenantsForAllocationPolicy,
     QueryResultOrError,
     QuotaAllowance,
@@ -68,14 +66,6 @@ class KeyedAllocationPolicy(AllocationPolicy):
         self._limit = self.DEFAULT_LIMIT if limit is None else limit
         self._max_threads = max_threads
         self._enforce = Enforce(enforce)
-
-    @classmethod
-    def from_kwargs(cls, *, storage_key: str, **kwargs: Any) -> AllocationPolicy:
-        # Config can hold any key; reject the ones __init__ does not name.
-        unknown = set(kwargs) - set(inspect.signature(cls.__init__).parameters)
-        if unknown:
-            raise AllocationPolicyError(f"{cls.__name__} has no settings {sorted(unknown)}")
-        return super().from_kwargs(storage_key=storage_key, **kwargs)
 
     @property
     @abstractmethod

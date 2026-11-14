@@ -106,15 +106,9 @@ def test_invalid_settings_raise(kwargs: dict[str, Any]) -> None:
         _policy(**kwargs)
 
 
-@pytest.mark.parametrize(
-    "kwargs",
-    [
-        pytest.param({"is_enforced": 0}, id="unknown key"),
-    ],
-)
-def test_from_kwargs_rejects_bad_config(kwargs: dict[str, Any]) -> None:
-    with pytest.raises(AllocationPolicyError):
-        BytesScannedPerOrgPolicy.from_kwargs(storage_key="errors", **kwargs)
+def test_unknown_key_raises_type_error() -> None:
+    with pytest.raises(TypeError):
+        BytesScannedPerOrgPolicy.from_kwargs(storage_key="errors", is_enforced=0)
 
 
 @pytest.mark.parametrize("cls", list(_BY_KEY.values()))
