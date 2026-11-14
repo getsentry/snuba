@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import inspect
 import os
 import subprocess
 import sys
@@ -97,8 +96,10 @@ def test_registered_by_name(cls: type[BytesScannedPolicy]) -> None:
     assert AllocationPolicy.get_from_name(cls.__name__) is cls
 
 
-def test_base_without_key_cannot_be_built() -> None:
-    assert inspect.isabstract(BytesScannedPolicy)
+def test_base_without_key_raises() -> None:
+    policy = BytesScannedPolicy(storage_key=ResourceIdentifier(StorageKey("errors")))
+    with pytest.raises(NotImplementedError):
+        policy._key(TENANT_IDS)
 
 
 @pytest.mark.redis_db
