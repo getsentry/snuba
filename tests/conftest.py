@@ -1,8 +1,8 @@
 import contextlib
-import hashlib
 import json
 import os
 import traceback
+from collections import Counter
 from collections.abc import Callable, Generator, Mapping, Sequence
 from typing import (
     Any,
@@ -142,17 +142,30 @@ def create_databases() -> None:
             connection.command(f"CREATE DATABASE {database_name};")
 
 
+def _plan_file_shards(file_ids: list[str], total: int) -> dict[str, int]:
+    """Assign whole test files to shards, largest file (by test count) to the
+    least-loaded shard. Every shard collects the same items, so they agree."""
+    counts = Counter(file_ids)
+    loads = [0] * total
+    plan: dict[str, int] = {}
+    for file_id, count in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])):
+        shard = min(range(total), key=lambda s: (loads[s], s))
+        plan[file_id] = shard
+        loads[shard] += count
+    return plan
+
+
 def pytest_collection_modifyitems(config: pytest.Config, items: list[Any]) -> None:
-    # Optional CI sharding by a stable hash of the test file (keeps a file's tests together); inert unless SNUBA_TEST_SHARD_TOTAL > 1.
+    # Optional CI sharding by test file (keeps a file's tests together); inert unless SNUBA_TEST_SHARD_TOTAL > 1.
     total = int(os.environ.get("SNUBA_TEST_SHARD_TOTAL", "1"))
     if total > 1:
         shard = int(os.environ.get("SNUBA_TEST_SHARD", "0"))
+        file_ids = [item.nodeid.split("::", 1)[0] for item in items]
+        plan = _plan_file_shards(file_ids, total)
         selected: list[Any] = []
         deselected: list[Any] = []
-        for item in items:
-            file_id = item.nodeid.split("::", 1)[0]
-            digest = int(hashlib.md5(file_id.encode()).hexdigest(), 16)
-            (selected if digest % total == shard else deselected).append(item)
+        for item, file_id in zip(items, file_ids, strict=True):
+            (selected if plan[file_id] == shard else deselected).append(item)
         items[:] = selected
         config.hook.pytest_deselected(items=deselected)
 
