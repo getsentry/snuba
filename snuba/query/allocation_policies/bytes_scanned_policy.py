@@ -93,8 +93,7 @@ class BytesScannedPolicy(AllocationPolicy):
             "This usually means a feature is querying inefficiently or is being abused."
         )
 
-    # The next four override runtime-config lookups. Refactor once the old dynamic
-    # policy config is removed.
+    # Refactor once the old dynamic policy config is removed.
     def _additional_config_definitions(self) -> list[Configuration]:
         return []
 
