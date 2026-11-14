@@ -1,0 +1,19 @@
+<yandex>
+    <!--
+    CI only. Turn off ClickHouse's background diagnostic log tables that no
+    test reads, so the server spends less CPU flushing them. query_log,
+    trace_log, part_log and asynchronous_insert_log stay: tests and the admin
+    system queries read them.
+    -->
+    <metric_log remove="1"/>
+    <asynchronous_metric_log remove="1"/>
+    <query_metric_log remove="1"/>
+    <text_log remove="1"/>
+    <processors_profile_log remove="1"/>
+    <query_thread_log remove="1"/>
+    <query_views_log remove="1"/>
+    <opentelemetry_span_log remove="1"/>
+    <session_log remove="1"/>
+    <error_log remove="1"/>
+    <latency_log remove="1"/>
+</yandex>
