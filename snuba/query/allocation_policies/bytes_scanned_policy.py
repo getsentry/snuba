@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from abc import abstractmethod
 from collections.abc import Mapping
 from enum import StrEnum
 from typing import Any
@@ -72,6 +73,7 @@ class BytesScannedPolicy(AllocationPolicy):
         self._time_window = time_window
         self._timeout_penalty = timeout_penalty
 
+    @abstractmethod
     def _key(self, tenant_ids: dict[str, str | int]) -> str:
         raise NotImplementedError
 
