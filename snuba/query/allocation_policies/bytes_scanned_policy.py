@@ -156,21 +156,16 @@ class BytesScannedPolicy(AllocationPolicy):
             [RequestedQuota(self.component_name(), self._limit, [self._quota(key)])]
         )
         used = self._limit - int(granted[0].granted)
-        if used < self._limit:
-            return self._allowance(
-                can_run=True,
-                used=used,
-                explanation={"reason": "within_limit"},
-                suggestion=NO_SUGGESTION,
-            )
+        can_run = used < self._limit
         return self._allowance(
-            can_run=False,
+            can_run=can_run,
             used=used,
             explanation={
-                "reason": f"{key} is at {used} of its {self._limit} bytes limit",
-                "limit": self._limit,
+                "reason": "within_limit"
+                if can_run
+                else f"{key} is at {used} of its {self._limit} bytes limit"
             },
-            suggestion=self.suggestion,
+            suggestion=NO_SUGGESTION if can_run else self.suggestion,
         )
 
     # Abstract hook of the old AllocationPolicy base. Refactor once the old dynamic

@@ -113,7 +113,7 @@ def test_rejects_once_limit_is_scanned() -> None:
     assert not allowance.can_run
     assert allowance.max_threads == 0
     assert allowance.quota_used == LIMIT
-    assert allowance.explanation["limit"] == LIMIT
+    assert allowance.rejection_threshold == LIMIT
 
 
 @pytest.mark.parametrize(
