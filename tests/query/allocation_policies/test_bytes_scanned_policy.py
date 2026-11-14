@@ -24,10 +24,7 @@ from snuba.query.allocation_policies.bytes_scanned_policy import (
     BytesScannedPerOrgRefPolicy,
     BytesScannedPerRefPolicy,
     BytesScannedPolicy,
-)
-from snuba.query.allocation_policies.keyed_allocation_policy import (
     Enforce,
-    KeyedAllocationPolicy,
 )
 from snuba.web import QueryException, QueryResult
 
@@ -87,6 +84,7 @@ def test_defaults() -> None:
     assert policy.is_pardonable is False
     assert policy._time_window == 600
     assert policy._quota("org:1").window_seconds == 600
+    assert policy.additional_config_definitions() == []
 
 
 def test_unknown_key_raises_type_error() -> None:
@@ -101,10 +99,6 @@ def test_registered_by_name(cls: type[BytesScannedPolicy]) -> None:
 
 def test_base_without_key_cannot_be_built() -> None:
     assert inspect.isabstract(BytesScannedPolicy)
-
-
-def test_is_a_keyed_policy() -> None:
-    assert issubclass(BytesScannedPolicy, KeyedAllocationPolicy)
 
 
 @pytest.mark.redis_db
