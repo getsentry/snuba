@@ -45,22 +45,14 @@ class Enforce(StrEnum):
 class BytesScannedPolicy(AllocationPolicy):
     """Rejects queries once a key has scanned `limit` bytes in a sliding `time_window`.
 
-    Not usable on its own: config names one of the Per*Policy subclasses below,
-    each of which picks the key with `_key`, reading tenant ids with `_tenant`.
-
-    Settings come only from the allocation_policies match block, never from
-    configurable_component_overrides:
+    Config names a Per*Policy subclass, which picks the key. Settings come only from
+    the allocation_policies match block, not configurable_component_overrides:
 
     - limit: bytes allowed per key.
-    - enforce: always | pardon | never. pardon lets the query run while cluster
-      load is under the block's thresholds.reject; never only records metrics.
-      Mapped onto is_enforced / is_pardonable so AllocationPolicy and the
-      callers' QuotaAllowance.decision() apply it unchanged.
+    - enforce: always | pardon (runs while load is under thresholds.reject) | never.
     - max_threads: threads granted when the query is allowed.
-    - time_window: length of the sliding window, in seconds. Defaults to 600
-      (10 minutes).
-    - timeout_penalty: share of `limit` counted when ClickHouse times out, since a
-      timed out query reports no bytes scanned. At 0.025, 40 timeouts fill any key.
+    - time_window: sliding window length, in seconds.
+    - timeout_penalty: share of `limit` counted per timed out query.
     """
 
     def __init__(
@@ -82,11 +74,9 @@ class BytesScannedPolicy(AllocationPolicy):
         self._timeout_penalty = timeout_penalty
 
     @abstractmethod
-    def _key(self, tenant_ids: dict[str, str | int]) -> str:
-        """The counter this query belongs to."""
+    def _key(self, tenant_ids: dict[str, str | int]) -> str: ...
 
     def _tenant(self, tenant_ids: dict[str, str | int], field: str) -> str | int:
-        """Return tenant_ids[field], rejecting the query if it is missing."""
         value = tenant_ids.get(field)
         if value is None:
             raise InvalidTenantsForAllocationPolicy.from_args(
@@ -102,25 +92,19 @@ class BytesScannedPolicy(AllocationPolicy):
             "This usually means a feature is querying inefficiently or is being abused."
         )
 
-    # Overrides the runtime-config definitions in ConfigurableComponent. Refactor once
-    # the old dynamic policy config is removed.
+    # The next four override runtime-config lookups. Refactor once the old dynamic
+    # policy config is removed.
     def _additional_config_definitions(self) -> list[Configuration]:
         return []
 
-    # Overrides the runtime-config lookup in AllocationPolicy. Refactor once the old
-    # dynamic policy config is removed.
     @property
     def is_enforced(self) -> bool:
         return self._enforce is not Enforce.NEVER
 
-    # Overrides the runtime-config lookup in AllocationPolicy. Refactor once the old
-    # dynamic policy config is removed.
     @property
     def is_pardonable(self) -> bool:
         return self._enforce is Enforce.PARDON
 
-    # Overrides the runtime-config lookup in AllocationPolicy. Refactor once the old
-    # dynamic policy config is removed.
     @property
     def max_threads(self) -> int:
         return self._max_threads
