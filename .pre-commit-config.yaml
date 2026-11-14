@@ -48,6 +48,14 @@ repos:
         entry: rustfmt --edition 2021
         files: ^rust_snuba/.*\.rs$
 
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+        args: ["--shell=sh", "--enable=check-extra-masked-returns"]
+        # CI scripts are POSIX sh. The gocd templates and scripts/ are bash.
+        files: ^\.github/workflows/scripts/
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
