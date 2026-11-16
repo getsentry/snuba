@@ -28,10 +28,6 @@ metrics = MetricsWrapper(
 class LoadInfo:
     cluster_load: float = -1.0
     concurrent_queries: float = -1.0
-    cgroup_user_time_normalized: float = -1.0
-    disk_inflight_ops: float = -1.0
-    memory_allocated: float = -1.0
-    part_mutation: float = -1.0
 
     def to_dict(self) -> dict[str, float]:
         return {f.name: getattr(self, f.name) for f in fields(self)}
@@ -127,16 +123,12 @@ def _get_cluster_loadinfo(
             """
 
         # maxIf() returns 0 when the condition never matches; 0 is a real idle value
-        # (Query/PartMutation). max(if(..., NULL)) stays NULL.
+        # (Query). max(if(..., NULL)) stays NULL.
         # https://clickhouse.com/docs/sql-reference/aggregate-functions/combinators#-if
         cluster_load_query = f"""
         SELECT
             max(cluster_load) AS cluster_load,
-            max(concurrent_queries) AS concurrent_queries,
-            max(cgroup_user_time_normalized) AS cgroup_user_time_normalized,
-            max(disk_inflight_ops) AS disk_inflight_ops,
-            max(memory_allocated) AS memory_allocated,
-            max(part_mutation) AS part_mutation
+            max(concurrent_queries) AS concurrent_queries
         FROM (
             SELECT
                 ifNull(
@@ -149,21 +141,12 @@ def _get_cluster_loadinfo(
                         * 100,
                     -1
                 ) AS cluster_load,
-                max(if(metric = 'Query', value, NULL)) AS concurrent_queries,
-                max(if(metric = 'CGroupUserTimeNormalized', value, NULL)) AS cgroup_user_time_normalized,
-                -- Actual metric is BlockInFlightOps_<device name>
-                max(if(startsWith(metric, 'BlockInFlightOps'), value, NULL)) AS disk_inflight_ops,
-                max(if(metric = 'MemoryTracking', value, NULL)) AS memory_allocated,
-                max(if(metric = 'PartMutation', value, NULL)) AS part_mutation
+                max(if(metric = 'Query', value, NULL)) AS concurrent_queries
             FROM (
                 {metrics_from}
             )
-            WHERE metric IN (
-                'LoadAverage1', 'CGroupUserTimeNormalized',
-                'Query', 'MemoryTracking', 'PartMutation'
-            )
+            WHERE metric IN ('LoadAverage1', 'Query')
                OR startsWith(metric, 'OSNiceTimeCPU')
-               OR startsWith(metric, 'BlockInFlightOps')
             GROUP BY host
         )
         """
@@ -177,10 +160,6 @@ def _get_cluster_loadinfo(
             {
                 "cluster_load": row[0],
                 "concurrent_queries": row[1],
-                "cgroup_user_time_normalized": row[2],
-                "disk_inflight_ops": row[3],
-                "memory_allocated": row[4],
-                "part_mutation": row[5],
             }
         )
 
