@@ -45,8 +45,7 @@ class Enforce(StrEnum):
 class BytesScannedPolicy(AllocationPolicy):
     """Rejects queries once a key has scanned `limit` bytes in a sliding `time_window`.
 
-    Config names a Per*Policy subclass, which picks the key. Settings come only from
-    the allocation_policies match block, not configurable_component_overrides:
+    Config names a Per*Policy subclass, which picks the key.
 
     - limit: bytes allowed per key.
     - enforce: always | pardon (runs while load is under thresholds.reject) | never.
