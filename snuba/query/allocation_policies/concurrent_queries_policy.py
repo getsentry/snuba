@@ -30,13 +30,13 @@ QUOTA_UNIT = "concurrent_queries"
 
 
 class ConcurrentQueriesPolicy(AllocationPolicy):
-    """Rejects a query when its key already has `limit` queries running.
+    """Rejects a query when above `limit` queries running per `key`.
 
     Config names a Per*Policy subclass, which picks the key. Settings come only from
     the allocation_policies match block, not configurable_component_overrides:
 
     - limit: concurrent queries allowed per key.
-    - enforce: always | pardon (runs while load is under thresholds.reject) | never.
+    - enforce: always | pardon | never.
     - max_threads: threads granted when the query is allowed.
     """
 
