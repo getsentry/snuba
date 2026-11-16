@@ -98,34 +98,28 @@ def get_cluster_loadinfo(
     return _get_cluster_loadinfo(storage_set_key)
 
 
-@cache(ttl_secs=60)
-def _get_cluster_loadinfo(
-    storage_set_key: StorageSetKey = StorageSetKey.EVENTS_ANALYTICS_PLATFORM,
-) -> LoadInfo:
-    cluster_name = None
-    try:
-        cluster = get_cluster(storage_set_key)
-        cluster_name = str(cluster.get_clickhouse_cluster_name())
+def _metrics_from_25_8(cluster_name: str, single_node: bool) -> str:
+    if single_node:
+        return """
+            SELECT hostName() AS host, metric, toFloat64(value) AS value FROM system.asynchronous_metrics
+            UNION ALL
+            SELECT hostName() AS host, metric, toFloat64(value) AS value FROM system.metrics
+        """
+    return f"""
+        SELECT hostName() AS host, metric, toFloat64(value) AS value
+        FROM clusterAllReplicas('{cluster_name}', 'system', asynchronous_metrics)
+        UNION ALL
+        SELECT hostName() AS host, metric, toFloat64(value) AS value
+        FROM clusterAllReplicas('{cluster_name}', 'system', metrics)
+    """
 
-        if cluster.is_single_node():
-            metrics_from = """
-                SELECT hostName() AS host, metric, toFloat64(value) AS value FROM system.asynchronous_metrics
-                UNION ALL
-                SELECT hostName() AS host, metric, toFloat64(value) AS value FROM system.metrics
-            """
-        else:
-            metrics_from = f"""
-                SELECT hostName() AS host, metric, toFloat64(value) AS value
-                FROM clusterAllReplicas('{cluster_name}', 'system', asynchronous_metrics)
-                UNION ALL
-                SELECT hostName() AS host, metric, toFloat64(value) AS value
-                FROM clusterAllReplicas('{cluster_name}', 'system', metrics)
-            """
 
-        # maxIf() returns 0 when the condition never matches; 0 is a real idle value
-        # (Query). max(if(..., NULL)) stays NULL.
-        # https://clickhouse.com/docs/sql-reference/aggregate-functions/combinators#-if
-        cluster_load_query = f"""
+def _cluster_load_query_25_8(cluster_name: str, single_node: bool) -> str:
+    metrics_from = _metrics_from_25_8(cluster_name, single_node)
+    # maxIf() returns 0 when the condition never matches; 0 is a real idle value
+    # (Query). max(if(..., NULL)) stays NULL.
+    # https://clickhouse.com/docs/sql-reference/aggregate-functions/combinators#-if
+    return f"""
         SELECT
             max(cluster_load) AS cluster_load,
             max(concurrent_queries) AS concurrent_queries
@@ -149,13 +143,69 @@ def _get_cluster_loadinfo(
                OR startsWith(metric, 'OSNiceTimeCPU')
             GROUP BY host
         )
-        """
+    """
 
-        row = (
-            cluster.get_query_connection(ClickhouseClientSettings.INTERNAL)
-            .execute(cluster_load_query)
-            .results[0]
+
+def _metrics_from_26_8(cluster_name: str, single_node: bool) -> str:
+    # Per-core async metrics are Maps; value is NaN. Core count is length(key_values).
+    # system.metrics has no key_values.
+    if single_node:
+        return """
+            SELECT hostName() AS host, metric, toFloat64(value) AS value, length(key_values) AS kv_len
+            FROM system.asynchronous_metrics
+            UNION ALL
+            SELECT hostName() AS host, metric, toFloat64(value) AS value, 0 AS kv_len
+            FROM system.metrics
+        """
+    return f"""
+        SELECT hostName() AS host, metric, toFloat64(value) AS value, length(key_values) AS kv_len
+        FROM clusterAllReplicas('{cluster_name}', 'system', asynchronous_metrics)
+        UNION ALL
+        SELECT hostName() AS host, metric, toFloat64(value) AS value, 0 AS kv_len
+        FROM clusterAllReplicas('{cluster_name}', 'system', metrics)
+    """
+
+
+def _cluster_load_query_26_8(cluster_name: str, single_node: bool) -> str:
+    metrics_from = _metrics_from_26_8(cluster_name, single_node)
+    return f"""
+        SELECT
+            max(cluster_load) AS cluster_load,
+            max(concurrent_queries) AS concurrent_queries
+        FROM (
+            SELECT
+                ifNull(
+                    max(if(metric = 'LoadAverage1', value, NULL))
+                        / nullIf(max(if(metric = 'OSNiceTimeCPU', kv_len, NULL)), 0)
+                        * 100,
+                    -1
+                ) AS cluster_load,
+                max(if(metric = 'Query', value, NULL)) AS concurrent_queries
+            FROM (
+                {metrics_from}
+            )
+            WHERE metric IN ('LoadAverage1', 'Query', 'OSNiceTimeCPU')
+            GROUP BY host
         )
+    """
+
+
+@cache(ttl_secs=60)
+def _get_cluster_loadinfo(
+    storage_set_key: StorageSetKey = StorageSetKey.EVENTS_ANALYTICS_PLATFORM,
+) -> LoadInfo:
+    cluster_name = None
+    try:
+        cluster = get_cluster(storage_set_key)
+        cluster_name = str(cluster.get_clickhouse_cluster_name())
+        conn = cluster.get_query_connection(ClickhouseClientSettings.INTERNAL)
+        major, minor, *_ = str(conn.execute("SELECT version()").results[0][0]).split(".")
+        if (int(major), int(minor)) >= (26, 8):
+            cluster_load_query = _cluster_load_query_26_8(cluster_name, cluster.is_single_node())
+        else:
+            cluster_load_query = _cluster_load_query_25_8(cluster_name, cluster.is_single_node())
+
+        row = conn.execute(cluster_load_query).results[0]
         load_info = LoadInfo.from_dict(
             {
                 "cluster_load": row[0],
