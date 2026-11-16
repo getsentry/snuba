@@ -106,6 +106,7 @@ def _analyze_filter(item_filter: TraceItemFilter | None) -> dict[str, str]:
             "has_or_filter": "false",
             "has_not_filter": "false",
             "has_like_filter": "false",
+            "has_regexp_filter": "false",
             "has_search_filter": "false",
         }
 
@@ -114,6 +115,7 @@ def _analyze_filter(item_filter: TraceItemFilter | None) -> dict[str, str]:
     has_or = False
     has_not = False
     has_like = False
+    has_regexp = False
     has_range = False
     has_in = False
     has_exists = False
@@ -121,7 +123,7 @@ def _analyze_filter(item_filter: TraceItemFilter | None) -> dict[str, str]:
     has_equality = False
 
     def walk(node: TraceItemFilter, depth: int) -> None:
-        nonlocal leaf_count, max_depth, has_or, has_not, has_like, has_range
+        nonlocal leaf_count, max_depth, has_or, has_not, has_like, has_regexp, has_range
         nonlocal has_in, has_exists, has_any_attr, has_equality
 
         max_depth = max(max_depth, depth)
@@ -150,11 +152,15 @@ def _analyze_filter(item_filter: TraceItemFilter | None) -> dict[str, str]:
                 node.any_attribute_filter.OP_NOT_LIKE,
             ):
                 has_like = True
+            elif any_op == node.any_attribute_filter.OP_REGEXP:
+                has_regexp = True
             return
         if kind == "comparison_filter":
             op = node.comparison_filter.op
             if op in (ComparisonFilter.OP_LIKE, ComparisonFilter.OP_NOT_LIKE):
                 has_like = True
+            elif op == ComparisonFilter.OP_REGEXP:
+                has_regexp = True
             elif op in (
                 ComparisonFilter.OP_LESS_THAN,
                 ComparisonFilter.OP_GREATER_THAN,
@@ -177,6 +183,8 @@ def _analyze_filter(item_filter: TraceItemFilter | None) -> dict[str, str]:
     # Single primary profile, ordered from most to least expensive/interesting.
     if has_any_attr:
         profile = "full_text_search"
+    elif has_regexp:
+        profile = "regexp"
     elif has_like:
         profile = "like"
     elif has_or and (has_range or has_in or has_exists):
@@ -203,6 +211,7 @@ def _analyze_filter(item_filter: TraceItemFilter | None) -> dict[str, str]:
         "has_or_filter": _bool_tag(has_or),
         "has_not_filter": _bool_tag(has_not),
         "has_like_filter": _bool_tag(has_like),
+        "has_regexp_filter": _bool_tag(has_regexp),
         "has_search_filter": _bool_tag(has_any_attr),
     }
 
@@ -392,6 +401,7 @@ def _default_shape_tags(query_type: str) -> dict[str, str]:
         "has_or_filter": "false",
         "has_not_filter": "false",
         "has_like_filter": "false",
+        "has_regexp_filter": "false",
         "has_search_filter": "false",
     }
 

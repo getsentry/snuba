@@ -55,7 +55,6 @@ REDIS_CLUSTERS = {
         (4, "subscription_store"),
         (5, "replacements_store"),
         (6, "config"),
-        (7, "dlq"),
         (8, "optimize"),
         (9, "admin_auth"),
         (10, "manual_jobs"),

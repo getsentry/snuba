@@ -1,6 +1,6 @@
 [project]
 name = "snuba"
-version = "26.11.0.dev0"
+version = "26.12.0.dev0"
 # CPython 3.13 only (.python-version / prod image). Cap the upper bound so uv
 # does not resolve future Python versions that our pinned wheels do not support.
 requires-python = ">=3.13,<3.14"
@@ -39,7 +39,7 @@ dependencies = [
     "sentry-protos>=0.100.0",
     "sentry-redis-tools>=0.5.1",
     "sentry-relay>=0.9.25",
-    "sentry-sdk>=2.66.1",
+    "sentry-sdk>=2.74.0",
     "sentry-usage-accountant>=0.0.11",
     "simplejson>=3.17.6",
     "snuba-sdk>=3.0.39",
