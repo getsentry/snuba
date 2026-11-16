@@ -8,7 +8,6 @@ from snuba.clusters.load_info import LoadInfo
 from snuba.configs.configuration import Configuration, InvalidConfig
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
-    DEFAULT_PASSTHROUGH_POLICY,
     MAX_THRESHOLD,
     NO_SUGGESTION,
     NO_UNITS,
@@ -55,9 +54,9 @@ def test_eq() -> None:
 
 @pytest.mark.redis_db
 def test_passthrough_allows_queries() -> None:
-    set_component_config(DEFAULT_PASSTHROUGH_POLICY, "max_threads", 420)
-    assert DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance({}, "deadbeef").can_run
-    assert DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance({}, "deadbeef").max_threads == 420
+    policy = PassthroughPolicy(StorageKey("something"), max_threads=420)
+    assert policy.get_quota_allowance({}, "deadbeef").can_run
+    assert policy.get_quota_allowance({}, "deadbeef").max_threads == 420
 
 
 class RejectingEverythingAllocationPolicy(PassthroughPolicy):
@@ -300,24 +299,27 @@ def test_add_delete_config_value(policy: AllocationPolicy) -> None:
     assert policy.get_config_value(config_key=config_key, params=params) == -1
 
 
-@pytest.mark.redis_db
-def test_default_config_overrides(policy: AllocationPolicy) -> None:
-    assert policy.is_enforced == 1
-    set_component_config(policy, config_key="is_enforced", value=0)
-    assert policy.is_enforced == 0
-    set_component_config(policy, config_key="is_enforced", value=1)
-    assert policy.is_enforced == 1
-
-    assert policy.is_pardonable == 1
-    set_component_config(policy, config_key="is_pardonable", value=0)
-    assert policy.is_pardonable == 0
-    set_component_config(policy, config_key="is_pardonable", value=1)
-    assert policy.is_pardonable == 1
-
-    assert policy.max_threads == 10
-    set_component_config(policy, config_key="max_threads", value=4)
+@pytest.mark.parametrize(
+    "enforce, is_enforced, is_pardonable",
+    [
+        ("always", True, False),
+        ("pardon", True, True),
+        ("never", False, False),
+    ],
+)
+def test_enforce_and_max_threads_from_constructor(
+    enforce: str, is_enforced: bool, is_pardonable: bool
+) -> None:
+    policy = PassthroughPolicy(StorageKey("some_storage"), enforce=enforce, max_threads=4)
+    assert policy.is_enforced is is_enforced
+    assert policy.is_pardonable is is_pardonable
     assert policy.max_threads == 4
-    set_component_config(policy, config_key="max_threads", value=10)
+
+
+def test_enforce_and_max_threads_defaults() -> None:
+    policy = PassthroughPolicy(StorageKey("some_storage"))
+    assert policy.is_enforced is True
+    assert policy.is_pardonable is False
     assert policy.max_threads == 10
 
 
@@ -393,8 +395,6 @@ def test_get_current_configs(policy: AllocationPolicy) -> None:
         "value": 4,
         "params": {},
     } in policy_configs
-    assert policy.is_enforced == 0
-    assert policy.max_threads == 4
 
 
 @pytest.mark.redis_db
@@ -420,17 +420,12 @@ def test_bad_defaults() -> None:
 @pytest.mark.redis_db
 def test_is_not_enforced() -> None:
     MAX_THREADS = 100
-    reject_policy = RejectingEverythingAllocationPolicy(
-        StorageKey("some_storage"),
-        my_param_config=420,
-        is_enforced=1,
-        max_threads=MAX_THREADS,
-    )
-    throttle_policy = ThrottleEverythingAllocationPolicy(
-        StorageKey("some_storage"),
-        is_enforced=1,
-        max_threads=MAX_THREADS,
-    )
+
+    def build(cls: type[AllocationPolicy], enforce: str) -> AllocationPolicy:
+        return cls(StorageKey("some_storage"), enforce=enforce, max_threads=MAX_THREADS)
+
+    reject_policy = build(RejectingEverythingAllocationPolicy, "always")
+    throttle_policy = build(ThrottleEverythingAllocationPolicy, "always")
     tenant_ids: dict[str, int | str] = {
         "organization_id": 123,
         "referrer": "some_referrer",
@@ -438,13 +433,12 @@ def test_is_not_enforced() -> None:
     quota_allowance = reject_policy.get_quota_allowance(tenant_ids, "deadbeef")
     assert not quota_allowance.can_run and quota_allowance.max_threads == 0
 
-    set_component_config(reject_policy, config_key="is_enforced", value=0)
     # policy not enforced so we don't reject the query
-    reject_policy.get_quota_allowance(tenant_ids, "deadbeef")
+    build(RejectingEverythingAllocationPolicy, "never").get_quota_allowance(tenant_ids, "deadbeef")
 
     assert throttle_policy.get_quota_allowance(tenant_ids, "deadbeef").max_threads == 1
-    set_component_config(throttle_policy, config_key="is_enforced", value=0)
-    assert throttle_policy.get_quota_allowance(tenant_ids, "deadbeef").max_threads == 1
+    never_throttle = build(ThrottleEverythingAllocationPolicy, "never")
+    assert never_throttle.get_quota_allowance(tenant_ids, "deadbeef").max_threads == 1
 
     rejected_metrics = get_recorded_metric_calls(
         "increment", "allocation_policy.db_request_rejected"
@@ -469,7 +463,7 @@ def test_is_not_enforced() -> None:
 def test_is_pardonable_overrides_can_run_when_idle() -> None:
     reject_policy = RejectingEverythingAllocationPolicy(
         StorageKey("some_storage"),
-        is_enforced=1,
+        enforce="pardon",
         thresholds={"reject": {"cluster_load": 0.0, "concurrent_queries": 0.0}},
     )
     tenant_ids: dict[str, int | str] = {
@@ -503,7 +497,7 @@ def test_is_pardonable_overrides_can_run_when_idle() -> None:
 def test_idle_pardons_without_reject_thresholds() -> None:
     reject_policy = RejectingEverythingAllocationPolicy(
         StorageKey("some_storage"),
-        is_enforced=1,
+        enforce="pardon",
     )
     idle = LoadInfo(cluster_load=0.0, concurrent_queries=0)
     allowance = reject_policy.get_quota_allowance(

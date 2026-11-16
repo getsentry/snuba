@@ -595,6 +595,7 @@ def test_routing_strategy_idle_pardon_allows_rejected_query() -> None:
             return_value=[
                 IdlePardonRejectionPolicy(
                     ResourceIdentifier(StorageKey("doesntmatter")),
+                    enforce="pardon",
                     thresholds={"reject": {"cluster_load": 90.0, "concurrent_queries": 100.0}},
                 )
             ],

@@ -3,8 +3,9 @@ from __future__ import annotations
 import json
 import os
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
-from enum import Enum, IntEnum
+from enum import Enum, IntEnum, StrEnum
 from typing import Any, assert_never, cast
 
 from redis.exceptions import TimeoutError as RedisTimeoutError
@@ -36,6 +37,7 @@ PASS_THROUGH_REFERRERS_SUGGESTION = (
     "subscriptions currently do not undergo rate limiting in any way"
 )
 MAX_THRESHOLD = int(1e12)
+DEFAULT_MAX_THREADS = 10
 
 
 @dataclass(frozen=True)
@@ -195,6 +197,12 @@ class AllocationPolicyViolations(SerializableException):
 
 class PolicyData(ConfigurableComponentData):
     query_type: str
+
+
+class Enforce(StrEnum):
+    ALWAYS = "always"
+    PARDON = "pardon"
+    NEVER = "never"
 
 
 class QueryType(Enum):
@@ -382,13 +390,18 @@ class AllocationPolicy(ConfigurableComponent, ABC):
     def __init__(
         self,
         storage_key: ResourceIdentifier,
+        *,
+        enforce: Enforce | str = Enforce.ALWAYS,
+        max_threads: int = DEFAULT_MAX_THREADS,
+        thresholds: Mapping[str, Mapping[str, float]] | None = None,
         **kwargs: Any,
     ) -> None:
         self._resource_identifier = storage_key
-        thresholds = kwargs.get("thresholds") or {}
+        self._enforce = Enforce(enforce)
+        self._max_threads = max_threads
         self._thresholds: dict[str, dict[str, float]] = {
             action: {k: float(v) for k, v in ceilings.items()}
-            for action, ceilings in thresholds.items()
+            for action, ceilings in (thresholds or {}).items()
         }
         self._default_config_definitions = [
             AllocationPolicyConfig(
@@ -434,11 +447,11 @@ class AllocationPolicy(ConfigurableComponent, ABC):
 
     @property
     def is_enforced(self) -> bool:
-        return bool(self.get_config_value(IS_ENFORCED))
+        return self._enforce is not Enforce.NEVER
 
     @property
     def is_pardonable(self) -> bool:
-        return bool(self.get_config_value(IS_PARDONABLE))
+        return self._enforce is Enforce.PARDON
 
     @property
     def thresholds(self) -> dict[str, dict[str, float]]:
@@ -447,7 +460,15 @@ class AllocationPolicy(ConfigurableComponent, ABC):
     @property
     def max_threads(self) -> int:
         """Maximum number of threads run a single query on ClickHouse with."""
-        return int(self.get_config_value(MAX_THREADS))
+        return self._max_threads
+
+    def _tenant(self, tenant_ids: dict[str, str | int], field: str) -> str | int:
+        value = tenant_ids.get(field)
+        if value is None:
+            raise InvalidTenantsForAllocationPolicy.from_args(
+                tenant_ids, type(self).__name__, f"needs {field}"
+            )
+        return value
 
     def __eq__(self, other: Any) -> bool:
         """There should not be a need to compare these except that

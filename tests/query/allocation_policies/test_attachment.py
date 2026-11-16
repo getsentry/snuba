@@ -17,7 +17,7 @@ from tests.query.allocation_policies.attachment import (
 _POLICY_SPECS: list[dict[str, object]] = [
     {"name": "BytesScannedPerOrgRefPolicy", "enforce": "never"},
     {"name": "ConcurrentQueriesPerOrgPolicy", "enforce": "never"},
-    {"name": "PassthroughPolicy", "is_enforced": 0},
+    {"name": "PassthroughPolicy", "enforce": "never"},
     {"name": "ConcurrentQueriesPerRefPolicy", "enforce": "never"},
 ]
 

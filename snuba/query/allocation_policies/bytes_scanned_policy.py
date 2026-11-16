@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import time
 from abc import abstractmethod
-from collections.abc import Mapping
-from enum import StrEnum
 from typing import Any
 
 from sentry_redis_tools.sliding_windows_rate_limiter import (
@@ -20,7 +18,6 @@ from snuba.query.allocation_policies import (
     CROSS_ORG_SUGGESTION,
     NO_SUGGESTION,
     AllocationPolicy,
-    InvalidTenantsForAllocationPolicy,
     QueryResultOrError,
     QuotaAllowance,
 )
@@ -30,16 +27,9 @@ _RATE_LIMITER = RedisSlidingWindowRateLimiter(get_redis_client(RedisClientKey.RA
 
 TERABYTE = 10**12
 DEFAULT_LIMIT = int(1.28 * TERABYTE)
-DEFAULT_MAX_THREADS = 10
 DEFAULT_TIMEOUT_PENALTY = 0.025
 DEFAULT_TIME_WINDOW_MINUTES = 10
 WINDOW_GRANULARITY_SECONDS = 60
-
-
-class Enforce(StrEnum):
-    ALWAYS = "always"
-    PARDON = "pardon"
-    NEVER = "never"
 
 
 class BytesScannedPolicy(AllocationPolicy):
@@ -59,31 +49,18 @@ class BytesScannedPolicy(AllocationPolicy):
         storage_key: ResourceIdentifier,
         *,
         limit: int = DEFAULT_LIMIT,
-        enforce: Enforce | str = Enforce.ALWAYS,
-        max_threads: int = DEFAULT_MAX_THREADS,
-        thresholds: Mapping[str, Mapping[str, float]] | None = None,
         time_window_minutes: int = DEFAULT_TIME_WINDOW_MINUTES,
         timeout_penalty: float = DEFAULT_TIMEOUT_PENALTY,
         **kwargs: Any,
     ) -> None:
-        super().__init__(storage_key, thresholds=thresholds, **kwargs)
+        super().__init__(storage_key, **kwargs)
         self._limit = limit
-        self._enforce = Enforce(enforce)
-        self._max_threads = max_threads
         self._time_window_minutes = time_window_minutes
         self._timeout_penalty = timeout_penalty
 
     @abstractmethod
     def _key(self, tenant_ids: dict[str, str | int]) -> str:
         raise NotImplementedError
-
-    def _tenant(self, tenant_ids: dict[str, str | int], field: str) -> str | int:
-        value = tenant_ids.get(field)
-        if value is None:
-            raise InvalidTenantsForAllocationPolicy.from_args(
-                tenant_ids, type(self).__name__, f"needs {field}"
-            )
-        return value
 
     @property
     def suggestion(self) -> str:
@@ -96,18 +73,6 @@ class BytesScannedPolicy(AllocationPolicy):
     # Refactor once the old dynamic policy config is removed.
     def _additional_config_definitions(self) -> list[Configuration]:
         return []
-
-    @property
-    def is_enforced(self) -> bool:
-        return self._enforce is not Enforce.NEVER
-
-    @property
-    def is_pardonable(self) -> bool:
-        return self._enforce is Enforce.PARDON
-
-    @property
-    def max_threads(self) -> int:
-        return self._max_threads
 
     def _quota(self, key: str) -> Quota:
         return Quota(
@@ -188,7 +153,7 @@ class BytesScannedPolicy(AllocationPolicy):
     ) -> QuotaAllowance:
         return QuotaAllowance(
             can_run=can_run,
-            max_threads=self._max_threads if can_run else 0,
+            max_threads=self.max_threads if can_run else 0,
             explanation=explanation,
             is_throttled=False,
             throttle_threshold=self._limit,

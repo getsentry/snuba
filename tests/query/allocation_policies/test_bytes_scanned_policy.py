@@ -15,6 +15,7 @@ from snuba.configs.configuration import ResourceIdentifier
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
     AllocationPolicy,
+    Enforce,
     QueryResultOrError,
     QuotaAllowanceDecision,
 )
@@ -24,7 +25,6 @@ from snuba.query.allocation_policies.bytes_scanned_policy import (
     BytesScannedPerOrgRefPolicy,
     BytesScannedPerRefPolicy,
     BytesScannedPolicy,
-    Enforce,
 )
 from snuba.web import QueryException, QueryResult
 

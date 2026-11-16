@@ -513,7 +513,7 @@ def test_db_query_success() -> None:
         {
             "errors_ro": match_block(
                 [
-                    {"name": "PassthroughPolicy", "is_enforced": 0},
+                    {"name": "PassthroughPolicy", "enforce": "never"},
                 ]
             )
         }
@@ -1446,6 +1446,7 @@ def test_idle_pardon_allows_rejected_query() -> None:
             allocation_policies=[
                 _RejectAllPolicy(
                     ResourceIdentifier(StorageKey("errors_ro")),
+                    enforce="pardon",
                     thresholds=reject_thresholds,
                 )
             ],
@@ -1484,6 +1485,7 @@ def test_idle_pardon_still_rejects_when_not_idle() -> None:
             allocation_policies=[
                 _RejectAllPolicy(
                     ResourceIdentifier(StorageKey("errors_ro")),
+                    enforce="pardon",
                     thresholds=reject_thresholds,
                 )
             ],
@@ -1514,6 +1516,7 @@ def test_idle_pardon_does_not_short_circuit_remaining_policies() -> None:
             allocation_policies=[
                 _RejectAllPolicy(
                     ResourceIdentifier(StorageKey("errors_ro")),
+                    enforce="pardon",
                     thresholds=reject_thresholds,
                 ),
                 second,
