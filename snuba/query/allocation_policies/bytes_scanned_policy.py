@@ -58,7 +58,7 @@ class BytesScannedPolicy(AllocationPolicy):
         self,
         storage_key: ResourceIdentifier,
         *,
-        limit: int | None = None,
+        limit: int = DEFAULT_LIMIT,
         enforce: Enforce | str = Enforce.ALWAYS,
         max_threads: int = DEFAULT_MAX_THREADS,
         thresholds: Mapping[str, Mapping[str, float]] | None = None,
@@ -67,7 +67,7 @@ class BytesScannedPolicy(AllocationPolicy):
         **kwargs: Any,
     ) -> None:
         super().__init__(storage_key, thresholds=thresholds, **kwargs)
-        self._limit = DEFAULT_LIMIT if limit is None else limit
+        self._limit = limit
         self._enforce = Enforce(enforce)
         self._max_threads = max_threads
         self._time_window_minutes = time_window_minutes
