@@ -42,7 +42,7 @@ Run these from the repository root.
 | Local and distributed migration modes | [docs/source/migrations/modes.rst](docs/source/migrations/modes.rst) |
 | ClickHouse topology, schema design, versions | [docs/source/clickhouse/](docs/source/clickhouse/) |
 | Data slicing | [docs/source/architecture/slicing.rst](docs/source/architecture/slicing.rst) |
-| Allocation policy config overrides | [snuba/query/allocation_policies/OVERRIDES.md](snuba/query/allocation_policies/OVERRIDES.md) |
+| Allocation policy config (`allocation_policies` match blocks) | [snuba/query/allocation_policies/OVERRIDES.md](snuba/query/allocation_policies/OVERRIDES.md) |
 | Admin UI | [snuba/admin/README.md](snuba/admin/README.md) |
 | GoCD pipelines | [gocd/README.md](gocd/README.md) |
 | Profiling | [docs/source/profiler.rst](docs/source/profiler.rst) |
