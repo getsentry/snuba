@@ -47,7 +47,6 @@ def mock_storage() -> Generator[ReadableTableStorage]:
         readiness_state=ReadinessState.COMPLETE,
         query_processors=[NoopCHQueryProcessor()],
         mandatory_condition_checkers=[],
-        allocation_policies=[],
     )
     # add it to the global storages and cluster
     get_config_built_storages()[mock_storage.get_storage_key()] = mock_storage
