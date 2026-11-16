@@ -171,15 +171,15 @@ def test_get_allocation_policies_uses_tenant_ids() -> None:
                     "match": {},
                     "policies": [
                         {
-                            "name": "ConcurrentRateLimitAllocationPolicy",
-                            "is_enforced": 0,
+                            "name": "ConcurrentQueriesPerOrgPolicy",
+                            "enforce": "never",
                         }
                     ],
                 },
                 {
                     "match": {"organization_id": [1]},
                     "policies": [
-                        {"name": "ReferrerGuardRailPolicy", "is_enforced": 0},
+                        {"name": "ConcurrentQueriesPerRefPolicy", "enforce": "never"},
                     ],
                 },
             ]
@@ -209,7 +209,7 @@ def test_get_allocation_policies_uses_tenant_ids() -> None:
         )
 
     assert [p.class_name() for p in for_org_1] == [
-        "ConcurrentRateLimitAllocationPolicy",
-        "ReferrerGuardRailPolicy",
+        "ConcurrentQueriesPerOrgPolicy",
+        "ConcurrentQueriesPerRefPolicy",
     ]
-    assert [p.class_name() for p in for_org_2] == ["ConcurrentRateLimitAllocationPolicy"]
+    assert [p.class_name() for p in for_org_2] == ["ConcurrentQueriesPerOrgPolicy"]
