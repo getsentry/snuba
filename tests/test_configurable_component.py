@@ -1,5 +1,3 @@
-from typing import cast
-
 import pytest
 
 from snuba.configs.configuration import (
@@ -9,10 +7,6 @@ from snuba.configs.configuration import (
     ResourceIdentifier,
 )
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
-    BaseRoutingStrategy,
-    RoutingStrategyConfig,
-)
 from tests.configs.component_config import (
     delete_component_config,
     set_component_config,
@@ -22,13 +16,13 @@ from tests.configs.component_config import (
 class SomeConfigurableComponent(ConfigurableComponent):
     def __init__(self) -> None:
         self._default_config_definitions = [
-            RoutingStrategyConfig(
+            Configuration(
                 name="default_config_1",
                 description="A default configuration",
                 value_type=int,
                 default=100,
             ),
-            RoutingStrategyConfig(
+            Configuration(
                 name="override_config_for_org_id",
                 description="override config for org",
                 value_type=int,
@@ -36,19 +30,13 @@ class SomeConfigurableComponent(ConfigurableComponent):
                 param_types={"organization_id": int},
             ),
         ]
-        self._overridden_additional_config_definitions = (
-            self._get_overridden_additional_config_defaults({"additional_config_1": 50})
-        )
 
     @classmethod
     def component_namespace(cls) -> str:
         return "SomeConfigurableComponent"
 
     def _get_default_config_definitions(self) -> list[Configuration]:
-        return cast(list[Configuration], self._default_config_definitions)
-
-    def additional_config_definitions(self) -> list[Configuration]:
-        return self._overridden_additional_config_definitions
+        return self._default_config_definitions
 
     def _additional_config_definitions(self) -> list[Configuration]:
         return [
@@ -75,9 +63,6 @@ class TestConfigurableComponentInvalid(SomeConfigurableComponent):
     def _get_default_config_definitions(self) -> list[Configuration]:
         return []
 
-    def additional_config_definitions(self) -> list[Configuration]:
-        return []
-
     def _additional_config_definitions(self) -> list[Configuration]:
         return []
 
@@ -92,7 +77,7 @@ class TestConfigurableComponentInvalidDefault(SomeConfigurableComponent):
     def __init__(self) -> None:
         super().__init__()
         self._default_config_definitions = [
-            RoutingStrategyConfig(
+            Configuration(
                 name="invalid_config",
                 description="A config with invalid default type",
                 value_type=int,
@@ -123,61 +108,6 @@ class TestConfigurableComponentBasic:
         assert {"default_config_1", "additional_config_1", "override_config_for_org_id"} == set(
             test_component.config_definitions().keys()
         )
-
-    def test_get_current_configs(self, test_component: SomeConfigurableComponent) -> None:
-        """Test that get_current_configs returns the correct configs."""
-        configs = test_component.get_current_configs()
-        assert len(configs) == 2
-        assert {
-            "name": "default_config_1",
-            "type": "int",
-            "default": 100,
-            "description": "A default configuration",
-            "value": 100,
-            "params": {},
-        } in configs
-        assert {
-            "name": "additional_config_1",
-            "type": "int",
-            "default": 50,
-            "description": "An additional configuration",
-            "value": 50,
-            "params": {},
-        } in configs
-
-        # add an instance of an optional config
-        set_component_config(
-            test_component,
-            config_key="override_config_for_org_id",
-            value=100,
-            params={"organization_id": 10},
-        )
-        configs = test_component.get_current_configs()
-        assert len(configs) == 3
-        assert {
-            "name": "default_config_1",
-            "type": "int",
-            "default": 100,
-            "description": "A default configuration",
-            "value": 100,
-            "params": {},
-        } in configs
-        assert {
-            "name": "additional_config_1",
-            "type": "int",
-            "default": 50,
-            "description": "An additional configuration",
-            "value": 50,
-            "params": {},
-        } in configs
-        assert {
-            "name": "override_config_for_org_id",
-            "type": "int",
-            "default": -1,
-            "description": "override config for org",
-            "params": {"organization_id": 10},
-            "value": 100,
-        } in configs
 
     def test_invalid_default_value_type(self) -> None:
         """Test that Configuration with invalid default value type raises ValueError."""
@@ -308,44 +238,3 @@ class TestConfigurableComponentConfigOperations:
     ) -> None:
         with pytest.raises(InvalidConfig):
             delete_component_config(test_component, "invalid_config")
-
-
-class TestConfigurableComponentConfigRetrieval:
-    """Test config retrieval methods."""
-
-    def test_get_optional_config_definitions_json(
-        self, test_component: SomeConfigurableComponent
-    ) -> None:
-        optional_configs = test_component.get_optional_config_definitions_json()
-
-        assert len(optional_configs) == 1
-        assert optional_configs[0]["name"] == "override_config_for_org_id"
-        assert "params" in optional_configs[0]
-        assert len(optional_configs[0]["params"]) == 1
-        assert optional_configs[0]["params"][0]["name"] == "organization_id"
-        assert optional_configs[0]["params"][0]["type"] == "int"
-
-
-class TestConfigurableComponentNamespaces:
-    """Test namespace filtering in all_names() method."""
-
-    def test_configurable_component_all_names_returns_all_classes(self) -> None:
-        """Test that ConfigurableComponent.all_names() returns all registered classes from different namespaces."""
-        namespaces = set()
-        for name in ConfigurableComponent.all_names():
-            namespace = name.split(".")[0]
-            namespaces.add(namespace)
-
-        # Should have multiple namespaces because as of 9/9/25, we have 2 namespaces: BaseRoutingStrategy and AllocationPolicy
-        assert len(namespaces) > 1
-
-    def test_subclass_all_names_filters_by_namespace(self) -> None:
-        """Test that any subclass all_names() returns only classes in its namespace."""
-        for name in BaseRoutingStrategy.all_names():
-            # ensures that the class name is valid within the BaseRoutingStrategy namespace
-            BaseRoutingStrategy.get_from_name(name)
-            # Should not include the base class itself
-            assert (
-                name
-                != f"{BaseRoutingStrategy.component_namespace()}.{BaseRoutingStrategy.component_namespace()}"
-            )
