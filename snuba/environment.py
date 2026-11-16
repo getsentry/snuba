@@ -1,3 +1,9 @@
+# Load the idna codec before sentry_sdk.init() starts background threads.
+# The first str.encode("idna") imports encodings.idna. If two threads do that
+# at once (an SDK thread resolving the Spotlight host, a request in werkzeug),
+# the codec registry can cache idna as missing, and every later
+# encode("idna") in the process raises LookupError, so every request fails.
+import encodings.idna  # noqa: F401
 import logging
 import os
 from urllib.parse import unquote
