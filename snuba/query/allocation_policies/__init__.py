@@ -586,11 +586,6 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         query_id: str,
         result_or_error: QueryResultOrError,
     ) -> int | None:
-        """Update the policy's quota after the query has run.
-
-        Returns what the policy recorded (e.g. bytes added to its usage), or
-        None if the policy records no amount or the update failed open.
-        """
         try:
             return self._update_quota_balance(tenant_ids, query_id, result_or_error)
         except InvalidTenantsForAllocationPolicy:
