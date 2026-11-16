@@ -15,6 +15,7 @@ from snuba.configs.configuration import ResourceIdentifier
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
     AllocationPolicy,
+    Enforce,
     QueryResultOrError,
     QuotaAllowanceDecision,
 )
@@ -24,7 +25,6 @@ from snuba.query.allocation_policies.bytes_scanned_policy import (
     BytesScannedPerOrgRefPolicy,
     BytesScannedPerRefPolicy,
     BytesScannedPolicy,
-    Enforce,
 )
 from snuba.web import QueryException, QueryResult
 
@@ -84,12 +84,6 @@ def test_defaults() -> None:
     assert policy.is_pardonable is False
     assert policy._time_window_minutes == 10
     assert policy._quota("org:1").window_seconds == 600
-    assert policy.additional_config_definitions() == []
-
-
-def test_unknown_key_is_ignored() -> None:
-    policy = BytesScannedPerOrgPolicy.from_kwargs(storage_key="errors", is_enforced=0)
-    assert policy._limit == int(1.28 * TERABYTE)
 
 
 @pytest.mark.parametrize("cls", list(_BY_KEY.values()))

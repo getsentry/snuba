@@ -82,10 +82,11 @@ def _construct_policies(
     resource: str,
 ) -> Iterator[AllocationPolicy]:
     for name, spec in specs_by_name.items():
+        settings = {key: value for key, value in spec.items() if key != "name"}
         try:
             yield AllocationPolicy.get_from_name(name).from_kwargs(
                 storage_key=resource,
-                **spec,
+                **settings,
             )
         except InvalidConfigKeyError:
             logger.warning("Unknown allocation policy %s for %s", name, resource)
@@ -102,8 +103,7 @@ def get_active_allocation_policies(
     present ``match`` keys against ``tenant_ids``; ``match: {}`` always matches)
     are applied in file order: ``remove`` then add/replace by ``name``. An
     absent or empty result falls back to a PassthroughPolicy. Per-policy
-    settings on the item (is_enforced, concurrent_limit, …) are passed as
-    constructor kwargs.
+    settings on the item (enforce, limit, …) are passed as constructor kwargs.
     """
     resource = resource_identifier.value
     specs_by_name = _resolve_policy_specs(

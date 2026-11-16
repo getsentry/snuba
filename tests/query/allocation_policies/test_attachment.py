@@ -17,7 +17,7 @@ from tests.query.allocation_policies.attachment import (
 _POLICY_SPECS: list[dict[str, object]] = [
     {"name": "BytesScannedPerOrgRefPolicy", "enforce": "never"},
     {"name": "ConcurrentQueriesPerOrgPolicy", "enforce": "never"},
-    {"name": "PassthroughPolicy", "is_enforced": 0},
+    {"name": "PassthroughPolicy", "enforce": "never"},
     {"name": "ConcurrentQueriesPerRefPolicy", "enforce": "never"},
 ]
 
@@ -357,10 +357,3 @@ def test_time_window_from_match_block() -> None:
         for policies in (org_1, org_2)
     ]
     assert windows == [[60], [10]]
-
-
-def test_unknown_policy_key_is_ignored() -> None:
-    blocks: list[dict[str, object]] = [
-        {"match": {}, "policies": [{"name": "BytesScannedPerOrgPolicy", "is_enforced": 0}]}
-    ]
-    assert _names({}, blocks) == ["BytesScannedPerOrgPolicy"]

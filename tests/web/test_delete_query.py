@@ -8,7 +8,7 @@ from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
-from snuba.configs.configuration import Configuration, ResourceIdentifier
+from snuba.configs.configuration import ResourceIdentifier
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
@@ -83,9 +83,6 @@ def test_delete_query_with_rejecting_allocation_policy() -> None:
     update_called = False
 
     class RejectPolicy(AllocationPolicy):
-        def _additional_config_definitions(self) -> list[Configuration]:
-            return []
-
         def _get_quota_allowance(
             self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:

@@ -514,9 +514,6 @@ def test_routing_strategy_with_rejecting_allocation_policy() -> None:
     update_called = False
 
     class RejectionPolicy(AllocationPolicy):
-        def _additional_config_definitions(self) -> list[Configuration]:
-            return []
-
         def _get_quota_allowance(
             self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:
@@ -555,9 +552,6 @@ def test_routing_strategy_with_rejecting_allocation_policy() -> None:
 @pytest.mark.redis_db
 def test_routing_strategy_idle_pardon_allows_rejected_query() -> None:
     class IdlePardonRejectionPolicy(AllocationPolicy):
-        def _additional_config_definitions(self) -> list[Configuration]:
-            return []
-
         def _get_quota_allowance(
             self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:
@@ -586,6 +580,7 @@ def test_routing_strategy_idle_pardon_allows_rejected_query() -> None:
             return_value=[
                 IdlePardonRejectionPolicy(
                     ResourceIdentifier(StorageKey("doesntmatter")),
+                    enforce="pardon",
                     thresholds={"reject": {"cluster_load": 90.0, "concurrent_queries": 100.0}},
                 )
             ],
@@ -614,6 +609,22 @@ def test_routing_strategy_idle_pardon_allows_rejected_query() -> None:
 
 
 @pytest.mark.redis_db
+def test_routing_strategy_uses_lowest_policy_max_threads() -> None:
+    class OtherPassthroughPolicy(PassthroughPolicy):
+        pass
+
+    resource = ResourceIdentifier(StorageKey("doesntmatter"))
+    test_strategy = TestRoutingStrategyWithCustomPolicies(
+        policies=[
+            PassthroughPolicy(resource, max_threads=4),
+            OtherPassthroughPolicy(resource, max_threads=5),
+        ]
+    )
+    routing_decision = test_strategy.get_routing_decision(deepcopy(ROUTING_CONTEXT))
+    assert routing_decision.clickhouse_settings["max_threads"] == 4
+
+
+@pytest.mark.redis_db
 @pytest.mark.eap
 def test_allocation_policy_updates_quota() -> None:
     MAX_QUERIES_TO_RUN = 2
@@ -621,9 +632,6 @@ def test_allocation_policy_updates_quota() -> None:
     queries_run = 0
 
     class QueryCountPolicy(AllocationPolicy):
-        def _additional_config_definitions(self) -> list[Configuration]:
-            return []
-
         def _get_quota_allowance(
             self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:
@@ -654,9 +662,6 @@ def test_allocation_policy_updates_quota() -> None:
     queries_run_duplicate = 0
 
     class QueryCountPolicyDuplicate(AllocationPolicy):
-        def _additional_config_definitions(self) -> list[Configuration]:
-            return []
-
         def _get_quota_allowance(
             self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:

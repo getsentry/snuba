@@ -9,7 +9,7 @@ from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
-from snuba.configs.configuration import Configuration, ResourceIdentifier
+from snuba.configs.configuration import ResourceIdentifier
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.query_pipeline import QueryPipelineResult
@@ -45,11 +45,6 @@ from snuba.web import QueryException
 
 
 class MockAllocationPolicy(AllocationPolicy):
-    def _additional_config_definitions(self) -> list[Configuration]:
-        # Define policy specific config definitions, these will be used along
-        # with the default definitions of the base class. (is_enforced)
-        return []
-
     def _get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:

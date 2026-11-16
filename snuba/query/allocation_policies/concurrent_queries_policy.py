@@ -2,19 +2,18 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from collections.abc import Mapping
-from typing import Any
 
-from snuba.configs.configuration import Configuration, ResourceIdentifier
+from snuba.configs.configuration import ResourceIdentifier
 from snuba.query.allocation_policies import (
     CROSS_ORG_SUGGESTION,
+    DEFAULT_MAX_THREADS,
     NO_SUGGESTION,
     AllocationPolicy,
     AllocationPolicyViolations,
-    InvalidTenantsForAllocationPolicy,
+    Enforce,
     QueryResultOrError,
     QuotaAllowance,
 )
-from snuba.query.allocation_policies.bytes_scanned_policy import Enforce
 from snuba.state.rate_limit import (
     RateLimitParameters,
     rate_limit_finish_request,
@@ -22,7 +21,6 @@ from snuba.state.rate_limit import (
 )
 
 DEFAULT_LIMIT = 22
-DEFAULT_MAX_THREADS = 10
 # Only the concurrent count is used, so finished queries need not be kept.
 RATE_HISTORY_S = 1
 SHARD_FACTOR = 1
@@ -32,8 +30,7 @@ QUOTA_UNIT = "concurrent_queries"
 class ConcurrentQueriesPolicy(AllocationPolicy):
     """Rejects a query when its key already has `limit` queries running.
 
-    Config names a Per*Policy subclass, which picks the key. Settings come only from
-    the allocation_policies match block, not configurable_component_overrides:
+    Config names a Per*Policy subclass, which picks the key.
 
     - limit: concurrent queries allowed per key.
     - enforce: always | pardon (runs while load is under thresholds.reject) | never.
@@ -48,24 +45,15 @@ class ConcurrentQueriesPolicy(AllocationPolicy):
         enforce: Enforce | str = Enforce.ALWAYS,
         max_threads: int = DEFAULT_MAX_THREADS,
         thresholds: Mapping[str, Mapping[str, float]] | None = None,
-        **kwargs: Any,
     ) -> None:
-        super().__init__(storage_key, thresholds=thresholds, **kwargs)
+        super().__init__(
+            storage_key, enforce=enforce, max_threads=max_threads, thresholds=thresholds
+        )
         self._limit = limit
-        self._enforce = Enforce(enforce)
-        self._max_threads = max_threads
 
     @abstractmethod
     def _key(self, tenant_ids: dict[str, str | int]) -> str:
         raise NotImplementedError
-
-    def _tenant(self, tenant_ids: dict[str, str | int], field: str) -> str | int:
-        value = tenant_ids.get(field)
-        if value is None:
-            raise InvalidTenantsForAllocationPolicy.from_args(
-                tenant_ids, type(self).__name__, f"needs {field}"
-            )
-        return value
 
     @property
     def suggestion(self) -> str:
@@ -73,23 +61,6 @@ class ConcurrentQueriesPolicy(AllocationPolicy):
             "This organization/referrer has too many queries running at once. "
             "This usually means a feature is querying inefficiently or is being abused."
         )
-
-    # The next four override runtime-config lookups. Refactor once the old dynamic
-    # policy config is removed.
-    def _additional_config_definitions(self) -> list[Configuration]:
-        return []
-
-    @property
-    def is_enforced(self) -> bool:
-        return self._enforce is not Enforce.NEVER
-
-    @property
-    def is_pardonable(self) -> bool:
-        return self._enforce is Enforce.PARDON
-
-    @property
-    def max_threads(self) -> int:
-        return self._max_threads
 
     def _params(self, key: str) -> RateLimitParameters:
         return RateLimitParameters(
@@ -101,8 +72,6 @@ class ConcurrentQueriesPolicy(AllocationPolicy):
         # component_name() is unique per storage and class.
         return f"{self.component_name()}:"
 
-    # Abstract hook of the old AllocationPolicy base. Refactor once the old dynamic
-    # policy config is removed.
     def _get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
@@ -131,8 +100,6 @@ class ConcurrentQueriesPolicy(AllocationPolicy):
             suggestion=NO_SUGGESTION if can_run else self.suggestion,
         )
 
-    # Abstract hook of the old AllocationPolicy base. Refactor once the old dynamic
-    # policy config is removed.
     def _update_quota_balance(
         self,
         tenant_ids: dict[str, str | int],
@@ -159,7 +126,7 @@ class ConcurrentQueriesPolicy(AllocationPolicy):
     ) -> QuotaAllowance:
         return QuotaAllowance(
             can_run=can_run,
-            max_threads=self._max_threads if can_run else 0,
+            max_threads=self.max_threads if can_run else 0,
             explanation={"reason": reason},
             rejection_threshold=self._limit,
             quota_used=used,
