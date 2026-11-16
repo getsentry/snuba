@@ -19,16 +19,16 @@ from snuba.query.allocation_policies import (
     QueryResultOrError,
     QuotaAllowance,
 )
-from snuba.query.allocation_policies.bytes_scanned_rejecting_policy import (
-    BytesScannedRejectingPolicy,
+from snuba.query.allocation_policies.bytes_scanned_policy import (
+    BytesScannedPerOrgPolicy,
+    BytesScannedPerOrgRefPolicy,
+    BytesScannedPerRefPolicy,
 )
-from snuba.query.allocation_policies.bytes_scanned_window_policy import (
-    BytesScannedWindowAllocationPolicy,
+from snuba.query.allocation_policies.concurrent_queries_policy import (
+    ConcurrentQueriesPerOrgPolicy,
+    ConcurrentQueriesPerOrgRefPolicy,
+    ConcurrentQueriesPerRefPolicy,
 )
-from snuba.query.allocation_policies.concurrent_rate_limit import (
-    ConcurrentRateLimitAllocationPolicy,
-)
-from snuba.query.allocation_policies.per_referrer import ReferrerGuardRailPolicy
 from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from tests.configs.component_config import (
     delete_component_config,
@@ -519,10 +519,12 @@ class TestComponentNameBackwardsCompatibility:
 
     def get_all_allocation_policy_classes(self) -> list[type[AllocationPolicy]]:
         return [
-            ReferrerGuardRailPolicy,
-            ConcurrentRateLimitAllocationPolicy,
-            BytesScannedRejectingPolicy,
-            BytesScannedWindowAllocationPolicy,
+            BytesScannedPerOrgPolicy,
+            BytesScannedPerOrgRefPolicy,
+            BytesScannedPerRefPolicy,
+            ConcurrentQueriesPerOrgPolicy,
+            ConcurrentQueriesPerOrgRefPolicy,
+            ConcurrentQueriesPerRefPolicy,
         ]
 
     @pytest.mark.parametrize(

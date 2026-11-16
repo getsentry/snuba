@@ -28,7 +28,7 @@ CONFIGURABLE_COMPONENT_OVERRIDES_KEY = "configurable_component_overrides"
 
 # A parameterized config key is ``{resource}.{ClassName}.{config}`` followed by a
 # sorted, PARAM_DELIMITER-joined run of ``{name}PARAM_KV_DELIMITER{value}`` pairs,
-# e.g. ``errors.MyPolicy.my_config|organization_id:1|referrer:api.foo``.
+# e.g. ``EAP.MyRoutingStrategy.my_config|organization_id:1|referrer:api.foo``.
 PARAM_DELIMITER = "|"
 PARAM_KV_DELIMITER = ":"
 
@@ -150,7 +150,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
 
         >>>     def resource_identifier(self) -> ResourceIdentifier:
         >>>         # describes what is the underlying resource of this ConfigurableComponent
-        >>>         # example: BytesScannedRejectingPolicy (ConfigurableComponent) is a policy that is applied to a storage (underlying resource)
+        >>>         # example: OutcomesBasedRoutingStrategy (ConfigurableComponent) routes queries for a storage (underlying resource)
         >>>         return ResourceIdentifier(storage_key=StorageKey("my_storage"))
 
     """
@@ -350,8 +350,8 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
     def _build_config_key(self, config: str, params: dict[str, Any]) -> str:
         """Builds the fully-qualified config key used to look up an override.
 
-        - no params -> `"mystorage.MyAllocationPolicy.my_config"`
-        - sorted params -> `"mystorage.MyAllocationPolicy.my_config|a:1|b:2"`
+        - no params -> `"EAP.MyRoutingStrategy.my_config"`
+        - sorted params -> `"EAP.MyRoutingStrategy.my_config|a:1|b:2"`
         """
         key = f"{self.component_name()}.{config}"
         for param in sorted(params):
