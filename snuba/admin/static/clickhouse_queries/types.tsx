@@ -5,6 +5,8 @@ type ClickhouseNode = {
 
 type ClickhouseNodeData = {
   storage_name: string;
+  // Storages in one storage set always share a cluster.
+  storage_set?: string;
   local_table_name: string;
   local_nodes: ClickhouseNode[];
   dist_nodes: ClickhouseNode[];

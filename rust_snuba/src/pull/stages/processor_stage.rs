@@ -63,6 +63,7 @@ impl Stage for ProcessorStage {
                     pipeline_batch,
                     envelope.metadata,
                     envelope.raw,
+                    envelope.offsets,
                 ))
             }
             Ok(Err(e)) if e.is::<SilencedDLQMessage>() => StageResult::Drop {

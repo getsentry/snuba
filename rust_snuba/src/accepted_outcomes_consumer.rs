@@ -5,7 +5,6 @@ use std::time::Duration;
 use sentry_arroyo::backends::kafka::config::KafkaConfig;
 use sentry_arroyo::backends::kafka::producer::KafkaProducer;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
-use sentry_arroyo::metrics;
 use sentry_arroyo::processing::dlq::{DlqLimit, DlqPolicy, KafkaDlqProducer};
 use sentry_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use sentry_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
@@ -17,7 +16,7 @@ use pyo3::prelude::*;
 use crate::config;
 use crate::logging::{setup_logging, setup_sentry};
 use crate::metrics::global_tags::set_global_tag;
-use crate::metrics::statsd::create_dogstatsd_backend;
+use crate::metrics::statsd::install_dogstatsd;
 use crate::strategies::accepted_outcomes::aggregator::OutcomesAggregator;
 use crate::strategies::accepted_outcomes::commit_outcomes::CommitOutcomes;
 use crate::strategies::accepted_outcomes::produce_outcome::ProduceAcceptedOutcome;
@@ -169,9 +168,7 @@ pub fn accepted_outcomes_consumer_impl(
             ("consumer_group", consumer_group.to_owned()),
         ];
 
-        if let Some(backend) = create_dogstatsd_backend(&env_config, "snuba.consumer", &tags) {
-            metrics::init(backend).unwrap();
-        }
+        install_dogstatsd(&env_config, "snuba.consumer", &tags);
     }
 
     // DLQ setup

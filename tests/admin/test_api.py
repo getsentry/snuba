@@ -68,6 +68,16 @@ def get_node_for_table(admin_api: FlaskClient, storage_name: str) -> tuple[str, 
 
 
 @pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_clickhouse_nodes_include_storage_set(admin_api: FlaskClient) -> None:
+    response = admin_api.get("/clickhouse_nodes")
+    assert response.status_code == 200, response
+    storage_sets = {node["storage_name"]: node["storage_set"] for node in json.loads(response.data)}
+    assert storage_sets["errors"] == "events"
+    assert storage_sets["outcomes_raw"] == storage_sets["outcomes_hourly"] == "outcomes"
+
+
+@pytest.mark.redis_db
 def test_admin_regions(admin_api: FlaskClient) -> None:
     with (
         mock.patch("snuba.settings.ADMIN_REGIONS", ["us", "de"]),

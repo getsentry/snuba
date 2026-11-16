@@ -17,7 +17,7 @@ mod partition_stall;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
-use sentry_arroyo::counter;
+use crate::counter;
 use sentry_arroyo::processing::strategies::healthcheck::HealthCheck;
 use sentry_arroyo::processing::strategies::ProcessingStrategy;
 

@@ -30,6 +30,15 @@ function ResultTable(props: { columnNames: string[]; rows: unknown[][] }) {
   // "row:col" of each long value the user opened.
   const [openCells, setOpenCells] = useState<Set<string>>(new Set());
   const tall = rows.length > COLLAPSED_ROW_LIMIT;
+  // A column lines up on the right only if every value in it is a number, so
+  // one that mixes numbers and text doesn't zigzag.
+  const numericColumns = columnNames.map(
+    (_, c) =>
+      rows.some((row) => row[c] !== null && row[c] !== undefined) &&
+      rows.every(
+        (row) => row[c] === null || row[c] === undefined || isNumeric(row[c])
+      )
+  );
 
   function toggleCell(key: string) {
     setOpenCells((prev) => {
@@ -86,27 +95,29 @@ function ResultTable(props: { columnNames: string[]; rows: unknown[][] }) {
                         style={{
                           ...tdStyle,
                           backgroundColor: rowBg,
-                          textAlign: isNumeric(value) ? "right" : "left",
+                          textAlign: numericColumns[c] ? "right" : "left",
                         }}
                       >
                         {text === null ? (
                           <span style={nullStyle}>NULL</span>
                         ) : long ? (
-                          <div
-                            role="button"
-                            tabIndex={0}
-                            aria-expanded={open}
-                            title={open ? "Click to collapse" : text}
-                            style={open ? openValueStyle : clippedValueStyle}
-                            onClick={() => toggleCell(key)}
-                            onKeyDown={(evt) => {
-                              if (evt.key === "Enter" || evt.key === " ") {
-                                evt.preventDefault();
-                                toggleCell(key);
-                              }
-                            }}
-                          >
-                            {text}
+                          <div style={longValueBoxStyle}>
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              aria-expanded={open}
+                              title={open ? "Click to collapse" : text}
+                              style={open ? openValueStyle : clippedValueStyle}
+                              onClick={() => toggleCell(key)}
+                              onKeyDown={(evt) => {
+                                if (evt.key === "Enter" || evt.key === " ") {
+                                  evt.preventDefault();
+                                  toggleCell(key);
+                                }
+                              }}
+                            >
+                              {text}
+                            </div>
                           </div>
                         ) : (
                           text
@@ -182,10 +193,13 @@ const tdStyle = {
   borderRight: `1px solid ${COLORS.BORDER_GRAY_LIGHT}`,
 };
 
-// Row numbers stay in view while scrolling sideways.
+// Row numbers stay in view while scrolling sideways. The tiny width shrinks
+// the column to its widest number, so a table stretched to fill the box gives
+// the spare room to the data columns.
 const rowNumberStyle = {
   position: "sticky" as const,
   left: 0,
+  width: 1,
   textAlign: "right" as const,
   color: COLORS.TEXT_LIGHTER,
   borderRight: border,
@@ -197,22 +211,30 @@ const cornerStyle = {
   backgroundColor: COLORS.TABLE_HEADER_BG,
 };
 
-// Opening a value keeps its width and only adds lines. A wrappable value with
-// no set width would let the table squeeze its column to a sliver.
-const longValueWidth = `${CELL_MAX_CHARS}ch`;
+// A long value's column is at least this wide, so the table can't squeeze it
+// to a sliver, and takes any spare room the table has on top of that.
+const longValueBoxStyle = {
+  minWidth: `${CELL_MAX_CHARS}ch`,
+};
 
-const clippedValueStyle = {
-  width: longValueWidth,
-  overflow: "hidden",
-  textOverflow: "ellipsis",
+// No width of its own, so the full text doesn't widen the column, and opening
+// a value only adds lines. It then stretches to fill the box above.
+const longValueStyle = {
+  width: 0,
+  minWidth: "100%",
   cursor: "pointer",
 };
 
+const clippedValueStyle = {
+  ...longValueStyle,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+};
+
 const openValueStyle = {
-  width: longValueWidth,
+  ...longValueStyle,
   whiteSpace: "pre-wrap" as const,
   overflowWrap: "anywhere" as const,
-  cursor: "pointer",
 };
 
 const nullStyle = {

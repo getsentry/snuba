@@ -33,4 +33,3 @@
 /docker_entrypoint.py           @getsentry/release-approvers
 /cloudbuild.yaml                @getsentry/release-approvers
 /scripts/bump-version.sh        @getsentry/release-approvers
-/scripts/post-release.sh        @getsentry/release-approvers

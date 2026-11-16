@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::{counter, gauge, timer};
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, Response};
 use sentry_arroyo::processing::strategies::run_task_in_threads::{
@@ -10,7 +11,6 @@ use sentry_arroyo::processing::strategies::{
     CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
 };
 use sentry_arroyo::types::Message;
-use sentry_arroyo::{counter, gauge, timer};
 
 use crate::config::ClickhouseConfig;
 use crate::options::{

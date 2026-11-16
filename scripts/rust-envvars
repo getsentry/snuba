@@ -11,6 +11,11 @@ fi
 export SNUBA_TEST_PYTHONPATH="$(python -c 'import sys; print(":".join(sys.path))')"
 export SNUBA_TEST_PYTHONEXECUTABLE="$(python -c 'import sys; print(sys.executable)')"
 
+# Load the libpython that `python` was built with. Otherwise the loader can pick
+# another libpython3.x first: on arm64 the CI image searches /lib/aarch64-linux-gnu
+# (Debian's libpython) before /usr/local/lib, and _ctypes segfaults against it.
+export LD_LIBRARY_PATH="$(python -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR"))')${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
 # https://github.com/astral-sh/uv/issues/8821
 if [ -z "${CI:-}" ]; then
   export PYTHONHOME="$(dirname $(dirname $(realpath "${REPOROOT}/.venv/bin/python")))"

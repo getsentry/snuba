@@ -8,8 +8,10 @@ crate: both read the same read-only ``snuba`` namespace, whose schema lives in
 from __future__ import annotations
 
 import logging
-from typing import TypeVar, cast
+from collections.abc import Mapping
+from typing import Any, TypeVar, cast
 
+import rapidjson
 import sentry_options
 from sentry_options import OptionValue
 
@@ -68,3 +70,18 @@ def get_mapped_option(key: str, name: str, default: T) -> T:
     if isinstance(mapping, dict) and name in mapping:
         return cast(T, mapping[name])
     return default
+
+
+def get_mapped_json_option(key: str, name: str) -> Mapping[str, Any]:
+    """Read entry ``name`` from a dict-typed option whose values are JSON-object
+    strings ({"clickhouse_setting": "value"}). sentry-options can't express
+    dict-of-dict natively, so the second level is a JSON string parsed here.
+    Returns ``{}`` when the entry is unset or isn't a JSON object."""
+    raw = get_mapped_option(key, name, "")
+    if not raw:
+        return {}
+    try:
+        parsed = rapidjson.loads(raw)
+    except (TypeError, ValueError):
+        return {}
+    return parsed if isinstance(parsed, dict) else {}

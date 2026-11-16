@@ -10,6 +10,9 @@ _DOWNSAMPLED_EAP_TABLES = [
     "eap_items_1_downsample_8_local",
     "eap_items_1_downsample_64_local",
     "eap_items_1_downsample_512_local",
+    "eap_items_2_downsample_8_local",
+    "eap_items_2_downsample_64_local",
+    "eap_items_2_downsample_512_local",
 ]
 
 

@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, LazyLock};
 
+use crate::counter;
 use chrono::{DateTime, Utc};
 use regex::Regex;
 use sentry::{Hub, SentryFutureExt};
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
-use sentry_arroyo::counter;
 use sentry_arroyo::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };

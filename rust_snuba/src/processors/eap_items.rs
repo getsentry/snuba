@@ -8,8 +8,8 @@ use serde::{Serialize, Serializer};
 use std::collections::{BTreeMap, HashMap};
 use uuid::Uuid;
 
+use crate::{counter, timer};
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
-use sentry_arroyo::{counter, timer};
 use sentry_options::options;
 use sentry_protos::snuba::v1::any_value::Value;
 use sentry_protos::snuba::v1::{ArrayValue, TraceItem, TraceItemType};
@@ -165,6 +165,7 @@ fn process_eap_item(
         TraceItemType::UserSession => "sessions",
         TraceItemType::ProcessingError => "processing_errors",
         TraceItemType::WorkflowEngineEvaluation => "workflow_engine_evaluations",
+        TraceItemType::EnrichmentAttributes => "telemetry_classifiers",
         TraceItemType::Unspecified => "null",
     }
     .to_string();
@@ -1781,6 +1782,34 @@ mod tests {
         assert!(batch.cogs_data.is_some());
         let cogs = batch.cogs_data.unwrap();
         assert_eq!(cogs.data.get("our_logs"), Some(&(payload_len as u64)));
+    }
+
+    #[test]
+    fn test_row_binary_enrichment_attributes_cogs_data() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.item_type = TraceItemType::EnrichmentAttributes.into();
+
+        let mut payload_bytes = Vec::new();
+        trace_item.encode(&mut payload_bytes).unwrap();
+        let payload_len = payload_bytes.len();
+
+        let payload = KafkaPayload::new(None, None, Some(payload_bytes));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+
+        let batch = process_message_row_binary_typed(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
+
+        assert!(batch.cogs_data.is_some());
+        let cogs = batch.cogs_data.unwrap();
+        assert_eq!(
+            cogs.data.get("telemetry_classifiers"),
+            Some(&(payload_len as u64))
+        );
     }
 
     #[test]

@@ -126,9 +126,9 @@ class ConsumerBuilder:
             else None
         )
 
-        self.commit_log_producer: Producer | None
+        self.commit_log_producer: KafkaProducer | None
         if self.__consumer_config.commit_log_topic is not None:
-            self.commit_log_producer = Producer(
+            self.commit_log_producer = KafkaProducer(
                 build_kafka_configuration(self.__consumer_config.commit_log_topic.broker_config)
             )
         else:
@@ -317,7 +317,7 @@ class ConsumerBuilder:
             self.replacements_producer.flush()
 
         if self.commit_log_producer:
-            self.commit_log_producer.flush()
+            self.commit_log_producer.close().result()
 
         if self.dlq_producer:
             self.dlq_producer.close()

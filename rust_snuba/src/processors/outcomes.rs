@@ -1,9 +1,9 @@
 use crate::config::ProcessorConfig;
+use crate::counter;
 use crate::processors::utils::StringToIntDatetime;
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 use anyhow::Context;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
-use sentry_arroyo::counter;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
