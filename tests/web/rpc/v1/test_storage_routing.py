@@ -121,7 +121,6 @@ class RoutingStrategySelectsTier8(BaseRoutingStrategy):
     def _update_routing_decision(self, routing_decision: RoutingDecision) -> None:
         routing_decision.tier = Tier.TIER_8
         routing_decision.can_run = True
-        routing_decision.is_throttled = False
 
     def _output_metrics(self, routing_context: RoutingContext) -> None:
         pass
@@ -367,13 +366,10 @@ def test_metrics_output() -> None:
                         "reason": "within_limit",
                         "storage_key": "EAP",
                     },
-                    "is_throttled": False,
-                    "throttle_threshold": AnyInt(66),
                     "rejection_threshold": AnyInt(66),
                     "quota_used": 1,
                     "quota_unit": "concurrent_queries",
                     "suggestion": "no_suggestion",
-                    "max_bytes_to_read": 0,
                 },
             },
             "clickhouse_settings": {"max_threads": 10},
@@ -388,7 +384,6 @@ def test_metrics_output() -> None:
             "final": False,
             "cache_hit": 0,
             "can_run": True,
-            "is_throttled": False,
             "max_threads": 10,
             "clickhouse_table": "na",
             "is_duplicate": 0,
@@ -529,8 +524,6 @@ def test_routing_strategy_with_rejecting_allocation_policy() -> None:
                 can_run=False,
                 max_threads=0,
                 explanation={"reason": "policy rejects all queries"},
-                is_throttled=True,
-                throttle_threshold=MAX_THRESHOLD,
                 rejection_threshold=MAX_THRESHOLD,
                 quota_used=0,
                 quota_unit=NO_UNITS,
@@ -572,8 +565,6 @@ def test_routing_strategy_idle_pardon_allows_rejected_query() -> None:
                 can_run=False,
                 max_threads=0,
                 explanation={"reason": "policy rejects all queries"},
-                is_throttled=False,
-                throttle_threshold=MAX_THRESHOLD,
                 rejection_threshold=MAX_THRESHOLD,
                 quota_used=0,
                 quota_unit=NO_UNITS,
@@ -623,64 +614,6 @@ def test_routing_strategy_idle_pardon_allows_rejected_query() -> None:
 
 
 @pytest.mark.redis_db
-def test_routing_strategy_with_throttling_allocation_policy() -> None:
-    POLICY_THREADS = 4
-
-    class ThrottleAllocationPolicy(AllocationPolicy):
-        def _additional_config_definitions(self) -> list[Configuration]:
-            return []
-
-        def _get_quota_allowance(
-            self, tenant_ids: dict[str, str | int], query_id: str
-        ) -> QuotaAllowance:
-            return QuotaAllowance(
-                can_run=True,
-                max_threads=POLICY_THREADS,
-                explanation={"reason": "Throttle everything!"},
-                is_throttled=True,
-                throttle_threshold=MAX_THRESHOLD,
-                rejection_threshold=MAX_THRESHOLD,
-                quota_used=0,
-                quota_unit=NO_UNITS,
-                suggestion=NO_SUGGESTION,
-            )
-
-        def _update_quota_balance(
-            self,
-            tenant_ids: dict[str, str | int],
-            query_id: str,
-            result_or_error: QueryResultOrError,
-        ) -> None:
-            return
-
-    class ThrottleAllocationPolicyDuplicate(ThrottleAllocationPolicy):
-        def _get_quota_allowance(
-            self, tenant_ids: dict[str, str | int], query_id: str
-        ) -> QuotaAllowance:
-            return QuotaAllowance(
-                can_run=True,
-                max_threads=POLICY_THREADS + 1,
-                explanation={"reason": "Throttle everything!"},
-                is_throttled=True,
-                throttle_threshold=MAX_THRESHOLD,
-                rejection_threshold=MAX_THRESHOLD,
-                quota_used=0,
-                quota_unit=NO_UNITS,
-                suggestion=NO_SUGGESTION,
-            )
-
-    test_strategy = TestRoutingStrategyWithCustomPolicies(
-        policies=[
-            ThrottleAllocationPolicy(ResourceIdentifier(StorageKey("doesntmatter"))),
-            ThrottleAllocationPolicyDuplicate(ResourceIdentifier(StorageKey("doesntmatter"))),
-        ]
-    )
-    routing_decision = test_strategy.get_routing_decision(deepcopy(ROUTING_CONTEXT))
-    assert routing_decision.clickhouse_settings["max_threads"] == POLICY_THREADS
-    assert routing_decision.is_throttled
-
-
-@pytest.mark.redis_db
 @pytest.mark.eap
 def test_allocation_policy_updates_quota() -> None:
     MAX_QUERIES_TO_RUN = 2
@@ -703,8 +636,6 @@ def test_allocation_policy_updates_quota() -> None:
                 can_run=can_run,
                 max_threads=0,
                 explanation={"reason": f"can only run {queries_run} queries!"},
-                is_throttled=False,
-                throttle_threshold=MAX_QUERIES_TO_RUN,
                 rejection_threshold=MAX_QUERIES_TO_RUN,
                 quota_used=queries_run + 1,
                 quota_unit="queries",
@@ -739,8 +670,6 @@ def test_allocation_policy_updates_quota() -> None:
                 can_run=can_run,
                 max_threads=0,
                 explanation={"reason": f"can only run {queries_run_duplicate} queries!"},
-                is_throttled=False,
-                throttle_threshold=MAX_QUERIES_TO_RUN,
                 rejection_threshold=MAX_QUERIES_TO_RUN,
                 quota_used=queries_run + 1,
                 quota_unit="queries",
@@ -775,46 +704,6 @@ def test_allocation_policy_updates_quota() -> None:
     assert not exc.details["allocation_policies_recommendations"]["QueryCountPolicyDuplicate"][
         "can_run"
     ]
-
-
-@pytest.mark.redis_db
-def test_policy_sets_max_bytes_to_read() -> None:
-    class MaximumBytesPolicy(AllocationPolicy):
-        def _additional_config_definitions(self) -> list[Configuration]:
-            return []
-
-        def _get_quota_allowance(
-            self, tenant_ids: dict[str, str | int], query_id: str
-        ) -> QuotaAllowance:
-            return QuotaAllowance(
-                can_run=True,
-                max_threads=10,
-                explanation={},
-                is_throttled=True,
-                throttle_threshold=420,
-                rejection_threshold=42069,
-                quota_used=123,
-                quota_unit="concurrent_queries",
-                suggestion=NO_SUGGESTION,
-                max_bytes_to_read=1,
-            )
-
-        def _update_quota_balance(
-            self,
-            tenant_ids: dict[str, str | int],
-            query_id: str,
-            result_or_error: QueryResultOrError,
-        ) -> None:
-            pass
-
-    test_strategy = TestRoutingStrategyWithCustomPolicies(
-        policies=[
-            MaximumBytesPolicy(ResourceIdentifier(StorageKey("doesntmatter"))),
-        ]
-    )
-
-    routing_decision = test_strategy.get_routing_decision(deepcopy(ROUTING_CONTEXT))
-    assert routing_decision.clickhouse_settings["max_bytes_to_read"] == 1
 
 
 @pytest.mark.parametrize("tier", [Tier.TIER_1, Tier.TIER_8, Tier.TIER_64, Tier.TIER_512])

@@ -1151,7 +1151,6 @@ class TestComparisonCanMatchColumnDefault:
 def test_convert_rpc_exception_to_proto_packs_details() -> None:
     routing_decision_log_dict = {
         "can_run": False,
-        "is_throttled": True,
         "strategy": "OutcomesBasedRoutingStrategy",
         "source_request_id": "21df09b9-41a8-4529-9fc7-d75c851adbfe",
         "extra_info": {
@@ -1172,13 +1171,10 @@ def test_convert_rpc_exception_to_proto_packs_details() -> None:
                     "reason": "policy rejects all queries",
                     "storage_key": "doesntmatter",
                 },
-                "is_throttled": True,
-                "throttle_threshold": 1000000000000,
                 "rejection_threshold": 1000000000000,
                 "quota_used": 0,
                 "quota_unit": "no_units",
                 "suggestion": "no_suggestion",
-                "max_bytes_to_read": 0,
             }
         },
     }

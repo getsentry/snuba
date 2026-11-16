@@ -93,8 +93,6 @@ def test_delete_query_with_rejecting_allocation_policy() -> None:
                 can_run=False,
                 max_threads=0,
                 explanation={"reason": "policy rejects all queries"},
-                is_throttled=True,
-                throttle_threshold=100000,
                 rejection_threshold=MAX_THRESHOLD,
                 quota_used=MAX_THRESHOLD,
                 quota_unit=NO_UNITS,

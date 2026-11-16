@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from enum import Enum, IntEnum
 from typing import Any, assert_never, cast
 
@@ -57,7 +57,6 @@ class QuotaAllowanceDecision(IntEnum):
     REJECTED = 0
     PARDONED = 1
     ALLOWED = 2
-    THROTTLED = 3
 
     @property
     def is_rejected(self) -> bool:
@@ -73,17 +72,10 @@ class QuotaAllowance:
     # about what caused that action. Not currently well typed
     # because I don't know what exactly should go in it yet
     explanation: dict[str, JsonSerializable]
-    is_throttled: bool
-    throttle_threshold: int
     rejection_threshold: int
     quota_used: int
     quota_unit: str
     suggestion: str
-
-    # sets this value:
-    # https://clickhouse.com/docs/operations/settings/settings#max_bytes_to_read
-    # 0 means unlimited
-    max_bytes_to_read: int = field(default=0)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -104,40 +96,7 @@ class QuotaAllowance:
             return (
                 QuotaAllowanceDecision.PARDONED if idle_pardon else QuotaAllowanceDecision.REJECTED
             )
-
-        if self.max_threads < policy.max_threads:
-            return QuotaAllowanceDecision.THROTTLED
-
         return QuotaAllowanceDecision.ALLOWED
-
-    def threads_for(
-        self,
-        decision: QuotaAllowanceDecision,
-        policy: AllocationPolicy,
-    ) -> int:
-        """Threads this allowance contributes to the combined cap. A pardoned
-        rejection contributes the policy's full budget instead of the rejection's 0,
-        every other decision contributes what the policy asked for (which is how
-        throttling reduces threads)."""
-        if decision is QuotaAllowanceDecision.PARDONED:
-            return policy.max_threads
-        return self.max_threads
-
-    def __eq__(self, other: Any) -> bool:
-        if not isinstance(other, QuotaAllowance):
-            return False
-        return (
-            self.can_run == other.can_run
-            and self.max_threads == other.max_threads
-            and self.max_bytes_to_read == other.max_bytes_to_read
-            and self.explanation == other.explanation
-            and self.is_throttled == other.is_throttled
-            and self.throttle_threshold == other.throttle_threshold
-            and self.rejection_threshold == other.rejection_threshold
-            and self.quota_used == other.quota_used
-            and self.quota_unit == other.quota_unit
-            and self.suggestion == other.suggestion
-        )
 
 
 class InvalidTenantsForAllocationPolicy(SerializableException):
@@ -498,8 +457,6 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                     can_run=False,
                     max_threads=0,
                     explanation=cast(dict[str, Any], e.to_dict()),
-                    is_throttled=False,
-                    throttle_threshold=0,
                     rejection_threshold=0,
                     quota_used=0,
                     quota_unit=NO_UNITS,
@@ -537,12 +494,6 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                     )
                 case QuotaAllowanceDecision.REJECTED:
                     self.metrics.increment("db_request_rejected", tags=decision_tags)
-                case QuotaAllowanceDecision.THROTTLED:
-                    self.metrics.increment(
-                        "db_request_throttled",
-                        tags={**decision_tags, "max_threads": str(allowance.max_threads)},
-                    )
-                    span.set_attribute("db_request_throttled", True)
                 case QuotaAllowanceDecision.ALLOWED:
                     pass
                 case unreachable:
@@ -553,8 +504,6 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                     can_run=True,
                     max_threads=self.max_threads,
                     explanation={},
-                    is_throttled=allowance.is_throttled,
-                    throttle_threshold=allowance.throttle_threshold,
                     rejection_threshold=allowance.rejection_threshold,
                     quota_used=allowance.quota_used,
                     quota_unit=allowance.quota_unit,
@@ -634,8 +583,6 @@ class PassthroughPolicy(AllocationPolicy):
             can_run=True,
             max_threads=self.max_threads,
             explanation={},
-            is_throttled=False,
-            throttle_threshold=MAX_THRESHOLD,
             rejection_threshold=MAX_THRESHOLD,
             quota_used=0,
             quota_unit=NO_UNITS,

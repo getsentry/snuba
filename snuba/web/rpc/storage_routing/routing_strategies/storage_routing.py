@@ -43,7 +43,6 @@ from snuba.query.allocation_policies import (
     QuotaAllowance,
 )
 from snuba.query.allocation_policies.resolver import get_active_allocation_policies
-from snuba.query.allocation_policies.utils import get_max_bytes_to_read
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import record_query
 from snuba.state.sentry_options import get_mapped_option, get_option
@@ -154,7 +153,6 @@ class RoutingDecision:
     clickhouse_settings: dict[str, Any] = field(default_factory=dict)
     can_run: bool | None = None
     time_window: TimeWindow | None = None
-    is_throttled: bool | None = None
     is_downsampled: bool = False
 
     def to_log_dict(self) -> dict[str, Any]:
@@ -170,7 +168,6 @@ class RoutingDecision:
 
         return {
             "can_run": self.can_run,
-            "is_throttled": self.is_throttled,
             "strategy": self.strategy.__class__.__name__,
             "source_request_id": in_msg_meta.request_id,
             "extra_info": self.routing_context.extra_info,
@@ -187,7 +184,6 @@ class RoutingDecision:
 
 class CombinedAllocationPoliciesRecommendations(TypedDict):
     can_run: bool
-    is_throttled: bool
     settings: dict[str, Any]
 
 
@@ -455,13 +451,6 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         load_info: LoadInfo | None,
     ) -> CombinedAllocationPoliciesRecommendations:
         # decides how to combine the recommendations from the allocation policies
-        settings = {}
-        policy_recommendations = list(recommendations.values())
-
-        max_bytes_to_read = get_max_bytes_to_read(policy_recommendations)
-        if max_bytes_to_read != 0:
-            settings["max_bytes_to_read"] = max_bytes_to_read
-
         can_run = True
         thread_cap = MAX_THRESHOLD
         for policy in policies:
@@ -471,14 +460,11 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             if decision.is_rejected:
                 thread_cap = 0
             else:
-                thread_cap = min(thread_cap, qa.threads_for(decision, policy))
-
-        settings["max_threads"] = thread_cap
+                thread_cap = min(thread_cap, policy.max_threads)
 
         return CombinedAllocationPoliciesRecommendations(
             can_run=can_run,
-            is_throttled=any(qa.is_throttled for qa in policy_recommendations),
-            settings=settings,
+            settings={"max_threads": thread_cap},
         )
 
     def _get_recommendations_from_allocation_policies(
@@ -534,7 +520,6 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                     tier=initial_tier,
                     clickhouse_settings=combined_allocation_policies_recommendations["settings"],
                     can_run=combined_allocation_policies_recommendations["can_run"],
-                    is_throttled=combined_allocation_policies_recommendations["is_throttled"],
                 )
 
                 self._update_routing_decision(routing_decision)
@@ -597,7 +582,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
 
             self.update_allocation_policies_balances(routing_decision, error)
 
-            # these metrics are meant to track reject/throttle/success decisions, so they get emitted even if the query did not run successfully after routing
+            # these metrics are meant to track reject/downsample/success decisions, so they get emitted even if the query did not run successfully after routing
             query_info_tags = extract_query_info_tags(routing_decision.routing_context.in_msg)
             tags = {
                 "strategy": self.class_name(),
@@ -609,8 +594,6 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 self.metrics.increment("rejected_query", tags=tags)
             elif routing_decision.is_downsampled:
                 self.metrics.increment("downsampled_query", tags=tags)
-            elif routing_decision.is_throttled:
-                self.metrics.increment("throttled_query", tags=tags)
             else:
                 self.metrics.increment("successful_query", tags=tags)
 

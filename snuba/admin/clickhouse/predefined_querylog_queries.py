@@ -310,41 +310,6 @@ class BytesScannedForReferrerByOrganization(QuerylogQuery):
     """
 
 
-class MostThrottledOrgs(QuerylogQuery):
-    """Orgs with the highest ratios of throttled queries. This isn't perfect, it just shows how many queries an Allocation Policy has set to
-    not 10 max threads (ie throttled to 1 thread) for some reason. How many threads ClickHouse would've run the query with given max 10 threads is still unknown.
-    """
-
-    sql = """
-    SELECT organization, throttled_queries, total_queries, divide(throttled_queries, total_queries) as ratio
-    FROM
-    (
-        SELECT organization, count(*) as throttled_queries
-        FROM querylog_dist
-        WHERE
-            timestamp > (now() - {{duration}})
-            AND JSONExtractRaw(JSONExtractRaw(arrayJoin(clickhouse_queries.stats), 'quota_allowance'), 'explanation') != '{}'
-            AND JSONExtractInt(JSONExtractRaw(arrayJoin(clickhouse_queries.stats), 'quota_allowance'), 'max_threads') != 10
-            AND timestamp < now()
-        GROUP BY organization
-    )
-    AS throttled_orgs
-    INNER JOIN
-    (
-        SELECT organization, count(*) as total_queries
-        FROM querylog_dist
-        WHERE
-            timestamp > (now() - {{duration}})
-            AND arrayJoin(clickhouse_queries.query_id) != 'bad_id_xyz'
-            AND timestamp < now()
-        GROUP BY organization
-    ) AS queries_by_org
-    ON throttled_orgs.organization = queries_by_org.organization
-    ORDER BY ratio desc
-    LIMIT 20
-    """
-
-
 class OrgQueryDurationQuantiles(QuerylogQuery):
     """Returns count, p50, p75, p90, p99 of all queries per Organization over a certain period of time, sorted by descending p99"""
 
@@ -413,29 +378,5 @@ class StoragesAndPoliciesOfRejectedQueries(QuerylogQuery):
         AND organization={{org_id}}
         AND JSON_QUERY(arrayJoin(clickhouse_queries.stats), '$.quota_allowance.summary.is_rejected') = '[true]'
         GROUP BY rejection_policy, rejection_storage, referrer, projects
-        ORDER BY count DESC
-    """
-
-
-class StoragesAndPoliciesOfThrottledQueries(QuerylogQuery):
-    """
-    Returns the storage(s) and polic(ies) of throttled queries, so we know which CapMan threshold to increase
-    """
-
-    sql = """
-        SELECT
-        JSON_QUERY(arrayJoin(clickhouse_queries.stats), '$.quota_allowance.summary.throttle_storage_key')
-            AS throttle_storage,
-        JSON_QUERY(arrayJoin(clickhouse_queries.stats), '$.quota_allowance.summary.throttled_by.policy')
-            AS throttle_policy,
-        referrer,
-        projects,
-        COUNT(*) AS count
-        FROM querylog_dist
-        WHERE toDateTime('{{start_timestamp}}', 'Universal') <= timestamp
-        AND timestamp <= toDateTime('{{end_timestamp}}', 'Universal')
-        AND organization={{org_id}}
-        AND JSON_QUERY(arrayJoin(clickhouse_queries.stats), '$.quota_allowance.summary.is_throttled') = '[true]'
-        GROUP BY throttle_policy, throttle_storage, referrer, projects
         ORDER BY count DESC
     """

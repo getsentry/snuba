@@ -55,10 +55,8 @@ class MockAllocationPolicy(AllocationPolicy):
     ) -> QuotaAllowance:
         return QuotaAllowance(
             can_run=True,
-            max_threads=1,
+            max_threads=self.max_threads,
             explanation={},
-            is_throttled=False,
-            throttle_threshold=MAX_THRESHOLD,
             rejection_threshold=MAX_THRESHOLD,
             quota_used=0,
             quota_unit=NO_UNITS,
@@ -158,7 +156,7 @@ def test_basic(ch_query: Query) -> None:
     )
     assert policy.did_update
     q = settings.get_resource_quota()
-    assert q and q.max_threads == 1
+    assert q and q.max_threads == 10
     # metadata
     assert (
         metadata.request_status == RequestStatus.SUCCESS

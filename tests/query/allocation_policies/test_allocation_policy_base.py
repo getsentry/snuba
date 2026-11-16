@@ -68,25 +68,6 @@ class RejectingEverythingAllocationPolicy(PassthroughPolicy):
             can_run=False,
             max_threads=0,
             explanation={},
-            is_throttled=True,
-            throttle_threshold=MAX_THRESHOLD,
-            rejection_threshold=MAX_THRESHOLD,
-            quota_used=0,
-            quota_unit=NO_UNITS,
-            suggestion=NO_SUGGESTION,
-        )
-
-
-class ThrottleEverythingAllocationPolicy(PassthroughPolicy):
-    def _get_quota_allowance(
-        self, tenant_ids: dict[str, str | int], query_id: str
-    ) -> QuotaAllowance:
-        return QuotaAllowance(
-            can_run=True,
-            max_threads=1,
-            explanation={},
-            is_throttled=True,
-            throttle_threshold=MAX_THRESHOLD,
             rejection_threshold=MAX_THRESHOLD,
             quota_used=0,
             quota_unit=NO_UNITS,
@@ -426,11 +407,6 @@ def test_is_not_enforced() -> None:
         is_enforced=1,
         max_threads=MAX_THREADS,
     )
-    throttle_policy = ThrottleEverythingAllocationPolicy(
-        StorageKey("some_storage"),
-        is_enforced=1,
-        max_threads=MAX_THREADS,
-    )
     tenant_ids: dict[str, int | str] = {
         "organization_id": 123,
         "referrer": "some_referrer",
@@ -442,10 +418,6 @@ def test_is_not_enforced() -> None:
     # policy not enforced so we don't reject the query
     reject_policy.get_quota_allowance(tenant_ids, "deadbeef")
 
-    assert throttle_policy.get_quota_allowance(tenant_ids, "deadbeef").max_threads == 1
-    set_component_config(throttle_policy, config_key="is_enforced", value=0)
-    assert throttle_policy.get_quota_allowance(tenant_ids, "deadbeef").max_threads == 1
-
     rejected_metrics = get_recorded_metric_calls(
         "increment", "allocation_policy.db_request_rejected"
     )
@@ -455,14 +427,6 @@ def test_is_not_enforced() -> None:
     assert rejected_metrics[0].tags["org_id"] == "123"
     assert rejected_metrics[0].tags["project_id"] == "no_project_id"
     assert rejected_metrics[1].tags["is_enforced"] == "False"
-    throttled_metrics = get_recorded_metric_calls(
-        "increment", "allocation_policy.db_request_throttled"
-    )
-    assert len(throttled_metrics) == 2, throttled_metrics
-    assert throttled_metrics[0].tags["policy_class"] == "ThrottleEverythingAllocationPolicy"
-    assert throttled_metrics[0].tags["is_enforced"] == "True"
-    assert throttled_metrics[0].tags["org_id"] == "123"
-    assert throttled_metrics[1].tags["is_enforced"] == "False"
 
 
 @pytest.mark.redis_db
