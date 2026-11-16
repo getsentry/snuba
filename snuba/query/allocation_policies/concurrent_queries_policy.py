@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from collections.abc import Mapping
+from typing import Any
 
 from snuba.configs.configuration import Configuration, ResourceIdentifier
 from snuba.query.allocation_policies import (
@@ -47,8 +48,9 @@ class ConcurrentQueriesPolicy(AllocationPolicy):
         enforce: Enforce | str = Enforce.ALWAYS,
         max_threads: int = DEFAULT_MAX_THREADS,
         thresholds: Mapping[str, Mapping[str, float]] | None = None,
+        **kwargs: Any,
     ) -> None:
-        super().__init__(storage_key, thresholds=thresholds)
+        super().__init__(storage_key, thresholds=thresholds, **kwargs)
         self._limit = limit
         self._enforce = Enforce(enforce)
         self._max_threads = max_threads

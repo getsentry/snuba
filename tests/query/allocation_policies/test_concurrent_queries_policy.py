@@ -139,3 +139,8 @@ def test_resolver_attaches_from_match_block() -> None:
     assert isinstance(policy, ConcurrentQueriesPerOrgPolicy)
     assert policy._limit == 5
     assert policy.is_pardonable
+
+
+def test_unknown_key_is_ignored() -> None:
+    policy = ConcurrentQueriesPerOrgPolicy.from_kwargs(storage_key="EAP", is_enforced=0, limit=5)
+    assert policy._limit == 5
