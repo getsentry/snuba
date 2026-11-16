@@ -134,7 +134,6 @@ class BytesScannedPolicy(AllocationPolicy):
 
         key = self._key(tenant_ids)
         # Requesting the full limit only reads what is left; nothing is used up here.
-        # Requesting less would cap the grant and make usage look higher than it is.
         _, granted = _RATE_LIMITER.check_within_quotas(
             [RequestedQuota(self.component_name(), self._limit, [self._quota(key)])]
         )
