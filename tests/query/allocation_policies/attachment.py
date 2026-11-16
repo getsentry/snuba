@@ -15,9 +15,9 @@ def match_block(policies: list[dict[str, Any]]) -> list[dict[str, Any]]:
 CURRENT_EAP_ATTACHMENT: list[dict[str, Any]] = match_block(
     [
         {
-            "name": "ConcurrentRateLimitAllocationPolicy",
-            "concurrent_limit": 66,
-            "is_enforced": 0,
+            "name": "ConcurrentQueriesPerOrgPolicy",
+            "limit": 66,
+            "enforce": "never",
         },
     ]
 )
@@ -25,7 +25,7 @@ CURRENT_EAP_ATTACHMENT: list[dict[str, Any]] = match_block(
 
 @contextmanager
 def override_allocation_policy(
-    attachment: dict[str, list[dict[str, Any]]],
+    attachment: dict[str, Any],
 ) -> Iterator[None]:
     with override_options("snuba", {ALLOCATION_POLICY_KEY: attachment}):
         yield
