@@ -32,9 +32,6 @@ MAX_THREADS = "max_threads"
 NO_UNITS = "no_units"
 NO_SUGGESTION = "no_suggestion"
 CROSS_ORG_SUGGESTION = "cross org queries do not have limits"
-PASS_THROUGH_REFERRERS_SUGGESTION = (
-    "subscriptions currently do not undergo rate limiting in any way"
-)
 MAX_THRESHOLD = int(1e12)
 
 
