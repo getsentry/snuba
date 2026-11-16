@@ -32,7 +32,7 @@ TERABYTE = 10**12
 DEFAULT_LIMIT = int(1.28 * TERABYTE)
 DEFAULT_MAX_THREADS = 10
 DEFAULT_TIMEOUT_PENALTY = 0.025
-DEFAULT_TIME_WINDOW = 10 * 60
+DEFAULT_TIME_WINDOW_MINUTES = 10
 WINDOW_GRANULARITY_SECONDS = 60
 
 
@@ -43,14 +43,14 @@ class Enforce(StrEnum):
 
 
 class BytesScannedPolicy(AllocationPolicy):
-    """Rejects queries once a key has scanned `limit` bytes in a sliding `time_window`.
+    """Rejects queries once a key has scanned `limit` bytes in a sliding `time_window_minutes`.
 
     Config names a Per*Policy subclass, which picks the key.
 
     - limit: bytes allowed per key.
     - enforce: always | pardon (runs while load is under thresholds.reject) | never.
     - max_threads: threads granted when the query is allowed.
-    - time_window: sliding window length, in seconds.
+    - time_window_minutes: sliding window length, in minutes.
     - timeout_penalty: share of `limit` counted per timed out query.
     """
 
@@ -62,14 +62,14 @@ class BytesScannedPolicy(AllocationPolicy):
         enforce: Enforce | str = Enforce.ALWAYS,
         max_threads: int = DEFAULT_MAX_THREADS,
         thresholds: Mapping[str, Mapping[str, float]] | None = None,
-        time_window: int = DEFAULT_TIME_WINDOW,
+        time_window_minutes: int = DEFAULT_TIME_WINDOW_MINUTES,
         timeout_penalty: float = DEFAULT_TIMEOUT_PENALTY,
     ) -> None:
         super().__init__(storage_key, thresholds=thresholds)
         self._limit = DEFAULT_LIMIT if limit is None else limit
         self._enforce = Enforce(enforce)
         self._max_threads = max_threads
-        self._time_window = time_window
+        self._time_window_minutes = time_window_minutes
         self._timeout_penalty = timeout_penalty
 
     @abstractmethod
@@ -88,7 +88,7 @@ class BytesScannedPolicy(AllocationPolicy):
     def suggestion(self) -> str:
         return (
             "This organization/referrer scanned too many bytes in the last "
-            f"{self._time_window} seconds. "
+            f"{self._time_window_minutes} minutes. "
             "This usually means a feature is querying inefficiently or is being abused."
         )
 
@@ -110,12 +110,12 @@ class BytesScannedPolicy(AllocationPolicy):
 
     def _quota(self, key: str) -> Quota:
         return Quota(
-            window_seconds=self._time_window,
+            window_seconds=self._time_window_minutes * 60,
             granularity_seconds=WINDOW_GRANULARITY_SECONDS,
             limit=self._limit,
             # component_name() is unique per storage and class. The window is in the
             # prefix so blocks with different windows on one key never share a counter.
-            prefix_override=f"{self.component_name()}-{self._time_window}s-{key}",
+            prefix_override=f"{self.component_name()}-{self._time_window_minutes}m-{key}",
         )
 
     # Abstract hook of the old AllocationPolicy base. Refactor once the old dynamic

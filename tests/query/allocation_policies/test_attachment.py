@@ -344,17 +344,17 @@ def test_time_window_from_match_block() -> None:
         {"match": {}, "policies": [{"name": "BytesScannedPerRefPolicy"}]},
         {
             "match": {"organization_id": [1]},
-            "policies": [{"name": "BytesScannedPerRefPolicy", "time_window": 3600}],
+            "policies": [{"name": "BytesScannedPerRefPolicy", "time_window_minutes": 60}],
         },
     ]
     with override_allocation_policy({"EAP": blocks}):
         org_1 = get_active_allocation_policies(ResourceIdentifier("EAP"), {"organization_id": 1})
         org_2 = get_active_allocation_policies(ResourceIdentifier("EAP"), {"organization_id": 2})
     windows = [
-        [p._time_window for p in policies if isinstance(p, BytesScannedPolicy)]
+        [p._time_window_minutes for p in policies if isinstance(p, BytesScannedPolicy)]
         for policies in (org_1, org_2)
     ]
-    assert windows == [[3600], [600]]
+    assert windows == [[60], [10]]
 
 
 def test_unknown_policy_key_raises_type_error() -> None:

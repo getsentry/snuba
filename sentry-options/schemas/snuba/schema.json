@@ -396,7 +396,7 @@
                     "type": "integer",
                     "optional": true
                   },
-                  "time_window": {
+                  "time_window_minutes": {
                     "type": "integer",
                     "optional": true
                   }
