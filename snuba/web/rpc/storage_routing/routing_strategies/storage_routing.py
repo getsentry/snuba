@@ -284,17 +284,10 @@ def _construct_hacky_querylog_payload(
     }
 
 
-@dataclass()
-class RoutingStrategyConfig(Configuration):
-    pass
-
-
 class BaseRoutingStrategy(ConfigurableComponent, ABC):
-    def __init__(self, default_config_overrides: dict[str, Any] | None = None) -> None:
-        if default_config_overrides is None:
-            default_config_overrides = {}
+    def __init__(self) -> None:
         self._default_config_definitions = [
-            RoutingStrategyConfig(
+            Configuration(
                 name="some_default_config",
                 description="Placeholder for now",
                 value_type=int,
@@ -303,7 +296,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         ]
         for setting_name, setting in ORG_OVERRIDABLE_CLICKHOUSE_SETTINGS.items():
             self._default_config_definitions.append(
-                RoutingStrategyConfig(
+                Configuration(
                     name=f"organization_{setting_name}_override",
                     description=setting.description,
                     value_type=setting.value_type,
@@ -311,12 +304,9 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                     param_types={"organization_id": int},
                 )
             )
-        self._overridden_additional_config_definitions = (
-            self._get_overridden_additional_config_defaults(default_config_overrides)
-        )
 
     def _get_default_config_definitions(self) -> list[Configuration]:
-        return cast(list[Configuration], self._default_config_definitions)
+        return self._default_config_definitions
 
     def _capture_routing_failure(
         self,
@@ -345,9 +335,6 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             tier = max(tier, low_priority_tier)
         return tier
 
-    def additional_config_definitions(self) -> list[Configuration]:
-        return self._overridden_additional_config_definitions
-
     @property
     def resource_identifier(self) -> ResourceIdentifier:
         return ResourceIdentifier(
@@ -360,12 +347,6 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             environment.metrics,
             "routing_strategy",
             tags={"routing_strategy_name": self.__class__.__name__},
-        )
-
-    @classmethod
-    def create_minimal_instance(cls, resource_identifier: str) -> ConfigurableComponent:
-        return cls(
-            default_config_overrides={},
         )
 
     def _is_highest_accuracy_mode(self, in_msg_meta: RequestMeta) -> bool:
