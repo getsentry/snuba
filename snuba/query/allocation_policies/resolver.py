@@ -82,11 +82,10 @@ def _construct_policies(
     resource: str,
 ) -> Iterator[AllocationPolicy]:
     for name, spec in specs_by_name.items():
-        settings = {key: value for key, value in spec.items() if key != "name"}
         try:
             yield AllocationPolicy.get_from_name(name).from_kwargs(
                 storage_key=resource,
-                **settings,
+                **spec,
             )
         except InvalidConfigKeyError:
             logger.warning("Unknown allocation policy %s for %s", name, resource)

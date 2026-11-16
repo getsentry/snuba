@@ -357,9 +357,8 @@ def test_time_window_from_match_block() -> None:
     assert windows == [[60], [10]]
 
 
-def test_unknown_policy_key_raises_type_error() -> None:
-    with pytest.raises(TypeError):
-        _names(
-            {},
-            [{"match": {}, "policies": [{"name": "BytesScannedPerOrgPolicy", "is_enforced": 0}]}],
-        )
+def test_unknown_policy_key_is_ignored() -> None:
+    blocks: list[dict[str, object]] = [
+        {"match": {}, "policies": [{"name": "BytesScannedPerOrgPolicy", "is_enforced": 0}]}
+    ]
+    assert _names({}, blocks) == ["BytesScannedPerOrgPolicy"]

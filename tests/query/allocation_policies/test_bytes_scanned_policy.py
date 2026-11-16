@@ -87,9 +87,9 @@ def test_defaults() -> None:
     assert policy.additional_config_definitions() == []
 
 
-def test_unknown_key_raises_type_error() -> None:
-    with pytest.raises(TypeError):
-        BytesScannedPerOrgPolicy.from_kwargs(storage_key="errors", is_enforced=0)
+def test_unknown_key_is_ignored() -> None:
+    policy = BytesScannedPerOrgPolicy.from_kwargs(storage_key="errors", is_enforced=0)
+    assert policy._limit == int(1.28 * TERABYTE)
 
 
 @pytest.mark.parametrize("cls", list(_BY_KEY.values()))
