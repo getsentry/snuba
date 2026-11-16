@@ -41,7 +41,6 @@ from snuba.query.allocation_policies import (
     QuotaAllowance,
 )
 from snuba.query.allocation_policies.resolver import get_active_allocation_policies
-from snuba.query.allocation_policies.utils import get_max_bytes_to_read
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Table
@@ -84,7 +83,6 @@ metrics = MetricsWrapper(environment.metrics, "db_query")
 redis_cache_client = get_redis_client(RedisClientKey.CACHE)
 
 _REJECTED_BY = "rejected_by"
-_THROTTLED_BY = "throttled_by"
 
 
 class ResultCacheCodec(ExceptionAwareCodec[bytes, Result]):
@@ -501,24 +499,14 @@ def _raw_query(
         error_code = None
         trigger_rate_limiter = None
         status = None
-        request_status = get_request_status(cause, context=stats)
+        request_status = get_request_status(cause)
 
-        calculated_cause = cause
         if isinstance(cause, RateLimitExceeded):
             status = QueryStatus.RATE_LIMITED
             trigger_rate_limiter = cause.extra_data.get("scope", "")
         elif isinstance(cause, ClickhouseError):
             error_code = cause.code
             status = get_query_status_from_error_codes(error_code)
-            # Only treat as rate limiting if the limit was set by allocation policy
-            if error_code == ErrorCodes.TOO_MANY_BYTES and stats.get(
-                "max_bytes_to_read_set_by_policy", False
-            ):
-                calculated_cause = RateLimitExceeded(
-                    "Query scanned more than the allocated amount of bytes",
-                    quota_allowance=stats["quota_allowance"],
-                )
-                status = QueryStatus.RATE_LIMITED
 
             with configure_scope() as scope:
                 fingerprint = ["{{default}}", str(cause.code), dataset_name]
@@ -547,7 +535,7 @@ def _raw_query(
                 "sql": sql,
                 "experiments": clickhouse_query.get_experiments(),
             },
-        ) from calculated_cause
+        ) from cause
     else:
         stats = update_with_status(
             status=QueryStatus.SUCCESS,
@@ -796,11 +784,10 @@ class _QuotaAndPolicy:
 
 def _add_quota_info(
     summary: dict[str, Any],
-    action: str,
     quota_and_policy: _QuotaAndPolicy | None = None,
 ) -> None:
     quota_info: dict[str, Any] = {}
-    summary[action] = quota_info
+    summary[_REJECTED_BY] = quota_info
 
     if quota_and_policy is not None:
         quota_info["policy"] = quota_and_policy.policy.class_name()
@@ -809,39 +796,25 @@ def _add_quota_info(
         quota_info["quota_unit"] = quota_allowance.quota_unit
         quota_info["suggestion"] = quota_allowance.suggestion
         quota_info["storage_key"] = quota_and_policy.policy.resource_identifier.value
-
-        if action == _REJECTED_BY:
-            quota_info["rejection_threshold"] = quota_allowance.rejection_threshold
-        else:
-            quota_info["throttle_threshold"] = quota_allowance.throttle_threshold
+        quota_info["rejection_threshold"] = quota_allowance.rejection_threshold
 
 
 def _populate_query_status(
     summary: dict[str, Any],
     rejection_quota_and_policy: _QuotaAndPolicy | None,
-    throttle_quota_and_policy: _QuotaAndPolicy | None,
 ) -> None:
     is_successful = "is_successful"
     is_rejected = "is_rejected"
-    is_throttled = "is_throttled"
     summary[is_successful] = True
     summary[is_rejected] = False
-    summary[is_throttled] = False
 
     rejection_storage_key = "rejection_storage_key"
-    throttle_storage_key = "throttle_storage_key"
     summary[rejection_storage_key] = None
-    summary[throttle_storage_key] = None
 
     if rejection_quota_and_policy:
         summary[is_successful] = False
         summary[is_rejected] = True
         summary[rejection_storage_key] = rejection_quota_and_policy.policy.resource_identifier.value
-
-    if throttle_quota_and_policy:
-        summary[is_successful] = False
-        summary[is_throttled] = True
-        summary[throttle_storage_key] = throttle_quota_and_policy.policy.resource_identifier.value
 
 
 def _apply_allocation_policies_quota(
@@ -863,7 +836,6 @@ def _apply_allocation_policies_quota(
     quota_allowances: dict[str, Any] = {}
     can_run = True
     rejection_quota_and_policy = None
-    throttle_quota_and_policy = None
     min_threads_across_policies = MAX_THRESHOLD
     load_info = None
     if get_option("storage_routing.enable_get_cluster_loadinfo", False):
@@ -888,11 +860,6 @@ def _apply_allocation_policies_quota(
                     quota_allowances[allocation_policy.class_name()].to_dict(), default=repr
                 ),
             )
-            if allowance.is_throttled and allowance.max_threads < min_threads_across_policies:
-                throttle_quota_and_policy = _QuotaAndPolicy(
-                    quota_allowance=allowance,
-                    policy=allocation_policy,
-                )
             if decision.is_rejected:
                 can_run = False
                 min_threads_across_policies = 0
@@ -902,7 +869,7 @@ def _apply_allocation_policies_quota(
                 )
                 break
             min_threads_across_policies = min(
-                min_threads_across_policies, allowance.threads_for(decision, allocation_policy)
+                min_threads_across_policies, allocation_policy.max_threads
             )
 
         allowance_dicts = {
@@ -915,16 +882,8 @@ def _apply_allocation_policies_quota(
         summary: dict[str, Any] = {}
         summary["threads_used"] = min_threads_across_policies
 
-        max_bytes_to_read = get_max_bytes_to_read(list(quota_allowances.values()))
-        if max_bytes_to_read != 0:
-            query_settings.push_clickhouse_setting("max_bytes_to_read", max_bytes_to_read)
-            summary["max_bytes_to_read"] = max_bytes_to_read
-            # Track that max_bytes_to_read was set by allocation policy
-            stats["max_bytes_to_read_set_by_policy"] = True
-
-        _populate_query_status(summary, rejection_quota_and_policy, throttle_quota_and_policy)
-        _add_quota_info(summary, _REJECTED_BY, rejection_quota_and_policy)
-        _add_quota_info(summary, _THROTTLED_BY, throttle_quota_and_policy)
+        _populate_query_status(summary, rejection_quota_and_policy)
+        _add_quota_info(summary, rejection_quota_and_policy)
         stats["quota_allowance"]["summary"] = summary
 
         if not can_run:
@@ -944,22 +903,10 @@ def _apply_allocation_policies_quota(
             )
             raise AllocationPolicyViolations.from_args(stats["quota_allowance"])
 
-        if throttle_quota_and_policy is not None:
-            throttling_policy = throttle_quota_and_policy.policy.class_name()
-            span.set_attribute("policy", throttling_policy)
-            span.set_attribute("action", "throttled")
-            metrics.increment(
-                "throttled_query",
-                tags={
-                    "storage_key": allocation_policies[0].resource_identifier.value,
-                    "policy": throttling_policy,
-                },
-            )
-        else:
-            metrics.increment(
-                "successful_query",
-                tags={"storage_key": allocation_policies[0].resource_identifier.value},
-            )
+        metrics.increment(
+            "successful_query",
+            tags={"storage_key": allocation_policies[0].resource_identifier.value},
+        )
         max_threads = min_threads_across_policies
         span.set_attribute("max_threads", max_threads)
         query_settings.set_resource_quota(ResourceQuota(max_threads=max_threads))

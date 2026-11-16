@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, MutableSequence
+from collections.abc import MutableSequence
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -127,9 +127,7 @@ ERROR_CODE_MAPPINGS: dict[int, RequestStatus] = {
 }
 
 
-def get_request_status(
-    cause: Exception | None = None, context: Mapping[str, Any] | None = None
-) -> Status:
+def get_request_status(cause: Exception | None = None) -> Status:
     slo_status: RequestStatus
     if cause is None:
         slo_status = RequestStatus.SUCCESS
@@ -140,15 +138,7 @@ def get_request_status(
         else:
             slo_status = RequestStatus.RATE_LIMITED
     elif isinstance(cause, ClickhouseError):
-        # Check if TOO_MANY_BYTES was from allocation policy
-        if (
-            cause.code == ErrorCodes.TOO_MANY_BYTES
-            and context
-            and context.get("max_bytes_to_read_set_by_policy", False)
-        ):
-            slo_status = RequestStatus.RATE_LIMITED
-        else:
-            slo_status = ERROR_CODE_MAPPINGS.get(cause.code, RequestStatus.ERROR)
+        slo_status = ERROR_CODE_MAPPINGS.get(cause.code, RequestStatus.ERROR)
     elif isinstance(cause, TimeoutError):
         slo_status = RequestStatus.QUERY_TIMEOUT
     elif isinstance(cause, ExecutionTimeoutError):

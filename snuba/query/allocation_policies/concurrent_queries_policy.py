@@ -161,8 +161,6 @@ class ConcurrentQueriesPolicy(AllocationPolicy):
             can_run=can_run,
             max_threads=self._max_threads if can_run else 0,
             explanation={"reason": reason},
-            is_throttled=False,
-            throttle_threshold=self._limit,
             rejection_threshold=self._limit,
             quota_used=used,
             quota_unit=QUOTA_UNIT,

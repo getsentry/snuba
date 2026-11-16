@@ -35,35 +35,6 @@ from tests.fixtures import get_raw_event, get_raw_transaction
 from tests.helpers import override_entity_column_validator, write_unprocessed_events
 
 
-class MaxBytesPolicy123(AllocationPolicy):
-    def _additional_config_definitions(self) -> list[Configuration]:
-        return []
-
-    def _get_quota_allowance(
-        self, tenant_ids: dict[str, str | int], query_id: str
-    ) -> QuotaAllowance:
-        return QuotaAllowance(
-            can_run=True,
-            max_threads=0,
-            max_bytes_to_read=1,
-            explanation={},
-            is_throttled=True,
-            throttle_threshold=MAX_THRESHOLD,
-            rejection_threshold=MAX_THRESHOLD,
-            quota_used=0,
-            quota_unit=NO_UNITS,
-            suggestion=NO_SUGGESTION,
-        )
-
-    def _update_quota_balance(
-        self,
-        tenant_ids: dict[str, str | int],
-        query_id: str,
-        result_or_error: QueryResultOrError,
-    ) -> None:
-        return
-
-
 class RejectAllocationPolicy123(AllocationPolicy):
     def _additional_config_definitions(self) -> list[Configuration]:
         return []
@@ -75,8 +46,6 @@ class RejectAllocationPolicy123(AllocationPolicy):
             can_run=False,
             max_threads=0,
             explanation={"reason": "policy rejects all queries"},
-            is_throttled=False,
-            throttle_threshold=MAX_THRESHOLD,
             rejection_threshold=MAX_THRESHOLD,
             quota_used=0,
             quota_unit=NO_UNITS,
@@ -1284,76 +1253,6 @@ class TestSnQLApi(BaseApiTest):
             in data["sql"]
         )
 
-    def test_allocation_policy_max_bytes_to_read(self) -> None:
-        with patch(
-            "snuba.web.db_query._get_allocation_policies",
-            return_value=[MaxBytesPolicy123(ResourceIdentifier(StorageKey("doesntmatter")))],
-        ):
-            response = self.post(
-                "/discover/snql",
-                data=json.dumps(
-                    {
-                        "query": f"""MATCH (discover_events )
-                        SELECT count() AS count BY project_id, tags[custom_tag]
-                        WHERE type != 'transaction' AND project_id = {self.project_id}
-                        AND timestamp >= toDateTime('{self.base_time.isoformat()}')
-                        AND timestamp < toDateTime('{self.next_time.isoformat()}')
-                        ORDER BY count ASC
-                        LIMIT 1000""",
-                        "referrer": "myreferrer",
-                        "turbo": False,
-                        "consistent": True,
-                        "debug": True,
-                        "tenant_ids": {"referrer": "r", "organization_id": 123},
-                    }
-                ),
-            )
-            assert response.status_code == 429
-
-            assert (
-                response.json["error"]["message"]
-                == "Query scanned more than the allocated amount of bytes"
-            )
-
-            expected_quota_allowance = {
-                "details": {
-                    "MaxBytesPolicy123": {
-                        "can_run": True,
-                        "max_threads": 0,
-                        "max_bytes_to_read": 1,
-                        "explanation": {
-                            "storage_key": "doesntmatter",
-                        },
-                        "is_throttled": True,
-                        "throttle_threshold": MAX_THRESHOLD,
-                        "rejection_threshold": MAX_THRESHOLD,
-                        "quota_used": 0,
-                        "quota_unit": NO_UNITS,
-                        "suggestion": NO_SUGGESTION,
-                    }
-                },
-                "summary": {
-                    "threads_used": 0,
-                    "max_bytes_to_read": 1,
-                    "is_successful": False,
-                    "is_rejected": False,
-                    "is_throttled": True,
-                    "rejection_storage_key": None,
-                    "throttle_storage_key": "doesntmatter",
-                    "rejected_by": {},
-                    "throttled_by": {
-                        "policy": "MaxBytesPolicy123",
-                        "quota_used": 0,
-                        "quota_unit": NO_UNITS,
-                        "suggestion": NO_SUGGESTION,
-                        "storage_key": "doesntmatter",
-                        "throttle_threshold": MAX_THRESHOLD,
-                    },
-                },
-            }
-
-            assert response.json["quota_allowance"] == expected_quota_allowance
-
     def test_allocation_policy_violation(self) -> None:
         with patch(
             "snuba.web.db_query._get_allocation_policies",
@@ -1387,22 +1286,17 @@ class TestSnQLApi(BaseApiTest):
                             "reason": "policy rejects all queries",
                             "storage_key": "doesntmatter",
                         },
-                        "is_throttled": False,
-                        "throttle_threshold": 1000000000000,
                         "rejection_threshold": 1000000000000,
                         "quota_used": 0,
                         "quota_unit": "no_units",
                         "suggestion": "no_suggestion",
-                        "max_bytes_to_read": 0,
                     }
                 },
                 "summary": {
                     "threads_used": 0,
                     "is_successful": False,
                     "is_rejected": True,
-                    "is_throttled": False,
                     "rejection_storage_key": "doesntmatter",
-                    "throttle_storage_key": None,
                     "rejected_by": {
                         "policy": "RejectAllocationPolicy123",
                         "quota_used": 0,
@@ -1411,7 +1305,6 @@ class TestSnQLApi(BaseApiTest):
                         "storage_key": "doesntmatter",
                         "rejection_threshold": 1000000000000,
                     },
-                    "throttled_by": {},
                 },
             }
             assert (
