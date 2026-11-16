@@ -141,6 +141,9 @@ def test_resolver_attaches_from_match_block() -> None:
     assert policy.is_pardonable
 
 
-def test_unknown_key_is_ignored() -> None:
-    policy = ConcurrentQueriesPerOrgPolicy.from_kwargs(storage_key="EAP", is_enforced=0, limit=5)
-    assert policy._limit == 5
+def test_resolver_raises_on_unknown_key() -> None:
+    # Stray keys fail every query on the resource, so automator must drop v1 keys
+    # when it switches a policy to v2.
+    block = match_block([{"name": "ConcurrentQueriesPerOrgPolicy", "concurrent_limit": 5}])
+    with override_allocation_policy({"EAP": block}), pytest.raises(TypeError):
+        get_active_allocation_policies(ResourceIdentifier("EAP"))

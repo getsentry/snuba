@@ -40,14 +40,6 @@ def _validated_entry(
     return component._build_config_key(config_key, params), definition.value_type(value)
 
 
-def set_raw_component_overrides(bag: dict[str, Any]) -> None:
-    """Replace the whole override bag verbatim (no key building / validation).
-
-    For tests that need to inject exactly-shaped keys, e.g. malformed ones.
-    """
-    _write_bag(bag)
-
-
 def clear_component_config_overrides() -> None:
     """Drop all component-config overrides (used by the autouse conftest fixture)."""
     from sentry_options._core import _clear_override

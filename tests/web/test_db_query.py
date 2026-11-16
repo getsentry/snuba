@@ -13,7 +13,7 @@ from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clusters.load_info import LoadInfo
-from snuba.configs.configuration import Configuration, ResourceIdentifier
+from snuba.configs.configuration import ResourceIdentifier
 from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.storage import Storage
 from snuba.datasets.storages.factory import get_storage
@@ -25,6 +25,7 @@ from snuba.query.allocation_policies import (
     NO_UNITS,
     AllocationPolicy,
     AllocationPolicyViolations,
+    PassthroughPolicy,
     QueryResultOrError,
     QuotaAllowance,
 )
@@ -513,7 +514,7 @@ def test_db_query_success() -> None:
         {
             "errors_ro": match_block(
                 [
-                    {"name": "PassthroughPolicy", "is_enforced": 0},
+                    {"name": "PassthroughPolicy"},
                 ]
             )
         }
@@ -659,9 +660,6 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
     update_called = False
 
     class RejectAllocationPolicy(AllocationPolicy):
-        def _additional_config_definitions(self) -> list[Configuration]:
-            return []
-
         def _get_quota_allowance(
             self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:
@@ -768,9 +766,6 @@ def test_allocation_policy_threads_applied_to_query() -> None:
     POLICY_THREADS = 4
 
     class ThreadLimitPolicy(AllocationPolicy):
-        def _additional_config_definitions(self) -> list[Configuration]:
-            return []
-
         def _get_quota_allowance(
             self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:
@@ -841,9 +836,6 @@ def test_allocation_policy_updates_quota() -> None:
     queries_run = 0
 
     class CountQueryPolicy(AllocationPolicy):
-        def _additional_config_definitions(self) -> list[Configuration]:
-            return []
-
         def _get_quota_allowance(
             self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:
@@ -874,9 +866,6 @@ def test_allocation_policy_updates_quota() -> None:
     queries_run_duplicate = 0
 
     class CountQueryPolicyDuplicate(AllocationPolicy):
-        def _additional_config_definitions(self) -> list[Configuration]:
-            return []
-
         def _get_quota_allowance(
             self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:
@@ -1102,9 +1091,6 @@ def test_cache_metrics_with_simple_readthrough() -> None:
 
 
 class _RejectAllPolicy(AllocationPolicy):
-    def _additional_config_definitions(self) -> list[Configuration]:
-        return []
-
     def _get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
@@ -1131,9 +1117,6 @@ class _RecordCallPolicy(AllocationPolicy):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.called = False
-
-    def _additional_config_definitions(self) -> list[Configuration]:
-        return []
 
     def _get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
@@ -1180,6 +1163,7 @@ def test_idle_pardon_allows_rejected_query() -> None:
             allocation_policies=[
                 _RejectAllPolicy(
                     ResourceIdentifier(StorageKey("errors_ro")),
+                    enforce="pardon",
                     thresholds=reject_thresholds,
                 )
             ],
@@ -1218,6 +1202,7 @@ def test_idle_pardon_still_rejects_when_not_idle() -> None:
             allocation_policies=[
                 _RejectAllPolicy(
                     ResourceIdentifier(StorageKey("errors_ro")),
+                    enforce="pardon",
                     thresholds=reject_thresholds,
                 )
             ],
@@ -1248,6 +1233,7 @@ def test_idle_pardon_does_not_short_circuit_remaining_policies() -> None:
             allocation_policies=[
                 _RejectAllPolicy(
                     ResourceIdentifier(StorageKey("errors_ro")),
+                    enforce="pardon",
                     thresholds=reject_thresholds,
                 ),
                 second,
@@ -1258,3 +1244,25 @@ def test_idle_pardon_does_not_short_circuit_remaining_policies() -> None:
     assert stats["quota_allowance"]["summary"]["is_rejected"] is False
     assert stats["quota_allowance"]["details"]["_RejectAllPolicy"]["can_run"] is False
     assert "_RecordCallPolicy" in stats["quota_allowance"]["details"]
+
+
+def test_lowest_policy_max_threads_applied() -> None:
+    attribution_info = mock.Mock()
+    attribution_info.tenant_ids = {"referrer": "test_referrer", "organization_id": 1}
+    stats: MutableMapping[str, Any] = {}
+    query_settings = HTTPQuerySettings()
+    _apply_allocation_policies_quota(
+        query_settings=query_settings,
+        attribution_info=attribution_info,
+        formatted_query=mock.Mock(),
+        stats=stats,
+        allocation_policies=[
+            _RecordCallPolicy(ResourceIdentifier(StorageKey("errors_ro")), max_threads=4),
+            PassthroughPolicy(ResourceIdentifier(StorageKey("errors_ro")), max_threads=5),
+        ],
+        query_id="lowest_threads",
+    )
+    assert stats["quota_allowance"]["summary"]["threads_used"] == 4
+    quota = query_settings.get_resource_quota()
+    assert quota is not None
+    assert quota.max_threads == 4

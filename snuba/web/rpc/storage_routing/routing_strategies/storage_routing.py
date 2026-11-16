@@ -29,7 +29,6 @@ from snuba import environment, settings
 from snuba.clusters.load_info import LoadInfo, get_cluster_loadinfo
 from snuba.configs.configuration import (
     ConfigurableComponent,
-    ConfigurableComponentData,
     Configuration,
     ResourceIdentifier,
 )
@@ -38,7 +37,6 @@ from snuba.downsampled_storage_tiers import Tier
 from snuba.query.allocation_policies import (
     MAX_THRESHOLD,
     AllocationPolicy,
-    PolicyData,
     QueryResultOrError,
     QuotaAllowance,
 )
@@ -291,10 +289,6 @@ class RoutingStrategyConfig(Configuration):
     pass
 
 
-class StrategyData(ConfigurableComponentData):
-    policies_data: list[PolicyData]
-
-
 class BaseRoutingStrategy(ConfigurableComponent, ABC):
     def __init__(self, default_config_overrides: dict[str, Any] | None = None) -> None:
         if default_config_overrides is None:
@@ -386,9 +380,6 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         # All routing strategies share allocation policies: they protect the same
         # resource (EAP). The list is configured via allocation_policies.
         return get_active_allocation_policies(ResourceIdentifier("EAP"), tenant_ids)
-
-    def get_delete_allocation_policies(self) -> list[AllocationPolicy]:
-        return []
 
     def merge_clickhouse_settings(
         self,
@@ -743,11 +734,6 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                         "tier": routing_decision.tier.name,
                     },
                 )
-
-    def to_dict(self) -> StrategyData:
-        base_data = super().to_dict()
-        policies = self.get_allocation_policies() + self.get_delete_allocation_policies()
-        return StrategyData(**base_data, policies_data=[policy.to_dict() for policy in policies])
 
 
 import_submodules_in_directory(

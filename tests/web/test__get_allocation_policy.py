@@ -153,7 +153,12 @@ def test__get_allocation_policies(
     query: ClickhouseQuery | CompositeQuery[Table],
     expected_allocation_policies: list[AllocationPolicy],
 ) -> None:
-    assert _get_allocation_policies(query, _ATTRIBUTION_INFO) == expected_allocation_policies
+    def key(policies: list[AllocationPolicy]) -> list[tuple[type, ResourceIdentifier]]:
+        return [(type(p), p.resource_identifier) for p in policies]
+
+    assert key(_get_allocation_policies(query, _ATTRIBUTION_INFO)) == key(
+        expected_allocation_policies
+    )
 
 
 def test_get_allocation_policies_uses_tenant_ids() -> None:

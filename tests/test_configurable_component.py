@@ -9,8 +9,8 @@ from snuba.configs.configuration import (
     ResourceIdentifier,
 )
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.query.allocation_policies import AllocationPolicy
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+    BaseRoutingStrategy,
     RoutingStrategyConfig,
 )
 from tests.configs.component_config import (
@@ -341,11 +341,11 @@ class TestConfigurableComponentNamespaces:
 
     def test_subclass_all_names_filters_by_namespace(self) -> None:
         """Test that any subclass all_names() returns only classes in its namespace."""
-        for name in AllocationPolicy.all_names():
-            # ensures that the class name is valid within the AllocationPolicy namespace
-            AllocationPolicy.get_from_name(name)
+        for name in BaseRoutingStrategy.all_names():
+            # ensures that the class name is valid within the BaseRoutingStrategy namespace
+            BaseRoutingStrategy.get_from_name(name)
             # Should not include the base class itself
             assert (
                 name
-                != f"{AllocationPolicy.component_namespace()}.{AllocationPolicy.component_namespace()}"
+                != f"{BaseRoutingStrategy.component_namespace()}.{BaseRoutingStrategy.component_namespace()}"
             )

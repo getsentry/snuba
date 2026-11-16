@@ -11,7 +11,7 @@ import pytest
 import simplejson as json
 from sentry_options.testing import override_options
 
-from snuba.configs.configuration import Configuration, ResourceIdentifier
+from snuba.configs.configuration import ResourceIdentifier
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages.factory import get_writable_storage
@@ -36,9 +36,6 @@ from tests.helpers import override_entity_column_validator, write_unprocessed_ev
 
 
 class RejectAllocationPolicy123(AllocationPolicy):
-    def _additional_config_definitions(self) -> list[Configuration]:
-        return []
-
     def _get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
