@@ -329,7 +329,7 @@
         "type": "number"
       },
       "default": {},
-      "description": "Override values for ConfigurableComponent (allocation policy and storage-routing strategy) configs, keyed by the fully-qualified config key '{resource}.{ClassName}.{config}' (parameterized configs append '|{param}:{value}|...', params sorted). Values are numbers cast to each config's declared numeric type (int/float) on read. All current ConfigurableComponent configs are numeric; a non-numeric config would require widening this type. Authoritative source for these configs; a key absent here falls back to the code default. Read-only at runtime and managed in sentry-options-automator. Migrated from the per-component runtime config of the same key."
+      "description": "Override values for storage-routing strategy configs (ConfigurableComponent), keyed by the fully-qualified config key '{resource}.{ClassName}.{config}' (parameterized configs append '|{param}:{value}|...', params sorted). Values are numbers cast to each config's declared numeric type (int/float) on read. All current ConfigurableComponent configs are numeric; a non-numeric config would require widening this type. Authoritative source for these configs; a key absent here falls back to the code default. Read-only at runtime and managed in sentry-options-automator. Migrated from the per-component runtime config of the same key."
     },
     "allocation_policies": {
       "type": "object",
@@ -380,14 +380,6 @@
                   "name": {
                     "type": "string"
                   },
-                  "is_enforced": {
-                    "type": "integer",
-                    "optional": true
-                  },
-                  "concurrent_limit": {
-                    "type": "integer",
-                    "optional": true
-                  },
                   "enforce": {
                     "type": "string",
                     "optional": true
@@ -396,8 +388,16 @@
                     "type": "integer",
                     "optional": true
                   },
+                  "limit": {
+                    "type": "integer",
+                    "optional": true
+                  },
                   "time_window_minutes": {
                     "type": "integer",
+                    "optional": true
+                  },
+                  "timeout_penalty": {
+                    "type": "number",
                     "optional": true
                   }
                 },
@@ -428,7 +428,7 @@
         }
       },
       "default": {},
-      "description": "Which AllocationPolicy classes to construct for a ResourceIdentifier. Keyed by resource (storage key for SNQL, 'EAP' for routing strategies). Each resource is a list of match blocks ({match, policies, remove?, thresholds?}). match keys (organization_id, project_id, referrer) are lists; AND across keys, OR within a key; match: {} always matches. Matching blocks apply in file order: remove names, then add/replace policies by name. Each policy item requires name. A configured policy is active. Optional per-policy settings (is_enforced, concurrent_limit, max_threads) are applied as constructor default_config_overrides. Block-level thresholds (a reject map of load ceilings keyed by LoadInfo field) are copied onto every policy in the block and gate dynamic pardoning. An absent or empty result falls back to PassthroughPolicy. Managed in sentry-options-automator."
+      "description": "Which AllocationPolicy classes to construct for a ResourceIdentifier. Keyed by resource (storage key for SNQL, 'EAP' for routing strategies). Each resource is a list of match blocks ({match, policies, remove?, thresholds?}). match keys (organization_id, project_id, referrer) are lists; AND across keys, OR within a key; match: {} always matches. Matching blocks apply in file order: remove names, then add/replace policies by name. Each policy item requires name; its other keys are passed to the policy constructor: enforce (always | pardon | never, default always), max_threads, limit, and for BytesScanned* policies time_window_minutes and timeout_penalty. Block-level thresholds (a reject map of load ceilings keyed by LoadInfo field) are copied onto every policy in the block and gate dynamic pardoning. An absent or empty result falls back to PassthroughPolicy. Managed in sentry-options-automator."
     },
     "storage_routing_sampled_too_low_threshold": {
       "type": "object",

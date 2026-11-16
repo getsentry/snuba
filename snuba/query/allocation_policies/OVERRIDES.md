@@ -1,61 +1,69 @@
-# Setting allocation-policy config overrides
+# Configuring allocation policies
 
-Allocation-policy (and other `ConfigurableComponent`) config values are read from
-**sentry-options** and managed centrally in **sentry-options-automator**. When an
-override is absent the code default applies; the legacy Redis runtime config is no
-longer consulted for reads.
+Allocation policies are configured only through the `allocation_policies`
+sentry-option, managed in **sentry-options-automator**. `resolver.py` reads it on
+every query; the schema is in `sentry-options/schemas/snuba/schema.json`.
 
-The policies themselves are unchanged — only *where* a config value comes from has
-moved (Redis runtime config → sentry-options). Keys, parameters, and semantics are
-exactly as before.
+## Shape
 
-All configs live in a single option, a flat `{key: number}` map:
-
-| Option | Value shape |
-| --- | --- |
-| `configurable_component_overrides` | `{ "<key>": number }` |
-
-## The key
-
-```
-{resource}.{ClassName}.{config}
-{resource}.{ClassName}.{config}|{param}:{value}|...   # parameterized config
+```yaml
+allocation_policies:
+  <resource>:        # storage key for SnQL (e.g. errors), EAP for RPC routing
+    - match: {}      # a match block
+      remove: [...]  # optional
+      policies: [...]
+      thresholds: {} # optional
 ```
 
-- **resource** — the storage/strategy the component is attached to, e.g. `errors`, `eap_items`.
-- **ClassName** — the concrete class, e.g. `BytesScannedRejectingPolicy`,
-  `ConcurrentRateLimitAllocationPolicy`.
-- **config** — the config name, e.g. `is_enforced`, `max_threads`, `concurrent_limit`.
-- **params** — for a parameterized config, its declared params appended as a
-  sorted, `|`-delimited `param:value` suffix, e.g.
-  `|organization_id:123` or `|organization_id:123|referrer:api.foo`.
+Blocks whose `match` fits the query's tenant ids are applied in file order:
 
-The lookup is an **exact match** on this key (the same key the policy has always
-built); there is no fallback/precedence walk in the base — a policy reads exactly
-the key it asks for, or the code default. A config's parameters are whatever it
-declares in `param_types`.
+- `match` keys are `organization_id`, `project_id` and `referrer`, each a list.
+  All keys must match (AND), any value in a list matches (OR). `match: {}`
+  matches every query.
+- `remove` drops policies added by earlier blocks, by name.
+- `policies` adds a policy, or replaces an earlier one with the same name.
+- `thresholds.reject` holds load ceilings keyed by `LoadInfo` field. They are
+  copied onto every policy in the block and decide when `enforce: pardon` lets a
+  rejected query run.
+
+An unknown policy name is skipped with a warning. If no policy is left, the
+resource gets a `PassthroughPolicy`.
+
+## Policy items
+
+`name` picks the class. Every other key is passed to its constructor, so an
+unknown key raises a `TypeError` when the policy is built.
+
+| Key | Policies | Default | Meaning |
+| --- | --- | --- | --- |
+| `enforce` | all | `always` | `always` rejects; `pardon` rejects unless load is under `thresholds.reject`; `never` only records |
+| `max_threads` | all | 10 | Threads a query runs with when allowed |
+| `limit` | `BytesScannedPer*` | 1280000000000 | Bytes allowed per key in the window |
+| `time_window_minutes` | `BytesScannedPer*` | 10 | Sliding window length |
+| `timeout_penalty` | `BytesScannedPer*` | 0.025 | Share of `limit` counted for each timed-out query |
+| `limit` | `ConcurrentQueriesPer*` | 22 | Queries allowed to run at once per key |
+
+`Per*` is the counting key: `PerOrgPolicy` (organization), `PerRefPolicy`
+(referrer) or `PerOrgRefPolicy` (organization and referrer).
 
 ## Example
 
-```json
-{
-  "errors.BytesScannedRejectingPolicy.is_enforced": 1,
-  "errors.ConcurrentRateLimitAllocationPolicy.concurrent_limit": 22,
-  "errors.BytesScannedRejectingPolicy.organization_referrer_scan_limit|organization_id:456": 20000000000
-}
+```yaml
+allocation_policies:
+  errors:
+    - match: {}
+      policies:
+        - name: BytesScannedPerOrgRefPolicy
+          enforce: pardon
+        - name: ConcurrentQueriesPerOrgPolicy
+          limit: 22
+      thresholds:
+        reject:
+          cluster_load: 90
+    - match:
+        referrer: [subscriptions_executor]
+      remove: [BytesScannedPerOrgRefPolicy]
 ```
 
-## Notes
-
-- The value is cast to the config's declared `int`/`float` type on read.
-- Values must be numeric — all current `ConfigurableComponent` configs are.
-- Parameterized (optional) configs are keyed exactly as the policy builds them;
-  snuba-admin's Capacity Management view lists the live configs and their params.
-
-## Finding the exact names
-
-- **resource** — the `StorageKey`/resource value the component is registered on.
-- **ClassName** — the class name.
-- **config** — the `Configuration` entries in the component's
-  `_additional_config_definitions` (plus the base `is_active` / `is_enforced` /
-  `max_threads`), with their `param_types` giving the params.
+Storage-routing strategy configs are separate: they are still read from the
+`configurable_component_overrides` option, keyed `{resource}.{ClassName}.{config}`.
