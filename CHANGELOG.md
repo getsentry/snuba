@@ -1,5 +1,69 @@
 # Changelog
 
+## 26.11.0
+
+### New Features ✨
+
+#### Allocation Policies
+
+- Add max_bytes_to_read to BytesScannedRejectingPolicy by @dezzeddi in [#8669](https://github.com/getsentry/snuba/pull/8669)
+- Add scan_limit to BytesScannedRejectingPolicy by @dezzeddi in [#8667](https://github.com/getsentry/snuba/pull/8667)
+- Tag decision metrics with org_id and project_id by @dezzeddi with @sentry-junior in [#8629](https://github.com/getsentry/snuba/pull/8629)
+
+#### Eap
+
+- Track REGEXP filters separately in query telemetry by @pbhandari in [#8695](https://github.com/getsentry/snuba/pull/8695)
+- Downsample NORMAL/LOW_PRIORITY when cluster load exceeds reject thresholds by @pbhandari with @getsantry in [#8688](https://github.com/getsentry/snuba/pull/8688)
+- Support enrichment attributes trace items by @vgrozdanic in [#8663](https://github.com/getsentry/snuba/pull/8663)
+- Downsample LOW_PRIORITY one tier coarser via outcomes by @pbhandari in [#8664](https://github.com/getsentry/snuba/pull/8664)
+
+#### Other
+
+- (admin) Fold shared-node storages and skip host words in node search by @onewland and @claude in [#8680](https://github.com/getsentry/snuba/pull/8680)
+- (query) Add per-storage sentry-option for ClickhouseSettingsOverride settings by @MeredithAnya and @claude in [#8622](https://github.com/getsentry/snuba/pull/8622)
+- (tracing) Attach OTEL_RESOURCE_ATTRIBUTES to all spans by @BojanOro with @sentry-junior in [#8651](https://github.com/getsentry/snuba/pull/8651)
+
+### Bug Fixes 🐛
+
+- (allocation-policies) Stop BytesScannedRejectingPolicy throttling every query by @dezzeddi in [#8624](https://github.com/getsentry/snuba/pull/8624)
+- (attribute-values) Return values for sentry.trace_id by @k-fish, @pbhandari and @cursoragent in [#8628](https://github.com/getsentry/snuba/pull/8628)
+- (ci) Pass SOURCE_COMMIT to image builds so Sentry events get a release by @mrduncan with @sentry-junior in [#8696](https://github.com/getsentry/snuba/pull/8696)
+- (routing) Keep low_priority_tier as a floor after outcomes estimation by @pbhandari in [#8620](https://github.com/getsentry/snuba/pull/8620)
+
+### Internal Changes 🔧
+
+#### Allocation Policies
+
+- Share sliding-window code between the bytes policies by @dezzeddi in [#8670](https://github.com/getsentry/snuba/pull/8670)
+- Remove CrossOrgQueryAllocationPolicy by @dezzeddi in [#8654](https://github.com/getsentry/snuba/pull/8654)
+
+#### Deps
+
+- Bump github/codeql-action/analyze from 256d634097be96e792d6764f9edaefc4320557b1 to 0911ee96d2d6c8def97122c36c5cadd93829a4b4 by @dependabot in [#8683](https://github.com/getsentry/snuba/pull/8683)
+- Bump github/codeql-action/autobuild from 256d634097be96e792d6764f9edaefc4320557b1 to 0911ee96d2d6c8def97122c36c5cadd93829a4b4 by @dependabot in [#8682](https://github.com/getsentry/snuba/pull/8682)
+- Bump github/codeql-action/init from 256d634097be96e792d6764f9edaefc4320557b1 to 0911ee96d2d6c8def97122c36c5cadd93829a4b4 by @dependabot in [#8684](https://github.com/getsentry/snuba/pull/8684)
+- Bump virtualenv from 21.14.12 to 21.14.13 by @dependabot in [#8660](https://github.com/getsentry/snuba/pull/8660)
+- Bump msgpack from 1.2.1 to 1.2.3 by @dependabot in [#8659](https://github.com/getsentry/snuba/pull/8659)
+- Bump pyasn1 from 0.6.4 to 0.6.5 by @dependabot in [#8658](https://github.com/getsentry/snuba/pull/8658)
+- Bump sentry_usage_accountant from 0.1.2 to 0.2.0 by @lvthanh03 in [#8581](https://github.com/getsentry/snuba/pull/8581)
+- Bump brace-expansion from 1.1.18 to 1.1.21 in /snuba/admin by @dependabot in [#8650](https://github.com/getsentry/snuba/pull/8650)
+- Bump astral-sh/setup-uv from 10.3.2 to 10.3.3 by @dependabot in [#8647](https://github.com/getsentry/snuba/pull/8647)
+
+#### Other
+
+- (clickhouse) Use Altinity 25.8.33.10002 in CI and devservices by @geoffg-sentry with @sentry-junior in [#8627](https://github.com/getsentry/snuba/pull/8627)
+- (producer) Use arroyo KafkaProducer for commit log by @lvthanh03 in [#8585](https://github.com/getsentry/snuba/pull/8585)
+- (producers) Use arroyo KafkaProducer for lw deletions and querylog by @lvthanh03 in [#8584](https://github.com/getsentry/snuba/pull/8584)
+- (warden) Enable incremental review by @Jeffreyhung with @sentry-junior in [#8679](https://github.com/getsentry/snuba/pull/8679)
+- Run CI jobs on ubuntu-26.04-arm by @joshuarli with @sentry-junior in [#8652](https://github.com/getsentry/snuba/pull/8652)
+- Bump sentry-conventions to 0.33.0 by @getsentry-bot with @sentry-junior in [#8687](https://github.com/getsentry/snuba/pull/8687)
+- Bump sentry-conventions to 0.32.0 by @getsentry-bot and @cleptric in [#8685](https://github.com/getsentry/snuba/pull/8685)
+- Bump sentry-conventions to 0.31.0 by @getsentry-bot and @andreiborza in [#8676](https://github.com/getsentry/snuba/pull/8676)
+- Bump Python to 3.13.18 by @oioki in [#8673](https://github.com/getsentry/snuba/pull/8673)
+- Run redis-cluster on the mirrored Valkey image by @Starrao123 in [#8655](https://github.com/getsentry/snuba/pull/8655)
+- Use Craft's post-release bump and bump Craft to 3.9.0 by @BYK with @sentry-junior in [#8649](https://github.com/getsentry/snuba/pull/8649)
+- Bump upstream ClickHouse in the version matrix to 26.8.36.3 by @markatsentry in [#8646](https://github.com/getsentry/snuba/pull/8646)
+
 ## 26.10.1
 
 ### New Features ✨

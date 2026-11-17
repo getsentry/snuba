@@ -8,7 +8,7 @@ on:
 jobs:
   docs:
     name: Sphinx
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04-arm
     env:
       # `make` targets call `uv run`; use the venv prepared below instead of
       # re-syncing, which would build rust_snuba.

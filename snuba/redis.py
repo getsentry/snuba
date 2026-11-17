@@ -115,7 +115,6 @@ class RedisClientKey(Enum):
     SUBSCRIPTION_STORE = "subscription_store"
     REPLACEMENTS_STORE = "replacements_store"
     CONFIG = "config"
-    DLQ = "dlq"
     OPTIMIZE = "optimize"
     ADMIN_AUTH = "admin_auth"
     MANUAL_JOBS = "manual_jobs"
@@ -140,9 +139,6 @@ _redis_clients: Mapping[RedisClientKey, RedisClientType] = {
     ),
     RedisClientKey.CONFIG: _initialize_specialized_redis_cluster(
         settings.REDIS_CLUSTERS["config"], socket_timeout=1
-    ),
-    RedisClientKey.DLQ: _initialize_specialized_redis_cluster(
-        settings.REDIS_CLUSTERS["dlq"], socket_timeout=1
     ),
     RedisClientKey.OPTIMIZE: _initialize_specialized_redis_cluster(
         settings.REDIS_CLUSTERS["optimize"], socket_timeout=1
