@@ -360,12 +360,11 @@ def test_metrics_output() -> None:
                 "time_budget": 8000,
             },
             "allocation_policies_recommendations": {
-                "ConcurrentRateLimitAllocationPolicy": {
+                "ConcurrentQueriesPerOrgPolicy": {
                     "can_run": True,
                     "max_threads": 10,
                     "explanation": {
-                        "overrides": {},
-                        "reason": "within limit",
+                        "reason": "within_limit",
                         "storage_key": "EAP",
                     },
                     "is_throttled": False,

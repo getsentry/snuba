@@ -65,7 +65,7 @@ allocation_policies:
   -
     name: PassthroughPolicy
   -
-    name: ConcurrentRateLimitAllocationPolicy
+    name: ConcurrentQueriesPerOrgPolicy
 
 deletion_settings:
   is_enabled: 0
@@ -109,7 +109,7 @@ delete_allocation_policies:
             assert storage.required_time_column == "timestamp"
             assert len(policies := storage.get_allocation_policies()) == 2
             assert {p.class_name() for p in policies} == {
-                "ConcurrentRateLimitAllocationPolicy",
+                "ConcurrentQueriesPerOrgPolicy",
                 "PassthroughPolicy",
             }
             passthru = next(p for p in policies if p.class_name() == "PassthroughPolicy")

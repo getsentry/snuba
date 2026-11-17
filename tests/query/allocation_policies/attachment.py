@@ -15,9 +15,9 @@ def match_block(policies: list[dict[str, Any]]) -> list[dict[str, Any]]:
 CURRENT_EAP_ATTACHMENT: list[dict[str, Any]] = match_block(
     [
         {
-            "name": "ConcurrentRateLimitAllocationPolicy",
-            "concurrent_limit": 66,
-            "is_enforced": 0,
+            "name": "ConcurrentQueriesPerOrgPolicy",
+            "limit": 66,
+            "enforce": "never",
         },
     ]
 )

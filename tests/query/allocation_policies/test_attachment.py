@@ -15,9 +15,9 @@ from tests.query.allocation_policies.attachment import (
 
 _POLICY_SPECS: list[dict[str, object]] = [
     {"name": "BytesScannedRejectingPolicy", "is_enforced": 0},
-    {"name": "ConcurrentRateLimitAllocationPolicy", "is_enforced": 0},
+    {"name": "ConcurrentQueriesPerOrgPolicy", "enforce": "never"},
     {"name": "PassthroughPolicy", "is_enforced": 0},
-    {"name": "ReferrerGuardRailPolicy", "is_enforced": 0},
+    {"name": "ConcurrentQueriesPerRefPolicy", "enforce": "never"},
 ]
 
 
@@ -40,10 +40,10 @@ def test_eap_attachment_constructs_named_policies() -> None:
         policies = get_active_allocation_policies(ResourceIdentifier("EAP"))
 
     assert [p.class_name() for p in policies] == [
-        "ConcurrentRateLimitAllocationPolicy",
+        "ConcurrentQueriesPerOrgPolicy",
     ]
     assert policies[0]._resource_identifier.value == "EAP"
-    assert policies[0].get_config_value("concurrent_limit") == 66
+    assert policies[0]._limit == 66
     assert policies[0].is_enforced is False
 
 
@@ -53,13 +53,13 @@ def test_unknown_policy_is_skipped() -> None:
             "EAP": match_block(
                 [
                     {"name": "DoesNotExist"},
-                    {"name": "ReferrerGuardRailPolicy"},
+                    {"name": "ConcurrentQueriesPerRefPolicy"},
                 ]
             )
         }
     ):
         policies = get_active_allocation_policies(ResourceIdentifier("EAP"))
-    assert [p.class_name() for p in policies] == ["ReferrerGuardRailPolicy"]
+    assert [p.class_name() for p in policies] == ["ConcurrentQueriesPerRefPolicy"]
 
 
 @pytest.mark.parametrize(
@@ -93,15 +93,15 @@ def test_matching_org_block_adds_policy() -> None:
                     "match": {},
                     "policies": [
                         {
-                            "name": "ConcurrentRateLimitAllocationPolicy",
-                            "is_enforced": 0,
+                            "name": "ConcurrentQueriesPerOrgPolicy",
+                            "enforce": "never",
                         }
                     ],
                 },
                 {
                     "match": {"organization_id": [1]},
                     "policies": [
-                        {"name": "ReferrerGuardRailPolicy", "is_enforced": 0},
+                        {"name": "ConcurrentQueriesPerRefPolicy", "enforce": "never"},
                     ],
                 },
             ]
@@ -115,10 +115,10 @@ def test_matching_org_block_adds_policy() -> None:
         )
 
     assert [p.class_name() for p in for_org_1] == [
-        "ConcurrentRateLimitAllocationPolicy",
-        "ReferrerGuardRailPolicy",
+        "ConcurrentQueriesPerOrgPolicy",
+        "ConcurrentQueriesPerRefPolicy",
     ]
-    assert [p.class_name() for p in for_org_2] == ["ConcurrentRateLimitAllocationPolicy"]
+    assert [p.class_name() for p in for_org_2] == ["ConcurrentQueriesPerOrgPolicy"]
 
 
 def test_later_matching_block_replaces_policy_by_name() -> None:
@@ -129,9 +129,9 @@ def test_later_matching_block_replaces_policy_by_name() -> None:
                     "match": {},
                     "policies": [
                         {
-                            "name": "ConcurrentRateLimitAllocationPolicy",
-                            "concurrent_limit": 66,
-                            "is_enforced": 0,
+                            "name": "ConcurrentQueriesPerOrgPolicy",
+                            "limit": 66,
+                            "enforce": "never",
                         }
                     ],
                 },
@@ -139,9 +139,9 @@ def test_later_matching_block_replaces_policy_by_name() -> None:
                     "match": {"organization_id": [1]},
                     "policies": [
                         {
-                            "name": "ConcurrentRateLimitAllocationPolicy",
-                            "concurrent_limit": 10,
-                            "is_enforced": 1,
+                            "name": "ConcurrentQueriesPerOrgPolicy",
+                            "limit": 10,
+                            "enforce": "always",
                         }
                     ],
                 },
@@ -155,11 +155,11 @@ def test_later_matching_block_replaces_policy_by_name() -> None:
             ResourceIdentifier("EAP"), {"organization_id": 2}
         )
 
-    assert [p.class_name() for p in for_org_1] == ["ConcurrentRateLimitAllocationPolicy"]
-    assert for_org_1[0].get_config_value("concurrent_limit") == 10
+    assert [p.class_name() for p in for_org_1] == ["ConcurrentQueriesPerOrgPolicy"]
+    assert for_org_1[0]._limit == 10
     assert for_org_1[0].is_enforced is True
-    assert [p.class_name() for p in for_org_2] == ["ConcurrentRateLimitAllocationPolicy"]
-    assert for_org_2[0].get_config_value("concurrent_limit") == 66
+    assert [p.class_name() for p in for_org_2] == ["ConcurrentQueriesPerOrgPolicy"]
+    assert for_org_2[0]._limit == 66
     assert for_org_2[0].is_enforced is False
 
 
@@ -171,15 +171,15 @@ def test_matching_block_can_remove_a_policy() -> None:
                     "match": {},
                     "policies": [
                         {
-                            "name": "ConcurrentRateLimitAllocationPolicy",
-                            "is_enforced": 0,
+                            "name": "ConcurrentQueriesPerOrgPolicy",
+                            "enforce": "never",
                         },
-                        {"name": "ReferrerGuardRailPolicy", "is_enforced": 0},
+                        {"name": "ConcurrentQueriesPerRefPolicy", "enforce": "never"},
                     ],
                 },
                 {
                     "match": {"organization_id": [1]},
-                    "remove": ["ReferrerGuardRailPolicy"],
+                    "remove": ["ConcurrentQueriesPerRefPolicy"],
                 },
             ]
         }
@@ -191,10 +191,10 @@ def test_matching_block_can_remove_a_policy() -> None:
             ResourceIdentifier("EAP"), {"organization_id": 2}
         )
 
-    assert [p.class_name() for p in for_org_1] == ["ConcurrentRateLimitAllocationPolicy"]
+    assert [p.class_name() for p in for_org_1] == ["ConcurrentQueriesPerOrgPolicy"]
     assert [p.class_name() for p in for_org_2] == [
-        "ConcurrentRateLimitAllocationPolicy",
-        "ReferrerGuardRailPolicy",
+        "ConcurrentQueriesPerOrgPolicy",
+        "ConcurrentQueriesPerRefPolicy",
     ]
 
 
@@ -206,15 +206,15 @@ def test_match_list_is_or_within_key() -> None:
                     "match": {},
                     "policies": [
                         {
-                            "name": "ConcurrentRateLimitAllocationPolicy",
-                            "is_enforced": 0,
+                            "name": "ConcurrentQueriesPerOrgPolicy",
+                            "enforce": "never",
                         }
                     ],
                 },
                 {
                     "match": {"organization_id": [1, 2]},
                     "policies": [
-                        {"name": "ReferrerGuardRailPolicy", "is_enforced": 0},
+                        {"name": "ConcurrentQueriesPerRefPolicy", "enforce": "never"},
                     ],
                 },
             ]
@@ -231,14 +231,14 @@ def test_match_list_is_or_within_key() -> None:
         )
 
     assert [p.class_name() for p in for_org_1] == [
-        "ConcurrentRateLimitAllocationPolicy",
-        "ReferrerGuardRailPolicy",
+        "ConcurrentQueriesPerOrgPolicy",
+        "ConcurrentQueriesPerRefPolicy",
     ]
     assert [p.class_name() for p in for_org_2] == [
-        "ConcurrentRateLimitAllocationPolicy",
-        "ReferrerGuardRailPolicy",
+        "ConcurrentQueriesPerOrgPolicy",
+        "ConcurrentQueriesPerRefPolicy",
     ]
-    assert [p.class_name() for p in for_org_3] == ["ConcurrentRateLimitAllocationPolicy"]
+    assert [p.class_name() for p in for_org_3] == ["ConcurrentQueriesPerOrgPolicy"]
 
 
 def test_match_requires_every_key() -> None:
@@ -249,8 +249,8 @@ def test_match_requires_every_key() -> None:
                     "match": {},
                     "policies": [
                         {
-                            "name": "ConcurrentRateLimitAllocationPolicy",
-                            "is_enforced": 0,
+                            "name": "ConcurrentQueriesPerOrgPolicy",
+                            "enforce": "never",
                         }
                     ],
                 },
@@ -260,7 +260,7 @@ def test_match_requires_every_key() -> None:
                         "referrer": ["api.search"],
                     },
                     "policies": [
-                        {"name": "ReferrerGuardRailPolicy", "is_enforced": 0},
+                        {"name": "ConcurrentQueriesPerRefPolicy", "enforce": "never"},
                     ],
                 },
             ]
@@ -276,10 +276,10 @@ def test_match_requires_every_key() -> None:
             {"organization_id": 1, "referrer": "api.other"},
         )
 
-    names = ["ConcurrentRateLimitAllocationPolicy", "ReferrerGuardRailPolicy"]
+    names = ["ConcurrentQueriesPerOrgPolicy", "ConcurrentQueriesPerRefPolicy"]
     assert [p.class_name() for p in both] == names
-    assert [p.class_name() for p in org_only] == ["ConcurrentRateLimitAllocationPolicy"]
-    assert [p.class_name() for p in other_referrer] == ["ConcurrentRateLimitAllocationPolicy"]
+    assert [p.class_name() for p in org_only] == ["ConcurrentQueriesPerOrgPolicy"]
+    assert [p.class_name() for p in other_referrer] == ["ConcurrentQueriesPerOrgPolicy"]
 
 
 def test_eap_routing_strategy_uses_tenant_ids() -> None:
@@ -290,15 +290,15 @@ def test_eap_routing_strategy_uses_tenant_ids() -> None:
                     "match": {},
                     "policies": [
                         {
-                            "name": "ConcurrentRateLimitAllocationPolicy",
-                            "is_enforced": 0,
+                            "name": "ConcurrentQueriesPerOrgPolicy",
+                            "enforce": "never",
                         }
                     ],
                 },
                 {
                     "match": {"organization_id": [1]},
                     "policies": [
-                        {"name": "ReferrerGuardRailPolicy", "is_enforced": 0},
+                        {"name": "ConcurrentQueriesPerRefPolicy", "enforce": "never"},
                     ],
                 },
             ]
@@ -309,10 +309,10 @@ def test_eap_routing_strategy_uses_tenant_ids() -> None:
         for_org_2 = strategy.get_allocation_policies({"organization_id": 2})
 
     assert [p.class_name() for p in for_org_1] == [
-        "ConcurrentRateLimitAllocationPolicy",
-        "ReferrerGuardRailPolicy",
+        "ConcurrentQueriesPerOrgPolicy",
+        "ConcurrentQueriesPerRefPolicy",
     ]
-    assert [p.class_name() for p in for_org_2] == ["ConcurrentRateLimitAllocationPolicy"]
+    assert [p.class_name() for p in for_org_2] == ["ConcurrentQueriesPerOrgPolicy"]
 
 
 def _names(tenant_ids: dict[str, str | int], blocks: list[dict[str, object]]) -> list[str]:

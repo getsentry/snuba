@@ -424,7 +424,7 @@ def test_outcomes_based_routing_normal_mode(store_outcomes_fixture: Any) -> None
 def test_routing_query_is_exempt_from_allocation_policies() -> None:
     # The outcomes estimation query that decides the tier must never be rejected by the
     # outcomes storage's allocation policies (SNUBA-A3V). It is marked as a cross-org
-    # / system query so the per-tenant policies (e.g. ConcurrentRateLimitAllocationPolicy)
+    # / system query so the per-tenant policies (e.g. ConcurrentQueriesPerOrgPolicy)
     # let it pass through instead of rejecting it under load.
     strategy = OutcomesBasedRoutingStrategy()
     request = TraceItemTableRequest(meta=_get_request_meta())
