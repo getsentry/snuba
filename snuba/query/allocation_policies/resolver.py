@@ -7,13 +7,10 @@ from snuba.query.allocation_policies import (
     ALLOCATION_POLICY_KEY,
     AllocationPolicy,
     PassthroughPolicy,
+    tenants_match,
 )
 from snuba.state.sentry_options import get_mapped_option
 from snuba.utils.registered_class import InvalidConfigKeyError
-
-
-def _block_matches(match: Mapping[str, Any], tenant_ids: Mapping[str, str | int]) -> bool:
-    return all(key in tenant_ids and tenant_ids[key] in expected for key, expected in match.items())
 
 
 def _apply_block(
@@ -71,7 +68,7 @@ def _resolve_policy_specs(
             continue
 
         match = block.get("match", {})
-        if not isinstance(match, dict) or not _block_matches(match, tenant_ids):
+        if not isinstance(match, dict) or not tenants_match(match, tenant_ids):
             continue
         _apply_block(block, specs_by_name, resource)
     return specs_by_name

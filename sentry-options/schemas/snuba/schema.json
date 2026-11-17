@@ -399,6 +399,33 @@
                   "time_window_minutes": {
                     "type": "integer",
                     "optional": true
+                  },
+                  "passthrough": {
+                    "type": "object",
+                    "optional": true,
+                    "properties": {
+                      "organization_id": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "optional": true
+                      },
+                      "project_id": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "optional": true
+                      },
+                      "referrer": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "optional": true
+                      }
+                    }
                   }
                 },
                 "additionalProperties": {
@@ -424,7 +451,7 @@
         }
       },
       "default": {},
-      "description": "Which AllocationPolicy classes to construct for a ResourceIdentifier. Keyed by resource (storage key for SNQL, 'EAP' for routing strategies). Each resource is a list of match blocks ({match, policies, remove?, thresholds?}). match keys (organization_id, project_id, referrer) are lists; AND across keys, OR within a key; match: {} always matches. Matching blocks apply in file order: remove names, then add/replace policies by name. Each policy item requires name. A configured policy is active. Optional per-policy settings (is_enforced, concurrent_limit, max_threads) are applied as constructor default_config_overrides. Block-level thresholds (a reject map of load ceilings keyed by LoadInfo field) are copied onto every policy in the block and gate dynamic pardoning. An absent or empty result falls back to PassthroughPolicy. Managed in sentry-options-automator."
+      "description": "Which AllocationPolicy classes to construct for a ResourceIdentifier. Keyed by resource (storage key for SNQL, 'EAP' for routing strategies). Each resource is a list of match blocks ({match, policies, remove?, thresholds?}). match keys (organization_id, project_id, referrer) are lists; AND across keys, OR within a key; match: {} always matches. Matching blocks apply in file order: remove names, then add/replace policies by name. Each policy item requires name. A configured policy is active. Optional per-policy settings (is_enforced, concurrent_limit, max_threads) are applied as constructor default_config_overrides. Block-level thresholds (a reject map of load ceilings keyed by LoadInfo field) are copied onto every policy in the block and gate dynamic pardoning. An optional per-policy passthrough map (same shape as match) lets matching queries run without being counted or limited by that policy. An absent or empty result falls back to PassthroughPolicy. Managed in sentry-options-automator."
     },
     "storage_routing_sampled_too_low_threshold": {
       "type": "object",
