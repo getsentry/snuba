@@ -119,10 +119,13 @@ def test_scheduler_consumer(tmpdir: Path) -> None:
         health_check_file=str(tmpdir / "health.txt"),
     )
     scheduler = builder.build_consumer()
-    time.sleep(2)
-    scheduler._run_once()
-    scheduler._run_once()
-    scheduler._run_once()
+    # Commits are produced next and the consumer starts at "latest", so wait for the
+    # assignment (the health check file is first written once the strategy exists).
+    # A fixed sleep is too short when this is the shard's first consumer group join.
+    deadline = time.time() + 30
+    while not (tmpdir / "health.txt").exists():
+        assert time.time() < deadline, "scheduler was never assigned a partition"
+        scheduler._run_once()
 
     epoch = 1000
 
