@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import _strptime  # NOQA fixes _strptime deferred import issue
+import atexit
 import inspect
+import threading
 from collections.abc import Callable, Mapping
 from functools import wraps
 from typing import Any, TypeVar, cast
@@ -12,6 +14,9 @@ from snuba import settings
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.types import Tags
 from snuba.utils.sentry import SENTRY_OP
+
+# Matches the Rust consumers' metrics-exporter-dogstatsd default flush interval.
+AGGREGATION_FLUSH_INTERVAL_SECONDS = 3.0
 
 
 def create_metrics(
@@ -24,6 +29,8 @@ def create_metrics(
     Metrics are sent to the local DogStatsD agent over the socket configured by
     ``settings.DOGSTATSD_SOCKET_PATH``, which is the only supported transport and is passed
     to the datadog client verbatim. Return a DummyMetricsBackend when it is not configured.
+    The ``dogstatsd_client_aggregation`` sentry-option switches from one unbuffered client
+    per thread to one buffered, aggregating client shared by the whole process.
     Prefixes must start with `snuba.<category>`, for example: `snuba.processor`.
     """
     if settings.TESTING:
@@ -46,7 +53,14 @@ def create_metrics(
 
     constant_tags = [f"{key}:{value}" for key, value in tags.items()] if tags is not None else None
 
-    def make_client() -> DogStatsd:
+    # With dogstatsd_client_aggregation on, every thread gets the same client, so counts
+    # and gauges aggregate across threads into one flush (like the Rust consumers' single
+    # global recorder) instead of each thread writing every call to the agent socket.
+    shared_client: DogStatsd | None = None
+    resolved = False
+    resolve_lock = threading.Lock()
+
+    def new_client(**aggregation: Any) -> DogStatsd:
         # socket_path is passed to the datadog client verbatim. It is expected to be a
         # full address including the transport scheme (e.g.
         # "unixgram:///run/dogstatsd.sock"); the datadog client strips the scheme and
@@ -58,7 +72,39 @@ def create_metrics(
             namespace=prefix,
             constant_tags=constant_tags,
             disable_telemetry=False,
+            **aggregation,
         )
+
+    def make_client() -> DogStatsd:
+        nonlocal shared_client, resolved
+        if not resolved:
+            # The options are read lazily here -- on the first metric emission -- not at
+            # create_metrics() time. create_metrics() runs while snuba.environment is being
+            # imported, and importing snuba.state.sentry_options pulls in the snuba.state
+            # package, whose __init__ binds MetricsWrapper(environment.metrics, ...) at
+            # import time, so importing it any earlier would be a circular import. If
+            # sentry-options isn't initialized yet, get_option returns the defaults.
+            from snuba.state.sentry_options import get_option
+
+            with resolve_lock:
+                if not resolved:
+                    if get_option("dogstatsd_client_aggregation", False):
+                        shared_client = new_client(
+                            disable_buffering=False,
+                            disable_aggregation=False,
+                            flush_interval=AGGREGATION_FLUSH_INTERVAL_SECONDS,
+                            max_metric_samples_per_context=get_option(
+                                "dogstatsd_max_samples_per_context", 0
+                            ),
+                        )
+                        # The client flushes from a daemon thread, so flush the last
+                        # window on exit instead of dropping it.
+                        atexit.register(shared_client.stop)
+                    resolved = True
+
+        if shared_client is not None:
+            return shared_client
+        return new_client()
 
     return SentryDatadogMetricsBackend(
         DatadogMetricsBackend(make_client, sample_rates),
