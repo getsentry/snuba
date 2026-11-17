@@ -91,16 +91,6 @@ class ConcurrentQueriesPolicy(AllocationPolicy):
     def max_threads(self) -> int:
         return self._max_threads
 
-    def _params(self, key: str) -> RateLimitParameters:
-        return RateLimitParameters(
-            self.component_name(), bucket=key, per_second_limit=None, concurrent_limit=self._limit
-        )
-
-    @property
-    def _prefix(self) -> str:
-        # component_name() is unique per storage and class.
-        return f"{self.component_name()}:"
-
     # Abstract hook of the old AllocationPolicy base. Refactor once the old dynamic
     # policy config is removed.
     def _get_quota_allowance(
@@ -119,7 +109,16 @@ class ConcurrentQueriesPolicy(AllocationPolicy):
         # Registers the query as running. The count includes it, and is -1 (runs)
         # when Redis fails.
         running = rate_limit_start_request(
-            self._params(key), query_id, RATE_HISTORY_S, SHARD_FACTOR, self._prefix
+            RateLimitParameters(
+                self.component_name(),
+                bucket=key,
+                per_second_limit=None,
+                concurrent_limit=self._limit,
+            ),
+            query_id,
+            RATE_HISTORY_S,
+            SHARD_FACTOR,
+            f"{self.component_name()}:",
         ).concurrent
         can_run = running <= self._limit
         return self._allowance(
@@ -147,11 +146,16 @@ class ConcurrentQueriesPolicy(AllocationPolicy):
             result_or_error.error.__cause__, AllocationPolicyViolations
         )
         rate_limit_finish_request(
-            self._params(self._key(tenant_ids)),
+            RateLimitParameters(
+                self.component_name(),
+                bucket=self._key(tenant_ids),
+                per_second_limit=None,
+                concurrent_limit=self._limit,
+            ),
             query_id,
             SHARD_FACTOR,
             was_rejected,
-            self._prefix,
+            f"{self.component_name()}:",
         )
 
     def _allowance(
