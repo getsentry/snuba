@@ -150,7 +150,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
 
         >>>     def resource_identifier(self) -> ResourceIdentifier:
         >>>         # describes what is the underlying resource of this ConfigurableComponent
-        >>>         # example: BytesScannedRejectingPolicy (ConfigurableComponent) is a policy that is applied to a storage (underlying resource)
+        >>>         # example: ReferrerGuardRailPolicy (ConfigurableComponent) is a policy that is applied to a storage (underlying resource)
         >>>         return ResourceIdentifier(storage_key=StorageKey("my_storage"))
 
     """
