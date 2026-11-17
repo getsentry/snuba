@@ -98,7 +98,7 @@ class ConcurrentQueriesPolicy(AllocationPolicy):
     ) -> QuotaAllowance:
         if self.is_cross_org_query(tenant_ids):
             # Cross-org queries have no single org to count against.
-            return self._allowance(cross_org=True)
+            return self._allowance(can_run=True, cross_org=True, used=0)
 
         key = self._key(tenant_ids)
         # Registers the query as running. The count includes it, and is -1 (runs)
@@ -115,7 +115,9 @@ class ConcurrentQueriesPolicy(AllocationPolicy):
             SHARD_FACTOR,
             f"{self.component_name()}:",
         ).concurrent
-        return self._allowance(used=running, key=key)
+        return self._allowance(
+            can_run=running <= self._limit, cross_org=False, used=running, key=key
+        )
 
     # Abstract hook of the old AllocationPolicy base. Refactor once the old dynamic
     # policy config is removed.
@@ -146,9 +148,8 @@ class ConcurrentQueriesPolicy(AllocationPolicy):
         )
 
     def _allowance(
-        self, *, cross_org: bool = False, used: int = 0, key: str = ""
+        self, *, can_run: bool, cross_org: bool, used: int, key: str = ""
     ) -> QuotaAllowance:
-        can_run = cross_org or used <= self._limit
         if cross_org:
             reason, suggestion = "cross_org_query", CROSS_ORG_SUGGESTION
         elif can_run:
