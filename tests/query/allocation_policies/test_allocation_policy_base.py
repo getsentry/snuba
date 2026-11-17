@@ -22,9 +22,6 @@ from snuba.query.allocation_policies import (
 from snuba.query.allocation_policies.bytes_scanned_rejecting_policy import (
     BytesScannedRejectingPolicy,
 )
-from snuba.query.allocation_policies.bytes_scanned_window_policy import (
-    BytesScannedWindowAllocationPolicy,
-)
 from snuba.query.allocation_policies.concurrent_rate_limit import (
     ConcurrentRateLimitAllocationPolicy,
 )
@@ -522,7 +519,6 @@ class TestComponentNameBackwardsCompatibility:
             ReferrerGuardRailPolicy,
             ConcurrentRateLimitAllocationPolicy,
             BytesScannedRejectingPolicy,
-            BytesScannedWindowAllocationPolicy,
         ]
 
     @pytest.mark.parametrize(

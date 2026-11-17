@@ -21,7 +21,6 @@ from arroyo.processing.strategies.run_task_with_multiprocessing import (
 from arroyo.types import BaseValue, Commit, FilteredPayload, Message, Partition
 
 from snuba.consumers.consumer import BytesInsertBatch, ProcessedMessageBatchWriter
-from snuba.consumers.dlq import ExitAfterNMessages
 from snuba.processor import ReplacementBatch
 
 ProcessedMessage = None | BytesInsertBatch | ReplacementBatch
@@ -54,9 +53,6 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
 
     The `collector` function should return a strategy to be executed on
     batches of messages. Could be used to write messages to disk in batches.
-
-    `max_messages_to_process` is passed only by the DLQ consumer. It is used
-    to stop the consumer after a fixed number of messages are processed.
     """
 
     def __init__(
@@ -72,16 +68,12 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         max_insert_batch_size: int | None,
         max_insert_batch_time: float | None,
         metrics_tags: MutableMapping[str, str],
-        # Passed in the case of DLQ consumer which exits after a certain number of messages
-        # is processed
-        max_messages_to_process: int | None = None,
         initialize_parallel_transform: Callable[[], None] | None = None,
         health_check_file: str | None = None,
     ) -> None:
         self.__prefilter = prefilter
         self.__process_message = process_message
         self.__collector = collector
-        self.__max_messages_to_process = max_messages_to_process
 
         self.__max_batch_size = max_batch_size
         self.__max_batch_time = max_batch_time
@@ -167,9 +159,6 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
 
         if self.__prefilter is not None:
             strategy = FilterStep(self.__should_accept, strategy, commit_policy=ONCE_PER_SECOND)
-
-        if self.__max_messages_to_process is not None:
-            strategy = ExitAfterNMessages(strategy, self.__max_messages_to_process, 10.0)
 
         if self.__health_check_file is not None:
             strategy = Healthcheck(self.__health_check_file, strategy)

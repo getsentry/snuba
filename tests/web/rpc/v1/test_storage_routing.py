@@ -413,6 +413,7 @@ def test_metrics_output() -> None:
                 "has_or_filter": "false",
                 "has_not_filter": "false",
                 "has_like_filter": "false",
+                "has_regexp_filter": "false",
                 "has_search_filter": "false",
                 "trace_item_type": "span",
             },
