@@ -98,12 +98,7 @@ class ConcurrentQueriesPolicy(AllocationPolicy):
     ) -> QuotaAllowance:
         if self.is_cross_org_query(tenant_ids):
             # Cross-org queries have no single org to count against.
-            return self._allowance(
-                can_run=True,
-                used=0,
-                reason="cross_org_query",
-                suggestion=CROSS_ORG_SUGGESTION,
-            )
+            return self._allowance(cross_org=True)
 
         key = self._key(tenant_ids)
         # Registers the query as running. The count includes it, and is -1 (runs)
@@ -120,15 +115,7 @@ class ConcurrentQueriesPolicy(AllocationPolicy):
             SHARD_FACTOR,
             f"{self.component_name()}:",
         ).concurrent
-        can_run = running <= self._limit
-        return self._allowance(
-            can_run=can_run,
-            used=running,
-            reason="within_limit"
-            if can_run
-            else f"{key} has {running} of its {self._limit} concurrent queries running",
-            suggestion=NO_SUGGESTION if can_run else self.suggestion,
-        )
+        return self._allowance(used=running, key=key)
 
     # Abstract hook of the old AllocationPolicy base. Refactor once the old dynamic
     # policy config is removed.
@@ -159,8 +146,16 @@ class ConcurrentQueriesPolicy(AllocationPolicy):
         )
 
     def _allowance(
-        self, *, can_run: bool, used: int, reason: str, suggestion: str
+        self, *, cross_org: bool = False, used: int = 0, key: str = ""
     ) -> QuotaAllowance:
+        can_run = cross_org or used <= self._limit
+        if cross_org:
+            reason, suggestion = "cross_org_query", CROSS_ORG_SUGGESTION
+        elif can_run:
+            reason, suggestion = "within_limit", NO_SUGGESTION
+        else:
+            reason = f"{key} has {used} of its {self._limit} concurrent queries running"
+            suggestion = self.suggestion
         return QuotaAllowance(
             can_run=can_run,
             max_threads=self._max_threads if can_run else 0,
