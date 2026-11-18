@@ -19,6 +19,7 @@ function QueryHistoryEntry(props: {
   defaultExpanded: boolean;
   csv: string;
   resultDataPopulator: (queryResult: QueryResult) => JSX.Element;
+  onRerun?: () => void;
 }) {
   const { sql, storage, host } = parseInputQuery(props.queryResult.input_query);
   return (
