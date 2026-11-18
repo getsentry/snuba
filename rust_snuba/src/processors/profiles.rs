@@ -1,5 +1,4 @@
 use crate::config::ProcessorConfig;
-use crate::counter;
 use anyhow::Context;
 use chrono::DateTime;
 use schemars::JsonSchema;
@@ -7,7 +6,7 @@ use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::processors::utils::{enforce_standard_retention, DROPPED_UNSUPPORTED_RETENTION_METRIC};
+use crate::processors::utils::enforce_standard_retention;
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
@@ -24,11 +23,7 @@ pub fn process_message(
         partition: metadata.partition,
     };
 
-    let Some(retention_days) = enforce_standard_retention(row.profile.retention_days) else {
-        counter!(DROPPED_UNSUPPORTED_RETENTION_METRIC, 1, "processor" => "profiles");
-        return Ok(InsertBatch::skip());
-    };
-    row.profile.retention_days = Some(retention_days);
+    row.profile.retention_days = Some(enforce_standard_retention(row.profile.retention_days));
 
     let origin_timestamp = DateTime::from_timestamp(row.profile.received, 0);
 

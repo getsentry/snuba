@@ -4,7 +4,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from unittest.mock import ANY, patch
+from unittest.mock import ANY
 
 import pytest
 from sentry_options.testing import override_options
@@ -106,7 +106,7 @@ class TransactionEvent:
                 "message": "/organizations/:orgId/issues/",
                 "group_id": None,
                 "group_ids": self.group_ids,
-                "retention_days": 30,
+                "retention_days": 23,
                 "data": {
                     "event_id": self.event_id,
                     "environment": self.environment,
@@ -275,7 +275,7 @@ class TransactionEvent:
             "http_referer": self.http_referer,
             "offset": meta.offset,
             "partition": meta.partition,
-            "retention_days": 30,
+            "retention_days": 23,
             "measurements.key": ["lcp", "lcp.elementSize"],
             "measurements.value": [32.129, 4242.0],
             "span_op_breakdowns.key": ["ops.db", "ops.http", "total.time"],
@@ -366,20 +366,6 @@ class TestTransactionsProcessor:
         meta = KafkaMessageMetadata(offset=1, partition=2, timestamp=datetime(1970, 1, 1))
         processor = TransactionsMessageProcessor()
         assert processor.process_message(payload, meta) is None
-
-    def test_unsupported_retention_is_dropped(self) -> None:
-        message = self.__get_transaction_event()
-        payload = message.serialize()
-        # Not a supported value: not ingested, and never rounded.
-        payload[2]["retention_days"] = 89
-
-        meta = KafkaMessageMetadata(offset=1, partition=2, timestamp=datetime(1970, 1, 1))
-        processor = TransactionsMessageProcessor()
-        with patch(
-            "snuba.datasets.processors.transactions_processor.record_unsupported_retention"
-        ) as record:
-            assert processor.process_message(payload, meta) is None
-        record.assert_called_once_with("transactions")
 
     def test_missing_trace_context(self) -> None:
         message = self.__get_transaction_event()

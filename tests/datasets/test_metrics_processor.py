@@ -42,7 +42,8 @@ SET_MESSAGE_SHARED = {
     "timestamp": timestamp,
     "tags": {"10": 11, "20": 22, "30": 33},
     "value": [324234, 345345, 456456, 567567],
-    "retention_days": 30,
+    # test enforce retention days of 30
+    "retention_days": 22,
     "mapping_meta": MAPPING_META_COMMON,
     "sentry_received_timestamp": sentry_received_timestamp,
 }
@@ -56,7 +57,8 @@ COUNTER_MESSAGE_SHARED = {
     "timestamp": timestamp,
     "tags": {"10": 11, "20": 22, "30": 33},
     "value": 123.123,
-    "retention_days": 60,
+    # test enforce retention days of 30
+    "retention_days": 23,
     "mapping_meta": MAPPING_META_COMMON,
     "sentry_received_timestamp": sentry_received_timestamp,
 }
@@ -71,7 +73,8 @@ DIST_MESSAGE_SHARED = {
     "timestamp": timestamp,
     "tags": {"10": 11, "20": 22, "30": 33},
     "value": DIST_VALUES,
-    "retention_days": 90,
+    # test enforce retention days of 90
+    "retention_days": 50,
     "mapping_meta": MAPPING_META_COMMON,
     "sentry_received_timestamp": sentry_received_timestamp,
 }
@@ -96,7 +99,7 @@ TEST_CASES_POLYMORPHIC = [
                 "count_value": None,
                 "distribution_values": None,
                 "materialization_version": MATERIALIZATION_VERSION,
-                "retention_days": 30,
+                "retention_days": 22,
                 "timeseries_id": ANY,
                 "partition": 1,
                 "offset": 100,
@@ -119,7 +122,7 @@ TEST_CASES_POLYMORPHIC = [
                 "distribution_values": None,
                 "set_values": None,
                 "materialization_version": MATERIALIZATION_VERSION,
-                "retention_days": 60,
+                "retention_days": 23,
                 "timeseries_id": ANY,
                 "partition": 1,
                 "offset": 100,
@@ -142,15 +145,13 @@ TEST_CASES_POLYMORPHIC = [
                 "count_value": None,
                 "set_values": None,
                 "materialization_version": MATERIALIZATION_VERSION,
-                "retention_days": 90,
+                "retention_days": 50,
                 "timeseries_id": ANY,
                 "partition": 1,
                 "offset": 100,
             }
         ],
     ),
-    # unsupported retention values are not ingested
-    pytest.param({**SET_MESSAGE_SHARED, "retention_days": 22}, []),
 ]
 
 

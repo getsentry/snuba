@@ -14,7 +14,7 @@ use sentry_arroyo::utils::timing::Deadline;
 use sentry_protos::snuba::v1::{TraceItem, TraceItemType};
 
 use crate::processors::utils::{
-    enforce_retentions, get_drop_invalid_timestamps_enabled, out_of_valid_interval_secs,
+    enforce_eap_retentions, get_drop_invalid_timestamps_enabled, out_of_valid_interval_secs,
     DROPPED_UNSUPPORTED_RETENTION_METRIC,
 };
 use crate::types::{item_type_name, AggregatedOutcomesBatch, BucketKey, ItemDedupKey};
@@ -256,7 +256,7 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
         let item_type =
             TraceItemType::try_from(trace_item.item_type).unwrap_or(TraceItemType::Unspecified);
         // Match the eap-items consumer so we don't bill for items it drops.
-        let Some((retention_days, _)) = enforce_retentions(
+        let Some((retention_days, _)) = enforce_eap_retentions(
             Some(u16::try_from(trace_item.retention_days).unwrap_or(u16::MAX)),
             Some(u16::try_from(trace_item.downsampled_retention_days).unwrap_or(u16::MAX)),
         ) else {

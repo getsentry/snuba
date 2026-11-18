@@ -79,47 +79,53 @@ fn retention_option(kind: RetentionKind, field: &str, fallback: u16) -> u16 {
         .unwrap_or(fallback)
 }
 
-/// Retention values (standard and downsampled) that may be written. Tables are
-/// partitioned by `(retention_days, toMonday(timestamp))`, so every distinct
-/// value adds a full set of partitions. Any other value is rejected, never
-/// rounded.
-pub const SUPPORTED_RETENTION_DAYS: [u16; 7] = [7, 30, 60, 90, 180, 366, 396];
+fn clamp_retention(value: Option<u16>, kind: RetentionKind) -> u16 {
+    let Some(value) = value.filter(|&n| n > 0) else {
+        return retention_option(kind, "default", kind.default_default());
+    };
+    value.min(retention_option(kind, "max", kind.default_max()))
+}
 
-/// Counter for messages dropped for an unsupported retention value. Shared by
-/// every processor (Rust and Python); the `processor` tag says which one.
+/// Standard retention for non-EAP processors: missing/non-positive -> the
+/// configured default, otherwise cap at the configured max.
+pub fn enforce_standard_retention(value: Option<u16>) -> u16 {
+    clamp_retention(value, RetentionKind::Standard)
+}
+
+/// Retention values (standard and downsampled) that EAP items may be written
+/// with. eap_items is partitioned by `(retention_days, toMonday(timestamp))`,
+/// so every distinct value adds a full set of partitions. Any other value is
+/// rejected, never rounded.
+pub const SUPPORTED_EAP_RETENTION_DAYS: [u16; 7] = [7, 30, 60, 90, 180, 366, 396];
+
+/// Counter for EAP items dropped for an unsupported retention value. The
+/// `processor` tag says which consumer dropped it.
 pub const DROPPED_UNSUPPORTED_RETENTION_METRIC: &str = "dropped_unsupported_retention";
 
-/// Missing/non-positive -> `kind`'s configured default. A supported value up
-/// to `kind`'s configured max is kept as is. Any other value (unsupported or
-/// above max) returns `None`: the message must not be ingested.
-fn enforce_retention(value: Option<u16>, kind: RetentionKind) -> Option<u16> {
-    let Some(value) = value.filter(|&n| n > 0) else {
-        return Some(retention_option(kind, "default", kind.default_default()));
+/// Missing/non-positive -> `kind`'s configured default. The result (given or
+/// default) must be a supported value no greater than `kind`'s configured max,
+/// otherwise `None`: the item must not be ingested.
+fn enforce_eap_retention(value: Option<u16>, kind: RetentionKind) -> Option<u16> {
+    let value = match value.filter(|&n| n > 0) {
+        Some(value) => value,
+        None => retention_option(kind, "default", kind.default_default()),
     };
     let max = retention_option(kind, "max", kind.default_max());
-    (SUPPORTED_RETENTION_DAYS.contains(&value) && value <= max).then_some(value)
+    (SUPPORTED_EAP_RETENTION_DAYS.contains(&value) && value <= max).then_some(value)
 }
 
-/// Standard: missing/non-positive -> 30; unsupported or above max (396) -> `None`.
-pub fn enforce_standard_retention(value: Option<u16>) -> Option<u16> {
-    enforce_retention(value, RetentionKind::Standard)
-}
-
-/// Downsampled: missing/non-positive -> 396; unsupported or above max (396) -> `None`.
-pub fn enforce_downsampled_retention(value: Option<u16>) -> Option<u16> {
-    enforce_retention(value, RetentionKind::Downsampled)
-}
-
-/// Enforce both windows. `None` means either value is unsupported and the item
-/// must not be ingested. Downsampled is at least standard; unset downsampled
-/// copies the standard value.
-pub fn enforce_retentions(
+/// Enforce both windows for an EAP item. `None` means either value is
+/// unsupported and the item must not be ingested. Downsampled is at least
+/// standard; unset downsampled copies the standard value.
+pub fn enforce_eap_retentions(
     retention_days: Option<u16>,
     downsampled_retention_days: Option<u16>,
 ) -> Option<(u16, u16)> {
-    let retention_days = enforce_standard_retention(retention_days)?;
+    let retention_days = enforce_eap_retention(retention_days, RetentionKind::Standard)?;
     let downsampled_retention_days = match downsampled_retention_days.filter(|&n| n > 0) {
-        Some(value) => enforce_downsampled_retention(Some(value))?.max(retention_days),
+        Some(value) => {
+            enforce_eap_retention(Some(value), RetentionKind::Downsampled)?.max(retention_days)
+        }
         None => retention_days,
     };
     Some((retention_days, downsampled_retention_days))
@@ -229,20 +235,46 @@ mod tests {
     }
 
     #[test]
-    fn test_standard_defaults() {
+    fn test_standard_clamp_for_non_eap() {
         init_options();
-        assert_eq!(enforce_standard_retention(None), Some(30));
-        assert_eq!(enforce_standard_retention(Some(0)), Some(30));
-        for value in SUPPORTED_RETENTION_DAYS {
-            assert_eq!(enforce_standard_retention(Some(value)), Some(value));
+        assert_eq!(enforce_standard_retention(None), 30);
+        assert_eq!(enforce_standard_retention(Some(0)), 30);
+        // Non-EAP values are not checked against the supported set.
+        assert_eq!(enforce_standard_retention(Some(2)), 2);
+        assert_eq!(enforce_standard_retention(Some(45)), 45);
+        assert_eq!(enforce_standard_retention(Some(396)), 396);
+        assert_eq!(enforce_standard_retention(Some(1000)), 396);
+    }
+
+    #[test]
+    fn test_eap_supported_values() {
+        init_options();
+        assert_eq!(enforce_eap_retentions(None, None), Some((30, 30)));
+        assert_eq!(enforce_eap_retentions(Some(0), Some(0)), Some((30, 30)));
+        for value in SUPPORTED_EAP_RETENTION_DAYS {
+            assert_eq!(
+                enforce_eap_retentions(Some(value), None),
+                Some((value, value))
+            );
+            assert_eq!(
+                enforce_eap_retentions(Some(7), Some(value)),
+                Some((7, value.max(7)))
+            );
         }
     }
 
     #[test]
-    fn test_standard_unsupported_values_rejected() {
+    fn test_eap_unsupported_values_rejected() {
         init_options();
-        for value in [1, 8, 14, 29, 31, 89, 100, 365, 367, 395, 397, 1000] {
-            assert_eq!(enforce_standard_retention(Some(value)), None, "{value}");
+        for value in [
+            1, 2, 8, 14, 21, 29, 31, 45, 89, 100, 365, 367, 395, 397, 1000,
+        ] {
+            assert_eq!(enforce_eap_retentions(Some(value), None), None, "{value}");
+            assert_eq!(
+                enforce_eap_retentions(Some(30), Some(value)),
+                None,
+                "{value}"
+            );
         }
     }
 
@@ -255,18 +287,24 @@ mod tests {
     }
 
     #[test]
-    fn test_downsampled_defaults() {
+    fn test_eap_retention_pair() {
         init_options();
-        assert_eq!(enforce_downsampled_retention(None), Some(396));
-        for value in SUPPORTED_RETENTION_DAYS {
-            assert_eq!(enforce_downsampled_retention(Some(value)), Some(value));
-        }
-        assert_eq!(enforce_downsampled_retention(Some(365)), None);
-        assert_eq!(enforce_downsampled_retention(Some(420)), None);
+        assert_eq!(enforce_eap_retentions(Some(90), None), Some((90, 90)));
+        assert_eq!(enforce_eap_retentions(Some(90), Some(366)), Some((90, 366)));
+        assert_eq!(enforce_eap_retentions(Some(90), Some(396)), Some((90, 396)));
+        // Downsampled is at least standard.
+        assert_eq!(
+            enforce_eap_retentions(Some(396), Some(90)),
+            Some((396, 396))
+        );
+        assert_eq!(
+            enforce_eap_retentions(Some(180), Some(60)),
+            Some((180, 180))
+        );
     }
 
     #[test]
-    fn test_values_above_max_are_rejected() {
+    fn test_eap_values_above_max_are_rejected() {
         init_options();
         let _guard = override_options(&[(
             "snuba",
@@ -278,34 +316,36 @@ mod tests {
         )])
         .unwrap();
 
-        assert_eq!(enforce_standard_retention(None), Some(60));
-        assert_eq!(enforce_standard_retention(Some(90)), Some(90));
-        assert_eq!(enforce_standard_retention(Some(180)), Some(180));
-        assert_eq!(enforce_standard_retention(Some(366)), None);
-        assert_eq!(enforce_downsampled_retention(None), Some(180));
-        assert_eq!(enforce_downsampled_retention(Some(366)), Some(366));
-        assert_eq!(enforce_downsampled_retention(Some(396)), None);
-        assert_eq!(enforce_retentions(Some(180), Some(366)), Some((180, 366)));
-        assert_eq!(enforce_retentions(Some(366), Some(366)), None);
-        assert_eq!(enforce_retentions(Some(90), Some(396)), None);
+        assert_eq!(enforce_eap_retentions(None, None), Some((60, 60)));
+        assert_eq!(
+            enforce_eap_retentions(Some(180), Some(366)),
+            Some((180, 366))
+        );
+        assert_eq!(enforce_eap_retentions(Some(366), None), None);
+        assert_eq!(enforce_eap_retentions(Some(90), Some(396)), None);
+        // Non-EAP still clamps to the configured max.
+        assert_eq!(enforce_standard_retention(None), 60);
+        assert_eq!(enforce_standard_retention(Some(366)), 180);
     }
 
     #[test]
-    fn test_retention_pair() {
+    fn test_eap_unsupported_default_is_rejected() {
         init_options();
-        assert_eq!(enforce_retentions(None, None), Some((30, 30)));
-        assert_eq!(enforce_retentions(Some(90), None), Some((90, 90)));
-        assert_eq!(enforce_retentions(Some(90), Some(0)), Some((90, 90)));
-        assert_eq!(enforce_retentions(Some(90), Some(30)), Some((90, 90)));
-        assert_eq!(enforce_retentions(Some(90), Some(366)), Some((90, 366)));
-        assert_eq!(enforce_retentions(Some(90), Some(396)), Some((90, 396)));
-        assert_eq!(enforce_retentions(Some(396), None), Some((396, 396)));
-        assert_eq!(enforce_retentions(Some(396), Some(90)), Some((396, 396)));
-        // Either value unsupported: not ingested.
-        assert_eq!(enforce_retentions(Some(14), Some(396)), None);
-        assert_eq!(enforce_retentions(Some(100), Some(396)), None);
-        assert_eq!(enforce_retentions(Some(90), Some(365)), None);
-        assert_eq!(enforce_retentions(Some(90), Some(420)), None);
+        let _guard = override_options(&[(
+            "snuba",
+            "retention_days",
+            json!({
+                "standard": {"default": 45, "max": 396},
+                "downsampled": {"default": 396, "max": 396},
+            }),
+        )])
+        .unwrap();
+
+        // A missing value falls back to the default, which must be supported too.
+        assert_eq!(enforce_eap_retentions(None, None), None);
+        assert_eq!(enforce_eap_retentions(Some(30), None), Some((30, 30)));
+        // Non-EAP uses the default as-is.
+        assert_eq!(enforce_standard_retention(None), 45);
     }
 
     #[test]
@@ -321,10 +361,13 @@ mod tests {
         )])
         .unwrap();
 
-        assert_eq!(enforce_standard_retention(None), Some(30));
-        assert_eq!(enforce_standard_retention(Some(396)), Some(396));
-        assert_eq!(enforce_downsampled_retention(None), Some(396));
-        assert_eq!(enforce_downsampled_retention(Some(396)), Some(396));
+        assert_eq!(enforce_standard_retention(None), 30);
+        assert_eq!(enforce_standard_retention(Some(1000)), 396);
+        assert_eq!(enforce_eap_retentions(None, None), Some((30, 30)));
+        assert_eq!(
+            enforce_eap_retentions(Some(396), Some(396)),
+            Some((396, 396))
+        );
     }
 
     const NOW_SECS: i64 = 2_000_000_000;

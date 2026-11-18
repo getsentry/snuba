@@ -311,7 +311,7 @@
         "standard": { "default": 30, "max": 396 },
         "downsampled": { "default": 396, "max": 396 }
       },
-      "description": "Retention windows in days for standard and downsampled storage. standard.default (30) is the fallback when RequestMeta.standard_retention_days is unset/non-positive. Only 7, 30, 60, 90, 180, 366 and 396 are accepted for standard and downsampled retention, up to each kind's max (396, 13 months); items with any other value are not ingested. downsampled.default (396) is the fallback for long-term downsampled retention."
+      "description": "Retention windows in days for standard and downsampled storage. standard.default (30) is the fallback when RequestMeta.standard_retention_days is unset/non-positive. standard.max (396, 13 months) caps positive values. For EAP items, only 7, 30, 60, 90, 180, 366 and 396 are accepted for standard and downsampled retention, up to each kind's max; EAP items with any other value are not ingested. downsampled.default (396) is the fallback for long-term downsampled retention."
     },
     "storage_routing_config_override": {
       "type": "string",

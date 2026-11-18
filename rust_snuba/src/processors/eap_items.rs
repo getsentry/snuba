@@ -16,7 +16,7 @@ use sentry_protos::snuba::v1::{ArrayValue, TraceItem, TraceItemType};
 
 use crate::config::ProcessorConfig;
 use crate::processors::utils::{
-    enforce_retentions, get_drop_invalid_timestamps_enabled, out_of_valid_interval_secs,
+    enforce_eap_retentions, get_drop_invalid_timestamps_enabled, out_of_valid_interval_secs,
     SilencedDLQMessage, DROPPED_UNSUPPORTED_RETENTION_METRIC,
 };
 use crate::strategies::clickhouse::rowbinary;
@@ -87,7 +87,7 @@ fn process_eap_item(
     let item_type =
         TraceItemType::try_from(trace_item.item_type).unwrap_or(TraceItemType::Unspecified);
 
-    let Some((retention_days, downsampled_retention_days)) = enforce_retentions(
+    let Some((retention_days, downsampled_retention_days)) = enforce_eap_retentions(
         Some(u16::try_from(trace_item.retention_days).unwrap_or(u16::MAX)),
         Some(u16::try_from(trace_item.downsampled_retention_days).unwrap_or(u16::MAX)),
     ) else {
