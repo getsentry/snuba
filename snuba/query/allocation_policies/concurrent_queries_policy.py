@@ -7,6 +7,7 @@ from typing import Any
 from snuba.configs.configuration import Configuration, ResourceIdentifier
 from snuba.query.allocation_policies import (
     CROSS_ORG_SUGGESTION,
+    MAX_THRESHOLD,
     NO_SUGGESTION,
     AllocationPolicy,
     AllocationPolicyViolations,
@@ -39,6 +40,9 @@ class ConcurrentQueriesPolicy(AllocationPolicy):
     - enforce: always | pardon | never.
     - max_threads: threads granted when the query is allowed.
     """
+
+    # Cross-org queries always run and are not counted, unless this is True.
+    _counts_cross_org = False
 
     def __init__(
         self,
@@ -96,9 +100,15 @@ class ConcurrentQueriesPolicy(AllocationPolicy):
     def _get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
-        if self.is_cross_org_query(tenant_ids):
+        if not self._counts_cross_org and self.is_cross_org_query(tenant_ids):
             # Cross-org queries have no single org to count against.
-            return self._allowance(can_run=True, cross_org=True, used=0)
+            return self._allowance(
+                can_run=True,
+                used=0,
+                reason="cross_org_query",
+                suggestion=CROSS_ORG_SUGGESTION,
+                threshold=MAX_THRESHOLD,
+            )
 
         key = self._key(tenant_ids)
         # Registers the query as running. The count includes it, and is -1 (runs)
@@ -115,8 +125,20 @@ class ConcurrentQueriesPolicy(AllocationPolicy):
             SHARD_FACTOR,
             f"{self.component_name()}:",
         ).concurrent
+        if running <= self._limit:
+            return self._allowance(
+                can_run=True,
+                used=running,
+                reason="within_limit",
+                suggestion=NO_SUGGESTION,
+                threshold=self._limit,
+            )
         return self._allowance(
-            can_run=running <= self._limit, cross_org=False, used=running, key=key
+            can_run=False,
+            used=running,
+            reason=f"{key} has {running} of its {self._limit} concurrent queries running",
+            suggestion=self.suggestion,
+            threshold=self._limit,
         )
 
     # Abstract hook of the old AllocationPolicy base. Refactor once the old dynamic
@@ -127,7 +149,8 @@ class ConcurrentQueriesPolicy(AllocationPolicy):
         query_id: str,
         result_or_error: QueryResultOrError,
     ) -> None:
-        if self.is_cross_org_query(tenant_ids):
+        # Skips exactly the queries _get_quota_allowance did not register.
+        if not self._counts_cross_org and self.is_cross_org_query(tenant_ids):
             return
         # Removes the query from the running set. A rejected query is dropped
         # entirely; a finished one is kept at its start time.
@@ -148,22 +171,15 @@ class ConcurrentQueriesPolicy(AllocationPolicy):
         )
 
     def _allowance(
-        self, *, can_run: bool, cross_org: bool, used: int, key: str = ""
+        self, *, can_run: bool, used: int, reason: str, suggestion: str, threshold: int
     ) -> QuotaAllowance:
-        if cross_org:
-            reason, suggestion = "cross_org_query", CROSS_ORG_SUGGESTION
-        elif can_run:
-            reason, suggestion = "within_limit", NO_SUGGESTION
-        else:
-            reason = f"{key} has {used} of its {self._limit} concurrent queries running"
-            suggestion = self.suggestion
         return QuotaAllowance(
             can_run=can_run,
             max_threads=self._max_threads if can_run else 0,
             explanation={"reason": reason},
             is_throttled=False,
-            throttle_threshold=self._limit,
-            rejection_threshold=self._limit,
+            throttle_threshold=threshold,
+            rejection_threshold=threshold,
             quota_used=used,
             quota_unit=QUOTA_UNIT,
             suggestion=suggestion,
@@ -178,10 +194,19 @@ class ConcurrentQueriesPerOrgPolicy(ConcurrentQueriesPolicy):
 
 
 class ConcurrentQueriesPerRefPolicy(ConcurrentQueriesPolicy):
-    """One count per referrer, shared by all organizations."""
+    """One count per referrer, shared by all organizations.
+
+    Replaces ReferrerGuardRailPolicy: counts cross-org queries too, and puts
+    queries without a referrer under "no_referrer".
+    """
+
+    _counts_cross_org = True
+
+    def __init__(self, storage_key: ResourceIdentifier, *, limit: int = 100, **kwargs: Any) -> None:
+        super().__init__(storage_key, limit=limit, **kwargs)
 
     def _key(self, tenant_ids: dict[str, str | int]) -> str:
-        return f"ref:{self._tenant(tenant_ids, 'referrer')}"
+        return f"ref:{tenant_ids.get('referrer', 'no_referrer')}"
 
 
 class ConcurrentQueriesPerOrgRefPolicy(ConcurrentQueriesPolicy):

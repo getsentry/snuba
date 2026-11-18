@@ -130,6 +130,27 @@ def test_enforce_never_runs() -> None:
     assert allowance.max_threads == MAX_THREADS
 
 
+@pytest.mark.redis_db
+def test_per_ref_counts_cross_org() -> None:
+    tenant_ids: dict[str, str | int] = {"cross_org_query": 1, "referrer": "some_referrer"}
+    policy = _policy(ConcurrentQueriesPerRefPolicy)
+    _fill(policy, tenant_ids)
+    assert not _start(policy, "extra", tenant_ids)
+
+
+@pytest.mark.redis_db
+def test_per_ref_missing_referrer_counts_as_no_referrer() -> None:
+    policy = _policy(ConcurrentQueriesPerRefPolicy)
+    _fill(policy, {"organization_id": 1})
+    assert not _start(policy, "same", {"organization_id": 2, "referrer": "no_referrer"})
+    assert _start(policy, "other", TENANT_IDS)
+
+
+def test_per_ref_default_limit() -> None:
+    policy = ConcurrentQueriesPerRefPolicy(storage_key=ResourceIdentifier(StorageKey("errors")))
+    assert policy._limit == 100
+
+
 def test_resolver_attaches_from_match_block() -> None:
     block = match_block(
         [{"name": "ConcurrentQueriesPerOrgPolicy", "limit": 5, "enforce": "pardon"}]
