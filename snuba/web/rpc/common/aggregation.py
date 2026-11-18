@@ -18,6 +18,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKeyExpression,
     ExtrapolationMode,
     Function,
+    HistogramMode,
     RankedBy,
     Reliability,
 )
@@ -38,6 +39,10 @@ from snuba.web.rpc.common.common import (
     trace_item_filters_to_expression,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.common.histogram_aggregation import (
+    bucket_aggregation_to_expression,
+    not_exemplar_condition,
+)
 
 sampling_factor_column = column("sampling_factor")
 client_sample_rate_column = column("client_sample_rate")
@@ -80,6 +85,10 @@ def _get_condition_in_aggregation(
             aggregation.filter,
             attribute_key_to_expression,
             membership_as_has=True,
+        )
+    if aggregation.histogram_mode == HistogramMode.HISTOGRAM_MODE_BUCKETS:
+        condition_in_aggregation = and_cond(
+            condition_in_aggregation, not_exemplar_condition(attribute_key_to_expression)
         )
     return condition_in_aggregation
 
@@ -998,16 +1007,31 @@ def aggregation_to_expression(
     )
     max_array_size = get_option("snuba_query_max_array_size", 1000)
 
+    extrapolate = aggregation.extrapolation_mode in [
+        ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+        ExtrapolationMode.EXTRAPOLATION_MODE_CLIENT_ONLY,
+        ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY,
+    ]
+
+    if aggregation.histogram_mode == HistogramMode.HISTOGRAM_MODE_BUCKETS:
+        return bucket_aggregation_to_expression(
+            aggregation,
+            field,
+            and_cond(field_exists, condition_in_aggregation),
+            attribute_key_to_expression,
+            (
+                _get_sampling_weight_expression(use_sampling_factor, aggregation.extrapolation_mode)
+                if extrapolate
+                else None
+            ),
+        )
+
     if aggregation.key.type in ARRAY_TYPES:
         return _array_aggregation_to_expression(
             aggregation, field, condition_in_aggregation, alias_dict
         )
 
-    if aggregation.extrapolation_mode in [
-        ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
-        ExtrapolationMode.EXTRAPOLATION_MODE_CLIENT_ONLY,
-        ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY,
-    ]:
+    if extrapolate:
         agg_func_expr = get_extrapolated_function(
             aggregation,
             field,
