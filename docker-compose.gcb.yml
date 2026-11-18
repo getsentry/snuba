@@ -110,10 +110,16 @@ services:
         hard: 262144
 
   # nodes for multi-node clickhouse cluster
+  # Each role can run its own ClickHouse image so CI can test a cluster that is
+  # mid-upgrade (see the clickhouse-mixed-versions job in ci.yml). All of them
+  # fall back to CLICKHOUSE_IMAGE, so existing callers are unaffected:
+  #   CLICKHOUSE_QUERY_IMAGE        clickhouse-query (Distributed tables)
+  #   CLICKHOUSE_STORAGE_IMAGE      clickhouse-01..04 (local tables)
+  #   CLICKHOUSE_STORAGE_0{2,3}_IMAGE  override one storage shard
   clickhouse-query:
     depends_on:
       - zookeeper
-    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.33.10002.altinitystable}"
+    image: "${CLICKHOUSE_QUERY_IMAGE:-${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.33.10002.altinitystable}}"
     hostname: clickhouse-query.local
     extra_hosts:
       - "clickhouse-query.local:127.0.0.1"  # Add entry to /etc/hosts file
@@ -129,7 +135,7 @@ services:
   clickhouse-01:
     depends_on:
       - zookeeper
-    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.33.10002.altinitystable}"
+    image: "${CLICKHOUSE_STORAGE_IMAGE:-${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.33.10002.altinitystable}}"
     hostname: clickhouse-01.local
     extra_hosts:
       - "clickhouse-01.local:127.0.0.1"  # Add entry to /etc/hosts file
@@ -146,7 +152,7 @@ services:
   clickhouse-02:
     depends_on:
       - zookeeper
-    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.33.10002.altinitystable}"
+    image: "${CLICKHOUSE_STORAGE_02_IMAGE:-${CLICKHOUSE_STORAGE_IMAGE:-${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.33.10002.altinitystable}}}"
     hostname: clickhouse-02.local
     extra_hosts:
       - "clickhouse-02.local:127.0.0.1"  # Add entry to /etc/hosts file
@@ -163,7 +169,7 @@ services:
   clickhouse-03:
     depends_on:
       - zookeeper
-    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.33.10002.altinitystable}"
+    image: "${CLICKHOUSE_STORAGE_03_IMAGE:-${CLICKHOUSE_STORAGE_IMAGE:-${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.33.10002.altinitystable}}}"
     hostname: clickhouse-03.local
     extra_hosts:
       - "clickhouse-03.local:127.0.0.1"  # Add entry to /etc/hosts file
@@ -180,7 +186,7 @@ services:
   clickhouse-04:
     depends_on:
       - zookeeper
-    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.33.10002.altinitystable}"
+    image: "${CLICKHOUSE_STORAGE_IMAGE:-${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.33.10002.altinitystable}}"
     hostname: clickhouse-04.local
     extra_hosts:
       - "clickhouse-04.local:127.0.0.1"  # Add entry to /etc/hosts file
