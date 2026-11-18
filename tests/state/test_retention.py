@@ -4,23 +4,27 @@ from unittest.mock import patch
 import pytest
 from sentry_options.testing import override_options
 
-from snuba.state.retention import clamp_retention_days, get_retention_days_config
+from snuba.state.retention import (
+    clamp_retention_days,
+    eap_standard_retention_days,
+    get_retention_days_config,
+)
 
 
 def test_schema_default() -> None:
     config = get_retention_days_config()
-    assert config["standard"] == {"default": 30, "max": 396}
+    assert config["standard"] == {"default": 30, "max": 90}
     assert config["downsampled"] == {"default": 396, "max": 396}
 
 
 def test_missing_option_falls_back_to_schema_defaults() -> None:
     with patch("snuba.state.retention.get_option", return_value={}):
         assert get_retention_days_config() == {
-            "standard": {"default": 30, "max": 396},
+            "standard": {"default": 30, "max": 90},
             "downsampled": {"default": 396, "max": 396},
         }
         assert clamp_retention_days(None) == 30
-        assert clamp_retention_days(1000) == 396
+        assert clamp_retention_days(100) == 90
 
 
 @pytest.mark.parametrize(
@@ -35,9 +39,8 @@ def test_missing_option_falls_back_to_schema_defaults() -> None:
         (60, "standard", 60),
         (89, "standard", 89),
         (90, "standard", 90),
-        (100, "standard", 100),
-        (396, "standard", 396),
-        (1000, "standard", 396),
+        (100, "standard", 90),
+        (120, "standard", 90),
         (None, "downsampled", 396),
         (365, "downsampled", 365),
         (396, "downsampled", 396),
@@ -68,3 +71,18 @@ def test_clamp_honors_option_override(value: int | None, kind: str, expected: in
     }
     with override_options("snuba", override):
         assert clamp_retention_days(value, kind) == expected  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("requested", "expected"),
+    [(None, 30), (0, 30), (-1, 30), (7, 7), (90, 90), (366, 366), (396, 396), (1000, 396)],
+)
+def test_eap_standard_retention_days_ignores_option(requested: int | None, expected: int) -> None:
+    override: dict[str, Any] = {
+        "retention_days": {
+            "standard": {"default": 60, "max": 180},
+            "downsampled": {"default": 180, "max": 360},
+        }
+    }
+    with override_options("snuba", override):
+        assert eap_standard_retention_days(requested) == expected
