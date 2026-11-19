@@ -1108,6 +1108,8 @@ class TestDeleteLog(BaseTest):
         assert processed is not None
 
         with (
+            # Use the query node executor on multi-node clusters too.
+            override_options("snuba", {"write_node_replacements_global": 0.0}),
             patch(
                 "snuba.replacer.QueryNodeExecutor.execute",
                 side_effect=RuntimeError("insert failed"),
