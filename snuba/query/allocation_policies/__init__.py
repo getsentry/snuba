@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from enum import Enum, IntEnum
 from typing import Any, assert_never, cast
@@ -390,6 +391,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
             action: {k: float(v) for k, v in ceilings.items()}
             for action, ceilings in thresholds.items()
         }
+        self._passthrough: Mapping[str, Any] = kwargs.get("passthrough") or {}
         self._default_config_definitions = [
             AllocationPolicyConfig(
                 name=IS_ENFORCED,
@@ -462,6 +464,10 @@ class AllocationPolicy(ConfigurableComponent, ABC):
     def is_cross_org_query(self, tenant_ids: dict[str, str | int]) -> bool:
         return bool(tenant_ids.get("cross_org_query", False))
 
+    def is_passthrough(self, tenant_ids: dict[str, str | int]) -> bool:
+        # An empty match block matches everything, so no passthrough must mean no match.
+        return bool(self._passthrough) and tenants_match(self._passthrough, tenant_ids)
+
     @classmethod
     def from_kwargs(
         cls,
@@ -495,7 +501,20 @@ class AllocationPolicy(ConfigurableComponent, ABC):
 
             passthrough = _default_passthough_policy(self._resource_identifier.value)
             try:
-                allowance = self._get_quota_allowance(tenant_ids, query_id)
+                if self.is_passthrough(tenant_ids):
+                    allowance = QuotaAllowance(
+                        can_run=True,
+                        max_threads=self.max_threads,
+                        explanation={"reason": "passthrough"},
+                        is_throttled=False,
+                        throttle_threshold=MAX_THRESHOLD,
+                        rejection_threshold=MAX_THRESHOLD,
+                        quota_used=0,
+                        quota_unit=NO_UNITS,
+                        suggestion=NO_SUGGESTION,
+                    )
+                else:
+                    allowance = self._get_quota_allowance(tenant_ids, query_id)
             except InvalidTenantsForAllocationPolicy as e:
                 allowance = QuotaAllowance(
                     can_run=False,
@@ -586,6 +605,8 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         query_id: str,
         result_or_error: QueryResultOrError,
     ) -> int | None:
+        if self.is_passthrough(tenant_ids):
+            return None
         try:
             return self._update_quota_balance(tenant_ids, query_id, result_or_error)
         except InvalidTenantsForAllocationPolicy:
@@ -655,6 +676,10 @@ class PassthroughPolicy(AllocationPolicy):
 
 
 ALLOCATION_POLICY_KEY = "allocation_policies"
+
+
+def tenants_match(match: Mapping[str, Any], tenant_ids: Mapping[str, str | int]) -> bool:
+    return all(key in tenant_ids and tenant_ids[key] in expected for key, expected in match.items())
 
 
 def _default_passthough_policy(storage_key: str = "default.no_storage_key") -> AllocationPolicy:
