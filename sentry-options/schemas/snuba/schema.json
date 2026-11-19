@@ -287,7 +287,7 @@
     "storage_routing.enable_allocation_policy_downsample": {
       "type": "boolean",
       "default": false,
-      "description": "When true, NORMAL and LOW_PRIORITY queries step one EAP downsample tier coarser if cluster load exceeds allocation-policy reject thresholds."
+      "description": "When true, NORMAL and LOW_PRIORITY queries step one EAP downsample tier coarser if cluster load exceeds allocation-policy downsample thresholds."
     },
     "retention_days": {
       "type": "object",
@@ -417,6 +417,14 @@
                     "cluster_load": { "type": "number", "optional": true },
                     "concurrent_queries": { "type": "number", "optional": true }
                   }
+                },
+                "downsample": {
+                  "type": "object",
+                  "optional": true,
+                  "properties": {
+                    "cluster_load": { "type": "number", "optional": true },
+                    "concurrent_queries": { "type": "number", "optional": true }
+                  }
                 }
               }
             }
@@ -424,7 +432,7 @@
         }
       },
       "default": {},
-      "description": "Which AllocationPolicy classes to construct for a ResourceIdentifier. Keyed by resource (storage key for SNQL, 'EAP' for routing strategies). Each resource is a list of match blocks ({match, policies, remove?, thresholds?}). match keys (organization_id, project_id, referrer) are lists; AND across keys, OR within a key; match: {} always matches. Matching blocks apply in file order: remove names, then add/replace policies by name. Each policy item requires name. A configured policy is active. Optional per-policy settings (is_enforced, concurrent_limit, max_threads) are applied as constructor default_config_overrides. Block-level thresholds (a reject map of load ceilings keyed by LoadInfo field) are copied onto every policy in the block and gate dynamic pardoning. An absent or empty result falls back to PassthroughPolicy. Managed in sentry-options-automator."
+      "description": "Which AllocationPolicy classes to construct for a ResourceIdentifier. Keyed by resource (storage key for SNQL, 'EAP' for routing strategies). Each resource is a list of match blocks ({match, policies, remove?, thresholds?}). match keys (organization_id, project_id, referrer) are lists; AND across keys, OR within a key; match: {} always matches. Matching blocks apply in file order: remove names, then add/replace policies by name. Each policy item requires name. A configured policy is active. Optional per-policy settings (is_enforced, concurrent_limit, max_threads) are applied as constructor default_config_overrides. Block-level thresholds (reject and downsample maps of load ceilings keyed by LoadInfo field) are copied onto every policy in the block; reject gates dynamic pardoning, downsample gates stepping EAP queries to a coarser tier. An absent or empty result falls back to PassthroughPolicy. Managed in sentry-options-automator."
     },
     "storage_routing_sampled_too_low_threshold": {
       "type": "object",
