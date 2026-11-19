@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from collections import defaultdict
 from collections.abc import Callable, Mapping, MutableMapping, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from datetime import datetime
 from functools import partial
 from typing import (
@@ -32,6 +33,7 @@ from snuba.clusters.cluster import (
 )
 from snuba.datasets.storage import WritableTableStorage
 from snuba.processor import InvalidMessageVersion
+from snuba.replacers.errors_replacer import DeleteGroupsReplacement
 from snuba.replacers.errors_replacer import Replacement as ErrorReplacement
 from snuba.replacers.replacements_and_expiry import (
     redis_client,
@@ -146,6 +148,13 @@ class InOrderConnectionPool(ShardedConnectionPool):
         return self.__nodes
 
 
+@dataclass(frozen=True)
+class InsertResult:
+    written_rows: int
+    # True when the main connections failed and the backup executor ran the query.
+    used_backup: bool = False
+
+
 class InsertExecutor(ABC):
     """
     Executes the Replacement insert query.
@@ -154,16 +163,16 @@ class InsertExecutor(ABC):
     """
 
     @abstractmethod
-    def execute(self, replacement: Replacement) -> None:
+    def execute(self, replacement: Replacement) -> InsertResult | None:
         """
         Executes the query according to the policy implemented by this
-        class.
+        class. Returns None when the replacement has no insert query.
         """
         raise NotImplementedError
 
 
-# Used by InsertExecutors to run the query
-RunQuery = Callable[[ClickhousePool, str, MetricsBackend], None]
+# Used by InsertExecutors to run the query. Returns the number of written rows.
+RunQuery = Callable[[ClickhousePool, str, MetricsBackend], int]
 
 
 class QueryNodeExecutor(InsertExecutor):
@@ -188,11 +197,11 @@ class QueryNodeExecutor(InsertExecutor):
         self.__metrics = metrics
         self.__runner = runner
 
-    def execute(self, replacement: Replacement) -> None:
+    def execute(self, replacement: Replacement) -> InsertResult | None:
         query = replacement.get_insert_query(self.__table)
         if query is None:
-            return
-        self.__runner(self.__connection, query, self.__metrics)
+            return None
+        return InsertResult(written_rows=self.__runner(self.__connection, query, self.__metrics))
 
 
 class ShardedExecutor(InsertExecutor):
@@ -227,7 +236,7 @@ class ShardedExecutor(InsertExecutor):
         nodes: Sequence[ClickhouseNode],
         query: str,
         metrics: MetricsBackend,
-    ) -> None:
+    ) -> int:
         """
         Makes multiple attempts to run the query.
         One per connection provided.
@@ -238,12 +247,11 @@ class ShardedExecutor(InsertExecutor):
                     ClickhouseClientSettings.REPLACE,
                     nodes[len(nodes) - remaining_attempts],
                 )
-                self.__runner(
+                return self.__runner(
                     connection,
                     query,
                     metrics,
                 )
-                return
             except Exception as e:
                 if remaining_attempts == 1:
                     raise
@@ -251,12 +259,14 @@ class ShardedExecutor(InsertExecutor):
                     "Replacement processing failed on the main connection",
                     exc_info=e,
                 )
+        # Only reached with no nodes: nothing ran.
+        return 0
 
-    def execute(self, replacement: Replacement) -> None:
+    def execute(self, replacement: Replacement) -> InsertResult | None:
         try:
             query = replacement.get_insert_query(self.__local_table_name)
             if query is None:
-                return
+                return None
             result_futures = []
             for nodes in self.__connection_pool.get_connections().values():
                 result_futures.append(
@@ -269,17 +279,23 @@ class ShardedExecutor(InsertExecutor):
                         )
                     )
                 )
+            written_rows = 0
             for result in as_completed(result_futures):
                 e = result.exception()
                 if e is not None:
                     raise e
+                written_rows += result.result()
+            return InsertResult(written_rows=written_rows)
 
         except Exception as e:
-            self.__backup_executor.execute(replacement)
+            backup_result = self.__backup_executor.execute(replacement)
             logger.warning(
                 "Replacement processing failed on the main connection",
                 exc_info=e,
             )
+            if backup_result is None:
+                return None
+            return InsertResult(written_rows=backup_result.written_rows, used_backup=True)
 
 
 TPayload = TypeVar("TPayload")
@@ -360,7 +376,7 @@ class ReplacerWorker:
             connection: ClickhousePool,
             query: str,
             metrics: MetricsBackend,
-        ) -> None:
+        ) -> int:
             t = time.time()
 
             logger.debug(f"Executing replace query: {query}")
@@ -384,6 +400,7 @@ class ReplacerWorker:
                 duration,
                 tags={"host": connection.host},
             )
+            return written_rows
 
         query_table_name = self.__replacer_processor.get_schema().get_table_name()
         local_table_name = self.__replacer_processor.get_schema().get_local_table_name()
@@ -457,10 +474,29 @@ class ReplacerWorker:
 
             need_optimize = self.__replacer_processor.pre_replacement(replacement) or need_optimize
 
+            # Only issue deletes are logged to Sentry Logs.
+            delete = replacement if isinstance(replacement, DeleteGroupsReplacement) else None
             query_executor = self.__get_insert_executor(replacement)
             with self.__rate_limiter as state:
                 self.metrics.increment("insert_state", tags={"state": state[0].value})
-                query_executor.execute(replacement)
+                try:
+                    result = query_executor.execute(replacement)
+                except Exception as e:
+                    if delete is not None:
+                        # The sharded executor raises only once the backup also failed.
+                        reason = (
+                            "main_and_backup_failed"
+                            if isinstance(query_executor, ShardedExecutor)
+                            else "insert_failed"
+                        )
+                        delete.log_delete("errors_failed", reason=reason, error=e)
+                    raise
+            if delete is not None and result is not None:
+                delete.log_delete(
+                    "errors_written",
+                    written_rows=result.written_rows,
+                    used_backup=result.used_backup,
+                )
 
             self.__replacer_processor.post_replacement(replacement)
 

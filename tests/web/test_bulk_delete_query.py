@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Mapping
+from concurrent.futures import Future
 from typing import Any
 from unittest.mock import Mock, patch
 
@@ -14,16 +15,26 @@ from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba import settings
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.clusters.cluster import UndefinedClickhouseCluster
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.lw_deletions.types import AttributeConditions
-from snuba.query.exceptions import InvalidQueryException
+from snuba.query.exceptions import (
+    InvalidQueryException,
+    NoRowsToDeleteException,
+    TooManyDeleteRowsException,
+)
 from snuba.utils.manage_topics import create_topics
 from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
 from snuba.utils.streams.topics import Topic
-from snuba.web.bulk_delete_query import delete_from_storage
+from snuba.web.bulk_delete_query import (
+    DeleteQueryMessage,
+    _delete_query_delivery_callback,
+    delete_from_storage,
+)
 from snuba.web.delete_query import DeletesNotEnabledError
+from tests.helpers import get_delete_log_events
 
 CONSUMER_CONFIG = {
     "bootstrap.servers": settings.BROKER_CONFIG["bootstrap.servers"],
@@ -397,3 +408,231 @@ def test_count_storage_key_mapping_without_readonly_cluster() -> None:
         side_effect=UndefinedClickhouseCluster("not configured"),
     ):
         assert _count_storage_key_by_local_table(storage) == {}
+
+
+EAP_CONDITIONS: dict[str, list[Any]] = {
+    "organization_id": [5],
+    "project_id": [1],
+    "item_type": [TraceItemType.TRACE_ITEM_TYPE_OCCURRENCE],
+}
+EAP_ATTRIBUTE_CONDITIONS = AttributeConditions(
+    item_type=TraceItemType.TRACE_ITEM_TYPE_OCCURRENCE,
+    attributes={
+        "group_id": (AttributeKey(type=AttributeKey.Type.TYPE_INT, name="group_id"), [7, 8])
+    },
+)
+EAP_DELETE_LOG = {
+    "target": "eap",
+    "organization_id": 5,
+    "project_id": 1,
+    "group_ids_count": 2,
+    "group_ids": "7,8",
+}
+
+
+def _delete_eap(conditions: dict[str, list[Any]] | None = None) -> Any:
+    return delete_from_storage(
+        get_writable_storage(StorageKey("eap_items_2")),
+        conditions or EAP_CONDITIONS,
+        get_attribution_info({"organization_id": 5, "project_id": 1}),
+        EAP_ATTRIBUTE_CONDITIONS,
+    )
+
+
+@pytest.mark.redis_db
+@override_options("snuba", {"permit_delete_by_attribute": True})
+def test_eap_delete_log_received() -> None:
+    with (
+        patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10),
+        patch("snuba.web.bulk_delete_query.produce_delete_query") as mock_produce,
+        patch("snuba.utils.delete_log.sentry_logger") as sentry_logger,
+    ):
+        _delete_eap()
+
+    mock_produce.assert_called_once()
+    assert get_delete_log_events(sentry_logger) == [
+        ("info", "snuba.delete.received", EAP_DELETE_LOG)
+    ]
+
+
+@pytest.mark.redis_db
+@pytest.mark.parametrize(
+    "options, max_rows, reason",
+    [
+        pytest.param({}, 10, "delete_ignored", id="delete_ignored"),
+        pytest.param(
+            {"permit_delete_by_attribute": True},
+            NoRowsToDeleteException("no rows"),
+            "no_rows_to_delete",
+            id="no_rows",
+        ),
+        pytest.param(
+            {
+                "permit_delete_by_attribute": True,
+                "lw_deletes_killswitch": {"eap_items_2": "[1]"},
+            },
+            10,
+            "killswitch",
+            id="killswitch",
+        ),
+    ],
+)
+def test_eap_delete_log_skipped(options: dict[str, Any], max_rows: Any, reason: str) -> None:
+    max_rows_patch = (
+        {"side_effect": max_rows} if isinstance(max_rows, Exception) else {"return_value": max_rows}
+    )
+    with (
+        override_options("snuba", options),
+        patch("snuba.web.bulk_delete_query._enforce_max_rows", **max_rows_patch),
+        patch("snuba.web.bulk_delete_query.produce_delete_query") as mock_produce,
+        patch("snuba.utils.delete_log.sentry_logger") as sentry_logger,
+    ):
+        _delete_eap()
+
+    mock_produce.assert_not_called()
+    assert get_delete_log_events(sentry_logger) == [
+        ("info", "snuba.delete.received", EAP_DELETE_LOG),
+        ("info", "snuba.delete.eap_skipped", {**EAP_DELETE_LOG, "reason": reason}),
+    ]
+
+
+@pytest.mark.redis_db
+@pytest.mark.parametrize(
+    "options, max_rows_error, conditions, reason, error",
+    [
+        pytest.param(
+            {"permit_delete_by_attribute": True},
+            TooManyDeleteRowsException("too many rows", should_report=False),
+            None,
+            "too_many_rows",
+            TooManyDeleteRowsException,
+            id="too_many_rows",
+        ),
+        pytest.param(
+            {"permit_delete_by_attribute": True},
+            ClickhouseError("count timed out", code=159),
+            None,
+            "timeout",
+            ClickhouseError,
+            id="timeout",
+        ),
+        pytest.param(
+            {"permit_delete_by_attribute": True},
+            RuntimeError("unexpected"),
+            None,
+            "unexpected_error",
+            RuntimeError,
+            id="unexpected_error",
+        ),
+        pytest.param(
+            {},
+            None,
+            {**EAP_CONDITIONS, "group_id": [1]},
+            "invalid_query",
+            InvalidQueryException,
+            id="invalid_query",
+        ),
+        pytest.param(
+            {"storage_deletes_enabled": False},
+            None,
+            None,
+            "deletes_not_enabled",
+            DeletesNotEnabledError,
+            id="deletes_not_enabled",
+        ),
+    ],
+)
+def test_eap_delete_log_failed(
+    options: dict[str, Any],
+    max_rows_error: Exception | None,
+    conditions: dict[str, list[Any]] | None,
+    reason: str,
+    error: type[Exception],
+) -> None:
+    with (
+        override_options("snuba", options),
+        patch("snuba.web.bulk_delete_query._enforce_max_rows", side_effect=max_rows_error),
+        patch("snuba.web.bulk_delete_query.produce_delete_query"),
+        patch("snuba.utils.delete_log.sentry_logger") as sentry_logger,
+        pytest.raises(error),
+    ):
+        _delete_eap(conditions)
+
+    events = get_delete_log_events(sentry_logger)
+    assert [(level, name) for level, name, _ in events] == [
+        ("info", "snuba.delete.received"),
+        ("error", "snuba.delete.eap_failed"),
+    ]
+    _, _, failed = events[1]
+    assert failed["reason"] == reason
+    assert failed["error"] == error.__name__
+
+
+@pytest.mark.redis_db
+@override_options("snuba", {"permit_delete_by_attribute": True})
+def test_eap_delete_log_produce_failed() -> None:
+    with (
+        patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10),
+        patch(
+            "snuba.web.bulk_delete_query._get_kafka_producer",
+            side_effect=RuntimeError("kafka is down"),
+        ),
+        patch("snuba.utils.delete_log.sentry_logger") as sentry_logger,
+    ):
+        # A produce failure is logged but still not raised.
+        _delete_eap()
+
+    assert get_delete_log_events(sentry_logger)[-1] == (
+        "error",
+        "snuba.delete.eap_failed",
+        {
+            **EAP_DELETE_LOG,
+            "reason": "kafka_produce_failed",
+            "error": "RuntimeError",
+            "error_message": "kafka is down",
+        },
+    )
+
+
+def test_eap_delete_log_delivery_failed() -> None:
+    delete_query: DeleteQueryMessage = {
+        "rows_to_delete": 10,
+        "storage_name": "eap_items_2",
+        "conditions": {"organization_id": [5], "project_id": [1]},
+        "tenant_ids": {"organization_id": 5},
+        "attribute_conditions": {
+            "group_id": {"attr_key_type": 2, "attr_key_name": "group_id", "attr_values": [7, 8]}
+        },
+    }
+    future: Future[Any] = Future()
+    future.set_exception(RuntimeError("delivery failed"))
+
+    with patch("snuba.utils.delete_log.sentry_logger") as sentry_logger:
+        _delete_query_delivery_callback(delete_query, future)
+
+    assert get_delete_log_events(sentry_logger) == [
+        (
+            "error",
+            "snuba.delete.eap_failed",
+            {
+                **EAP_DELETE_LOG,
+                "reason": "kafka_produce_failed",
+                "error": "RuntimeError",
+                "error_message": "delivery failed",
+            },
+        )
+    ]
+
+
+@pytest.mark.redis_db
+@patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10)
+@patch("snuba.web.bulk_delete_query.produce_delete_query")
+def test_delete_log_not_sent_for_search_issues(
+    mock_produce_query: Mock, mock_enforce_rows: Mock
+) -> None:
+    storage = get_writable_storage(StorageKey("search_issues"))
+    with patch("snuba.utils.delete_log.sentry_logger") as sentry_logger:
+        delete_from_storage(storage, {"project_id": [1], "group_id": [1]}, get_attribution_info())
+
+    mock_produce_query.assert_called_once()
+    assert sentry_logger.method_calls == []

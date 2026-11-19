@@ -1,25 +1,33 @@
 from __future__ import annotations
 
+import time
 from collections.abc import Iterator
 from datetime import datetime, timedelta
+from typing import Any
 from unittest.mock import Mock, patch
 
 import pytest
 import rapidjson
 from arroyo.backends.kafka import KafkaPayload
-from arroyo.types import BrokerValue, Message, Partition, Topic
+from arroyo.processing.strategies.abstract import MessageRejected
+from arroyo.types import BrokerValue, Message, Partition, Topic, Value
 from sentry_options.testing import override_options
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.clusters.cluster import ClickhouseNode
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.lw_deletions.batching import BatchStepCustom
+from snuba.lw_deletions.batching import BatchStepCustom, ValuesBatch
 from snuba.lw_deletions.formatters import EAPItemsFormatter, SearchIssuesFormatter
-from snuba.lw_deletions.strategy import FormatQuery, increment_by
+from snuba.lw_deletions.strategy import FormatQuery, LWDeleteQueryException, increment_by
 from snuba.lw_deletions.types import ConditionsType
+from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.utils.streams.topics import Topic as SnubaTopic
+from snuba.web import QueryException
 from snuba.web.bulk_delete_query import DeleteQueryMessage
+from tests.helpers import get_delete_log_events
 
 ROWS_CONDITIONS = {
     5: {"project_id": [1], "group_id": [1, 2, 3, 4]},
@@ -627,3 +635,168 @@ def test_allowlist_all_allowed(mock_execute: Mock, mock_num_mutations: Mock) -> 
     # No delete_skipped
     skipped_calls = [c for c in metrics.increment.call_args_list if c[0][0] == "delete_skipped"]
     assert len(skipped_calls) == 0
+
+
+def _make_eap_issue_message(organization_id: int, project_id: int) -> Message[KafkaPayload]:
+    """An EAP issue delete: filtered on the group_id attribute."""
+    delete_query: DeleteQueryMessage = {
+        **_get_eap_message(5, {"organization_id": [organization_id], "project_id": [project_id]}),
+        "attribute_conditions": {
+            "group_id": {"attr_key_type": 2, "attr_key_name": "group_id", "attr_values": [7, 8]}
+        },
+        "attribute_conditions_item_type": TraceItemType.TRACE_ITEM_TYPE_OCCURRENCE,
+    }
+    return Message(
+        BrokerValue(
+            KafkaPayload(None, rapidjson.dumps(delete_query).encode("utf-8"), []),
+            Partition(Topic(SnubaTopic.LW_DELETIONS_GENERIC_EVENTS.value), 0),
+            0,
+            datetime(1970, 1, 1),
+        )
+    )
+
+
+def _eap_delete_log(organization_id: int, project_id: int, **extra: Any) -> dict[str, Any]:
+    return {
+        "target": "eap",
+        "organization_id": organization_id,
+        "project_id": project_id,
+        "group_ids_count": 2,
+        "group_ids": "7,8",
+        **extra,
+    }
+
+
+def _run_eap_batch(messages: list[Message[KafkaPayload]]) -> Mock:
+    commit_step = Mock()
+    storage = get_writable_storage(StorageKey("eap_items"))
+    strategy = BatchStepCustom(
+        max_batch_size=20,
+        max_batch_time=1000,
+        next_step=FormatQuery(commit_step, storage, EAPItemsFormatter(), Mock()),
+        increment_by=increment_by,
+    )
+    for message in messages:
+        strategy.submit(message)
+    strategy.join(2.0)
+    return commit_step
+
+
+@patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
+@patch("snuba.lw_deletions.strategy._execute_query")
+@pytest.mark.redis_db
+@override_options("snuba", {"org_ids_delete_allowlist": "1"})
+def test_delete_log_eap_deleted_and_skipped(mock_execute: Mock, mock_num_mutations: Mock) -> None:
+    with patch("snuba.utils.delete_log.sentry_logger") as sentry_logger:
+        commit_step = _run_eap_batch([_make_eap_issue_message(1, 1), _make_eap_issue_message(2, 2)])
+
+    assert commit_step.submit.call_count == 1
+    tables = get_writable_storage(StorageKey("eap_items")).get_deletion_settings().tables
+    # Org 2 is not in the allowlist. Org 1 is deleted from every table.
+    assert get_delete_log_events(sentry_logger) == [
+        *[("info", "snuba.delete.eap_deleted", _eap_delete_log(1, 1, table=t)) for t in tables],
+        ("info", "snuba.delete.eap_skipped", _eap_delete_log(2, 2, reason="org_not_in_allowlist")),
+    ]
+
+
+@patch("snuba.lw_deletions.strategy._num_parts_currently_mutating")
+@patch("snuba.lw_deletions.strategy._execute_query")
+@pytest.mark.redis_db
+@override_options("snuba", {"org_ids_delete_allowlist": "1"})
+def test_delete_log_skipped_once_when_batch_is_retried(
+    mock_execute: Mock, mock_num_mutations: Mock
+) -> None:
+    """A batch rejected for backpressure and retried logs its skipped delete once."""
+    # Too many mutations on the first try, then few enough.
+    mock_num_mutations.side_effect = [1000, 1]
+    commit_step = Mock()
+    storage = get_writable_storage(StorageKey("eap_items"))
+    format_query = FormatQuery(commit_step, storage, EAPItemsFormatter(), Mock())
+    batch: Message[ValuesBatch[KafkaPayload]] = Message(
+        Value([_make_eap_issue_message(1, 1).value, _make_eap_issue_message(2, 2).value], {})
+    )
+
+    with patch("snuba.utils.delete_log.sentry_logger") as sentry_logger:
+        with pytest.raises(MessageRejected):
+            format_query.submit(batch)
+        # The ongoing mutations check is throttled to once per second.
+        with patch("snuba.lw_deletions.strategy.time.time", return_value=time.time() + 2):
+            format_query.submit(batch)
+
+    assert commit_step.submit.call_count == 1
+    skipped = [
+        e for e in get_delete_log_events(sentry_logger) if e[1] == "snuba.delete.eap_skipped"
+    ]
+    assert skipped == [
+        ("info", "snuba.delete.eap_skipped", _eap_delete_log(2, 2, reason="org_not_in_allowlist"))
+    ]
+
+
+@patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
+@patch("snuba.lw_deletions.strategy._execute_query")
+@pytest.mark.redis_db
+@pytest.mark.parametrize(
+    "cause, reason, raises",
+    [
+        pytest.param(
+            ClickhouseError("too slow", code=160),
+            "non_retryable_clickhouse_error",
+            False,
+            id="non_retryable",
+        ),
+        pytest.param(
+            ClickhouseError("network error", code=210),
+            "retryable_clickhouse_error",
+            True,
+            id="retryable",
+        ),
+        pytest.param(
+            AllocationPolicyViolations.from_args({"details": {}, "summary": {}}),
+            "allocation_policy_violation",
+            False,
+            id="allocation_policy_violation",
+        ),
+        pytest.param(None, "query_exception", False, id="query_exception"),
+    ],
+)
+def test_delete_log_eap_failed(
+    mock_execute: Mock,
+    mock_num_mutations: Mock,
+    cause: Exception | None,
+    reason: str,
+    raises: bool,
+) -> None:
+    error = QueryException(message="delete failed")
+    error.__cause__ = cause
+    mock_execute.side_effect = error
+
+    with patch("snuba.utils.delete_log.sentry_logger") as sentry_logger:
+        if raises:
+            with pytest.raises(LWDeleteQueryException):
+                _run_eap_batch([_make_eap_issue_message(1, 1)])
+        else:
+            commit_step = _run_eap_batch([_make_eap_issue_message(1, 1)])
+            # The existing behavior is unchanged: the failure is swallowed
+            # and the batch is still committed.
+            assert commit_step.submit.call_count == 1
+
+    events = get_delete_log_events(sentry_logger)
+    # A retryable error stops at the first table; the others continue to the next table.
+    tables = get_writable_storage(StorageKey("eap_items")).get_deletion_settings().tables
+    expected_tables = tables[:1] if raises else tables
+    assert events == [
+        (
+            "error",
+            "snuba.delete.eap_failed",
+            _eap_delete_log(
+                1,
+                1,
+                reason=reason,
+                table=t,
+                # Without a cause, the QueryException itself is reported.
+                error=type(cause or error).__name__,
+                error_message=str(cause or error),
+            ),
+        )
+        for t in expected_tables
+    ]

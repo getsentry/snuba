@@ -1,6 +1,7 @@
 import logging
 from collections.abc import Mapping, MutableMapping, Sequence
 from concurrent.futures import Future
+from functools import partial
 from typing import Any, TypedDict
 
 import rapidjson
@@ -12,6 +13,8 @@ from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 from snuba import environment, settings
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.error_codes import ErrorCodes
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query import Query
 from snuba.clusters.cluster import UndefinedClickhouseCluster, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
@@ -25,10 +28,15 @@ from snuba.protos.common import get_trace_item_type_name
 from snuba.query.conditions import combine_or_conditions
 from snuba.query.data_source.simple import Table
 from snuba.query.dsl import literal
-from snuba.query.exceptions import InvalidQueryException, NoRowsToDeleteException
+from snuba.query.exceptions import (
+    InvalidQueryException,
+    NoRowsToDeleteException,
+    TooManyDeleteRowsException,
+)
 from snuba.query.expressions import Expression
 from snuba.reader import Result
 from snuba.state.sentry_options import get_mapped_option, get_option
+from snuba.utils.delete_log import eap_group_ids, log_eap_delete_event
 from snuba.utils.metrics.util import with_span
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.schemas import ColumnValidator, InvalidColumnType
@@ -87,7 +95,23 @@ def _get_kafka_producer(topic: Topic) -> KafkaProducer:
     return producer
 
 
-def _delete_query_delivery_callback(future: Future[BrokerValue[KafkaPayload]]) -> None:
+def _log_produce_failure(delete_query: DeleteQueryMessage, error: BaseException) -> None:
+    """The delete query never reached the lw_deletions consumer, so nothing is deleted."""
+    attribute_conditions = delete_query.get("attribute_conditions") or {}
+    group_id_condition = attribute_conditions.get("group_id")
+    log_eap_delete_event(
+        StorageKey(delete_query["storage_name"]),
+        "eap_failed",
+        delete_query["conditions"],
+        group_id_condition["attr_values"] if group_id_condition else [],
+        reason="kafka_produce_failed",
+        error=error,
+    )
+
+
+def _delete_query_delivery_callback(
+    delete_query: DeleteQueryMessage, future: Future[BrokerValue[KafkaPayload]]
+) -> None:
     error = future.exception()
     metrics.increment(
         "delete_query.delivery_callback",
@@ -96,6 +120,7 @@ def _delete_query_delivery_callback(future: Future[BrokerValue[KafkaPayload]]) -
 
     if error is not None:
         logger.warning("Could not produce delete query due to error: %r", error)
+        _log_produce_failure(delete_query, error)
 
 
 def produce_delete_query(delete_query: DeleteQueryMessage) -> None:
@@ -111,9 +136,10 @@ def produce_delete_query(delete_query: DeleteQueryMessage) -> None:
             KafkaPayload(None, data, []),
         )
         assert isinstance(future, Future)  # use_simple_futures is off
-        future.add_done_callback(_delete_query_delivery_callback)
+        future.add_done_callback(partial(_delete_query_delivery_callback, delete_query))
     except Exception as ex:
         logger.exception("Could not produce delete query due to error: %r", ex)
+        _log_produce_failure(delete_query, ex)
 
 
 def _validate_attribute_conditions(
@@ -165,8 +191,52 @@ def _validate_attribute_conditions(
         )
 
 
+def _eap_failure_reason(error: Exception) -> str:
+    if isinstance(error, TooManyDeleteRowsException):
+        return "too_many_rows"
+    if isinstance(error, DeletesNotEnabledError):
+        return "deletes_not_enabled"
+    if isinstance(error, InvalidQueryException):
+        return "invalid_query"
+    if isinstance(error, TimeoutError) or (
+        isinstance(error, ClickhouseError) and error.code == ErrorCodes.TIMEOUT_EXCEEDED
+    ):
+        return "timeout"
+    return "unexpected_error"
+
+
 @with_span()
 def delete_from_storage(
+    storage: WritableTableStorage,
+    column_conditions: dict[str, list[Any]],
+    attribution_info: Mapping[str, Any],
+    attribute_conditions: AttributeConditions | None = None,
+) -> dict[str, Result]:
+    """
+    Validates the delete and produces it to the lw_deletions topic. See
+    `_delete_from_storage`. On EAP storages, it also sends the
+    snuba.delete.received and snuba.delete.eap_failed Sentry Logs.
+    """
+    storage_key = storage.get_storage_key()
+    group_ids = eap_group_ids(attribute_conditions)
+    log_eap_delete_event(storage_key, "received", column_conditions, group_ids)
+    try:
+        return _delete_from_storage(
+            storage, column_conditions, attribution_info, attribute_conditions
+        )
+    except Exception as e:
+        log_eap_delete_event(
+            storage_key,
+            "eap_failed",
+            column_conditions,
+            group_ids,
+            reason=_eap_failure_reason(e),
+            error=e,
+        )
+        raise
+
+
+def _delete_from_storage(
     storage: WritableTableStorage,
     column_conditions: dict[str, list[Any]],
     attribution_info: Mapping[str, Any],
@@ -211,6 +281,13 @@ def delete_from_storage(
 
         if not get_option("permit_delete_by_attribute", False):
             metrics.increment("delete_query.delete_ignored")
+            log_eap_delete_event(
+                storage.get_storage_key(),
+                "eap_skipped",
+                column_conditions,
+                eap_group_ids(attribute_conditions),
+                reason="delete_ignored",
+            )
             return {}
 
     attr_info = _get_attribution_info(attribution_info)
@@ -315,12 +392,27 @@ def delete_from_tables(
         except NoRowsToDeleteException:
             result[table] = {}
 
+    group_ids = eap_group_ids(conditions.attribute_conditions)
     if highest_rows_to_delete == 0:
+        log_eap_delete_event(
+            storage.get_storage_key(),
+            "eap_skipped",
+            conditions.column_conditions,
+            group_ids,
+            reason="no_rows_to_delete",
+        )
         return result
 
     storage_name = storage.get_storage_key().value
     project_id = attribution_info.tenant_ids.get("project_id")
     if project_id and should_use_killswitch(storage_name, str(project_id)):
+        log_eap_delete_event(
+            storage.get_storage_key(),
+            "eap_skipped",
+            conditions.column_conditions,
+            group_ids,
+            reason="killswitch",
+        )
         return result
 
     delete_query: DeleteQueryMessage = {

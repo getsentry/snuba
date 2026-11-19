@@ -4,7 +4,7 @@ import logging
 import time
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta
-from typing import TypeVar
+from typing import Any, TypeVar
 
 import rapidjson
 from arroyo.backends.kafka import KafkaPayload
@@ -36,6 +36,7 @@ from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state.sentry_options import get_mapped_option, get_option
+from snuba.utils.delete_log import DeleteState, eap_group_ids, log_eap_delete_event
 from snuba.utils.metrics import MetricsBackend
 from snuba.web import QueryException
 from snuba.web.bulk_delete_query import construct_or_conditions, construct_query
@@ -103,6 +104,19 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
                 self.__metrics.increment("delete_skipped")
         return allowed
 
+    def _log_delete(
+        self, state: DeleteState, conditions: Sequence[ConditionsBag], **kwargs: Any
+    ) -> None:
+        """Send one snuba.delete.<state> Sentry Log per delete in the batch."""
+        for cond in conditions:
+            log_eap_delete_event(
+                self.__storage.get_storage_key(),
+                state,
+                cond.column_conditions,
+                eap_group_ids(cond.attribute_conditions),
+                **kwargs,
+            )
+
     def submit(self, message: Message[ValuesBatch[KafkaPayload]]) -> None:
         decode_messages = [rapidjson.loads(m.payload.value) for m in message.value.payload]
         conditions = self.__formatter.format(decode_messages)
@@ -123,6 +137,10 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
                 self.__metrics.increment("allocation_policy_violation")
                 raise MessageRejected from None
 
+        # Logged here, not in _filter_allowed_conditions, so a batch retried
+        # after MessageRejected logs each skipped delete once.
+        blocked = [c for c in conditions if not any(c is a for a in allowed_conditions)]
+        self._log_delete("eap_skipped", blocked, reason="org_not_in_allowlist")
         self.__next_step.submit(message)
 
     def _get_attribute_info(self) -> AttributionInfo:
@@ -230,7 +248,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
                 self._execute_delete_by_partition(table, where_clause, query_settings, conditions)
             else:
                 query = construct_query(self.__storage, table, where_clause)
-                self._execute_single_delete(table, query, query_settings)
+                self._execute_single_delete(table, query, query_settings, conditions)
 
     def _execute_delete_by_partition(
         self,
@@ -247,7 +265,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
                 table,
             )
             query = construct_query(self.__storage, table, where_clause)
-            self._execute_single_delete(table, query, query_settings)
+            self._execute_single_delete(table, query, query_settings, conditions)
             return
 
         cond_hash = self._conditions_hash(conditions)
@@ -277,7 +295,9 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
             )
             partition_where = combine_and_conditions([where_clause, partition_condition])
             query = construct_query(self.__storage, table, partition_where)
-            self._execute_single_delete(table, query, query_settings, partition_week=partition_week)
+            self._execute_single_delete(
+                table, query, query_settings, conditions, partition_week=partition_week
+            )
             self.__metrics.increment(
                 "partition_delete_executed",
                 tags={"table": table, "partition_week": partition_week},
@@ -291,6 +311,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         table: str,
         query: Query,
         query_settings: HTTPQuerySettings,
+        conditions: Sequence[ConditionsBag],
         partition_week: str | None = None,
     ) -> None:
         tags = {"table": table}
@@ -314,11 +335,21 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         except QueryException as exc:
             self.__metrics.increment("execute_delete_query_failed", tags=tags)
             cause = exc.__cause__
+            self._log_delete(
+                "eap_failed",
+                conditions,
+                reason=_delete_failure_reason(cause),
+                table=table,
+                partition_week=partition_week,
+                error=cause or exc,
+            )
             if isinstance(cause, ClickhouseError):
                 if cause.code in LW_DELETE_NON_RETRYABLE_CLICKHOUSE_ERROR_CODES:
                     logger.exception("Error running delete query %r", exc)
                 else:
                     raise LWDeleteQueryException(exc.message) from exc
+        else:
+            self._log_delete("eap_deleted", conditions, table=table, partition_week=partition_week)
 
     def _check_ongoing_mutations(self, skip_throttle: bool = False) -> None:
         now = time.time()
@@ -350,6 +381,18 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
 
     def join(self, timeout: float | None = None) -> None:
         self.__next_step.join(timeout)
+
+
+def _delete_failure_reason(cause: BaseException | None) -> str:
+    """Why a delete query failed, for the snuba.delete.eap_failed Sentry Log."""
+    if isinstance(cause, ClickhouseError):
+        if cause.code in LW_DELETE_NON_RETRYABLE_CLICKHOUSE_ERROR_CODES:
+            # Not retried: the delete is dropped.
+            return "non_retryable_clickhouse_error"
+        return "retryable_clickhouse_error"
+    if isinstance(cause, AllocationPolicyViolations):
+        return "allocation_policy_violation"
+    return "query_exception"
 
 
 def increment_by(message: BaseValue[KafkaPayload]) -> int:

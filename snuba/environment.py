@@ -188,6 +188,7 @@ def setup_sentry() -> None:
         dsn=settings.SENTRY_DSN,
         spotlight=None if settings.DEBUG else False,
         before_send=before_send,
+        enable_logs=True,
         integrations=[
             FlaskIntegration(),
             GnuBacktraceIntegration(),
@@ -195,7 +196,9 @@ def setup_sentry() -> None:
             # operational noise far more often than they're actionable (e.g.
             # consumer rebalance/shutdown timeouts) and are still captured as
             # logs/breadcrumbs.
-            LoggingIntegration(event_level=logging.ERROR),
+            # sentry_logs_level=None: don't forward stdlib log records to
+            # Sentry Logs. Only explicit sentry_sdk.logger calls are sent.
+            LoggingIntegration(event_level=logging.ERROR, sentry_logs_level=None),
             RedisIntegration(),
             ThreadingIntegration(propagate_hub=True),
         ],
