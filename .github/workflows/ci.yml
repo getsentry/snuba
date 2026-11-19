@@ -613,11 +613,13 @@ jobs:
             query: "clickhouse-clickhouse-server:26.8.36.3"
             storage: "altinity-clickhouse-server:25.8.33.10002.altinitystable"
             remote_servers: "remote_servers_single_shard.xml"
+            storage_hosts: "clickhouse-02"
             expected: "clickhouse-query=26.8,clickhouse-02=25.8"
           - name: "query 25.8, single shard 26.8"
             query: "altinity-clickhouse-server:25.8.33.10002.altinitystable"
             storage: "clickhouse-clickhouse-server:26.8.36.3"
             remote_servers: "remote_servers_single_shard.xml"
+            storage_hosts: "clickhouse-02"
             expected: "clickhouse-query=25.8,clickhouse-02=26.8"
 
     steps:
@@ -674,10 +676,11 @@ jobs:
           CLICKHOUSE_STORAGE_03_IMAGE: ${{ matrix.storage_03 && format('ghcr.io/getsentry/image-mirror-{0}', matrix.storage_03) || '' }}
           EXPECTED_CLICKHOUSE_VERSIONS: ${{ matrix.expected }}
           CLICKHOUSE_REMOTE_SERVERS_CONFIG: ./test_distributed_migrations/config/clickhouse/${{ matrix.remote_servers || 'remote_servers.xml' }}
+          EXPECTED_STORAGE_HOSTS: ${{ matrix.storage_hosts || '' }}
         run: |
           docker compose --profile multi_node -f docker-compose.gcb.yml up -d
           TEST_LOCATION=test_distributed_migrations docker compose --profile multi_node -f docker-compose.gcb.yml \
-            run --rm -e EXPECTED_CLICKHOUSE_VERSIONS snuba-test
+            run --rm -e EXPECTED_CLICKHOUSE_VERSIONS -e EXPECTED_STORAGE_HOSTS snuba-test
 
   image-smoke-test:
     name: Image smoke test
