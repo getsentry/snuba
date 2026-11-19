@@ -27,7 +27,6 @@ from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.lw_deletions.batching import BatchStepCustom, NoBatchStep, ValuesBatch
 from snuba.lw_deletions.formatters import Formatter
-from snuba.lw_deletions.off_peak import OffPeakProcessingStrategy
 from snuba.lw_deletions.types import ConditionsBag
 from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.query.conditions import combine_and_conditions
@@ -399,4 +398,4 @@ class LWDeletionsConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]
                 next_step=format_query,
                 increment_by=increment_by,
             )
-        return OffPeakProcessingStrategy(next_step=step, metrics=self.metrics)
+        return step

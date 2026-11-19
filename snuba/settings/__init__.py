@@ -134,7 +134,6 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
 DOGSTATSD_SAMPLING_RATES = {
     "metrics.processor.set.size": 0.1,
     "metrics.processor.distribution.size": 0.1,
-    "off_peak_rejected": 0.01,
 }
 DDM_METRICS_SAMPLE_RATE = float(os.environ.get("SNUBA_DDM_METRICS_SAMPLE_RATE", 0.01))
 

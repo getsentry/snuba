@@ -642,21 +642,6 @@
       "default": false,
       "description": "When true, bypass the read-through query cache entirely and call the underlying function directly (escape hatch for Redis issues)."
     },
-    "lw_deletions_offpeak_enabled": {
-      "type": "boolean",
-      "default": false,
-      "description": "When true, lightweight deletes are only processed during the configured off-peak window."
-    },
-    "lw_deletions_offpeak_start": {
-      "type": "integer",
-      "default": 0,
-      "description": "UTC hour (0-24) at which the lightweight-deletes off-peak window starts."
-    },
-    "lw_deletions_offpeak_end": {
-      "type": "integer",
-      "default": 24,
-      "description": "UTC hour (0-24) at which the lightweight-deletes off-peak window ends."
-    },
     "org_ids_delete_allowlist": {
       "type": "string",
       "default": "",
