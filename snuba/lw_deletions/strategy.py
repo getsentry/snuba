@@ -240,13 +240,12 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         for table in self.__tables:
             where_clause = construct_or_conditions(self.__storage, conditions)
             if split_enabled:
-                ok = self._execute_delete_by_partition(
+                succeeded &= self._execute_delete_by_partition(
                     table, where_clause, query_settings, conditions
                 )
             else:
                 query = construct_query(self.__storage, table, where_clause)
-                ok = self._execute_single_delete(table, query, query_settings)
-            succeeded = succeeded and ok
+                succeeded &= self._execute_single_delete(table, query, query_settings)
 
         # Only when every table's delete ran without a swallowed error.
         if self.__is_eap and succeeded:
@@ -309,10 +308,9 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
             )
             partition_where = combine_and_conditions([where_clause, partition_condition])
             query = construct_query(self.__storage, table, partition_where)
-            if not self._execute_single_delete(
+            succeeded &= self._execute_single_delete(
                 table, query, query_settings, partition_week=partition_week
-            ):
-                succeeded = False
+            )
             self.__metrics.increment(
                 "partition_delete_executed",
                 tags={"table": table, "partition_week": partition_week},
