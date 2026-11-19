@@ -8,8 +8,11 @@ from unittest import mock
 import pytest
 from sentry_options.testing import override_options
 
+from snuba import reader as snuba_reader
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
+from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clusters.load_info import LoadInfo
@@ -29,6 +32,7 @@ from snuba.query.allocation_policies import (
     QuotaAllowance,
 )
 from snuba.query.data_source.simple import Table
+from snuba.query.expressions import Column, FunctionCall
 from snuba.query.parser.expressions import parse_clickhouse_function
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.querylog.query_metadata import ClickhouseQueryMetadata
@@ -1524,3 +1528,102 @@ def test_idle_pardon_does_not_short_circuit_remaining_policies() -> None:
     assert stats["quota_allowance"]["summary"]["is_rejected"] is False
     assert stats["quota_allowance"]["details"]["_RejectAllPolicy"]["can_run"] is False
     assert "_RecordCallPolicy" in stats["quota_allowance"]["details"]
+
+
+_REMOTE_HEADER_MISMATCH = (
+    "Code: 10. DB::Exception: Not found column arrayJoin(__table1.`tags.key`) in block. "
+    "There are only columns: arrayJoin(__table1.tags.key), count(): While executing Remote. "
+    "(NOT_FOUND_COLUMN_IN_BLOCK)"
+)
+
+
+class _FailFirstReader(snuba_reader.Reader):
+    """Raises ``error`` on the first execute, then returns one row."""
+
+    def __init__(self, error: ClickhouseError) -> None:
+        super().__init__(cache_partition_id=None, query_settings_prefix=None)
+        self.error = error
+        self.calls: list[tuple[str, Mapping[str, Any]]] = []
+
+    def execute(
+        self, query: Any, settings: Any = None, *args: Any, **kwargs: Any
+    ) -> snuba_reader.Result:
+        self.calls.append((query.get_sql(), dict(settings or {})))
+        if len(self.calls) == 1:
+            raise self.error
+        return {"data": [{"k": "a"}], "meta": [{"name": "k", "type": "String"}]}
+
+
+def _tag_keys_query() -> ClickhouseQuery:
+    return ClickhouseQuery(
+        Table("errors_dist", ColumnSet([]), storage_key=StorageKey("errors")),
+        selected_columns=[
+            SelectedExpression(
+                "k", FunctionCall("k", "arrayJoin", (Column(None, None, "tags.key"),))
+            )
+        ],
+        groupby=[FunctionCall("k", "arrayJoin", (Column(None, None, "tags.key"),))],
+    )
+
+
+def _execute(reader: snuba_reader.Reader, stats: MutableMapping[str, Any]) -> snuba_reader.Result:
+    query = _tag_keys_query()
+    return execute_query(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(),
+        formatted_query=format_query(query),
+        reader=reader,
+        timer=Timer("test"),
+        stats=stats,
+        clickhouse_query_settings={"query_id": "randomized-original"},
+        robust=False,
+    )
+
+
+def test_remote_header_mismatch_retries_with_projection_subquery() -> None:
+    reader = _FailFirstReader(ClickhouseError(_REMOTE_HEADER_MISMATCH, code=10))
+    stats: dict[str, Any] = {}
+
+    result = _execute(reader, stats)
+
+    assert result["data"] == [{"k": "a"}]
+    assert stats["remote_header_fallback"] is True
+    assert len(reader.calls) == 2
+    retry_sql, retry_settings = reader.calls[1]
+    assert retry_sql == (
+        "SELECT (arrayJoin(_snuba_inner_0) AS k) "
+        "FROM (SELECT (`tags.key` AS _snuba_inner_0) FROM errors_dist) GROUP BY k"
+    )
+    assert retry_settings["query_id"] != "randomized-original"
+    calls = get_recorded_metric_calls("increment", "db_query.remote_header_fallback")
+    assert calls is not None and calls[-1].tags == {"status": "succeeded"}
+
+
+@pytest.mark.parametrize(
+    "error, options",
+    [
+        pytest.param(
+            ClickhouseError(_REMOTE_HEADER_MISMATCH, code=10),
+            {"remote_header_fallback_enabled": False},
+            id="killswitch-off",
+        ),
+        pytest.param(
+            ClickhouseError(
+                "Code: 10. DB::Exception: Not found column x in block. "
+                "There are only columns: y: While executing Remote.",
+                code=10,
+            ),
+            {},
+            id="unrelated-missing-column",
+        ),
+        pytest.param(ClickhouseError(_REMOTE_HEADER_MISMATCH, code=241), {}, id="other-code"),
+    ],
+)
+def test_remote_header_fallback_reraises_without_retry(
+    error: ClickhouseError, options: dict[str, Any]
+) -> None:
+    reader = _FailFirstReader(error)
+    with override_options("snuba", options), pytest.raises(ClickhouseError) as exc_info:
+        _execute(reader, {})
+    assert exc_info.value is error
+    assert len(reader.calls) == 1
