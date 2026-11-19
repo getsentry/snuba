@@ -24,6 +24,7 @@ from sentry_kafka_schemas.schema_types.events_v1 import (
     ReplaceGroupMessageBody,
     TombstoneEventsMessageBody,
 )
+from sentry_sdk import logger as sentry_logger
 
 from snuba import environment, settings
 from snuba.clickhouse import DATETIME_FORMAT
@@ -49,7 +50,6 @@ from snuba.replacers.replacer_processor import (
     ReplacerState,
 )
 from snuba.state.sentry_options import get_option
-from snuba.utils.delete_log import DeleteState, log_delete_event
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 """
@@ -164,13 +164,19 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         attributes_json = json.dumps({"message_type": type_, **message.data})
         logger.info(attributes_json)
 
-        if type_ == ReplacementType.END_DELETE_GROUPS:
-            log_delete_event(
-                "received",
-                "errors",
-                project_id=message.data.get("project_id"),
-                group_ids=message.data.get("group_ids") or [],
-                transaction_id=message.data.get("transaction_id"),
+        # Issue deletes send snuba.delete.* Sentry Logs.
+        delete_attrs = (
+            {
+                "project_id": message.data["project_id"],
+                "group_ids_count": len(message.data["group_ids"]),
+                "transaction_id": message.data.get("transaction_id", ""),
+            }
+            if type_ == ReplacementType.END_DELETE_GROUPS
+            else None
+        )
+        if delete_attrs:
+            sentry_logger.info(
+                "snuba.delete.received", attributes={**delete_attrs, "target": "errors"}
             )
 
         if type_ in REPLACEMENT_EVENT_TYPES:
@@ -202,7 +208,7 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
             auto_bypass_projects = list(
                 get_config_auto_replacements_bypass_projects(datetime.now()).keys()
             )
-            projects_to_skip = list(auto_bypass_projects)
+            projects_to_skip = auto_bypass_projects
             if manual_bypass_projects is not None:
                 try:
                     projects_to_skip.extend(json.loads(manual_bypass_projects))
@@ -223,13 +229,10 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                         "consumer_group": message.metadata.consumer_group,
                     },
                 )
-                if isinstance(processed, DeleteGroupsReplacement):
-                    bypass_list = (
-                        "auto" if processed.get_project_id() in auto_bypass_projects else "manual"
-                    )
-                    # Neither the Redis exclude list nor the errors table is written.
-                    for state in ("redis_skipped", "errors_skipped"):
-                        processed.log_delete(state, reason="bypass_list", bypass_list=bypass_list)
+                if delete_attrs:
+                    skipped = {**delete_attrs, "reason": "bypass_list"}
+                    sentry_logger.info("snuba.delete.redis_skipped", attributes=skipped)
+                    sentry_logger.info("snuba.delete.errors_skipped", attributes=skipped)
                 return None
 
         return processed
@@ -246,8 +249,11 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
     def pre_replacement(self, replacement: Replacement) -> bool:
         project_id = replacement.get_project_id()
         query_time_flags = replacement.get_query_time_flags()
-        # Only issue deletes are logged, not the other ExcludeGroups replacements.
-        delete = replacement if isinstance(replacement, DeleteGroupsReplacement) else None
+        delete_attrs = (
+            {"project_id": project_id, "group_ids_count": len(replacement.group_ids)}
+            if isinstance(replacement, DeleteGroupsReplacement)
+            else None
+        )
 
         if not settings.REPLACER_IMMEDIATE_OPTIMIZE:
             if isinstance(query_time_flags, NeedsFinal):
@@ -264,15 +270,21 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                         replacement.get_replacement_type(),
                     )
                 except Exception as e:
-                    if delete is not None:
-                        delete.log_delete("redis_failed", reason="redis_write_failed", error=e)
+                    if delete_attrs:
+                        sentry_logger.error(
+                            "snuba.delete.redis_failed",
+                            attributes={**delete_attrs, "error": type(e).__name__},
+                        )
                     raise
-                if delete is not None:
-                    delete.log_delete("redis_written")
+                if delete_attrs:
+                    sentry_logger.info("snuba.delete.redis_written", attributes=delete_attrs)
 
         elif query_time_flags is not None:
-            if delete is not None:
-                delete.log_delete("redis_skipped", reason="immediate_optimize")
+            if delete_attrs:
+                sentry_logger.info(
+                    "snuba.delete.redis_skipped",
+                    attributes={**delete_attrs, "reason": "immediate_optimize"},
+                )
             return True
 
         return False
@@ -405,8 +417,6 @@ class DeleteGroupsReplacement(Replacement):
     required_columns: Sequence[str]
     timestamp: datetime
     group_ids: Sequence[int]
-    # Only used in the snuba.delete.* Sentry Logs.
-    transaction_id: str | None = None
 
     @classmethod
     def parse_message(
@@ -427,23 +437,10 @@ class DeleteGroupsReplacement(Replacement):
             project_id=message.data["project_id"],
             timestamp=timestamp,
             group_ids=group_ids,
-            transaction_id=message.data.get("transaction_id"),
         )
 
     def get_project_id(self) -> int:
         return self.project_id
-
-    def log_delete(self, state: DeleteState, **kwargs: Any) -> None:
-        """Send a snuba.delete.<state> Sentry Log for this issue delete."""
-        log_delete_event(
-            state,
-            # The stage is in the state name; this is the store it writes to.
-            "redis" if state.startswith("redis_") else "errors",
-            project_id=self.project_id,
-            group_ids=self.group_ids,
-            transaction_id=self.transaction_id,
-            **kwargs,
-        )
 
     def get_query_time_flags(self) -> QueryTimeFlags | None:
         return ExcludeGroups(group_ids=self.group_ids)

@@ -66,13 +66,3 @@ def override_entity_column_validator(
     assert isinstance(entity, PluggableEntity)
     entity.validate_data_model = validator_mode
     override_entity_map(entity_key, entity)
-
-
-def get_delete_log_events(sentry_logger: Any) -> list[tuple[str, str, dict[str, Any]]]:
-    """
-    (level, name, attributes) of each snuba.delete.* Sentry Log sent to a
-    mocked `snuba.utils.delete_log.sentry_logger`.
-    """
-    return [
-        (level, args[0], kwargs["attributes"]) for level, args, kwargs in sentry_logger.method_calls
-    ]

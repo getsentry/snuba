@@ -10,7 +10,6 @@ import pytest
 import simplejson as json
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.types import BrokerValue, Message, Partition, Topic
-from redis.exceptions import ConnectionError as RedisConnectionError
 from sentry_options.testing import override_options
 
 from snuba import replacer, settings
@@ -22,11 +21,10 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import ReplacementType
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.replacers import errors_replacer
-from snuba.replacers.projects_query_flags import ProjectsQueryFlags
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from tests.fixtures import get_raw_event
-from tests.helpers import get_delete_log_events, write_unprocessed_events
+from tests.helpers import write_unprocessed_events
 
 redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
 
@@ -925,210 +923,26 @@ class TestReplacerProcess(BaseTest):
             meta_and_replacement = self.replacer.process_message(self._wrap(message))
             assert meta_and_replacement is None
 
-
-@pytest.mark.clickhouse_db
-@pytest.mark.redis_db
-class TestDeleteLog(BaseTest):
-    """The snuba.delete.* Sentry Logs sent for issue deletes on the errors path."""
-
-    def teardown_method(self) -> None:
-        importlib.reload(settings)
-
-    def _delete_message(self, group_ids: list[int] | None = None) -> Message[KafkaPayload]:
-        return self._wrap(
-            (
-                2,
-                ReplacementType.END_DELETE_GROUPS,
-                {
-                    "project_id": self.project_id,
-                    "group_ids": group_ids or [1, 2, 3],
-                    "transaction_id": "t1",
-                    "datetime": datetime.utcnow().strftime(PAYLOAD_DATETIME_FORMAT),
-                },
-            )
-        )
-
-    def _delete_log(self, target: str, **extra: Any) -> dict[str, Any]:
-        return {
-            "target": target,
-            "project_id": self.project_id,
-            "group_ids_count": 3,
-            "group_ids": "1,2,3",
-            "transaction_id": "t1",
-            **extra,
-        }
-
-    def _delete_replacement(
-        self,
-    ) -> tuple[errors_replacer.ErrorsReplacer, errors_replacer.DeleteGroupsReplacement]:
-        processor = self.storage.get_table_writer().get_replacer_processor()
-        assert isinstance(processor, errors_replacer.ErrorsReplacer)
-        processed = self.replacer.process_message(self._delete_message())
-        assert processed is not None
-        _, replacement = processed
-        assert isinstance(replacement, errors_replacer.DeleteGroupsReplacement)
-        return processor, replacement
-
-    def test_delete_log_received(self) -> None:
-        with patch("snuba.utils.delete_log.sentry_logger") as sentry_logger:
-            assert self.replacer.process_message(self._delete_message(list(range(1, 13))))
-
-        assert get_delete_log_events(sentry_logger) == [
-            (
-                "info",
-                "snuba.delete.received",
-                self._delete_log("errors", group_ids_count=12, group_ids="1,2,3,4,5,6,7,8,9,10"),
-            )
-        ]
-
-    @pytest.mark.parametrize(
-        "replacement_type, extra",
-        [
-            (ReplacementType.START_DELETE_GROUPS, {"group_ids": [1, 2]}),
-            (ReplacementType.TOMBSTONE_EVENTS, {"event_ids": ["00e24a150d7f4ee4b142b61b4d893b6d"]}),
-            (ReplacementType.END_MERGE, {"new_group_id": 2, "previous_group_ids": [1, 3]}),
-            (ReplacementType.EXCLUDE_GROUPS, {"group_ids": [1, 2]}),
-        ],
-    )
-    def test_delete_log_not_sent_for_other_messages(
-        self, replacement_type: ReplacementType, extra: dict[str, Any]
-    ) -> None:
+    def test_delete_sends_sentry_log(self) -> None:
         message = (
             2,
-            replacement_type,
+            ReplacementType.END_DELETE_GROUPS,
             {
                 "project_id": self.project_id,
-                "datetime": datetime.utcnow().strftime(PAYLOAD_DATETIME_FORMAT),
-                **extra,
+                "group_ids": [1, 2, 3],
+                "transaction_id": "t1",
+                "datetime": datetime.now().strftime(PAYLOAD_DATETIME_FORMAT),
             },
         )
-        with patch("snuba.utils.delete_log.sentry_logger") as sentry_logger:
-            processed = self.replacer.process_message(self._wrap(message))
-            if processed is not None:
-                self.replacer.flush_batch([processed])
+        with patch("snuba.replacers.errors_replacer.sentry_logger") as sentry_logger:
+            self.replacer.process_message(self._wrap(message))
 
-        assert sentry_logger.method_calls == []
-
-    @pytest.mark.parametrize("bypass_list", ["manual", "auto"])
-    def test_delete_log_skipped_bypass(self, bypass_list: str) -> None:
-        if bypass_list == "manual":
-            bypass = override_options(
-                "snuba", {"replacements_bypass_projects": f"[{self.project_id}]"}
-            )
-        else:
-            bypass = patch.object(
-                errors_replacer,
-                "get_config_auto_replacements_bypass_projects",
-                return_value={self.project_id: datetime.now()},
-            )
-        with bypass, patch("snuba.utils.delete_log.sentry_logger") as sentry_logger:
-            assert self.replacer.process_message(self._delete_message()) is None
-
-        skipped = {"reason": "bypass_list", "bypass_list": bypass_list}
-        assert get_delete_log_events(sentry_logger) == [
-            ("info", "snuba.delete.received", self._delete_log("errors")),
-            ("info", "snuba.delete.redis_skipped", self._delete_log("redis", **skipped)),
-            ("info", "snuba.delete.errors_skipped", self._delete_log("errors", **skipped)),
-        ]
-
-    def test_delete_log_redis_written(self) -> None:
-        processor, replacement = self._delete_replacement()
-        with patch("snuba.utils.delete_log.sentry_logger") as sentry_logger:
-            assert processor.pre_replacement(replacement) is False
-
-        assert get_delete_log_events(sentry_logger) == [
-            ("info", "snuba.delete.redis_written", self._delete_log("redis"))
-        ]
-
-    def test_delete_log_redis_failed(self) -> None:
-        processor, replacement = self._delete_replacement()
-        with (
-            patch.object(
-                ProjectsQueryFlags,
-                "set_project_exclude_groups",
-                side_effect=RedisConnectionError("redis is down"),
-            ),
-            patch("snuba.utils.delete_log.sentry_logger") as sentry_logger,
-            pytest.raises(RedisConnectionError),
-        ):
-            processor.pre_replacement(replacement)
-
-        assert get_delete_log_events(sentry_logger) == [
-            (
-                "error",
-                "snuba.delete.redis_failed",
-                self._delete_log(
-                    "redis",
-                    reason="redis_write_failed",
-                    error="ConnectionError",
-                    error_message="redis is down",
-                ),
-            )
-        ]
-
-    def test_delete_log_skipped_immediate_optimize(self) -> None:
-        processor, replacement = self._delete_replacement()
-        with (
-            patch.object(settings, "REPLACER_IMMEDIATE_OPTIMIZE", True),
-            patch("snuba.utils.delete_log.sentry_logger") as sentry_logger,
-        ):
-            assert processor.pre_replacement(replacement) is True
-
-        assert get_delete_log_events(sentry_logger) == [
-            (
-                "info",
-                "snuba.delete.redis_skipped",
-                self._delete_log("redis", reason="immediate_optimize"),
-            )
-        ]
-
-    def test_delete_log_errors_written(self) -> None:
-        self.event["project_id"] = self.project_id
-        self.event["group_id"] = 1
-        write_unprocessed_events(self.storage, [self.event])
-
-        with patch("snuba.utils.delete_log.sentry_logger") as sentry_logger:
-            processed = self.replacer.process_message(self._delete_message([1]))
-            assert processed is not None
-            self.replacer.flush_batch([processed])
-
-        one_group = {"group_ids_count": 1, "group_ids": "1"}
-        assert get_delete_log_events(sentry_logger) == [
-            ("info", "snuba.delete.received", self._delete_log("errors", **one_group)),
-            ("info", "snuba.delete.redis_written", self._delete_log("redis", **one_group)),
-            (
-                "info",
-                "snuba.delete.errors_written",
-                self._delete_log("errors", **one_group, written_rows=1, used_backup=False),
-            ),
-        ]
-
-    def test_delete_log_errors_failed(self) -> None:
-        processed = self.replacer.process_message(self._delete_message())
-        assert processed is not None
-
-        with (
-            # Use the query node executor on multi-node clusters too.
-            override_options("snuba", {"write_node_replacements_global": 0.0}),
-            patch(
-                "snuba.replacer.QueryNodeExecutor.execute",
-                side_effect=RuntimeError("insert failed"),
-            ),
-            patch("snuba.utils.delete_log.sentry_logger") as sentry_logger,
-            pytest.raises(RuntimeError),
-        ):
-            self.replacer.flush_batch([processed])
-
-        assert get_delete_log_events(sentry_logger) == [
-            ("info", "snuba.delete.redis_written", self._delete_log("redis")),
-            (
-                "error",
-                "snuba.delete.errors_failed",
-                self._delete_log(
-                    "errors",
-                    reason="insert_failed",
-                    error="RuntimeError",
-                    error_message="insert failed",
-                ),
-            ),
-        ]
+        sentry_logger.info.assert_called_once_with(
+            "snuba.delete.received",
+            attributes={
+                "project_id": self.project_id,
+                "group_ids_count": 3,
+                "transaction_id": "t1",
+                "target": "errors",
+            },
+        )

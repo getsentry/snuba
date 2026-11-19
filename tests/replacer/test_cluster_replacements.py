@@ -3,11 +3,9 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Callable, Generator, Mapping, MutableMapping, Sequence
 from concurrent.futures.thread import ThreadPoolExecutor
-from datetime import datetime
 from typing import (
     Any,
 )
-from unittest.mock import patch
 
 import pytest
 from sentry_options.testing import override_options
@@ -21,13 +19,11 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import ReplacementType
 from snuba.replacer import (
     InOrderConnectionPool,
-    InsertResult,
     QueryNodeExecutor,
     ReplacerWorker,
     ShardedExecutor,
 )
 from snuba.replacers.errors_replacer import (
-    DeleteGroupsReplacement,
     NeedsFinal,
     QueryTimeFlags,
     Replacement,
@@ -44,7 +40,6 @@ from tests.clusters.fake_cluster import (
     FakeClickhousePool,
     ServerExplodedException,
 )
-from tests.helpers import get_delete_log_events
 
 
 def _build_cluster(healthy: bool = True) -> FakeClickhouseCluster:
@@ -345,10 +340,9 @@ def test_local_executor(
         connection: ClickhousePool,
         query: str,
         metrics: MetricsBackend,
-    ) -> int:
+    ) -> None:
         connection.execute_robust(query)
         queries[connection.host].append(query)
-        return 1
 
     all_nodes: list[tuple[ClickhouseNode, bool]] = []
     for shard_nodes in nodes.values():
@@ -384,83 +378,8 @@ def test_local_executor(
         metrics=DummyMetricsBackend(),
     )
 
-    result = insert_executor.execute(
+    insert_executor.execute(
         replacement=DummyReplacement(),
     )
 
     assert queries == expected_queries
-    # The fake runner reports one written row per query that ran.
-    used_backup = "snuba-query" in expected_queries
-    assert result == InsertResult(
-        written_rows=1 if used_backup else len(nodes), used_backup=used_backup
-    )
-
-
-def _delete_groups_replacement() -> DeleteGroupsReplacement:
-    return DeleteGroupsReplacement(
-        project_id=1,
-        required_columns=["project_id", "group_id"],
-        timestamp=datetime.now(),
-        group_ids=[1, 2],
-        transaction_id="t1",
-    )
-
-
-DELETE_LOG = {
-    "project_id": 1,
-    "group_ids_count": 2,
-    "group_ids": "1,2",
-    "transaction_id": "t1",
-}
-
-
-@pytest.mark.redis_db
-@pytest.mark.events_db
-@override_options("snuba", {"write_node_replacements_global": 1.0})
-def test_delete_log_sharded_errors_written(
-    override_cluster: Callable[[bool], FakeClickhouseCluster],
-) -> None:
-    override_cluster(True)
-    replacer = ReplacerWorker(
-        get_writable_storage(StorageKey.ERRORS), "consumer_group", DummyMetricsBackend()
-    )
-
-    with patch("snuba.utils.delete_log.sentry_logger") as sentry_logger:
-        replacer.flush_batch([(ReplacementMessageMetadata(0, 0, ""), _delete_groups_replacement())])
-
-    # The fake pool reports no written rows.
-    assert get_delete_log_events(sentry_logger) == [
-        ("info", "snuba.delete.redis_written", {"target": "redis", **DELETE_LOG}),
-        (
-            "info",
-            "snuba.delete.errors_written",
-            {"target": "errors", **DELETE_LOG, "written_rows": 0, "used_backup": False},
-        ),
-    ]
-
-
-@pytest.mark.redis_db
-@pytest.mark.events_db
-@override_options("snuba", {"write_node_replacements_global": 1.0})
-def test_delete_log_sharded_errors_failed(
-    override_cluster: Callable[[bool], FakeClickhouseCluster],
-) -> None:
-    override_cluster(False)
-    replacer = ReplacerWorker(
-        get_writable_storage(StorageKey.ERRORS), "consumer_group", DummyMetricsBackend()
-    )
-
-    with (
-        patch("snuba.utils.delete_log.sentry_logger") as sentry_logger,
-        pytest.raises(ServerExplodedException),
-    ):
-        replacer.flush_batch([(ReplacementMessageMetadata(0, 0, ""), _delete_groups_replacement())])
-
-    events = get_delete_log_events(sentry_logger)
-    assert [(level, name) for level, name, _ in events] == [
-        ("info", "snuba.delete.redis_written"),
-        ("error", "snuba.delete.errors_failed"),
-    ]
-    _, _, failed = events[1]
-    assert failed["reason"] == "main_and_backup_failed"
-    assert failed["error"] == "ServerExplodedException"
