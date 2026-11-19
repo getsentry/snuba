@@ -899,6 +899,8 @@ _COLD_LOAD = LoadInfo(cluster_load=0.5)
         ([_REJECT_ONLY_POLICY], _HOT_LOAD, False),
         ([_DOWNSAMPLE_POLICY], None, False),
         ([_DOWNSAMPLE_POLICY], _COLD_LOAD, False),
+        # a metric with no configured ceiling is ignored, however high it is
+        ([_DOWNSAMPLE_POLICY], LoadInfo(cluster_load=0.5, concurrent_queries=10000.0), False),
         ([_EMPTY_POLICY, _DOWNSAMPLE_POLICY], _HOT_LOAD, True),
         ([_DOWNSAMPLE_POLICY], _HOT_LOAD, True),
     ],
