@@ -324,6 +324,8 @@ def test_enforce_never_counts_pardon_when_idle(
     """Over-limit NEVER queries are counted like v1 (pardoned when idle, rejected
     when busy) and run with full threads either way."""
     policy = _policy(enforce="never", thresholds=THRESHOLDS)
+    # The base decision pardons unenforced policies; NEVER itself is not pardonable.
+    assert not policy.is_pardonable
     _scan(policy, TENANT_IDS, LIMIT)
     before = _decision_count(metric)
     allowance = policy.get_quota_allowance(TENANT_IDS, QUERY_ID, load_info)

@@ -85,10 +85,7 @@ class ConcurrentQueriesPolicy(AllocationPolicy):
 
     @property
     def is_pardonable(self) -> bool:
-        # NEVER is pardonable too, which only changes the metric: an idle-cluster
-        # rejection is counted as pardoned instead of rejected, like v1. It runs
-        # either way.
-        return self._enforce is not Enforce.ALWAYS
+        return self._enforce is Enforce.PARDON
 
     @property
     def max_threads(self) -> int:
