@@ -272,11 +272,6 @@ schema:
     - retention_days
     - date
   not_deleted_mandatory_condition: deleted
-allocation_policies:
-  - name: ConcurrentQueriesPerRefPolicy
-    args:
-      limit: 100
-      enforce: never
 query_processors:
   - processor: UniqInSelectAndHavingProcessor
   - processor: TupleUnaliaser

@@ -269,11 +269,6 @@ schema:
   local_table_name: errors_local
   dist_table_name: errors_dist_ro
   not_deleted_mandatory_condition: deleted
-allocation_policies:
-  - name: ConcurrentQueriesPerRefPolicy
-    args:
-      limit: 100
-      enforce: never
 query_processors:
   - processor: UniqInSelectAndHavingProcessor
   - processor: TupleUnaliaser
