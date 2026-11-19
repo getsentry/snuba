@@ -32,6 +32,9 @@ type QueryResult = {
   rows: QueryResultRow[];
   trace_output?: string;
   error?: string;
+  // What was run, to load it back into the editor. Results saved before this
+  // was recorded don't have it.
+  request?: QueryRequest;
 };
 
 type PredefinedQuery = {

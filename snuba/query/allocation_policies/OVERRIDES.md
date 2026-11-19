@@ -23,7 +23,7 @@ All configs live in a single option, a flat `{key: number}` map:
 ```
 
 - **resource** — the storage/strategy the component is attached to, e.g. `errors`, `eap_items`.
-- **ClassName** — the concrete class, e.g. `BytesScannedRejectingPolicy`.
+- **ClassName** — the concrete class, e.g. `OutcomesBasedRoutingStrategy`.
 - **config** — the config name, e.g. `is_enforced`, `max_threads`, `concurrent_limit`.
 - **params** — for a parameterized config, its declared params appended as a
   sorted, `|`-delimited `param:value` suffix, e.g.
@@ -38,8 +38,7 @@ declares in `param_types`.
 
 ```json
 {
-  "errors.BytesScannedRejectingPolicy.is_enforced": 1,
-  "errors.BytesScannedRejectingPolicy.organization_referrer_scan_limit|organization_id:456": 20000000000
+  "eap_items.OutcomesBasedRoutingStrategy.max_items_before_downsampling|organization_id:123": 1000000
 }
 ```
 

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { Button, Group } from "@mantine/core";
+import { ActionIcon, Button, Group, Tooltip } from "@mantine/core";
+import { IconArrowBackUp } from "@tabler/icons-react";
 import QueryResultCopier from "SnubaAdmin/utils/query_result_copier";
 import { COLORS } from "SnubaAdmin/theme";
 
@@ -69,6 +70,8 @@ function QueryHistoryEntry<R extends HistoryResult>(props: {
   defaultExpanded: boolean;
   csv: string;
   resultDataPopulator: (queryResult: R) => JSX.Element;
+  // Loads the query back into the editor.
+  onRerun?: () => void;
 }) {
   const { queryResult, isLatest, sql, storage, host } = props;
   const [expanded, setExpanded] = useState(props.defaultExpanded);
@@ -131,6 +134,17 @@ function QueryHistoryEntry<R extends HistoryResult>(props: {
           >
             {sqlShown ? "Hide SQL" : "SQL"}
           </Button>
+          {props.onRerun && (
+            <Tooltip label="Re-run: load into the editor" withArrow>
+              <ActionIcon
+                variant="default"
+                aria-label="Re-run"
+                onClick={props.onRerun}
+              >
+                <IconArrowBackUp size={16} />
+              </ActionIcon>
+            </Tooltip>
+          )}
           <QueryResultCopier
             tableInput={toTsv(queryResult)}
             markdownInput={toMarkdown(queryResult)}
