@@ -899,8 +899,6 @@ _COLD_LOAD = LoadInfo(cluster_load=0.5)
         ([_REJECT_ONLY_POLICY], _HOT_LOAD, False),
         ([_DOWNSAMPLE_POLICY], None, False),
         ([_DOWNSAMPLE_POLICY], _COLD_LOAD, False),
-        # a metric with no configured ceiling is ignored, however high it is
-        ([_DOWNSAMPLE_POLICY], LoadInfo(cluster_load=0.5, concurrent_queries=10000.0), False),
         ([_EMPTY_POLICY, _DOWNSAMPLE_POLICY], _HOT_LOAD, True),
         ([_DOWNSAMPLE_POLICY], _HOT_LOAD, True),
     ],
@@ -911,6 +909,13 @@ def test_load_exceeds_any_downsample_threshold(
     expected: bool,
 ) -> None:
     assert load_exceeds_any_downsample_threshold(policies, load) is expected
+
+
+def test_downsample_threshold_ignores_metrics_without_a_ceiling() -> None:
+    # _DOWNSAMPLE_POLICY only sets a cluster_load ceiling, so concurrent_queries
+    # is never checked, however high it is.
+    load = LoadInfo(cluster_load=0.5, concurrent_queries=10000.0)
+    assert load_exceeds_any_downsample_threshold([_DOWNSAMPLE_POLICY], load) is False
 
 
 def _routing_decision_when_cluster_exceeds_downsample(
