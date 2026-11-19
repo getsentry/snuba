@@ -22,10 +22,14 @@ from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.error_codes import ErrorCodes
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
-from snuba.clickhouse.formatter.query import format_query_anonymized
+from snuba.clickhouse.formatter.query import format_query, format_query_anonymized
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_dsl.accessors import get_time_range_estimate
 from snuba.clickhouse.query_profiler import generate_profile
+from snuba.clickhouse.remote_header_fallback import (
+    is_remote_header_mismatch,
+    wrap_in_projection_subquery,
+)
 from snuba.clusters.load_info import get_cluster_loadinfo
 from snuba.configs.configuration import ResourceIdentifier
 from snuba.datasets.storages.factory import get_storage
@@ -187,12 +191,17 @@ def execute_query(
     # Apply clickhouse query setting overrides
     clickhouse_query_settings.update(query_settings.get_clickhouse_settings())
 
-    result = reader.execute(
-        formatted_query,
-        clickhouse_query_settings,
-        with_totals=clickhouse_query.has_totals(),
-        robust=robust,
-    )
+    try:
+        result = reader.execute(
+            formatted_query,
+            clickhouse_query_settings,
+            with_totals=clickhouse_query.has_totals(),
+            robust=robust,
+        )
+    except ClickhouseError as e:
+        result = _retry_remote_header_mismatch(
+            e, clickhouse_query, reader, stats, clickhouse_query_settings, robust
+        )
 
     # The clickhouse-connect (HTTP) reader returns empty meta for a zero-row result
     # (ClickHouse sends a zero-byte Native body, so there's no column header; the
@@ -227,6 +236,48 @@ def execute_query(
     if (max_threads := clickhouse_query_settings.get("max_threads")) is not None:
         stats["max_threads"] = max_threads
 
+    return result
+
+
+def _retry_remote_header_mismatch(
+    error: ClickhouseError,
+    clickhouse_query: Query | CompositeQuery[Table],
+    reader: Reader,
+    stats: MutableMapping[str, Any],
+    clickhouse_query_settings: Mapping[str, Any],
+    robust: bool,
+) -> Result:
+    """
+    While query and storage nodes run different ClickHouse versions, queries
+    that send Nested columns across the wire fail with NOT_FOUND_COLUMN_IN_BLOCK
+    (see snuba.clickhouse.remote_header_fallback). Retry those once, rewritten
+    so the shards only filter and project. Re-raise everything else.
+    """
+    if not is_remote_header_mismatch(error) or not get_option(
+        "remote_header_fallback_enabled", True
+    ):
+        raise error
+    fallback_query = wrap_in_projection_subquery(clickhouse_query)
+    if fallback_query is None:
+        metrics.increment("remote_header_fallback", tags={"status": "unsupported"})
+        raise error
+
+    logger.warning("Retrying query with remote header fallback after: %s", error.message)
+    stats["remote_header_fallback"] = True
+    settings = dict(clickhouse_query_settings)
+    if "query_id" in settings:
+        settings["query_id"] = f"randomized-{uuid.uuid4().hex}"
+    try:
+        result = reader.execute(
+            format_query(fallback_query),
+            settings,
+            with_totals=fallback_query.has_totals(),
+            robust=robust,
+        )
+    except Exception:
+        metrics.increment("remote_header_fallback", tags={"status": "failed"})
+        raise
+    metrics.increment("remote_header_fallback", tags={"status": "succeeded"})
     return result
 
 

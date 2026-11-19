@@ -11,6 +11,7 @@ from enum import IntEnum
 
 
 class ErrorCodes(IntEnum):
+    NOT_FOUND_COLUMN_IN_BLOCK = 10
     CANNOT_COMPILE_REGEXP = 427
     ILLEGAL_TYPE_OF_ARGUMENT = 43
     ILLEGAL_COLUMN = 44

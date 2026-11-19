@@ -594,6 +594,11 @@
       "default": false,
       "description": "When true, retry a query that ClickHouse rejected because another query with the same id is already running."
     },
+    "remote_header_fallback_enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "When true, a query that fails with NOT_FOUND_COLUMN_IN_BLOCK because query and storage nodes on different ClickHouse versions quote remote header names differently (ClickHouse#113250) is retried once, rewritten so the shards only filter and project. Turn off to surface the original error."
+    },
     "enable_bypass_cache_referrers": {
       "type": "boolean",
       "default": false,

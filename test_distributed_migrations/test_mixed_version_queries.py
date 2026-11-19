@@ -18,16 +18,25 @@ instead of failing.
 
 import os
 import uuid
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
 
+from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.pool import ClickhousePool
+from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query.data_source.simple import Table
+from snuba.query.expressions import Column, Expression, FunctionCall, Literal
+from snuba.query.query_settings import HTTPQuerySettings
+from snuba.utils.metrics.timer import Timer
+from snuba.web.db_query import execute_query
 
 PROJECT_ID = 4500
 UNHANDLED_GROUP = 101  # newest event is unhandled
@@ -172,3 +181,131 @@ def test_query_through_distributed_tables(
     errors_rows: None, sql: str, expected: list[tuple[Any, ...]]
 ) -> None:
     assert _normalize(_connection().execute(sql).results) == expected
+
+
+# The same queries as Snuba ASTs, run through execute_query with the errors
+# storage's reader. In a mixed cluster the first attempt fails with
+# NOT_FOUND_COLUMN_IN_BLOCK and the remote-header fallback retries it as a
+# projection subquery; on a single-version cluster no retry should happen.
+def _col(name: str, alias: str | None = None) -> Column:
+    return Column(alias, None, name)
+
+
+def _f(name: str, *args: Expression, alias: str | None = None) -> FunctionCall:
+    return FunctionCall(alias, name, args)
+
+
+def _snuba_query(
+    selected: list[tuple[str, Expression]],
+    groupby: Expression,
+    extra_condition: Expression | None = None,
+) -> ClickhouseQuery:
+    now = datetime.now(UTC).replace(tzinfo=None)
+    conditions: list[Expression] = [
+        _f("in", _col("project_id"), _f("tuple", Literal(None, PROJECT_ID))),
+        _f("equals", _col("deleted"), Literal(None, 0)),
+        _f("greaterOrEquals", _col("timestamp"), Literal(None, now - timedelta(days=1))),
+        _f("less", _col("timestamp"), Literal(None, now + timedelta(hours=1))),
+    ]
+    if extra_condition is not None:
+        conditions.append(extra_condition)
+    condition = conditions[0]
+    for c in conditions[1:]:
+        condition = _f("and", condition, c)
+    return ClickhouseQuery(
+        Table("errors_dist", ColumnSet([]), storage_key=StorageKey("errors")),
+        selected_columns=[SelectedExpression(name, exp) for name, exp in selected],
+        condition=condition,
+        groupby=[groupby],
+        order_by=[OrderBy(OrderByDirection.ASC, groupby)],
+    )
+
+
+_TAG_KEY = _f("arrayJoin", _col("tags.key"), alias="_snuba_tags_key")
+_TAG_ENV = _f(
+    "arrayElement",
+    _col("tags.value"),
+    _f("indexOf", _col("tags.key"), Literal(None, "environment")),
+    alias="_snuba_tags_environment",
+)
+_EXC_TYPE = _f("arrayJoin", _col("exception_stacks.type"), alias="_snuba_exception_type")
+
+SNUBA_PATH_QUERIES = [
+    pytest.param(
+        lambda: _snuba_query(
+            [
+                ("_snuba_group_id", _col("group_id", "_snuba_group_id")),
+                (
+                    "_snuba_unhandled",
+                    _f(
+                        "argMax",
+                        _f("has", _col("exception_stacks.mechanism_handled"), Literal(None, 0)),
+                        _col("timestamp"),
+                        alias="_snuba_unhandled",
+                    ),
+                ),
+            ],
+            _col("group_id", "_snuba_group_id"),
+        ),
+        [(UNHANDLED_GROUP, 1), (HANDLED_GROUP, 0)],
+        id="nested-unhandled-flag",
+    ),
+    pytest.param(
+        lambda: _snuba_query(
+            [("_snuba_tags_key", _TAG_KEY), ("_snuba_count", _f("count", alias="_snuba_count"))],
+            _TAG_KEY,
+        ),
+        [("environment", 2 * EVENTS_PER_GROUP), ("level", 2 * EVENTS_PER_GROUP)],
+        id="nested-tag-keys",
+    ),
+    pytest.param(
+        lambda: _snuba_query(
+            [
+                ("_snuba_tags_environment", _TAG_ENV),
+                ("_snuba_count", _f("count", alias="_snuba_count")),
+            ],
+            _TAG_ENV,
+            _f("has", _col("tags.key"), Literal(None, "environment")),
+        ),
+        [("production", EVENTS_PER_GROUP), ("staging", EVENTS_PER_GROUP)],
+        id="nested-tag-values",
+    ),
+    pytest.param(
+        lambda: _snuba_query(
+            [
+                ("_snuba_exception_type", _EXC_TYPE),
+                ("_snuba_groups", _f("uniq", _col("group_id"), alias="_snuba_groups")),
+            ],
+            _EXC_TYPE,
+        ),
+        [("KeyError", 1), ("ValueError", 1)],
+        id="nested-exception-type",
+    ),
+]
+
+
+@pytest.mark.parametrize("build_query, expected", SNUBA_PATH_QUERIES)
+def test_query_through_snuba_with_fallback(
+    errors_rows: None,
+    build_query: Callable[[], ClickhouseQuery],
+    expected: list[tuple[Any, ...]],
+) -> None:
+    query = build_query()
+    stats: dict[str, Any] = {}
+    result = execute_query(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(),
+        formatted_query=format_query(query),
+        reader=get_storage(StorageKey.ERRORS).get_cluster().get_reader(),
+        timer=Timer("test"),
+        stats=stats,
+        clickhouse_query_settings={},
+        robust=False,
+    )
+    rows = _normalize([tuple(row.values()) for row in result["data"]])
+    print(f"remote_header_fallback={stats.get('remote_header_fallback', False)}")
+    assert rows == expected
+    expected_versions = os.environ.get("EXPECTED_CLICKHOUSE_VERSIONS", "")
+    mixed = len({pair.split("=")[1] for pair in expected_versions.split(",") if pair}) > 1
+    if expected_versions:
+        assert stats.get("remote_header_fallback", False) is mixed
