@@ -25,6 +25,8 @@ from typing import Any
 import pytest
 
 from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.error_codes import ErrorCodes
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.pool import ClickhousePool
 from snuba.clickhouse.query import Query as ClickhouseQuery
@@ -63,6 +65,12 @@ def _connection() -> ClickhousePool:
         .get_cluster()
         .get_query_connection(ClickhouseClientSettings.QUERY)
     )
+
+
+def _is_mixed_cluster() -> bool:
+    """True when EXPECTED_CLICKHOUSE_VERSIONS lists more than one version."""
+    expected = os.environ.get("EXPECTED_CLICKHOUSE_VERSIONS", "")
+    return len({pair.split("=")[1] for pair in expected.split(",") if pair}) > 1
 
 
 def _normalize(rows: Sequence[Sequence[Any]]) -> list[tuple[Any, ...]]:
@@ -178,9 +186,33 @@ MIXED_VERSION_QUERIES = [
 
 @pytest.mark.parametrize("sql, expected", MIXED_VERSION_QUERIES)
 def test_query_through_distributed_tables(
-    errors_rows: None, sql: str, expected: list[tuple[Any, ...]]
+    request: pytest.FixtureRequest,
+    errors_rows: None,
+    sql: str,
+    expected: list[tuple[Any, ...]],
 ) -> None:
-    assert _normalize(_connection().execute(sql).results) == expected
+    """
+    Raw SQL, bypassing Snuba's remote-header fallback, so in a mixed cluster
+    the nested-* queries still hit ClickHouse#113250. There they are strict
+    expected failures: only NOT_FOUND_COLUMN_IN_BLOCK counts, and a pass fails
+    the test, which means ClickHouse fixed the mismatch and the fallback in
+    snuba/clickhouse/remote_header_fallback.py can be removed.
+    """
+    if not (_is_mixed_cluster() and request.node.callspec.id.startswith("nested-")):
+        assert _normalize(_connection().execute(sql).results) == expected
+        return
+
+    try:
+        _connection().execute(sql)
+    except ClickhouseError as e:
+        if e.code != ErrorCodes.NOT_FOUND_COLUMN_IN_BLOCK:
+            raise
+        pytest.xfail(f"ClickHouse#113250 still present: {e.message[:300]}")
+    pytest.fail(
+        "Query succeeded on a mixed-version cluster: ClickHouse#113250 looks fixed for "
+        "this version pair. Remove this expected failure, and check whether the "
+        "remote-header fallback is still needed."
+    )
 
 
 # The same queries as Snuba ASTs, run through execute_query with the errors
@@ -305,7 +337,5 @@ def test_query_through_snuba_with_fallback(
     rows = _normalize([tuple(row.values()) for row in result["data"]])
     print(f"remote_header_fallback={stats.get('remote_header_fallback', False)}")
     assert rows == expected
-    expected_versions = os.environ.get("EXPECTED_CLICKHOUSE_VERSIONS", "")
-    mixed = len({pair.split("=")[1] for pair in expected_versions.split(",") if pair}) > 1
-    if expected_versions:
-        assert stats.get("remote_header_fallback", False) is mixed
+    if os.environ.get("EXPECTED_CLICKHOUSE_VERSIONS"):
+        assert stats.get("remote_header_fallback", False) is _is_mixed_cluster()
