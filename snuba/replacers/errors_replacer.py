@@ -257,43 +257,14 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                 )
 
             elif isinstance(query_time_flags, ExcludeGroups):
-                try:
-                    ProjectsQueryFlags.set_project_exclude_groups(
-                        project_id,
-                        query_time_flags.group_ids,
-                        self.__state_name,
-                        replacement.get_replacement_type(),
-                    )
-                except Exception as e:
-                    if isinstance(replacement, DeleteGroupsReplacement):
-                        sentry_logger.error(
-                            "snuba.delete.redis_failed",
-                            attributes={
-                                "project_id": project_id,
-                                "group_ids_count": len(replacement.group_ids),
-                                "error": type(e).__name__,
-                            },
-                        )
-                    raise
-                if isinstance(replacement, DeleteGroupsReplacement):
-                    sentry_logger.info(
-                        "snuba.delete.redis_written",
-                        attributes={
-                            "project_id": project_id,
-                            "group_ids_count": len(replacement.group_ids),
-                        },
-                    )
+                ProjectsQueryFlags.set_project_exclude_groups(
+                    project_id,
+                    query_time_flags.group_ids,
+                    self.__state_name,
+                    replacement.get_replacement_type(),
+                )
 
         elif query_time_flags is not None:
-            if isinstance(replacement, DeleteGroupsReplacement):
-                sentry_logger.info(
-                    "snuba.delete.redis_skipped",
-                    attributes={
-                        "project_id": project_id,
-                        "group_ids_count": len(replacement.group_ids),
-                        "reason": "immediate_optimize",
-                    },
-                )
             return True
 
         return False
