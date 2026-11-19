@@ -459,28 +459,30 @@ class ReplacerWorker:
 
             need_optimize = self.__replacer_processor.pre_replacement(replacement) or need_optimize
 
-            delete_attrs = (
-                {
-                    "project_id": replacement.project_id,
-                    "group_ids_count": len(replacement.group_ids),
-                }
-                if isinstance(replacement, DeleteGroupsReplacement)
-                else None
-            )
             query_executor = self.__get_insert_executor(replacement)
             with self.__rate_limiter as state:
                 self.metrics.increment("insert_state", tags={"state": state[0].value})
                 try:
                     query_executor.execute(replacement)
                 except Exception as e:
-                    if delete_attrs:
+                    if isinstance(replacement, DeleteGroupsReplacement):
                         sentry_logger.error(
                             "snuba.delete.errors_failed",
-                            attributes={**delete_attrs, "error": type(e).__name__},
+                            attributes={
+                                "project_id": replacement.project_id,
+                                "group_ids_count": len(replacement.group_ids),
+                                "error": type(e).__name__,
+                            },
                         )
                     raise
-            if delete_attrs:
-                sentry_logger.info("snuba.delete.errors_written", attributes=delete_attrs)
+            if isinstance(replacement, DeleteGroupsReplacement):
+                sentry_logger.info(
+                    "snuba.delete.errors_written",
+                    attributes={
+                        "project_id": replacement.project_id,
+                        "group_ids_count": len(replacement.group_ids),
+                    },
+                )
 
             self.__replacer_processor.post_replacement(replacement)
 

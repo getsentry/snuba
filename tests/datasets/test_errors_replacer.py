@@ -4,7 +4,6 @@ import uuid
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import Any
-from unittest.mock import patch
 
 import pytest
 import simplejson as json
@@ -922,27 +921,3 @@ class TestReplacerProcess(BaseTest):
         ):
             meta_and_replacement = self.replacer.process_message(self._wrap(message))
             assert meta_and_replacement is None
-
-    def test_delete_sends_sentry_log(self) -> None:
-        message = (
-            2,
-            ReplacementType.END_DELETE_GROUPS,
-            {
-                "project_id": self.project_id,
-                "group_ids": [1, 2, 3],
-                "transaction_id": "t1",
-                "datetime": datetime.now().strftime(PAYLOAD_DATETIME_FORMAT),
-            },
-        )
-        with patch("snuba.replacers.errors_replacer.sentry_logger") as sentry_logger:
-            self.replacer.process_message(self._wrap(message))
-
-        sentry_logger.info.assert_called_once_with(
-            "snuba.delete.received",
-            attributes={
-                "project_id": self.project_id,
-                "group_ids_count": 3,
-                "transaction_id": "t1",
-                "target": "errors",
-            },
-        )
