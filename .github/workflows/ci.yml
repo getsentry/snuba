@@ -606,6 +606,19 @@ jobs:
             storage: "altinity-clickhouse-server:25.8.33.10002.altinitystable"
             storage_03: "clickhouse-clickhouse-server:26.8.36.3"
             expected: "clickhouse-query=26.8,clickhouse-02=25.8,clickhouse-03=26.8"
+          # A single storage shard. ClickHouse then runs the whole query on the
+          # shard and returns final rows instead of partial results, so the
+          # header mismatch may not apply.
+          - name: "query 26.8, single shard 25.8"
+            query: "clickhouse-clickhouse-server:26.8.36.3"
+            storage: "altinity-clickhouse-server:25.8.33.10002.altinitystable"
+            remote_servers: "remote_servers_single_shard.xml"
+            expected: "clickhouse-query=26.8,clickhouse-02=25.8"
+          - name: "query 25.8, single shard 26.8"
+            query: "altinity-clickhouse-server:25.8.33.10002.altinitystable"
+            storage: "clickhouse-clickhouse-server:26.8.36.3"
+            remote_servers: "remote_servers_single_shard.xml"
+            expected: "clickhouse-query=25.8,clickhouse-02=26.8"
 
     steps:
       - name: Checkout code
@@ -660,6 +673,7 @@ jobs:
           CLICKHOUSE_STORAGE_IMAGE: ghcr.io/getsentry/image-mirror-${{ matrix.storage }}
           CLICKHOUSE_STORAGE_03_IMAGE: ${{ matrix.storage_03 && format('ghcr.io/getsentry/image-mirror-{0}', matrix.storage_03) || '' }}
           EXPECTED_CLICKHOUSE_VERSIONS: ${{ matrix.expected }}
+          CLICKHOUSE_REMOTE_SERVERS_CONFIG: ./test_distributed_migrations/config/clickhouse/${{ matrix.remote_servers || 'remote_servers.xml' }}
         run: |
           docker compose --profile multi_node -f docker-compose.gcb.yml up -d
           TEST_LOCATION=test_distributed_migrations docker compose --profile multi_node -f docker-compose.gcb.yml \

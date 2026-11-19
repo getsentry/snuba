@@ -30,3 +30,6 @@ locally, set ``CLICKHOUSE_QUERY_IMAGE`` and ``CLICKHOUSE_STORAGE_IMAGE``, and
 optionally ``CLICKHOUSE_STORAGE_02_IMAGE`` or ``CLICKHOUSE_STORAGE_03_IMAGE`` to
 put one shard on a different version. Unset ones fall back to
 ``CLICKHOUSE_IMAGE``.
+Set ``CLICKHOUSE_REMOTE_SERVERS_CONFIG`` to
+``./test_distributed_migrations/config/clickhouse/remote_servers_single_shard.xml``
+to run with a single storage shard instead of two.

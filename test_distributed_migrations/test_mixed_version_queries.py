@@ -35,7 +35,8 @@ HANDLED_GROUP = 102  # every event is handled
 EVENTS_PER_GROUP = 6
 
 # Fixed IDs so the cityHash64(event_id) sharding is deterministic. These put
-# rows from both groups on both storage shards.
+# rows from both groups on both storage shards (or the one shard, in the
+# single-shard layout).
 EVENT_IDS = [
     str(uuid.uuid5(uuid.NAMESPACE_URL, f"snuba-mixed-version-test-{i}"))
     for i in range(2 * EVENTS_PER_GROUP)
@@ -114,11 +115,21 @@ def errors_rows() -> None:
     # Distributed inserts are asynchronous by default; push them to the shards.
     conn.execute("SYSTEM FLUSH DISTRIBUTED errors_dist")
 
+    # The default layout has two storage shards; the single-shard CI cells use
+    # remote_servers_single_shard.xml. Either way every shard should get rows.
+    shard_count = int(
+        conn.execute(
+            "SELECT count(DISTINCT shard_num) FROM system.clusters "
+            "WHERE cluster = 'storage_cluster'"
+        ).results[0][0]
+    )
     shards = conn.execute(
         f"SELECT _shard_num, count() FROM errors_dist WHERE project_id = {PROJECT_ID} "
         "GROUP BY _shard_num ORDER BY _shard_num"
     ).results
-    assert len(shards) == 2, f"expected rows on both storage shards, got {shards}"
+    assert len(shards) == shard_count, (
+        f"expected rows on all {shard_count} storage shards, got {shards}"
+    )
 
 
 MIXED_VERSION_QUERIES = [

@@ -1,0 +1,36 @@
+<!--
+Same as remote_servers.xml, but storage_cluster has a single shard
+(clickhouse-02). Used by the clickhouse-mixed-versions CI job to check whether
+a mixed-version query node and storage shard break with only one shard, where
+ClickHouse runs the whole query on the shard instead of merging partial
+results on the query node.
+-->
+<yandex>
+    <remote_servers>
+        <query_cluster>
+            <shard>
+                <replica>
+                    <host>clickhouse-query</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+        </query_cluster>
+        <migrations_cluster>
+            <shard>
+                <replica>
+                    <host>clickhouse-01</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+        </migrations_cluster>
+
+        <storage_cluster>
+            <shard>
+                <replica>
+                    <host>clickhouse-02</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+        </storage_cluster>
+    </remote_servers>
+</yandex>
