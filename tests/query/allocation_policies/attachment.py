@@ -34,5 +34,5 @@ def override_allocation_policy(
 @contextmanager
 def override_current_eap_policies() -> Iterator[None]:
     """Attach today's EAP policy list and the settings the hardcoded ctor used to inject."""
-    with override_allocation_policy({"EAP": CURRENT_EAP_ATTACHMENT}):
+    with override_allocation_policy({"RPC": CURRENT_EAP_ATTACHMENT}):
         yield
