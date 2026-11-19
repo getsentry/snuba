@@ -140,15 +140,16 @@ def _convert_result_timeseries(
     # { ("group_by_attr_1,g1|group_by_attr_2,g2", "sum(sentry.duration"): TimeSeries()}
     result_timeseries: dict[tuple[str, str], TimeSeries] = {}
 
-    # create a mapping for each timeseries of timestamp: row to fill data points not returned in the query
+    # create a mapping for each timeseries of timestamp: (row, extrapolation context) to fill
+    # data points not returned in the query
     # {
     #   ("group_by_attr_1,g1|group_by_attr_2,g2", "sum(sentry.duration"): {
-    #       time_converted_to_integer_timestamp: row_data_for_that_time_bucket
+    #       time_converted_to_integer_timestamp: (row_data_for_that_time_bucket, extrapolation_context)
     #   }
     # }
-    result_timeseries_timestamp_to_row: defaultdict[tuple[str, str], dict[int, dict[str, Any]]] = (
-        defaultdict(dict)
-    )
+    result_timeseries_timestamp_to_row: defaultdict[
+        tuple[str, str], dict[int, tuple[dict[str, Any], ExtrapolationContext]]
+    ] = defaultdict(dict)
 
     query_duration = request.meta.end_timestamp.seconds - request.meta.start_timestamp.seconds
     time_buckets = [
@@ -165,6 +166,7 @@ def _convert_result_timeseries(
                 group_by_map[col_name] = str(col_value)
 
         group_by_key = "|".join([f"{k},{v}" for k, v in group_by_map.items()])
+        row_extrapolation_contexts = ExtrapolationContext.from_row_columns(aggregation_labels, row)
         for col_name in aggregation_labels:
             if not result_timeseries.get((group_by_key, col_name)):
                 result_timeseries[(group_by_key, col_name)] = TimeSeries(
@@ -174,19 +176,19 @@ def _convert_result_timeseries(
                 )
             result_timeseries_timestamp_to_row[(group_by_key, col_name)][
                 int(_unix_seconds(row["time"]))
-            ] = row
+            ] = (row, row_extrapolation_contexts[col_name])
 
     # Go through every possible time bucket in the query, if there's row data for it, fill in its data
     # otherwise put a dummy datapoint in
     for bucket in time_buckets:
         for timeseries_key, timeseries in result_timeseries.items():
-            row_data = result_timeseries_timestamp_to_row.get(timeseries_key, {}).get(
+            row_and_context = result_timeseries_timestamp_to_row.get(timeseries_key, {}).get(
                 bucket.seconds
             )
-            if not row_data:
+            if row_and_context is None:
                 timeseries.data_points.append(DataPoint(data=0, data_present=False))
             else:
-                extrapolation_context = ExtrapolationContext.from_row(timeseries.label, row_data)
+                row_data, extrapolation_context = row_and_context
                 if row_data.get(timeseries.label, None) is not None:
                     timeseries.data_points.append(
                         DataPoint(

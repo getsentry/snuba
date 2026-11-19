@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from abc import ABC, abstractmethod
 from bisect import bisect_left
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from functools import cached_property
 from typing import Any
@@ -195,7 +195,41 @@ class ExtrapolationContext(ABC):
         column_label: str,
         row_data: dict[str, Any],
     ) -> ExtrapolationContext:
-        value = row_data[column_label]
+        return ExtrapolationContext.from_row_columns([column_label], row_data)[column_label]
+
+    @staticmethod
+    def from_row_columns(
+        column_labels: Iterable[str],
+        row_data: dict[str, Any],
+    ) -> dict[str, ExtrapolationContext]:
+        """
+        Builds the context of each column in `column_labels` from one row. Each custom
+        column alias is parsed once, so the cost does not grow with the number of labels.
+        """
+        custom_columns: dict[str, list[tuple[CustomColumnInformation, Any]]] = {}
+        for col_name, col_value in row_data.items():
+            # we ignore non-custom columns
+            if not col_name.startswith(CUSTOM_COLUMN_PREFIX):
+                continue
+
+            custom_column_information = CustomColumnInformation.from_alias(col_name)
+            if custom_column_information.referenced_column is not None:
+                custom_columns.setdefault(custom_column_information.referenced_column, []).append(
+                    (custom_column_information, col_value)
+                )
+
+        return {
+            column_label: ExtrapolationContext._from_custom_columns(
+                row_data[column_label], custom_columns.get(column_label, [])
+            )
+            for column_label in column_labels
+        }
+
+    @staticmethod
+    def _from_custom_columns(
+        value: Any,
+        custom_columns: list[tuple[CustomColumnInformation, Any]],
+    ) -> ExtrapolationContext:
         is_extrapolated = False
 
         confidence_interval = None
@@ -208,18 +242,7 @@ class ExtrapolationContext(ABC):
 
         is_percentile = False
 
-        for col_name, col_value in row_data.items():
-            # we ignore non-custom columns
-            if not col_name.startswith(CUSTOM_COLUMN_PREFIX):
-                continue
-
-            custom_column_information = CustomColumnInformation.from_alias(col_name)
-            if (
-                custom_column_information.referenced_column is None
-                or custom_column_information.referenced_column != column_label
-            ):
-                continue
-
+        for custom_column_information, col_value in custom_columns:
             if custom_column_information.custom_column_id == "confidence_interval":
                 is_extrapolated = True
                 confidence_interval = col_value
