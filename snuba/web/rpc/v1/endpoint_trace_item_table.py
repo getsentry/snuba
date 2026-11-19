@@ -95,6 +95,7 @@ from snuba.web.rpc.common.formula_ops import (
     COLUMN_OP_TO_EXPR,
     FORMULA_CONDITION_OP_TO_EXPR,
 )
+from snuba.web.rpc.common.histogram_aggregation import reject_value_filter_with_buckets
 from snuba.web.rpc.common.pagination import FlexibleTimeWindowPageWithFilters
 from snuba.web.rpc.common.trace_item_table import convert_results
 from snuba.web.rpc.proto_visitor import (
@@ -1090,6 +1091,7 @@ class EndpointTraceItemTable(RPCEndpoint[TraceItemTableRequest, TraceItemTableRe
 
         in_msg = _apply_labels_to_columns(in_msg)
         _validate_select_and_groupby(in_msg)
+        reject_value_filter_with_buckets(in_msg)
         _validate_order_by(in_msg)
         _validate_limit_by(in_msg)
         _enforce_flextime_routing_orders_by_timestamp_and_item_id(in_msg)
