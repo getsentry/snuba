@@ -115,6 +115,9 @@ function QueryEditor(props: {
   // Where to put the predefined query picker instead of above the editor.
   // It's null until that element mounts, and the picker waits for it.
   predefinedQuerySlot?: HTMLElement | null;
+  // Replaces the query whenever a new object is passed, e.g. to load a past
+  // query back in. The replacement is its own undo step.
+  replaceQuery?: { sql: string };
 }) {
   const [query, setQuery] = useState<string>("");
   const hash = splitHash(window.location.hash).route;
@@ -147,6 +150,13 @@ function QueryEditor(props: {
       setQueryTemplate(props.initialQuery);
     }
   }, []);
+
+  useEffect(() => {
+    if (props.replaceQuery) {
+      setSelectedPredefinedQuery(undefined);
+      setQueryTemplate(props.replaceQuery.sql);
+    }
+  }, [props.replaceQuery]);
 
   const variableRegex = /{{([a-zA-Z0-9_]+)}}/;
   const hasTimeRangeParams =

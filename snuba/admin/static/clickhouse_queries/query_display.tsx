@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Client from "SnubaAdmin/api_client";
 import QueryEditor from "SnubaAdmin/query_editor";
 import ExecuteButton from "SnubaAdmin/utils/execute_button";
@@ -36,7 +36,10 @@ import {
   rankNodes,
   storageForNode,
 } from "SnubaAdmin/utils/clickhouse_node_utils";
-import { QueryHistoryEntry } from "SnubaAdmin/clickhouse_queries/query_history_entry";
+import {
+  QueryHistoryEntry,
+  parseInputQuery,
+} from "SnubaAdmin/clickhouse_queries/query_history_entry";
 import {
   clearHashParams,
   parseHostPort,
@@ -125,6 +128,10 @@ function QueryDisplay(props: {
   // The query editor puts its predefined query picker here, beside Close.
   const [predefinedQuerySlot, setPredefinedQuerySlot] =
     useState<HTMLDivElement | null>(null);
+  // A past query to load back into the editor; a new object each time, so
+  // loading the same one twice still replaces edits made since.
+  const [replaceQuery, setReplaceQuery] = useState<{ sql: string }>();
+  const editorPanelRef = useRef<HTMLDivElement>(null);
 
   const [queryError, setQueryError] = useState<Error | null>(null);
 
@@ -251,6 +258,7 @@ function QueryDisplay(props: {
     return props.api
       .executeSystemQuery(query as QueryRequest)
       .then((result) => {
+        result.request = { ...query } as QueryRequest;
         setQueryError(null);  // clear any previous error
         result.input_query = `${query.sql} (${query.storage},${query.host}:${query.port})`;
         // The server doesn't timestamp results; record when this one ran.
@@ -261,6 +269,44 @@ function QueryDisplay(props: {
         setEditorOpen(false);
       });
   }
+
+  // Puts a past query, its target and its mode back into the editor to
+  // review and run again.
+  function loadQuery(queryResult: QueryResult) {
+    const parsed = parseInputQuery(queryResult.input_query);
+    const request = queryResult.request;
+    const sql = request?.sql ?? parsed.sql;
+    const storage = request?.storage ?? parsed.storage ?? undefined;
+    const target = request ?? (parsed.host ? parseHostPort(parsed.host) : null);
+    const hostPort = target ? `${target.host}:${target.port}` : "";
+    // Older results don't say how the host was entered; one no storage knows
+    // about can only have been typed.
+    const clusterless =
+      request?.clusterless ??
+      (target !== null &&
+        !nodeOptions.some((option) => option.value === hostPort));
+    if (clusterless) {
+      setManualHostInput(hostPort);
+    }
+    setQuery({
+      storage,
+      host: target?.host,
+      port: target?.port,
+      sql,
+      // Older results didn't record the mode, so they load in user mode.
+      sudo: request?.sudo ?? false,
+      clusterless,
+    });
+    setReplaceQuery({ sql });
+    setQueryError(null);
+    setEditorOpen(true);
+  }
+
+  useEffect(() => {
+    if (replaceQuery) {
+      editorPanelRef.current?.scrollIntoView?.({ block: "start" });
+    }
+  }, [replaceQuery]);
 
   function clearResults() {
     clearRecentHistory(HISTORY_KEY);
@@ -341,6 +387,7 @@ function QueryDisplay(props: {
   return (
     <div>
       <div
+        ref={editorPanelRef}
         style={editorOpen ? editorPanelStyle : stickyEditorPanelStyle}
         data-testid="editor-panel"
       >
@@ -567,6 +614,7 @@ function QueryDisplay(props: {
               predefinedQueryOptions={props.predefinedQueryOptions}
               initialQuery={prefill?.sql}
               predefinedQuerySlot={predefinedQuerySlot}
+              replaceQuery={replaceQuery}
             />
           </div>
           {/* Sudo can change data, so it gets a red frame. */}
@@ -605,6 +653,7 @@ function QueryDisplay(props: {
             defaultExpanded={queryResult === justRan}
             csv={convertResultsToCSV(queryResult)}
             resultDataPopulator={props.resultDataPopulator}
+            onRerun={() => loadQuery(queryResult)}
           />
         ))}
       </div>

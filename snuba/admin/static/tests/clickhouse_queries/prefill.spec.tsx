@@ -223,6 +223,67 @@ describe("QueryDisplay opened from a link", () => {
     expect(screen.queryByLabelText("Open editor")).toBeNull();
   });
 
+  it("loads a past query back into the editor in its mode", async () => {
+    const api = renderWithHash(
+      "#system-queries?query=SYSTEM%20FLUSH%20LOGS&storage=errors&host=clickhouse-01%3A9000"
+    );
+    await waitFor(() => expect(api.getClickhouseNodes).toBeCalled());
+    await screen.findAllByDisplayValue("clickhouse-01:9000");
+
+    fireEvent.click(screen.getByText("Sudo mode"));
+    fireEvent.click(screen.getByText("Execute Sudo Query"));
+    await screen.findByText("1 row", { exact: false });
+
+    // Change everything the past run set.
+    fireEvent.click(screen.getByLabelText("Open editor"));
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "SELECT 2" },
+    });
+    fireEvent.click(screen.getByText("User mode"));
+    expect(screen.getByText("Execute Query")).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("Close editor"));
+
+    expect(screen.getByLabelText("Copy JSON")).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("Re-run"));
+
+    expect(screen.getByRole("textbox").textContent).toBe("SYSTEM FLUSH LOGS");
+    expect(screen.getAllByDisplayValue("clickhouse-01:9000")).not.toHaveLength(0);
+    // Nothing runs until the user executes it.
+    expect(api.executeSystemQuery).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByText("Execute Sudo Query"));
+    await waitFor(() => expect(api.executeSystemQuery).toHaveBeenCalledTimes(2));
+    expect(api.executeSystemQuery.mock.calls[1][0]).toMatchObject({
+      sql: "SYSTEM FLUSH LOGS",
+      storage: "errors",
+      host: "clickhouse-01",
+      port: 9000,
+      sudo: true,
+    });
+  });
+
+  it("loads an older past query in user mode with its typed host", async () => {
+    localStorage.setItem(
+      "clickhouse_queries.history",
+      JSON.stringify([
+        {
+          input_query: "SELECT 1 (errors,other-host:8123)",
+          timestamp: 1,
+          column_names: ["x"],
+          rows: [["1"]],
+        },
+      ])
+    );
+    const api = renderWithHash("#system-queries");
+    await waitFor(() => expect(api.getClickhouseNodes).toBeCalled());
+
+    fireEvent.click(screen.getByText("Sudo mode"));
+    fireEvent.click(await screen.findByLabelText("Re-run"));
+
+    expect(screen.getByTestId("SQLEditor").textContent).toBe("SELECT 1");
+    expect(screen.getByDisplayValue("other-host:8123")).toBeTruthy();
+    expect(screen.getByText("Execute Query")).toBeTruthy();
+  });
+
   it("fills in the saved node", async () => {
     localStorage.setItem("select-host", "clickhouse-01:9000");
     const api = renderWithHash("#system-queries");
