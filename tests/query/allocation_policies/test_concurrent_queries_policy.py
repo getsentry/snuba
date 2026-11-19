@@ -134,13 +134,13 @@ def test_resolver_attaches_from_match_block() -> None:
     block = match_block(
         [{"name": "ConcurrentQueriesPerOrgPolicy", "limit": 5, "enforce": "pardon"}]
     )
-    with override_allocation_policy({"EAP": block}):
-        (policy,) = get_active_allocation_policies(ResourceIdentifier("EAP"))
+    with override_allocation_policy({"RPC": block}):
+        (policy,) = get_active_allocation_policies(ResourceIdentifier("RPC"))
     assert isinstance(policy, ConcurrentQueriesPerOrgPolicy)
     assert policy._limit == 5
     assert policy.is_pardonable
 
 
 def test_unknown_key_is_ignored() -> None:
-    policy = ConcurrentQueriesPerOrgPolicy.from_kwargs(storage_key="EAP", is_enforced=0, limit=5)
+    policy = ConcurrentQueriesPerOrgPolicy.from_kwargs(storage_key="RPC", is_enforced=0, limit=5)
     assert policy._limit == 5

@@ -366,7 +366,7 @@ def test_metrics_output() -> None:
                     "explanation": {
                         "overrides": {},
                         "reason": "within limit",
-                        "storage_key": "EAP",
+                        "storage_key": "RPC",
                     },
                     "is_throttled": False,
                     "throttle_threshold": AnyInt(66),
@@ -878,9 +878,9 @@ class SelectsTier8CannotRun(RoutingStrategySelectsTier8):
         routing_decision.can_run = False
 
 
-_EMPTY_POLICY = PassthroughPolicy(ResourceIdentifier("EAP"))
+_EMPTY_POLICY = PassthroughPolicy(ResourceIdentifier("RPC"))
 _REJECT_POLICY = PassthroughPolicy(
-    ResourceIdentifier("EAP"),
+    ResourceIdentifier("RPC"),
     thresholds={"reject": {"cluster_load": 1.0}},
 )
 _HOT_LOAD = LoadInfo(cluster_load=2.0)

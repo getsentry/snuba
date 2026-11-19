@@ -35,13 +35,13 @@ def test_empty_list_falls_back_to_passthrough() -> None:
 
 
 def test_eap_attachment_constructs_named_policies() -> None:
-    with override_allocation_policy({"EAP": CURRENT_EAP_ATTACHMENT}):
-        policies = get_active_allocation_policies(ResourceIdentifier("EAP"))
+    with override_allocation_policy({"RPC": CURRENT_EAP_ATTACHMENT}):
+        policies = get_active_allocation_policies(ResourceIdentifier("RPC"))
 
     assert [p.class_name() for p in policies] == [
         "ConcurrentRateLimitAllocationPolicy",
     ]
-    assert policies[0]._resource_identifier.value == "EAP"
+    assert policies[0]._resource_identifier.value == "RPC"
     assert policies[0].get_config_value("concurrent_limit") == 66
     assert policies[0].is_enforced is False
 
@@ -49,7 +49,7 @@ def test_eap_attachment_constructs_named_policies() -> None:
 def test_unknown_policy_is_skipped() -> None:
     with override_allocation_policy(
         {
-            "EAP": match_block(
+            "RPC": match_block(
                 [
                     {"name": "DoesNotExist"},
                     {"name": "ReferrerGuardRailPolicy"},
@@ -57,7 +57,7 @@ def test_unknown_policy_is_skipped() -> None:
             )
         }
     ):
-        policies = get_active_allocation_policies(ResourceIdentifier("EAP"))
+        policies = get_active_allocation_policies(ResourceIdentifier("RPC"))
     assert [p.class_name() for p in policies] == ["ReferrerGuardRailPolicy"]
 
 
@@ -78,8 +78,8 @@ def test_each_policy_constructs(spec: dict[str, object]) -> None:
 
 
 def test_all_unknown_falls_back_to_passthrough() -> None:
-    with override_allocation_policy({"EAP": match_block([{"name": "DoesNotExist"}])}):
-        policies = get_active_allocation_policies(ResourceIdentifier("EAP"))
+    with override_allocation_policy({"RPC": match_block([{"name": "DoesNotExist"}])}):
+        policies = get_active_allocation_policies(ResourceIdentifier("RPC"))
     assert len(policies) == 1
     assert isinstance(policies[0], PassthroughPolicy)
 
@@ -87,7 +87,7 @@ def test_all_unknown_falls_back_to_passthrough() -> None:
 def test_matching_org_block_adds_policy() -> None:
     with override_allocation_policy(
         {
-            "EAP": [
+            "RPC": [
                 {
                     "match": {},
                     "policies": [
@@ -107,10 +107,10 @@ def test_matching_org_block_adds_policy() -> None:
         }
     ):
         for_org_1 = get_active_allocation_policies(
-            ResourceIdentifier("EAP"), {"organization_id": 1}
+            ResourceIdentifier("RPC"), {"organization_id": 1}
         )
         for_org_2 = get_active_allocation_policies(
-            ResourceIdentifier("EAP"), {"organization_id": 2}
+            ResourceIdentifier("RPC"), {"organization_id": 2}
         )
 
     assert [p.class_name() for p in for_org_1] == [
@@ -123,7 +123,7 @@ def test_matching_org_block_adds_policy() -> None:
 def test_later_matching_block_replaces_policy_by_name() -> None:
     with override_allocation_policy(
         {
-            "EAP": [
+            "RPC": [
                 {
                     "match": {},
                     "policies": [
@@ -148,10 +148,10 @@ def test_later_matching_block_replaces_policy_by_name() -> None:
         }
     ):
         for_org_1 = get_active_allocation_policies(
-            ResourceIdentifier("EAP"), {"organization_id": 1}
+            ResourceIdentifier("RPC"), {"organization_id": 1}
         )
         for_org_2 = get_active_allocation_policies(
-            ResourceIdentifier("EAP"), {"organization_id": 2}
+            ResourceIdentifier("RPC"), {"organization_id": 2}
         )
 
     assert [p.class_name() for p in for_org_1] == ["ConcurrentRateLimitAllocationPolicy"]
@@ -165,7 +165,7 @@ def test_later_matching_block_replaces_policy_by_name() -> None:
 def test_matching_block_can_remove_a_policy() -> None:
     with override_allocation_policy(
         {
-            "EAP": [
+            "RPC": [
                 {
                     "match": {},
                     "policies": [
@@ -184,10 +184,10 @@ def test_matching_block_can_remove_a_policy() -> None:
         }
     ):
         for_org_1 = get_active_allocation_policies(
-            ResourceIdentifier("EAP"), {"organization_id": 1}
+            ResourceIdentifier("RPC"), {"organization_id": 1}
         )
         for_org_2 = get_active_allocation_policies(
-            ResourceIdentifier("EAP"), {"organization_id": 2}
+            ResourceIdentifier("RPC"), {"organization_id": 2}
         )
 
     assert [p.class_name() for p in for_org_1] == ["ConcurrentRateLimitAllocationPolicy"]
@@ -200,7 +200,7 @@ def test_matching_block_can_remove_a_policy() -> None:
 def test_match_list_is_or_within_key() -> None:
     with override_allocation_policy(
         {
-            "EAP": [
+            "RPC": [
                 {
                     "match": {},
                     "policies": [
@@ -220,13 +220,13 @@ def test_match_list_is_or_within_key() -> None:
         }
     ):
         for_org_1 = get_active_allocation_policies(
-            ResourceIdentifier("EAP"), {"organization_id": 1}
+            ResourceIdentifier("RPC"), {"organization_id": 1}
         )
         for_org_2 = get_active_allocation_policies(
-            ResourceIdentifier("EAP"), {"organization_id": 2}
+            ResourceIdentifier("RPC"), {"organization_id": 2}
         )
         for_org_3 = get_active_allocation_policies(
-            ResourceIdentifier("EAP"), {"organization_id": 3}
+            ResourceIdentifier("RPC"), {"organization_id": 3}
         )
 
     assert [p.class_name() for p in for_org_1] == [
@@ -243,7 +243,7 @@ def test_match_list_is_or_within_key() -> None:
 def test_match_requires_every_key() -> None:
     with override_allocation_policy(
         {
-            "EAP": [
+            "RPC": [
                 {
                     "match": {},
                     "policies": [
@@ -266,12 +266,12 @@ def test_match_requires_every_key() -> None:
         }
     ):
         both = get_active_allocation_policies(
-            ResourceIdentifier("EAP"),
+            ResourceIdentifier("RPC"),
             {"organization_id": 1, "referrer": "api.search"},
         )
-        org_only = get_active_allocation_policies(ResourceIdentifier("EAP"), {"organization_id": 1})
+        org_only = get_active_allocation_policies(ResourceIdentifier("RPC"), {"organization_id": 1})
         other_referrer = get_active_allocation_policies(
-            ResourceIdentifier("EAP"),
+            ResourceIdentifier("RPC"),
             {"organization_id": 1, "referrer": "api.other"},
         )
 
@@ -284,7 +284,7 @@ def test_match_requires_every_key() -> None:
 def test_eap_routing_strategy_uses_tenant_ids() -> None:
     with override_allocation_policy(
         {
-            "EAP": [
+            "RPC": [
                 {
                     "match": {},
                     "policies": [
@@ -315,8 +315,8 @@ def test_eap_routing_strategy_uses_tenant_ids() -> None:
 
 
 def _names(tenant_ids: dict[str, str | int], blocks: list[dict[str, object]]) -> list[str]:
-    with override_allocation_policy({"EAP": blocks}):
-        policies = get_active_allocation_policies(ResourceIdentifier("EAP"), tenant_ids)
+    with override_allocation_policy({"RPC": blocks}):
+        policies = get_active_allocation_policies(ResourceIdentifier("RPC"), tenant_ids)
     return [p.class_name() for p in policies]
 
 
@@ -344,9 +344,9 @@ def test_time_window_from_match_block() -> None:
             "policies": [{"name": "BytesScannedPerRefPolicy", "time_window_minutes": 60}],
         },
     ]
-    with override_allocation_policy({"EAP": blocks}):
-        org_1 = get_active_allocation_policies(ResourceIdentifier("EAP"), {"organization_id": 1})
-        org_2 = get_active_allocation_policies(ResourceIdentifier("EAP"), {"organization_id": 2})
+    with override_allocation_policy({"RPC": blocks}):
+        org_1 = get_active_allocation_policies(ResourceIdentifier("RPC"), {"organization_id": 1})
+        org_2 = get_active_allocation_policies(ResourceIdentifier("RPC"), {"organization_id": 2})
     windows = [
         [p._time_window_minutes for p in policies if isinstance(p, BytesScannedPolicy)]
         for policies in (org_1, org_2)

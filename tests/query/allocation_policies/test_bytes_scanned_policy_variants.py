@@ -16,7 +16,7 @@ from snuba.query.allocation_policies.resolver import get_active_allocation_polic
 from snuba.web import QueryResult
 from tests.query.allocation_policies.attachment import match_block, override_allocation_policy
 
-RESOURCE = "EAP"
+RESOURCE = "RPC"
 QUERY_ID = "deadbeef"
 PER_ORG = "BytesScannedPerOrgPolicy"
 PER_REF = "BytesScannedPerRefPolicy"

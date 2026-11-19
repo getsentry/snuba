@@ -388,8 +388,8 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         self, tenant_ids: dict[str, str | int] | None = None
     ) -> list[AllocationPolicy]:
         # All routing strategies share allocation policies: they protect the same
-        # resource (EAP). The list is configured via allocation_policies.
-        return get_active_allocation_policies(ResourceIdentifier("EAP"), tenant_ids)
+        # resource (RPC). The list is configured via allocation_policies.
+        return get_active_allocation_policies(ResourceIdentifier("RPC"), tenant_ids)
 
     def get_delete_allocation_policies(self) -> list[AllocationPolicy]:
         return []
