@@ -4,11 +4,13 @@ from typing import Any
 
 import pytest
 
+from snuba.clusters.load_info import LoadInfo
 from snuba.configs.configuration import ResourceIdentifier
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
     AllocationPolicyViolations,
     QueryResultOrError,
+    QuotaAllowanceDecision,
 )
 from snuba.query.allocation_policies.concurrent_queries_policy import (
     ConcurrentQueriesPerOrgPolicy,
@@ -17,12 +19,16 @@ from snuba.query.allocation_policies.concurrent_queries_policy import (
     ConcurrentQueriesPolicy,
 )
 from snuba.query.allocation_policies.resolver import get_active_allocation_policies
+from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from snuba.web import QueryException, QueryResult
 from tests.query.allocation_policies.attachment import match_block, override_allocation_policy
 
 LIMIT = 3
 MAX_THREADS = 16
 TENANT_IDS: dict[str, str | int] = {"organization_id": 1, "referrer": "some_referrer"}
+IDLE = LoadInfo(cluster_load=10, concurrent_queries=1)
+BUSY = LoadInfo(cluster_load=500, concurrent_queries=100)
+THRESHOLDS = {"reject": {"cluster_load": 200, "concurrent_queries": 50}}
 
 _FINISHED = QueryResultOrError(
     query_result=QueryResult(result={}, extra={"stats": {}, "sql": "", "experiments": {}}),
@@ -128,6 +134,34 @@ def test_enforce_never_runs() -> None:
     allowance = policy.get_quota_allowance(TENANT_IDS, "extra")
     assert allowance.can_run
     assert allowance.max_threads == MAX_THREADS
+
+
+def _decision_count(name: str) -> int:
+    return len(get_recorded_metric_calls("increment", f"allocation_policy.{name}") or [])
+
+
+@pytest.mark.parametrize(
+    ("load_info", "decision", "metric"),
+    [
+        pytest.param(IDLE, QuotaAllowanceDecision.PARDONED, "db_request_pardoned", id="idle"),
+        pytest.param(BUSY, QuotaAllowanceDecision.ALLOWED, "db_request_rejected", id="busy"),
+    ],
+)
+@pytest.mark.redis_db
+def test_enforce_never_counts_pardon_when_idle(
+    load_info: LoadInfo, decision: QuotaAllowanceDecision, metric: str
+) -> None:
+    """Over-limit NEVER queries are counted like v1 (pardoned when idle, rejected
+    when busy) and run with full threads either way."""
+    policy = _policy(enforce="never", thresholds=THRESHOLDS)
+    _fill(policy)
+    before = _decision_count(metric)
+    allowance = policy.get_quota_allowance(TENANT_IDS, "extra", load_info)
+    assert _decision_count(metric) == before + 1
+    seen = allowance.decision(policy, load_info)
+    assert seen is decision
+    assert not seen.is_rejected
+    assert allowance.threads_for(seen, policy) == MAX_THREADS
 
 
 def test_resolver_attaches_from_match_block() -> None:

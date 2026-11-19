@@ -26,6 +26,7 @@ from snuba.query.allocation_policies.bytes_scanned_policy import (
     BytesScannedPolicy,
     Enforce,
 )
+from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from snuba.web import QueryException, QueryResult
 
 LIMIT = 1000
@@ -303,6 +304,34 @@ def test_enforce_over_limit(
     allowance = policy.get_quota_allowance(TENANT_IDS, QUERY_ID, load_info)
     assert allowance.can_run is can_run
     assert allowance.decision(policy, load_info) is decision
+
+
+def _decision_count(name: str) -> int:
+    return len(get_recorded_metric_calls("increment", f"allocation_policy.{name}") or [])
+
+
+@pytest.mark.parametrize(
+    ("load_info", "decision", "metric"),
+    [
+        pytest.param(IDLE, QuotaAllowanceDecision.PARDONED, "db_request_pardoned", id="idle"),
+        pytest.param(BUSY, QuotaAllowanceDecision.ALLOWED, "db_request_rejected", id="busy"),
+    ],
+)
+@pytest.mark.redis_db
+def test_enforce_never_counts_pardon_when_idle(
+    load_info: LoadInfo, decision: QuotaAllowanceDecision, metric: str
+) -> None:
+    """Over-limit NEVER queries are counted like v1 (pardoned when idle, rejected
+    when busy) and run with full threads either way."""
+    policy = _policy(enforce="never", thresholds=THRESHOLDS)
+    _scan(policy, TENANT_IDS, LIMIT)
+    before = _decision_count(metric)
+    allowance = policy.get_quota_allowance(TENANT_IDS, QUERY_ID, load_info)
+    assert _decision_count(metric) == before + 1
+    seen = allowance.decision(policy, load_info)
+    assert seen is decision
+    assert not seen.is_rejected
+    assert allowance.threads_for(seen, policy) == MAX_THREADS
 
 
 def test_resolver_import_registers_bytes_scanned_policies() -> None:
