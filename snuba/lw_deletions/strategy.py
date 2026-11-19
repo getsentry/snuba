@@ -236,15 +236,20 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
             and get_mapped_option("lw_deletes_split_by_partition", self.__storage_name, 0)
         )
 
+        succeeded = True
         for table in self.__tables:
             where_clause = construct_or_conditions(self.__storage, conditions)
             if split_enabled:
-                self._execute_delete_by_partition(table, where_clause, query_settings, conditions)
+                ok = self._execute_delete_by_partition(
+                    table, where_clause, query_settings, conditions
+                )
             else:
                 query = construct_query(self.__storage, table, where_clause)
-                self._execute_single_delete(table, query, query_settings)
+                ok = self._execute_single_delete(table, query, query_settings)
+            succeeded = succeeded and ok
 
-        if self.__is_eap:
+        # Only when every table's delete ran without a swallowed error.
+        if self.__is_eap and succeeded:
             for cond in conditions:
                 sentry_logger.info(
                     "snuba.delete.eap_deleted",
@@ -264,7 +269,8 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         where_clause: Expression,
         query_settings: HTTPQuerySettings,
         conditions: Sequence[ConditionsBag],
-    ) -> None:
+    ) -> bool:
+        """Returns False if any partition's delete failed with a swallowed error."""
         assert self.__partition_column is not None
         partition_dates = self._get_partition_dates(table)
         if not partition_dates:
@@ -273,9 +279,9 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
                 table,
             )
             query = construct_query(self.__storage, table, where_clause)
-            self._execute_single_delete(table, query, query_settings)
-            return
+            return self._execute_single_delete(table, query, query_settings)
 
+        succeeded = True
         cond_hash = self._conditions_hash(conditions)
         tracking_key = f"lw_delete_partitions:{self.__storage_name}:{cond_hash}"
         ttl = settings.LW_DELETES_PARTITION_TRACKING_TTL
@@ -303,7 +309,10 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
             )
             partition_where = combine_and_conditions([where_clause, partition_condition])
             query = construct_query(self.__storage, table, partition_where)
-            self._execute_single_delete(table, query, query_settings, partition_week=partition_week)
+            if not self._execute_single_delete(
+                table, query, query_settings, partition_week=partition_week
+            ):
+                succeeded = False
             self.__metrics.increment(
                 "partition_delete_executed",
                 tags={"table": table, "partition_week": partition_week},
@@ -311,6 +320,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
             self.__redis_client.sadd(tracking_key, member)
 
         self.__redis_client.expire(tracking_key, ttl)
+        return succeeded
 
     def _execute_single_delete(
         self,
@@ -318,7 +328,8 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         query: Query,
         query_settings: HTTPQuerySettings,
         partition_week: str | None = None,
-    ) -> None:
+    ) -> bool:
+        """Returns False if the delete failed and the error was swallowed."""
         tags = {"table": table}
         if partition_week:
             tags["partition_week"] = partition_week
@@ -350,6 +361,8 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
                     logger.exception("Error running delete query %r", exc)
                 else:
                     raise LWDeleteQueryException(exc.message) from exc
+            return False
+        return True
 
     def _check_ongoing_mutations(self, skip_throttle: bool = False) -> None:
         now = time.time()
