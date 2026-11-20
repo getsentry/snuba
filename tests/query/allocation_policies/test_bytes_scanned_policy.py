@@ -78,7 +78,9 @@ def _timeout(policy: AllocationPolicy, tenant_ids: dict[str, str | int]) -> int 
 def test_defaults() -> None:
     policy = BytesScannedPerOrgRefPolicy(storage_key=ResourceIdentifier(StorageKey("errors")))
     assert policy._enforce is Enforce.ALWAYS
-    assert policy._limit == int(1.28 * TERABYTE)
+    assert policy._limit == int(4 * TERABYTE)
+    # A timed out query counts 32 GB, as in v1.
+    assert int(policy._limit * policy._timeout_penalty) == 32 * 10**9
     assert policy.max_threads == 10
     assert policy.is_enforced is True
     assert policy.is_pardonable is False
@@ -89,7 +91,7 @@ def test_defaults() -> None:
 
 def test_unknown_key_is_ignored() -> None:
     policy = BytesScannedPerOrgPolicy.from_kwargs(storage_key="errors", is_enforced=0)
-    assert policy._limit == int(1.28 * TERABYTE)
+    assert policy._limit == int(4 * TERABYTE)
 
 
 @pytest.mark.parametrize("cls", list(_BY_KEY.values()))
