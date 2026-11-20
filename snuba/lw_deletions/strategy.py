@@ -75,7 +75,6 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         self.__metrics = metrics
         self.__last_ongoing_mutations_check: float | None = None
         self.__redis_client = get_redis_client(RedisClientKey.CONFIG)
-        self.__is_eap = storage.get_storage_key() in (StorageKey.EAP_ITEMS, StorageKey.EAP_ITEMS_2)
 
     def poll(self) -> None:
         self.__next_step.poll()
@@ -236,31 +235,37 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
             and get_mapped_option("lw_deletes_split_by_partition", self.__storage_name, 0)
         )
 
-        succeeded = True
+        batch = {
+            "storage": self.__storage_name,
+            "organization_ids": ",".join(
+                str(o) for c in conditions for o in c.column_conditions.get("organization_id", [])
+            ),
+            "project_ids": ",".join(
+                str(p) for c in conditions for p in c.column_conditions.get("project_id", [])
+            ),
+        }
         for table in self.__tables:
+            attributes = {**batch, "table": table}
             where_clause = construct_or_conditions(self.__storage, conditions)
-            if split_enabled:
-                succeeded &= self._execute_delete_by_partition(
-                    table, where_clause, query_settings, conditions
+            try:
+                if split_enabled:
+                    deleted = self._execute_delete_by_partition(
+                        table, where_clause, query_settings, conditions
+                    )
+                else:
+                    query = construct_query(self.__storage, table, where_clause)
+                    deleted = self._execute_single_delete(table, query, query_settings)
+            except TooManyOngoingMutationsError:
+                raise  # Backpressure: the batch is retried, not failed.
+            except Exception as e:
+                sentry_logger.error(
+                    "snuba.delete.eap_failed", attributes={**attributes, "error": type(e).__name__}
                 )
+                raise
+            if deleted:
+                sentry_logger.info("snuba.delete.eap_deleted", attributes=attributes)
             else:
-                query = construct_query(self.__storage, table, where_clause)
-                succeeded &= self._execute_single_delete(table, query, query_settings)
-
-        # Only when every table's delete ran without a swallowed error.
-        if self.__is_eap and succeeded:
-            for cond in conditions:
-                sentry_logger.info(
-                    "snuba.delete.eap_deleted",
-                    attributes={
-                        "organization_ids": ",".join(
-                            map(str, cond.column_conditions.get("organization_id", []))
-                        ),
-                        "project_ids": ",".join(
-                            map(str, cond.column_conditions.get("project_id", []))
-                        ),
-                    },
-                )
+                sentry_logger.error("snuba.delete.eap_failed", attributes=attributes)
 
     def _execute_delete_by_partition(
         self,
@@ -349,11 +354,6 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         except QueryException as exc:
             self.__metrics.increment("execute_delete_query_failed", tags=tags)
             cause = exc.__cause__
-            if self.__is_eap:
-                sentry_logger.error(
-                    "snuba.delete.eap_failed",
-                    attributes={"table": table, "error": type(cause or exc).__name__},
-                )
             if isinstance(cause, ClickhouseError):
                 if cause.code in LW_DELETE_NON_RETRYABLE_CLICKHOUSE_ERROR_CODES:
                     logger.exception("Error running delete query %r", exc)
