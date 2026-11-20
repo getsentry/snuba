@@ -159,23 +159,26 @@ class EndpointDeleteTraceItems(RPCEndpoint[DeleteTraceItemsRequest, DeleteTraceI
             # Add item_type to conditions for the delete query
             conditions["item_type"] = [attribute_conditions.item_type]
 
-        sentry_logger.info(
-            "snuba.delete.received",
-            attributes={
-                "organization_ids": str(request.meta.organization_id),
-                "project_ids": ",".join(map(str, request.meta.project_ids)),
-                "target": "eap",
-            },
-        )
+        attributes = {
+            "organization_ids": str(request.meta.organization_id),
+            "project_ids": ",".join(map(str, request.meta.project_ids)),
+        }
+        sentry_logger.info("snuba.delete.received", attributes={**attributes, "target": "eap"})
         storage = get_writable_storage(StorageKey.EAP_ITEMS_2)
         schema = storage.get_schema()
         assert isinstance(schema, TableSchema)
-        delete_result = delete_from_storage(
-            storage,
-            conditions,
-            attribution_info,
-            attribute_conditions,
-        )
+        try:
+            delete_result = delete_from_storage(
+                storage,
+                conditions,
+                attribution_info,
+                attribute_conditions,
+            )
+        except Exception as e:
+            sentry_logger.error(
+                "snuba.delete.eap_failed", attributes={**attributes, "error": type(e).__name__}
+            )
+            raise
 
         response = DeleteTraceItemsResponse()
         # TODO: fix how we pass this data around, this is too coupled

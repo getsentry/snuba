@@ -349,6 +349,17 @@ def delete_from_tables(
         delete_query["attribute_conditions_item_type"] = conditions.attribute_conditions.item_type
 
     produce_delete_query(delete_query)
+    sentry_logger.info(
+        "snuba.delete.eap_queued",
+        attributes={
+            "storage": storage_name,
+            "tables": ",".join(tables),
+            "organization_ids": ",".join(
+                map(str, conditions.column_conditions.get("organization_id", []))
+            ),
+            "project_ids": ",".join(map(str, conditions.column_conditions.get("project_id", []))),
+        },
+    )
     return result
 
 

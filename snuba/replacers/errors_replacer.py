@@ -39,6 +39,7 @@ from snuba.processor import (
     _hashify,
 )
 from snuba.query.final import query_final_disabled
+from snuba.redis import RedisClientKey
 from snuba.replacers.projects_query_flags import ProjectsQueryFlags
 from snuba.replacers.replacements_and_expiry import (
     get_config_auto_replacements_bypass_projects,
@@ -219,7 +220,10 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                     "message_type": type_,
                     "reason": "bypass_list",
                 }
-                sentry_logger.info("snuba.delete.redis_skipped", attributes=attributes)
+                sentry_logger.info(
+                    "snuba.delete.redis_skipped",
+                    attributes={**attributes, "redis": RedisClientKey.REPLACEMENTS_STORE.value},
+                )
                 sentry_logger.info("snuba.delete.errors_skipped", attributes=attributes)
                 return None
 
@@ -245,20 +249,26 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                 )
 
             elif isinstance(query_time_flags, ExcludeGroups):
-                ProjectsQueryFlags.set_project_exclude_groups(
-                    project_id,
-                    query_time_flags.group_ids,
-                    self.__state_name,
-                    replacement.get_replacement_type(),
-                )
-                sentry_logger.info(
-                    "snuba.delete.redis_written",
-                    attributes={
-                        "project_id": project_id,
-                        "group_ids_count": len(query_time_flags.group_ids),
-                        "message_type": replacement.get_replacement_type().value,
-                    },
-                )
+                attributes = {
+                    "project_id": project_id,
+                    "group_ids_count": len(query_time_flags.group_ids),
+                    "message_type": replacement.get_replacement_type().value,
+                    "redis": RedisClientKey.REPLACEMENTS_STORE.value,
+                }
+                try:
+                    ProjectsQueryFlags.set_project_exclude_groups(
+                        project_id,
+                        query_time_flags.group_ids,
+                        self.__state_name,
+                        replacement.get_replacement_type(),
+                    )
+                except Exception as e:
+                    sentry_logger.error(
+                        "snuba.delete.redis_failed",
+                        attributes={**attributes, "error": type(e).__name__},
+                    )
+                    raise
+                sentry_logger.info("snuba.delete.redis_written", attributes=attributes)
 
         elif query_time_flags is not None:
             sentry_logger.info(
@@ -266,6 +276,7 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                 attributes={
                     "project_id": project_id,
                     "message_type": replacement.get_replacement_type().value,
+                    "redis": RedisClientKey.REPLACEMENTS_STORE.value,
                     "reason": "immediate_optimize",
                 },
             )

@@ -75,6 +75,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         self.__metrics = metrics
         self.__last_ongoing_mutations_check: float | None = None
         self.__redis_client = get_redis_client(RedisClientKey.CONFIG)
+        self.__delete_attributes: dict[str, str] = {}
 
     def poll(self) -> None:
         self.__next_step.poll()
@@ -127,11 +128,19 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
             # backpressure is applied while we wait for the
             # currently ongoing mutations to finish
             self.__metrics.increment("too_many_ongoing_mutations")
+            sentry_logger.info(
+                "snuba.delete.eap_delayed",
+                attributes={"storage": self.__storage_name, "reason": "too_many_ongoing_mutations"},
+            )
             raise MessageRejected from None
         except QueryException as err:
             cause = err.__cause__
             if isinstance(cause, AllocationPolicyViolations):
                 self.__metrics.increment("allocation_policy_violation")
+                sentry_logger.info(
+                    "snuba.delete.eap_delayed",
+                    attributes={"storage": self.__storage_name, "reason": "allocation_policy"},
+                )
                 raise MessageRejected from None
 
         self.__next_step.submit(message)
@@ -235,6 +244,15 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
             and get_mapped_option("lw_deletes_split_by_partition", self.__storage_name, 0)
         )
 
+        self.__delete_attributes = {
+            "storage": self.__storage_name,
+            "organization_ids": ",".join(
+                str(o) for c in conditions for o in c.column_conditions.get("organization_id", [])
+            ),
+            "project_ids": ",".join(
+                str(p) for c in conditions for p in c.column_conditions.get("project_id", [])
+            ),
+        }
         for table in self.__tables:
             where_clause = construct_or_conditions(self.__storage, conditions)
             if split_enabled:
@@ -279,6 +297,15 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
                     partition_date,
                     table,
                 )
+                sentry_logger.info(
+                    "snuba.delete.eap_skipped",
+                    attributes={
+                        **self.__delete_attributes,
+                        "table": table,
+                        "partition_date": partition_date,
+                        "reason": "partition_already_deleted",
+                    },
+                )
                 continue
 
             self._check_ongoing_mutations(skip_throttle=True)
@@ -307,7 +334,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         tags = {"table": table}
         if partition_week:
             tags["partition_week"] = partition_week
-        attributes = {**tags, "storage": self.__storage_name}
+        attributes = {**tags, **self.__delete_attributes}
         start = time.time()
         try:
             _execute_query(

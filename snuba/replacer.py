@@ -11,6 +11,7 @@ from functools import partial
 from typing import (
     Any,
     TypeVar,
+    cast,
 )
 
 import simplejson as json
@@ -363,12 +364,29 @@ class ReplacerWorker:
             metrics: MetricsBackend,
         ) -> None:
             t = time.time()
+            # Only the errors storage has a replacer, so this is an errors replacement.
+            attributes = {
+                "project_id": cast(ErrorReplacement, replacement).get_project_id(),
+                "message_type": replacement.get_replacement_type().value,
+                "host": connection.host,
+            }
 
             logger.debug(f"Executing replace query: {query}")
-            result = connection.execute_robust(query, settings=_replace_resource_settings())
+            try:
+                result = connection.execute_robust(query, settings=_replace_resource_settings())
+            except Exception as e:
+                sentry_logger.error(
+                    "snuba.delete.errors_failed",
+                    attributes={**attributes, "error": type(e).__name__},
+                )
+                raise
             duration = int((time.time() - t) * 1000)
             profile = result.profile
             written_rows = profile["written_rows"] if profile and "written_rows" in profile else 0
+            sentry_logger.info(
+                "snuba.delete.errors_written",
+                attributes={**attributes, "written_rows": written_rows},
+            )
 
             logger.info(
                 "Replacement query took %sms, written_rows=%s",
@@ -469,13 +487,6 @@ class ReplacerWorker:
 
             if isinstance(replacement, ErrorReplacement):
                 project_id = replacement.get_project_id()
-                sentry_logger.info(
-                    "snuba.delete.errors_written",
-                    attributes={
-                        "project_id": project_id,
-                        "message_type": replacement.get_replacement_type().value,
-                    },
-                )
                 end_time = datetime.now()
                 self._attempt_emitting_metric_for_projects_exceeding_limit(
                     start_time, end_time, project_id

@@ -5,6 +5,7 @@ from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies.abstract import MessageRejected
 from arroyo.types import Message
+from sentry_sdk import logger as sentry_logger
 
 from snuba.state.sentry_options import get_option
 from snuba.utils.metrics import MetricsBackend
@@ -40,6 +41,7 @@ class OffPeakProcessingStrategy(ProcessingStrategy[KafkaPayload]):
     def submit(self, message: Message[KafkaPayload]) -> None:
         if not self._is_off_peak():
             self.__metrics.increment("off_peak_rejected")
+            sentry_logger.info("snuba.delete.eap_delayed", attributes={"reason": "off_peak"})
             raise MessageRejected
         self.__next_step.submit(message)
 
