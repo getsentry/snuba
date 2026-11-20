@@ -28,6 +28,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entity import Entity
+from snuba.datasets.entity_subscriptions.validators import InvalidSubscriptionError
 from snuba.datasets.factory import get_dataset
 from snuba.reader import Result
 from snuba.subscriptions.codecs import (
@@ -80,6 +81,7 @@ def build_rpc_subscription_data_from_proto(
             ),
             time_window_secs=300,
             resolution_secs=60,
+            auto_generated=metadata.get("auto_generated"),
         ),
         EntityKey.EAP_ITEMS,
     )
@@ -161,6 +163,82 @@ def test_basic(
     codec = SubscriptionDataCodec(entity_key)
     data = builder(entity_key, metadata)
     assert codec.decode(codec.encode(data)) == data
+
+
+@pytest.mark.parametrize("builder, metadata, entity_key", SNQL_CASES + RPC_CASES)
+@pytest.mark.parametrize("auto_generated", [True, False])
+def test_auto_generated_round_trip(
+    builder: Callable[[EntityKey, Mapping[str, Any]], SubscriptionData],
+    metadata: Mapping[str, Any],
+    entity_key: EntityKey,
+    auto_generated: bool,
+) -> None:
+    subscription = builder(entity_key, {**metadata, "auto_generated": auto_generated})
+    assert subscription.auto_generated is auto_generated
+
+    # Redis stores the subscription using this codec before the scheduler reads it.
+    codec = SubscriptionDataCodec(entity_key)
+    stored = codec.decode(codec.encode(subscription))
+    assert stored == subscription
+
+    task = ScheduledSubscriptionTask(
+        timestamp=datetime(2026, 1, 1),
+        task=SubscriptionWithMetadata(
+            entity_key,
+            Subscription(SubscriptionIdentifier(PartitionId(1), uuid.uuid4()), stored),
+            5,
+        ),
+    )
+    encoder = SubscriptionScheduledTaskEncoder()
+    decoded = encoder.decode(encoder.encode(task))
+    assert decoded == task
+    assert decoded.task.subscription.data.auto_generated is auto_generated
+
+
+@pytest.mark.parametrize("builder, metadata, entity_key", SNQL_CASES + RPC_CASES)
+def test_auto_generated_defaults_to_false(
+    builder: Callable[[EntityKey, Mapping[str, Any]], SubscriptionData],
+    metadata: Mapping[str, Any],
+    entity_key: EntityKey,
+) -> None:
+    subscription = builder(entity_key, metadata)
+    codec = SubscriptionDataCodec(entity_key)
+    assert not codec.decode(codec.encode(subscription)).auto_generated
+    assert "auto_generated" not in subscription.metadata
+
+
+@pytest.mark.parametrize("builder, metadata, entity_key", SNQL_CASES + RPC_CASES)
+@pytest.mark.parametrize("auto_generated", [True, False])
+def test_auto_generated_nested_metadata(
+    builder: Callable[[EntityKey, Mapping[str, Any]], SubscriptionData],
+    metadata: Mapping[str, Any],
+    entity_key: EntityKey,
+    auto_generated: bool,
+) -> None:
+    payload = dict(builder(entity_key, metadata).to_dict())
+    payload["metadata"] = {**metadata, "auto_generated": auto_generated}
+    codec = SubscriptionDataCodec(entity_key)
+    subscription = codec.decode(json.dumps(payload).encode())
+    assert subscription.auto_generated is auto_generated
+    assert codec.decode(codec.encode(subscription)) == subscription
+
+
+@pytest.mark.parametrize(
+    "builder, entity_key",
+    [
+        (build_snql_subscription_data, EntityKey.EVENTS),
+        (build_rpc_subscription_data, EntityKey.EAP_ITEMS),
+    ],
+)
+@pytest.mark.parametrize("invalid_flag", [None, "true", "false", 0, 1, [], {}])
+def test_auto_generated_must_be_boolean(
+    builder: Callable[[EntityKey, Mapping[str, Any]], SubscriptionData],
+    entity_key: EntityKey,
+    invalid_flag: Any,
+) -> None:
+    subscription = builder(entity_key, {"auto_generated": invalid_flag})
+    with pytest.raises(InvalidSubscriptionError, match="auto_generated must be a boolean"):
+        subscription.validate()
 
 
 @pytest.mark.parametrize("builder, metadata, entity_key", SNQL_CASES)

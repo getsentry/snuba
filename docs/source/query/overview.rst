@@ -349,6 +349,16 @@ project_id, resolution, time_window are all specified as separate fields
 in the subscription payload by the user, alongside the query. This allows
 us to pre-build one subscription query and vary these as separate parameters.
 
+Callers can mark an automatically created subscription with the optional boolean
+``auto_generated``. For JSON requests, set ``"metadata": {"auto_generated": true}``
+(the top-level ``"auto_generated": true`` form is also accepted). RPC callers set
+``CreateSubscriptionRequest.auto_generated``. When omitted, the flag defaults to
+false. The flag is preserved in subscription metadata through Redis storage and
+scheduled Kafka tasks, and is available to the scheduler and executor through
+``subscription.data.auto_generated``. It records how the subscription was created;
+it does not currently change scheduling or query execution. Existing subscriptions
+are not relabeled automatically.
+
 'time_window' becomes part of the query condition (i.e the WHERE), and the
 subscription query will look at the past 'time_window' seconds (as specified
 by the window) of events. For example, if 'time_window' = 60, the

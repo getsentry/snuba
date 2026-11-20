@@ -180,7 +180,8 @@ class TestCreateSubscriptionApi(BaseApiTest):
         admin_client = AdminClient(get_default_kafka_configuration())
         create_topics(admin_client, [SnubaTopic.ITEMS])
 
-    def test_create_valid_subscription(self) -> None:
+    @pytest.mark.parametrize("auto_generated", [None, True, False])
+    def test_create_valid_subscription(self, auto_generated: bool | None) -> None:
         store_spans_timeseries(
             START_TIME,
             1,
@@ -209,6 +210,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
             ),
             time_window_secs=300,
             resolution_secs=60,
+            auto_generated=auto_generated,
         )
         response = self.app.post(
             "/rpc/CreateSubscriptionRequest/v1", data=message.SerializeToString()
@@ -239,6 +241,11 @@ class TestCreateSubscriptionApi(BaseApiTest):
         assert rpc_subscription_data.resolution_sec == 60
         assert rpc_subscription_data.request_name == "TimeSeriesRequest"
         assert rpc_subscription_data.request_version == "v1"
+        assert rpc_subscription_data.auto_generated is (auto_generated is True)
+        if auto_generated is None:
+            assert "auto_generated" not in rpc_subscription_data.metadata
+        else:
+            assert rpc_subscription_data.metadata["auto_generated"] is auto_generated
 
     @pytest.mark.parametrize("create_subscription, error_message", TESTS_INVALID_RPC_SUBSCRIPTIONS)
     def test_create_invalid_subscription(

@@ -114,7 +114,16 @@ class _SubscriptionData(ABC, Generic[TRequest]):
     metadata: Mapping[str, Any]
     tenant_ids: Mapping[str, Any] = field(default_factory=lambda: {})
 
+    @property
+    def auto_generated(self) -> bool:
+        return self.metadata.get("auto_generated", False) is True
+
     def validate(self) -> None:
+        if "auto_generated" in self.metadata and not isinstance(
+            self.metadata["auto_generated"], bool
+        ):
+            raise InvalidSubscriptionError("auto_generated must be a boolean")
+
         if self.time_window_sec < 60:
             raise InvalidSubscriptionError("Time window must be greater than or equal to 1 minute")
         if self.time_window_sec > 60 * 60 * 24:
@@ -299,6 +308,8 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
         metadata = {}
         if item.time_series_request.meta:
             metadata["organization"] = item.time_series_request.meta.organization_id
+        if item.HasField("auto_generated"):
+            metadata["auto_generated"] = item.auto_generated
 
         return RPCSubscriptionData(
             project_id=item.time_series_request.meta.project_ids[0],
@@ -465,7 +476,9 @@ class SnQLSubscriptionData(_SubscriptionData[Request]):
 
         metadata = {}
         for key in data:
-            if key not in SUBSCRIPTION_DATA_PAYLOAD_KEYS:
+            if key == "metadata":
+                metadata.update(data[key])
+            elif key not in SUBSCRIPTION_DATA_PAYLOAD_KEYS:
                 metadata[key] = data[key]
 
         return SnQLSubscriptionData(
@@ -492,6 +505,8 @@ class SnQLSubscriptionData(_SubscriptionData[Request]):
         if subscription_processors:
             for processor in subscription_processors:
                 subscription_data_dict.update(processor.to_dict(self.metadata))
+        if "auto_generated" in self.metadata:
+            subscription_data_dict["auto_generated"] = self.metadata["auto_generated"]
         return subscription_data_dict
 
 
