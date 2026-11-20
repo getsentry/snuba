@@ -49,3 +49,9 @@ def test_all_load_info_fields_are_documented_in_schema() -> None:
         assert load_info_fields <= keys, (
             f"thresholds.{action} is missing LoadInfo fields: {load_info_fields - keys}"
         )
+
+
+def test_threshold_groups() -> None:
+    """The per-group tests above pin each group's keys to LoadInfo's fields, so
+    all groups listed here share identical keys."""
+    assert set(_threshold_properties()) == {"reject", "downsample"}

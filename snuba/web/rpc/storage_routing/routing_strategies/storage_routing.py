@@ -198,13 +198,13 @@ def allows_downsample(mode: DownsampledStorageConfig.Mode.ValueType) -> bool:
     )
 
 
-def load_exceeds_any_reject_threshold(
+def load_exceeds_any_downsample_threshold(
     policies: Iterable[AllocationPolicy],
     load_info: LoadInfo | None,
 ) -> bool:
     if load_info is None:
         return False
-    return any(load_info.exceeds(policy.thresholds.get("reject", {})) for policy in policies)
+    return any(load_info.exceeds(policy.thresholds.get("downsample", {})) for policy in policies)
 
 
 def get_stats_dict(
@@ -540,11 +540,11 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 self._update_routing_decision(routing_decision)
 
                 mode = extract_message_meta(routing_context.in_msg).downsampled_storage_config.mode
-                cluster_over_reject = load_exceeds_any_reject_threshold(
+                cluster_over_downsample = load_exceeds_any_downsample_threshold(
                     self.get_allocation_policies(routing_context.tenant_ids),
                     routing_context.cluster_load_info,
                 )
-                if allows_downsample(mode) and cluster_over_reject:
+                if allows_downsample(mode) and cluster_over_downsample:
                     original_tier = routing_decision.tier
                     if get_option("storage_routing.enable_allocation_policy_downsample", False):
                         routing_decision.tier = routing_decision.tier.lower()
