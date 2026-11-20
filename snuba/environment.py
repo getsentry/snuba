@@ -15,7 +15,7 @@ from sentry_sdk.integrations.gnu_backtrace import GnuBacktraceIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 from sentry_sdk.integrations.redis import RedisIntegration
 from sentry_sdk.integrations.threading import ThreadingIntegration
-from sentry_sdk.types import Event, Hint
+from sentry_sdk.types import Event, Hint, Log
 from structlog.processors import JSONRenderer
 from structlog.types import EventDict
 from structlog_sentry import SentryProcessor
@@ -90,6 +90,18 @@ def setup_logging(level: str | None = None) -> None:
             JSONRenderer(),
         ],
     )
+
+
+def before_send_log(log: Log, hint: Hint) -> Log | None:
+    """Drop the snuba.delete.* logs unless the delete_sentry_logs_enabled option is on."""
+    # Imported here: snuba.state imports this module.
+    from snuba.state.sentry_options import get_option
+
+    if log["body"].startswith("snuba.delete.") and not get_option(
+        "delete_sentry_logs_enabled", False
+    ):
+        return None
+    return log
 
 
 def before_send(event: Event, hint: Hint) -> Event | None:
@@ -188,6 +200,8 @@ def setup_sentry() -> None:
         dsn=settings.SENTRY_DSN,
         spotlight=None if settings.DEBUG else False,
         before_send=before_send,
+        enable_logs=True,
+        before_send_log=before_send_log,
         integrations=[
             FlaskIntegration(),
             GnuBacktraceIntegration(),
@@ -195,7 +209,9 @@ def setup_sentry() -> None:
             # operational noise far more often than they're actionable (e.g.
             # consumer rebalance/shutdown timeouts) and are still captured as
             # logs/breadcrumbs.
-            LoggingIntegration(event_level=logging.ERROR),
+            # sentry_logs_level=None: don't forward stdlib log records to
+            # Sentry Logs. Only explicit sentry_sdk.logger calls are sent.
+            LoggingIntegration(event_level=logging.ERROR, sentry_logs_level=None),
             RedisIntegration(),
             ThreadingIntegration(propagate_hub=True),
         ],

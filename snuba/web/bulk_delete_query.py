@@ -8,6 +8,7 @@ from arroyo.backends.kafka import KafkaPayload, KafkaProducer
 from arroyo.types import BrokerValue
 from arroyo.types import Topic as ArroyoTopic
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
+from sentry_sdk import logger as sentry_logger
 
 from snuba import environment, settings
 from snuba.attribution.attribution_info import AttributionInfo
@@ -211,6 +212,16 @@ def delete_from_storage(
 
         if not get_option("permit_delete_by_attribute", False):
             metrics.increment("delete_query.delete_ignored")
+            sentry_logger.info(
+                "snuba.delete.eap_skipped",
+                attributes={
+                    "organization_ids": ",".join(
+                        map(str, column_conditions.get("organization_id", []))
+                    ),
+                    "project_ids": ",".join(map(str, column_conditions.get("project_id", []))),
+                    "reason": "delete_ignored",
+                },
+            )
             return {}
 
     attr_info = _get_attribution_info(attribution_info)
@@ -338,6 +349,17 @@ def delete_from_tables(
         delete_query["attribute_conditions_item_type"] = conditions.attribute_conditions.item_type
 
     produce_delete_query(delete_query)
+    sentry_logger.info(
+        "snuba.delete.eap_queued",
+        attributes={
+            "storage": storage_name,
+            "tables": ",".join(tables),
+            "organization_ids": ",".join(
+                map(str, conditions.column_conditions.get("organization_id", []))
+            ),
+            "project_ids": ",".join(map(str, conditions.column_conditions.get("project_id", []))),
+        },
+    )
     return result
 
 
