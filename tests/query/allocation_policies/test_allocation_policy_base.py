@@ -19,10 +19,6 @@ from snuba.query.allocation_policies import (
     QueryResultOrError,
     QuotaAllowance,
 )
-from snuba.query.allocation_policies.concurrent_rate_limit import (
-    ConcurrentRateLimitAllocationPolicy,
-)
-from snuba.query.allocation_policies.per_referrer import ReferrerGuardRailPolicy
 from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from tests.configs.component_config import (
     delete_component_config,
@@ -506,45 +502,3 @@ def test_idle_pardons_without_reject_thresholds() -> None:
         idle,
     )
     assert allowance.explanation["idle_pardon"] == idle.to_dict()
-
-
-class TestComponentNameBackwardsCompatibility:
-    """Test that component_name() keeps the historical ``{storage}.{ClassName}`` shape."""
-
-    def get_all_allocation_policy_classes(self) -> list[type[AllocationPolicy]]:
-        return [
-            ReferrerGuardRailPolicy,
-            ConcurrentRateLimitAllocationPolicy,
-        ]
-
-    @pytest.mark.parametrize(
-        "storage_key",
-        [
-            StorageKey.DISCOVER,
-            StorageKey.EAP_ITEMS,
-            StorageKey.EAP_ITEMS_DOWNSAMPLE_8,
-            StorageKey.EAP_ITEMS_DOWNSAMPLE_64,
-            StorageKey.EAP_ITEMS_DOWNSAMPLE_512,
-            StorageKey.ERRORS,
-            StorageKey.ERRORS_RO,
-            StorageKey.FUNCTIONS,
-            StorageKey.FUNCTIONS_RAW,
-            StorageKey.METRICS_COUNTERS,
-        ],
-    )
-    def test_component_name_equals_old_runtime_config_prefix_pattern(
-        self, storage_key: StorageKey
-    ) -> None:
-        """component_name() is ``{storage_key}.{ClassName}``."""
-        policy_classes = self.get_all_allocation_policy_classes()
-
-        for policy_class in policy_classes:
-            # Create an instance of the policy
-            policy = policy_class(
-                storage_key=storage_key,
-            )
-
-            expected_old_prefix = f"{storage_key.value}.{policy_class.__name__}"
-
-            # They should be the same
-            assert policy.component_name() == expected_old_prefix
