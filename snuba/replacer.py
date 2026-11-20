@@ -33,7 +33,6 @@ from snuba.clusters.cluster import (
 )
 from snuba.datasets.storage import WritableTableStorage
 from snuba.processor import InvalidMessageVersion
-from snuba.replacers.errors_replacer import DeleteGroupsReplacement
 from snuba.replacers.errors_replacer import Replacement as ErrorReplacement
 from snuba.replacers.replacements_and_expiry import (
     redis_client,
@@ -65,22 +64,6 @@ def _replace_resource_settings() -> dict[str, int]:
 
 
 executor = ThreadPoolExecutor()
-
-
-def _log_delete(event: str, replacement: Replacement, **extra: str) -> None:
-    """Send a snuba.delete.* Sentry Log for issue deletes; other replacements send nothing."""
-    if isinstance(replacement, DeleteGroupsReplacement):
-        send = sentry_logger.error if event.endswith("_failed") else sentry_logger.info
-        send(
-            event,
-            attributes={
-                "project_id": replacement.project_id,
-                "group_ids_count": len(replacement.group_ids),
-                **extra,
-            },
-        )
-
-
 NODES_REFRESH_PERIOD = 10
 
 RESET_CHECK_CONFIG = "consumer_groups_to_reset_offset_check"
@@ -473,28 +456,12 @@ class ReplacerWorker:
         for message_metadata, replacement in batch:
             start_time = datetime.now()
 
-            # For an issue delete, pre_replacement writes the Redis exclude list and
-            # returns True only when REPLACER_IMMEDIATE_OPTIMIZE skips that write.
-            try:
-                skipped_redis = self.__replacer_processor.pre_replacement(replacement)
-            except Exception as e:
-                _log_delete("snuba.delete.redis_failed", replacement, error=type(e).__name__)
-                raise
-            if skipped_redis:
-                _log_delete("snuba.delete.redis_skipped", replacement, reason="immediate_optimize")
-            else:
-                _log_delete("snuba.delete.redis_written", replacement)
-            need_optimize = skipped_redis or need_optimize
+            need_optimize = self.__replacer_processor.pre_replacement(replacement) or need_optimize
 
             query_executor = self.__get_insert_executor(replacement)
             with self.__rate_limiter as state:
                 self.metrics.increment("insert_state", tags={"state": state[0].value})
-                try:
-                    query_executor.execute(replacement)
-                except Exception as e:
-                    _log_delete("snuba.delete.errors_failed", replacement, error=type(e).__name__)
-                    raise
-            _log_delete("snuba.delete.errors_written", replacement)
+                query_executor.execute(replacement)
 
             self.__replacer_processor.post_replacement(replacement)
 
@@ -502,6 +469,13 @@ class ReplacerWorker:
 
             if isinstance(replacement, ErrorReplacement):
                 project_id = replacement.get_project_id()
+                sentry_logger.info(
+                    "snuba.delete.errors_written",
+                    attributes={
+                        "project_id": project_id,
+                        "message_type": replacement.get_replacement_type().value,
+                    },
+                )
                 end_time = datetime.now()
                 self._attempt_emitting_metric_for_projects_exceeding_limit(
                     start_time, end_time, project_id

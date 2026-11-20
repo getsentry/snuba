@@ -164,17 +164,6 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         attributes_json = json.dumps({"message_type": type_, **message.data})
         logger.info(attributes_json)
 
-        if type_ == ReplacementType.END_DELETE_GROUPS:
-            sentry_logger.info(
-                "snuba.delete.received",
-                attributes={
-                    "project_id": message.data["project_id"],
-                    "group_ids_count": len(message.data["group_ids"]),
-                    "transaction_id": message.data.get("transaction_id", ""),
-                    "target": "errors",
-                },
-            )
-
         if type_ in REPLACEMENT_EVENT_TYPES:
             metrics.increment(
                 "process",
@@ -225,14 +214,13 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                         "consumer_group": message.metadata.consumer_group,
                     },
                 )
-                if type_ == ReplacementType.END_DELETE_GROUPS:
-                    skipped = {
-                        "project_id": message.data["project_id"],
-                        "group_ids_count": len(message.data["group_ids"]),
-                        "reason": "bypass_list",
-                    }
-                    sentry_logger.info("snuba.delete.redis_skipped", attributes=skipped)
-                    sentry_logger.info("snuba.delete.errors_skipped", attributes=skipped)
+                attributes = {
+                    "project_id": processed.get_project_id(),
+                    "message_type": type_,
+                    "reason": "bypass_list",
+                }
+                sentry_logger.info("snuba.delete.redis_skipped", attributes=attributes)
+                sentry_logger.info("snuba.delete.errors_skipped", attributes=attributes)
                 return None
 
         return processed
@@ -263,8 +251,24 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                     self.__state_name,
                     replacement.get_replacement_type(),
                 )
+                sentry_logger.info(
+                    "snuba.delete.redis_written",
+                    attributes={
+                        "project_id": project_id,
+                        "group_ids_count": len(query_time_flags.group_ids),
+                        "message_type": replacement.get_replacement_type().value,
+                    },
+                )
 
         elif query_time_flags is not None:
+            sentry_logger.info(
+                "snuba.delete.redis_skipped",
+                attributes={
+                    "project_id": project_id,
+                    "message_type": replacement.get_replacement_type().value,
+                    "reason": "immediate_optimize",
+                },
+            )
             return True
 
         return False
@@ -405,6 +409,15 @@ class DeleteGroupsReplacement(Replacement):
         context: ReplacementContext,
     ) -> DeleteGroupsReplacement | None:
         group_ids = message.data["group_ids"]
+        sentry_logger.info(
+            "snuba.delete.received",
+            attributes={
+                "project_id": message.data["project_id"],
+                "group_ids_count": len(group_ids),
+                "transaction_id": message.data.get("transaction_id", ""),
+                "target": "errors",
+            },
+        )
         if not group_ids:
             return None
 
