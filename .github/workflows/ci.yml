@@ -494,11 +494,17 @@ jobs:
       - name: Bootstrap per-worker Snuba instances
         run: python3 sentry/.github/workflows/scripts/bootstrap-snuba.py
 
+      - name: List sentry's snuba_ci test files
+        working-directory: sentry
+        run: python3 ../.github/workflows/scripts/list-snuba-ci-tests.py "$RUNNER_TEMP/snuba-ci-tests.txt"
+
       - name: Run snuba CI tests
         working-directory: sentry
-        run: |
-          export PYTEST_ADDOPTS="$PYTEST_ADDOPTS -k 'not __In' -m snuba_ci -n $XDIST_WORKERS --dist=loadfile -vv"
-          make test-python-ci
+        env:
+          # Each shard collects only its share of the listed files, not sentry's whole suite.
+          SELECTED_TESTS_FILE: ${{ runner.temp }}/snuba-ci-tests.txt
+          PYTEST_ADDOPTS: ${{ env.PYTEST_ADDOPTS }} -k 'not __In' -m snuba_ci -n ${{ env.XDIST_WORKERS }} --dist=loadfile -vv
+        run: make test-python-ci
 
       - name: Run full tests
         if: needs.files-changed.outputs.api_changes == 'true'
