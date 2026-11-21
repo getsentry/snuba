@@ -571,6 +571,117 @@ jobs:
           export CLICKHOUSE_IMAGE=ghcr.io/getsentry/image-mirror-${{matrix.version}}
           SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=test docker compose -f docker-compose.gcb.yml run --rm ${{ matrix.test_type }}
 
+  clickhouse-mixed-versions:
+    # Runs real queries from a query node on one ClickHouse version against
+    # storage shards on another, the way a cluster looks during a rolling
+    # upgrade. The clickhouse-versions job above only tests each version on
+    # its own, which is how INC-2695 (26.8 query nodes vs 25.8 storage) got
+    # through.
+    needs: [linting, snuba-image, docker-deps]
+    name: Mixed ClickHouse versions (${{ matrix.name }})
+    runs-on: ubuntu-26.04-arm
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Control: proves the test passes when every node is on the target.
+          - name: "all 26.8"
+            query: "clickhouse-clickhouse-server:26.8.36.3"
+            storage: "clickhouse-clickhouse-server:26.8.36.3"
+            expected: "clickhouse-query=26.8,clickhouse-02=26.8,clickhouse-03=26.8"
+          # Query tier upgraded first (the runbook order).
+          - name: "query 26.8, storage 25.8"
+            query: "clickhouse-clickhouse-server:26.8.36.3"
+            storage: "altinity-clickhouse-server:25.8.33.10002.altinitystable"
+            expected: "clickhouse-query=26.8,clickhouse-02=25.8,clickhouse-03=25.8"
+          # Storage upgraded first.
+          - name: "query 25.8, storage 26.8"
+            query: "altinity-clickhouse-server:25.8.33.10002.altinitystable"
+            storage: "clickhouse-clickhouse-server:26.8.36.3"
+            expected: "clickhouse-query=25.8,clickhouse-02=26.8,clickhouse-03=26.8"
+          # Mid-rollout: one shard upgraded, one not.
+          - name: "query 26.8, shards 25.8 + 26.8"
+            query: "clickhouse-clickhouse-server:26.8.36.3"
+            storage: "altinity-clickhouse-server:25.8.33.10002.altinitystable"
+            storage_03: "clickhouse-clickhouse-server:26.8.36.3"
+            expected: "clickhouse-query=26.8,clickhouse-02=25.8,clickhouse-03=26.8"
+          # A single storage shard. ClickHouse then runs the whole query on the
+          # shard and returns final rows instead of partial results, so the
+          # header mismatch may not apply.
+          - name: "query 26.8, single shard 25.8"
+            query: "clickhouse-clickhouse-server:26.8.36.3"
+            storage: "altinity-clickhouse-server:25.8.33.10002.altinitystable"
+            remote_servers: "remote_servers_single_shard.xml"
+            storage_hosts: "clickhouse-02"
+            expected: "clickhouse-query=26.8,clickhouse-02=25.8"
+          - name: "query 25.8, single shard 26.8"
+            query: "altinity-clickhouse-server:25.8.33.10002.altinitystable"
+            storage: "clickhouse-clickhouse-server:26.8.36.3"
+            remote_servers: "remote_servers_single_shard.xml"
+            storage_hosts: "clickhouse-02"
+            expected: "clickhouse-query=25.8,clickhouse-02=26.8"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download snuba-ci image from artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: snuba-ci
+          path: /tmp
+
+      - name: Load snuba-ci image
+        run: |
+          docker load --input /tmp/snuba-ci.tar
+          docker image ls -a
+
+      - name: Restore Docker dependency image cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
+        with:
+          path: /tmp/docker-deps
+          key: docker-deps-${{ runner.arch }}-${{ hashFiles('docker-compose.gcb.yml') }}-${{ github.run_id }}
+          restore-keys: docker-deps-${{ runner.arch }}-${{ hashFiles('docker-compose.gcb.yml') }}-
+
+      - name: Load Docker dependency images
+        run: |
+          if [ -f /tmp/docker-deps/deps.tar ]; then
+            docker load --input /tmp/docker-deps/deps.tar
+          fi
+          images=(
+            "ghcr.io/getsentry/image-mirror-${{ matrix.query }}"
+            "ghcr.io/getsentry/image-mirror-${{ matrix.storage }}"
+            "ghcr.io/getsentry/image-mirror-${{ matrix.storage_03 || matrix.storage }}"
+            "ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.8.33.10002.altinitystable"
+            "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:7.5.0"
+            "ghcr.io/getsentry/image-mirror-valkey-valkey:8.0.12"
+          )
+          for image in "${images[@]}"; do
+            if ! docker image inspect "$image" &>/dev/null; then
+              docker pull "$image"
+            fi
+          done
+
+      - name: Docker set up
+        run: |
+          docker network create --attachable cloudbuild
+
+      - name: Docker Snuba mixed-version multi-node tests
+        env:
+          SNUBA_IMAGE: ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }}
+          SNUBA_SETTINGS: test_distributed_migrations
+          CLICKHOUSE_QUERY_IMAGE: ghcr.io/getsentry/image-mirror-${{ matrix.query }}
+          CLICKHOUSE_STORAGE_IMAGE: ghcr.io/getsentry/image-mirror-${{ matrix.storage }}
+          CLICKHOUSE_STORAGE_03_IMAGE: ${{ matrix.storage_03 && format('ghcr.io/getsentry/image-mirror-{0}', matrix.storage_03) || '' }}
+          EXPECTED_CLICKHOUSE_VERSIONS: ${{ matrix.expected }}
+          CLICKHOUSE_REMOTE_SERVERS_CONFIG: ./test_distributed_migrations/config/clickhouse/${{ matrix.remote_servers || 'remote_servers.xml' }}
+          EXPECTED_STORAGE_HOSTS: ${{ matrix.storage_hosts || '' }}
+        run: |
+          docker compose --profile multi_node -f docker-compose.gcb.yml up -d
+          TEST_LOCATION=test_distributed_migrations docker compose --profile multi_node -f docker-compose.gcb.yml \
+            run --rm -e EXPECTED_CLICKHOUSE_VERSIONS -e EXPECTED_STORAGE_HOSTS snuba-test
+
   image-smoke-test:
     name: Image smoke test
     needs: [snuba-image]
