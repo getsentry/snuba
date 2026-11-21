@@ -173,7 +173,7 @@ class EntityContainsColumnsValidator(QueryValidator):
         }
 
         if missing:
-            error_message = f"Tag keys ({', '.join(missing)}) not resolved"
+            error_message = f"Tag keys ({', '.join(sorted(missing))}) not resolved"
             if self.validation_mode == ColumnValidationMode.ERROR:
                 raise InvalidQueryException(error_message)
             if self.validation_mode == ColumnValidationMode.WARN:
