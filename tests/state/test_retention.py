@@ -4,7 +4,11 @@ from unittest.mock import patch
 import pytest
 from sentry_options.testing import override_options
 
-from snuba.state.retention import clamp_retention_days, get_retention_days_config
+from snuba.state.retention import (
+    clamp_retention_days,
+    eap_standard_retention_days,
+    get_retention_days_config,
+)
 
 
 def test_schema_default() -> None:
@@ -67,3 +71,18 @@ def test_clamp_honors_option_override(value: int | None, kind: str, expected: in
     }
     with override_options("snuba", override):
         assert clamp_retention_days(value, kind) == expected  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("requested", "expected"),
+    [(None, 30), (0, 30), (-1, 30), (7, 7), (90, 90), (366, 366), (396, 396), (1000, 396)],
+)
+def test_eap_standard_retention_days_ignores_option(requested: int | None, expected: int) -> None:
+    override: dict[str, Any] = {
+        "retention_days": {
+            "standard": {"default": 60, "max": 180},
+            "downsampled": {"default": 180, "max": 360},
+        }
+    }
+    with override_options("snuba", override):
+        assert eap_standard_retention_days(requested) == expected

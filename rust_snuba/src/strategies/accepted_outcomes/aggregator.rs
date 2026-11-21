@@ -14,7 +14,8 @@ use sentry_arroyo::utils::timing::Deadline;
 use sentry_protos::snuba::v1::{TraceItem, TraceItemType};
 
 use crate::processors::utils::{
-    enforce_standard_retention, get_drop_invalid_timestamps_enabled, out_of_valid_interval_secs,
+    enforce_eap_retentions, get_drop_invalid_timestamps_enabled, out_of_valid_interval_secs,
+    DROPPED_UNSUPPORTED_RETENTION_METRIC,
 };
 use crate::types::{item_type_name, AggregatedOutcomesBatch, BucketKey, ItemDedupKey};
 
@@ -252,22 +253,31 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
             }
         };
 
+        let item_type =
+            TraceItemType::try_from(trace_item.item_type).unwrap_or(TraceItemType::Unspecified);
+        // Match the eap-items consumer so we don't bill for items it drops.
+        let Some((retention_days, _)) = enforce_eap_retentions(
+            Some(u16::try_from(trace_item.retention_days).unwrap_or(u16::MAX)),
+            Some(u16::try_from(trace_item.downsampled_retention_days).unwrap_or(u16::MAX)),
+        ) else {
+            counter!(
+                DROPPED_UNSUPPORTED_RETENTION_METRIC,
+                1,
+                "processor" => "accepted_outcomes",
+                "item_type" => item_type_name(item_type)
+            );
+            return Ok(());
+        };
+
         let event_timestamp = trace_item
             .timestamp
             .as_ref()
             .and_then(|ts| DateTime::from_timestamp(ts.seconds, 0));
         if let Some(event_ts) = event_timestamp {
             let now = Utc::now();
-            // Match the eap-items consumer so we don't bill for items it drops.
             if get_drop_invalid_timestamps_enabled()
-                && out_of_valid_interval_secs(
-                    event_ts,
-                    now,
-                    enforce_standard_retention(Some(trace_item.retention_days as u16)),
-                )
+                && out_of_valid_interval_secs(event_ts, now, retention_days)
             {
-                let item_type = TraceItemType::try_from(trace_item.item_type)
-                    .unwrap_or(TraceItemType::Unspecified);
                 counter!(
                     "accepted_outcomes.dropped_out_of_range_timestamp",
                     1,
