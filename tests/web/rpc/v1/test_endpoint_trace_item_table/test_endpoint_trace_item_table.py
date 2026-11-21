@@ -62,7 +62,7 @@ from snuba.clickhouse.errors import ClickhouseError
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
-from snuba.protos.common import _resolve_canonical
+from snuba.protos.common import ATTRIBUTES_TO_COALESCE, _resolve_canonical
 from snuba.query import LimitBy, OrderBy, OrderByDirection
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column as snuba_column
@@ -5921,6 +5921,65 @@ def test_build_query_limit_by_virtual_column_has_no_alias() -> None:
     for column in limitby.columns:
         column.transform(_collect_alias)
     assert all(alias is None for alias in aliases)
+
+
+@pytest.mark.parametrize(
+    "op, value",
+    [
+        (ComparisonFilter.OP_EQUALS, "Unknown"),
+        (ComparisonFilter.OP_NOT_EQUALS, "Unknown"),
+        (ComparisonFilter.OP_LIKE, "%low%"),
+    ],
+)
+def test_build_query_virtual_column_ignores_to_column_aliases(
+    op: ComparisonFilter.Op.ValueType, value: str
+) -> None:
+    """A virtual column replaces every read of its name, even when sentry-conventions
+    gives that name aliases (e.g. `device.class` <-> `sentry.device.class`). The query
+    must match the one built when `to_column_name` has no aliases; otherwise the alias
+    operands of the coalesced read leak raw values and NULLs past the value map."""
+    request = _apply_labels_to_columns(
+        TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="device.class")),
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="device.class")],
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="device.class"),
+                    op=op,
+                    value=AttributeValue(val_str=value),
+                )
+            ),
+            virtual_column_contexts=[
+                VirtualColumnContext(
+                    from_column_name="sentry.device.class",
+                    to_column_name="device.class",
+                    value_map={"": "Unknown", "1": "low"},
+                    default_value="Unknown",
+                ),
+            ],
+        )
+    )
+
+    from_column_aliases = {"sentry.device.class": ["device.class"]}
+    with patch.dict(ATTRIBUTES_TO_COALESCE, from_column_aliases, clear=True):
+        expected = build_query(request)
+    with patch.dict(
+        ATTRIBUTES_TO_COALESCE,
+        {**from_column_aliases, "device.class": ["sentry.device.class"]},
+        clear=True,
+    ):
+        query = build_query(request)
+
+    assert query.get_selected_columns() == expected.get_selected_columns()
+    assert query.get_condition() == expected.get_condition()
+    assert query.get_groupby() == expected.get_groupby()
 
 
 def test_build_query_without_limit_by() -> None:
