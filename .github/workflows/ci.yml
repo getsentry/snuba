@@ -288,13 +288,21 @@ jobs:
       matrix:
         include:
           - snuba_settings: test
+            shard: 0
+            shard_total: 2
+          - snuba_settings: test
+            shard: 1
+            shard_total: 2
           - snuba_settings: test_rust
           - snuba_settings: test_distributed
             shard: 0
-            shard_total: 2
+            shard_total: 3
           - snuba_settings: test_distributed
             shard: 1
-            shard_total: 2
+            shard_total: 3
+          - snuba_settings: test_distributed
+            shard: 2
+            shard_total: 3
           - snuba_settings: test_distributed_migrations
           - snuba_settings: test_migrations
           - snuba_settings: test_migrations_distributed
@@ -512,6 +520,10 @@ jobs:
     name: Tests on multiple clickhouse versions
     runs-on: ubuntu-26.04-arm
     timeout-minutes: 30
+    env:
+      # Read by docker-compose.gcb.yml and tests/conftest.py. Only snuba-test is sharded.
+      SNUBA_TEST_SHARD: ${{ matrix.shard }}
+      SNUBA_TEST_SHARD_TOTAL: ${{ matrix.test_type == 'snuba-test' && 2 || 1 }}
     strategy:
       fail-fast: false
       matrix:
@@ -523,6 +535,10 @@ jobs:
             "clickhouse-clickhouse-server:26.8.36.3",
           ]
         test_type: [snuba-test, snuba-test-migrations]
+        shard: [0, 1]
+        exclude:
+          - test_type: snuba-test-migrations
+            shard: 1
 
     steps:
       - name: Checkout code
