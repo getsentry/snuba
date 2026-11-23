@@ -104,6 +104,13 @@ def produce_delete_query(delete_query: DeleteQueryMessage) -> None:
     topic = STORAGE_TOPIC.get(storage_name)
     if not topic:
         raise InvalidStorageTopic(f"No topic found for {storage_name}")
+    labels = {
+        "storage": storage_name,
+        "organization_ids": ",".join(
+            map(str, delete_query["conditions"].get("organization_id", []))
+        ),
+        "project_ids": ",".join(map(str, delete_query["conditions"].get("project_id", []))),
+    }
     try:
         producer = _get_kafka_producer(topic)
         data = rapidjson.dumps(delete_query).encode("utf-8")
@@ -113,8 +120,12 @@ def produce_delete_query(delete_query: DeleteQueryMessage) -> None:
         )
         assert isinstance(future, Future)  # use_simple_futures is off
         future.add_done_callback(_delete_query_delivery_callback)
+        sentry_logger.info("snuba.delete.eap_queued", attributes=labels)
     except Exception as ex:
         logger.exception("Could not produce delete query due to error: %r", ex)
+        sentry_logger.error(
+            "snuba.delete.eap_failed", attributes={**labels, "error": type(ex).__name__}
+        )
 
 
 def _validate_attribute_conditions(
@@ -349,17 +360,6 @@ def delete_from_tables(
         delete_query["attribute_conditions_item_type"] = conditions.attribute_conditions.item_type
 
     produce_delete_query(delete_query)
-    sentry_logger.info(
-        "snuba.delete.eap_queued",
-        attributes={
-            "storage": storage_name,
-            "tables": ",".join(tables),
-            "organization_ids": ",".join(
-                map(str, conditions.column_conditions.get("organization_id", []))
-            ),
-            "project_ids": ",".join(map(str, conditions.column_conditions.get("project_id", []))),
-        },
-    )
     return result
 
 
