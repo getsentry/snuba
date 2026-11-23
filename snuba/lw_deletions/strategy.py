@@ -74,7 +74,6 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         self.__metrics = metrics
         self.__last_ongoing_mutations_check: float | None = None
         self.__redis_client = get_redis_client(RedisClientKey.CONFIG)
-        self.__delete_attributes: dict[str, str] = {}
 
     def poll(self) -> None:
         self.__next_step.poll()
@@ -243,22 +242,13 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
             and get_mapped_option("lw_deletes_split_by_partition", self.__storage_name, 0)
         )
 
-        self.__delete_attributes = {
-            "storage": self.__storage_name,
-            "organization_ids": ",".join(
-                str(o) for c in conditions for o in c.column_conditions.get("organization_id", [])
-            ),
-            "project_ids": ",".join(
-                str(p) for c in conditions for p in c.column_conditions.get("project_id", [])
-            ),
-        }
         for table in self.__tables:
             where_clause = construct_or_conditions(self.__storage, conditions)
             if split_enabled:
                 self._execute_delete_by_partition(table, where_clause, query_settings, conditions)
             else:
                 query = construct_query(self.__storage, table, where_clause)
-                self._execute_single_delete(table, query, query_settings)
+                self._execute_single_delete(table, query, query_settings, conditions)
 
     def _execute_delete_by_partition(
         self,
@@ -275,7 +265,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
                 table,
             )
             query = construct_query(self.__storage, table, where_clause)
-            self._execute_single_delete(table, query, query_settings)
+            self._execute_single_delete(table, query, query_settings, conditions)
             return
 
         cond_hash = self._conditions_hash(conditions)
@@ -299,7 +289,17 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
                 sentry_logger.info(
                     "snuba.delete.eap_skipped",
                     attributes={
-                        **self.__delete_attributes,
+                        "storage": self.__storage_name,
+                        "organization_ids": ",".join(
+                            str(o)
+                            for c in conditions
+                            for o in c.column_conditions.get("organization_id", [])
+                        ),
+                        "project_ids": ",".join(
+                            str(p)
+                            for c in conditions
+                            for p in c.column_conditions.get("project_id", [])
+                        ),
                         "table": table,
                         "partition_date": partition_date,
                         "reason": "partition_already_deleted",
@@ -314,7 +314,9 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
             )
             partition_where = combine_and_conditions([where_clause, partition_condition])
             query = construct_query(self.__storage, table, partition_where)
-            self._execute_single_delete(table, query, query_settings, partition_week=partition_week)
+            self._execute_single_delete(
+                table, query, query_settings, conditions, partition_week=partition_week
+            )
             self.__metrics.increment(
                 "partition_delete_executed",
                 tags={"table": table, "partition_week": partition_week},
@@ -328,12 +330,22 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         table: str,
         query: Query,
         query_settings: HTTPQuerySettings,
+        conditions: Sequence[ConditionsBag],
         partition_week: str | None = None,
     ) -> None:
         tags = {"table": table}
         if partition_week:
             tags["partition_week"] = partition_week
-        attributes = {**tags, **self.__delete_attributes}
+        attributes = {
+            **tags,
+            "storage": self.__storage_name,
+            "organization_ids": ",".join(
+                str(o) for c in conditions for o in c.column_conditions.get("organization_id", [])
+            ),
+            "project_ids": ",".join(
+                str(p) for c in conditions for p in c.column_conditions.get("project_id", [])
+            ),
+        }
         start = time.time()
         try:
             _execute_query(
