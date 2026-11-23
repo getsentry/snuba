@@ -215,16 +215,15 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                         "consumer_group": message.metadata.consumer_group,
                     },
                 )
-                attributes = {
-                    "project_id": processed.get_project_id(),
-                    "message_type": type_,
-                    "reason": "bypass_list",
-                }
                 sentry_logger.info(
                     "snuba.delete.redis_skipped",
-                    attributes={**attributes, "redis": RedisClientKey.REPLACEMENTS_STORE.value},
+                    attributes={
+                        "project_id": processed.get_project_id(),
+                        "message_type": type_,
+                        "reason": "bypass_list",
+                        "redis": RedisClientKey.REPLACEMENTS_STORE.value,
+                    },
                 )
-                sentry_logger.info("snuba.delete.errors_skipped", attributes=attributes)
                 return None
 
         return processed
