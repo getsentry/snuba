@@ -52,6 +52,9 @@ TPayload = TypeVar("TPayload")
 
 logger = logging.getLogger(__name__)
 
+# retries for one batch before the consumer crashes
+MAX_RETRYABLE_CLICKHOUSE_ERRORS = 3
+
 
 class LWDeleteQueryException(Exception):
     pass
@@ -76,6 +79,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         self.__metrics = metrics
         self.__last_ongoing_mutations_check: float | None = None
         self.__redis_client = get_redis_client(RedisClientKey.CONFIG)
+        self.__retryable_errors = 0
 
     def poll(self) -> None:
         self.__next_step.poll()
@@ -130,8 +134,13 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
             ):
                 # retry the batch later through backpressure. Deletes are
                 # idempotent, so running one again is safe.
+                self.__retryable_errors += 1
                 self.__metrics.increment("retryable_clickhouse_error")
+                if self.__retryable_errors > MAX_RETRYABLE_CLICKHOUSE_ERRORS:
+                    raise LWDeleteQueryException(err.message) from err
                 raise MessageRejected from None
+
+        self.__retryable_errors = 0
 
         self.__next_step.submit(message)
 
