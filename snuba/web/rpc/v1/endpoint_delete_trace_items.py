@@ -159,11 +159,11 @@ class EndpointDeleteTraceItems(RPCEndpoint[DeleteTraceItemsRequest, DeleteTraceI
             # Add item_type to conditions for the delete query
             conditions["item_type"] = [attribute_conditions.item_type]
 
-        attributes = {
+        labels = {
             "organization_ids": str(request.meta.organization_id),
             "project_ids": ",".join(map(str, request.meta.project_ids)),
         }
-        sentry_logger.info("snuba.delete.received", attributes={**attributes, "target": "eap"})
+        sentry_logger.info("snuba.delete.received", attributes={**labels, "target": "eap"})
         storage = get_writable_storage(StorageKey.EAP_ITEMS_2)
         schema = storage.get_schema()
         assert isinstance(schema, TableSchema)
@@ -176,7 +176,7 @@ class EndpointDeleteTraceItems(RPCEndpoint[DeleteTraceItemsRequest, DeleteTraceI
             )
         except Exception as e:
             sentry_logger.error(
-                "snuba.delete.eap_failed", attributes={**attributes, "error": type(e).__name__}
+                "snuba.delete.eap_failed", attributes={**labels, "error": type(e).__name__}
             )
             raise
 

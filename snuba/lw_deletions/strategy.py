@@ -336,7 +336,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         tags = {"table": table}
         if partition_week:
             tags["partition_week"] = partition_week
-        attributes = {
+        labels = {
             **tags,
             "storage": self.__storage_name,
             "organization_ids": ",".join(
@@ -361,13 +361,13 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
                 (time.time() - start) * 1000,
                 tags=tags,
             )
-            sentry_logger.info("snuba.delete.eap_deleted", attributes=attributes)
+            sentry_logger.info("snuba.delete.eap_deleted", attributes=labels)
         except QueryException as exc:
             self.__metrics.increment("execute_delete_query_failed", tags=tags)
             cause = exc.__cause__
             sentry_logger.error(
                 "snuba.delete.eap_failed",
-                attributes={**attributes, "error": type(cause or exc).__name__},
+                attributes={**labels, "error": type(cause or exc).__name__},
             )
             if isinstance(cause, ClickhouseError):
                 if cause.code in LW_DELETE_NON_RETRYABLE_CLICKHOUSE_ERROR_CODES:

@@ -248,7 +248,7 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                 )
 
             elif isinstance(query_time_flags, ExcludeGroups):
-                attributes = {
+                labels = {
                     "project_id": project_id,
                     "group_ids_count": len(query_time_flags.group_ids),
                     "message_type": replacement.get_replacement_type().value,
@@ -264,10 +264,10 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                 except Exception as e:
                     sentry_logger.error(
                         "snuba.delete.redis_failed",
-                        attributes={**attributes, "error": type(e).__name__},
+                        attributes={**labels, "error": type(e).__name__},
                     )
                     raise
-                sentry_logger.info("snuba.delete.redis_written", attributes=attributes)
+                sentry_logger.info("snuba.delete.redis_written", attributes=labels)
 
         elif query_time_flags is not None:
             sentry_logger.info(
