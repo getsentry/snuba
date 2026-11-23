@@ -215,15 +215,16 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                         "consumer_group": message.metadata.consumer_group,
                     },
                 )
-                sentry_logger.info(
-                    "snuba.delete.redis_skipped",
-                    attributes={
-                        "project_id": processed.get_project_id(),
-                        "message_type": type_,
-                        "reason": "bypass_list",
-                        "redis": RedisClientKey.REPLACEMENTS_STORE.value,
-                    },
-                )
+                if type_ == ReplacementType.END_DELETE_GROUPS:
+                    sentry_logger.info(
+                        "snuba.delete.redis_skipped",
+                        attributes={
+                            "project_id": processed.get_project_id(),
+                            "message_type": type_,
+                            "reason": "bypass_list",
+                            "redis": RedisClientKey.REPLACEMENTS_STORE.value,
+                        },
+                    )
                 return None
 
         return processed
@@ -262,23 +263,26 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                         replacement.get_replacement_type(),
                     )
                 except Exception as e:
-                    sentry_logger.error(
-                        "snuba.delete.redis_failed",
-                        attributes={**labels, "error": type(e).__name__},
-                    )
+                    if replacement.get_replacement_type() == ReplacementType.END_DELETE_GROUPS:
+                        sentry_logger.error(
+                            "snuba.delete.redis_failed",
+                            attributes={**labels, "error": type(e).__name__},
+                        )
                     raise
-                sentry_logger.info("snuba.delete.redis_written", attributes=labels)
+                if replacement.get_replacement_type() == ReplacementType.END_DELETE_GROUPS:
+                    sentry_logger.info("snuba.delete.redis_written", attributes=labels)
 
         elif query_time_flags is not None:
-            sentry_logger.info(
-                "snuba.delete.redis_skipped",
-                attributes={
-                    "project_id": project_id,
-                    "message_type": replacement.get_replacement_type().value,
-                    "redis": RedisClientKey.REPLACEMENTS_STORE.value,
-                    "reason": "immediate_optimize",
-                },
-            )
+            if replacement.get_replacement_type() == ReplacementType.END_DELETE_GROUPS:
+                sentry_logger.info(
+                    "snuba.delete.redis_skipped",
+                    attributes={
+                        "project_id": project_id,
+                        "message_type": replacement.get_replacement_type().value,
+                        "redis": RedisClientKey.REPLACEMENTS_STORE.value,
+                        "reason": "immediate_optimize",
+                    },
+                )
             return True
 
         return False

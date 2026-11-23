@@ -33,7 +33,7 @@ from snuba.clusters.cluster import (
     ClickhouseNode,
 )
 from snuba.datasets.storage import WritableTableStorage
-from snuba.processor import InvalidMessageVersion
+from snuba.processor import InvalidMessageVersion, ReplacementType
 from snuba.replacers.errors_replacer import Replacement as ErrorReplacement
 from snuba.replacers.replacements_and_expiry import (
     redis_client,
@@ -369,28 +369,30 @@ class ReplacerWorker:
             try:
                 result = connection.execute_robust(query, settings=_replace_resource_settings())
             except Exception as e:
-                sentry_logger.error(
-                    "snuba.delete.errors_failed",
-                    attributes={
-                        "project_id": cast(ErrorReplacement, replacement).get_project_id(),
-                        "message_type": replacement.get_replacement_type().value,
-                        "host": connection.host,
-                        "error": type(e).__name__,
-                    },
-                )
+                if replacement.get_replacement_type() == ReplacementType.END_DELETE_GROUPS:
+                    sentry_logger.error(
+                        "snuba.delete.errors_failed",
+                        attributes={
+                            "project_id": cast(ErrorReplacement, replacement).get_project_id(),
+                            "message_type": replacement.get_replacement_type().value,
+                            "host": connection.host,
+                            "error": type(e).__name__,
+                        },
+                    )
                 raise
             duration = int((time.time() - t) * 1000)
             profile = result.profile
             written_rows = profile["written_rows"] if profile and "written_rows" in profile else 0
-            sentry_logger.info(
-                "snuba.delete.errors_written",
-                attributes={
-                    "project_id": cast(ErrorReplacement, replacement).get_project_id(),
-                    "message_type": replacement.get_replacement_type().value,
-                    "host": connection.host,
-                    "written_rows": written_rows,
-                },
-            )
+            if replacement.get_replacement_type() == ReplacementType.END_DELETE_GROUPS:
+                sentry_logger.info(
+                    "snuba.delete.errors_written",
+                    attributes={
+                        "project_id": cast(ErrorReplacement, replacement).get_project_id(),
+                        "message_type": replacement.get_replacement_type().value,
+                        "host": connection.host,
+                        "written_rows": written_rows,
+                    },
+                )
 
             logger.info(
                 "Replacement query took %sms, written_rows=%s",
