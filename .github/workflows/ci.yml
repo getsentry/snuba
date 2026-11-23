@@ -49,7 +49,7 @@ jobs:
           uv run --no-project python tools/bump_version.py test-package 1.0.0 || echo "Expected failure for non-existent package"
 
   linting:
-    name: "pre-commit hooks" # (includes Python formatting + linting)
+    name: "prek hooks" # (includes Python formatting + linting)
     runs-on: ubuntu-26.04-arm
     timeout-minutes: 10
     steps:
@@ -78,11 +78,11 @@ jobs:
 
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
         with:
-          path: ~/.cache/pre-commit
+          path: ~/.cache/prek
           key: cache-epoch-1|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml', 'uv.lock') }}
 
-      - name: Setup pre-commit
-        run: pre-commit install-hooks
+      - name: Setup prek
+        run: .venv/bin/prek prepare-hooks
 
       - uses: getsentry/paths-filter@66f7f1844185eb7fb6738ea4ea59d74bb99199e5 # v2
         id: files
@@ -99,17 +99,17 @@ jobs:
             all:
               - added|modified: '**/*'
 
-      - name: Run pre-commit checks
-        # Run pre-commit to lint and format check files that were changed (but not deleted) compared to master.
+      - name: Run prek checks
+        # Run prek to lint and format check files that were changed (but not deleted) compared to master.
         # XXX: there is a very small chance that it'll expand to exceed Linux's limits
         #      `getconf ARG_MAX` - max # bytes of args + environ for exec()
         # we skip the `no-commit-to-branch` because in CI we are in fact on master already
         # and we have merged to it
         run: |
-          SKIP=no-commit-to-branch pre-commit run --files ${{ steps.files.outputs.all_files }}
+          SKIP=no-commit-to-branch .venv/bin/prek run --files ${{ steps.files.outputs.all_files }}
 
       # If working tree is dirty, commit and update if we have a token
-      - name: Apply any pre-commit fixed files
+      - name: Apply any prek fixed files
         if: steps.token.outcome == 'success' && github.ref != 'refs/heads/master' && always()
         uses: getsentry/action-github-commit@5972d5f578ad77306063449e718c0c2a6fbc4ae1 # v2.1.0
         with:

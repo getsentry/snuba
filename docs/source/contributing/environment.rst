@@ -32,7 +32,7 @@ Clone the repository::
 Set up the environment. ``direnv allow`` puts ``.venv`` and ``rustup`` on your
 ``PATH``. ``devenv sync`` installs ``rustup``, ``cmake``, and ``protobuf`` from
 ``Brewfile``, syncs the Python virtual environment, and installs the
-pre-commit hooks::
+prek hooks::
 
     direnv allow
     devenv sync

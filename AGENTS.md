@@ -6,11 +6,11 @@ Snuba is Sentry's query and ingestion service on top of ClickHouse. The Python s
 
 Run these from the repository root.
 
-- `devenv sync` syncs `.venv` and installs pre-commit hooks. `make install-rs-dev` builds `rust_snuba` into `.venv`.
+- `devenv sync` syncs `.venv` and installs prek hooks. `make install-rs-dev` builds `rust_snuba` into `.venv`.
 - `devservices up` starts ClickHouse, Redis, and Kafka. The tests need them.
 - `make test` runs the Python tests. Run one file with `SNUBA_SETTINGS=test pytest tests/path/to/test_file.py`.
 - `make test-rust` runs the Rust tests.
-- `make lint-check` and `make typecheck` run ruff and mypy. `pre-commit run --files <files>` runs the commit hooks.
+- `make lint-check` and `make typecheck` run ruff and mypy. `prek run --files <files>` runs the commit hooks.
 - `make lint-rust` and `make format-rust` run clippy and rustfmt.
 - `make validate-configs` validates the dataset YAML in `snuba/datasets/configuration/`.
 - `make generate-config-docs` and then `make snubadocs` build the Sphinx docs. Warnings fail the build.
