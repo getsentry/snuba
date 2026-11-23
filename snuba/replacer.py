@@ -364,12 +364,6 @@ class ReplacerWorker:
             metrics: MetricsBackend,
         ) -> None:
             t = time.time()
-            # Only the errors storage has a replacer, so this is an errors replacement.
-            attributes = {
-                "project_id": cast(ErrorReplacement, replacement).get_project_id(),
-                "message_type": replacement.get_replacement_type().value,
-                "host": connection.host,
-            }
 
             logger.debug(f"Executing replace query: {query}")
             try:
@@ -377,7 +371,12 @@ class ReplacerWorker:
             except Exception as e:
                 sentry_logger.error(
                     "snuba.delete.errors_failed",
-                    attributes={**attributes, "error": type(e).__name__},
+                    attributes={
+                        "project_id": cast(ErrorReplacement, replacement).get_project_id(),
+                        "message_type": replacement.get_replacement_type().value,
+                        "host": connection.host,
+                        "error": type(e).__name__,
+                    },
                 )
                 raise
             duration = int((time.time() - t) * 1000)
@@ -385,7 +384,12 @@ class ReplacerWorker:
             written_rows = profile["written_rows"] if profile and "written_rows" in profile else 0
             sentry_logger.info(
                 "snuba.delete.errors_written",
-                attributes={**attributes, "written_rows": written_rows},
+                attributes={
+                    "project_id": cast(ErrorReplacement, replacement).get_project_id(),
+                    "message_type": replacement.get_replacement_type().value,
+                    "host": connection.host,
+                    "written_rows": written_rows,
+                },
             )
 
             logger.info(
