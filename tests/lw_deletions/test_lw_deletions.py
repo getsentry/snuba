@@ -225,14 +225,15 @@ def _make_single_message(
 @patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
 @patch("snuba.lw_deletions.strategy._execute_query")
 @pytest.mark.redis_db
-def test_transport_error_does_not_crash(mock_execute: Mock, mock_num_mutations: Mock) -> None:
+def test_transport_error_is_retried(mock_execute: Mock, mock_num_mutations: Mock) -> None:
     """
-    A dropped connection surfaces as a ClickhouseError with code -1. It is
-    logged and the batch is committed instead of crashing the consumer.
+    A dropped connection surfaces as a ClickhouseError with code -1. The
+    batch is held back with MessageRejected and run again, instead of
+    crashing the consumer or dropping the delete.
     """
     exc = QueryException(message="Connection broken")
     exc.__cause__ = ClickhouseError("Connection broken: IncompleteRead", code=-1)
-    mock_execute.side_effect = exc
+    mock_execute.side_effect = [exc, None]
 
     commit_step = Mock()
     metrics = Mock()
@@ -245,10 +246,12 @@ def test_transport_error_does_not_crash(mock_execute: Mock, mock_num_mutations: 
         increment_by=increment_by,
     )
     strategy.submit(_make_single_message())
-    strategy.join(2.0)
+    # the retry waits out the 1s throttle on the ongoing mutations check
+    strategy.join(5.0)
 
-    assert mock_execute.call_count == 1
+    assert mock_execute.call_count == 2
     assert commit_step.submit.call_count == 1
+    metrics.increment.assert_any_call("retryable_clickhouse_error")
 
 
 @patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)

@@ -28,6 +28,9 @@ LW_DELETE_NON_RETRYABLE_CLICKHOUSE_ERROR_CODES = {
     ErrorCodes.TIMEOUT_EXCEEDED,
     ErrorCodes.MEMORY_LIMIT_EXCEEDED,
     ErrorCodes.TOO_SLOW,
+}
+
+LW_DELETE_RETRYABLE_CLICKHOUSE_ERROR_CODES = {
     # Client-side transport failure, such as a connection dropped while
     # reading the response. See _translate_clickhouse_errors in
     # snuba/clickhouse/connect.py.

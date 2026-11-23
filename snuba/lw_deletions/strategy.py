@@ -38,7 +38,10 @@ from snuba.state.sentry_options import get_mapped_option, get_option
 from snuba.utils.metrics import MetricsBackend
 from snuba.web import QueryException
 from snuba.web.bulk_delete_query import construct_or_conditions, construct_query
-from snuba.web.constants import LW_DELETE_NON_RETRYABLE_CLICKHOUSE_ERROR_CODES
+from snuba.web.constants import (
+    LW_DELETE_NON_RETRYABLE_CLICKHOUSE_ERROR_CODES,
+    LW_DELETE_RETRYABLE_CLICKHOUSE_ERROR_CODES,
+)
 from snuba.web.delete_query import (
     TooManyOngoingMutationsError,
     _execute_query,
@@ -120,6 +123,14 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
             cause = err.__cause__
             if isinstance(cause, AllocationPolicyViolations):
                 self.__metrics.increment("allocation_policy_violation")
+                raise MessageRejected from None
+            if (
+                isinstance(cause, ClickhouseError)
+                and cause.code in LW_DELETE_RETRYABLE_CLICKHOUSE_ERROR_CODES
+            ):
+                # retry the batch later through backpressure. Deletes are
+                # idempotent, so running one again is safe.
+                self.__metrics.increment("retryable_clickhouse_error")
                 raise MessageRejected from None
 
         self.__next_step.submit(message)
@@ -314,6 +325,8 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
             self.__metrics.increment("execute_delete_query_failed", tags=tags)
             cause = exc.__cause__
             if isinstance(cause, ClickhouseError):
+                if cause.code in LW_DELETE_RETRYABLE_CLICKHOUSE_ERROR_CODES:
+                    raise
                 if cause.code in LW_DELETE_NON_RETRYABLE_CLICKHOUSE_ERROR_CODES:
                     logger.exception("Error running delete query %r", exc)
                 else:
