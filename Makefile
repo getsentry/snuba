@@ -5,7 +5,7 @@ apply-migrations:
 .PHONY: apply-migrations
 
 reset-python:
-	pre-commit clean
+	prek cache clean
 	rm -rf .venv
 .PHONY: reset-python
 
