@@ -35,9 +35,9 @@ def encode_routing_hint(tier: Tier) -> str:
     return base64.b64encode(payload).decode()
 
 
-def decode_routing_hint(hint: str) -> Tier:
+def decode_routing_hint(hint: str, default: Tier) -> Tier:
     if not hint:
-        return _ROUTING_HINT_DEFAULT_TIER
+        return default
 
     try:
         decoded = base64.b64decode(hint, validate=True)

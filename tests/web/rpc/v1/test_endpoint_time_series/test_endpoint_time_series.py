@@ -20,6 +20,7 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     Expression,
     TimeSeries,
     TimeSeriesRequest,
+    TimeSeriesResponse,
 )
 from sentry_protos.snuba.v1.error_pb2 import Error
 from sentry_protos.snuba.v1.formula_pb2 import Literal
@@ -43,16 +44,23 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.downsampled_storage_tiers import Tier
 from snuba.web import QueryException
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.storage_routing.common import decode_routing_hint, encode_routing_hint
 from snuba.web.rpc.v1.endpoint_time_series import (
     EndpointTimeSeries,
     _validate_time_buckets,
 )
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
-from tests.web.rpc.v1.test_utils import gen_item_message
+from tests.web.rpc.v1.test_utils import (
+    create_mock_routing_decision,
+    create_request_meta,
+    gen_item_message,
+    track_storage_selections,
+)
 
 BASE_TIME = datetime.utcnow().replace(
     hour=8, minute=0, second=0, microsecond=0, tzinfo=UTC
@@ -85,6 +93,35 @@ def store_spans_timeseries(
     items_storage = get_writable_storage(StorageKey("eap_items"))
 
     write_raw_unprocessed_events(items_storage, messages)
+
+
+def _execute_with_routed_tier(
+    routed_tier: Tier, routing_hint: str
+) -> tuple[EndpointTimeSeries, TimeSeriesResponse, list[StorageKey]]:
+    """Runs a count() timeseries query with the routing strategy's decision fixed to routed_tier."""
+    message = TimeSeriesRequest(
+        meta=create_request_meta(
+            BASE_TIME, BASE_TIME + timedelta(hours=1), TraceItemType.TRACE_ITEM_TYPE_SPAN
+        ),
+        expressions=[
+            Expression(
+                aggregation=AttributeAggregation(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.trace_id"),
+                    aggregate=Function.FUNCTION_COUNT,
+                    label="count",
+                ),
+                label="count",
+            )
+        ],
+        granularity_secs=3600,
+        routing_hint=routing_hint,
+    )
+    storage_keys, storage_tracker = track_storage_selections()
+    with storage_tracker, patch.object(RPCEndpoint, "_RPCEndpoint__before_execute"):
+        endpoint = EndpointTimeSeries()
+        endpoint.routing_decision = create_mock_routing_decision(routed_tier, message)
+        response = endpoint.execute(message)
+    return endpoint, response, storage_keys
 
 
 @pytest.mark.eap
@@ -2160,6 +2197,26 @@ class TestTimeSeriesApi(BaseApiTest):
                 data_points=expected_data_points,
             )
         ]
+
+    def test_empty_routing_hint_keeps_and_reports_routed_tier(self) -> None:
+        endpoint, response, storage_keys = _execute_with_routed_tier(Tier.TIER_8, routing_hint="")
+
+        assert endpoint.routing_decision.tier == Tier.TIER_8
+        assert decode_routing_hint(response.routing_hint, Tier.TIER_1) == Tier.TIER_8
+        assert storage_keys == [StorageKey.EAP_ITEMS_DOWNSAMPLE_8]
+
+    def test_request_routing_hint_overrides_routed_tier(self) -> None:
+        endpoint, response, storage_keys = _execute_with_routed_tier(
+            Tier.TIER_1, routing_hint=encode_routing_hint(Tier.TIER_8)
+        )
+
+        assert endpoint.routing_decision.tier == Tier.TIER_8
+        assert decode_routing_hint(response.routing_hint, Tier.TIER_1) == Tier.TIER_8
+        assert storage_keys == [StorageKey.EAP_ITEMS_DOWNSAMPLE_8]
+
+    def test_invalid_routing_hint_is_bad_request(self) -> None:
+        with pytest.raises(BadSnubaRPCRequestException, match="^invalid routing_hint$"):
+            _execute_with_routed_tier(Tier.TIER_1, routing_hint="not-base64!!")
 
 
 class TestUtils:

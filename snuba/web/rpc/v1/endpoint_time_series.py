@@ -76,6 +76,7 @@ from snuba.web.rpc.proto_visitor import (
     AggregationToConditionalAggregationVisitor,
     TimeSeriesRequestWrapper,
 )
+from snuba.web.rpc.storage_routing.common import decode_routing_hint, encode_routing_hint
 from snuba.web.rpc.v1.visitors.time_series_request_visitor import (
     preprocess_expression_labels,
 )
@@ -581,6 +582,7 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
 
     def _query_time_series(self, in_msg: TimeSeriesRequest) -> TimeSeriesResponse:
         routing_decision = self.routing_decision
+        routing_decision.tier = decode_routing_hint(in_msg.routing_hint, routing_decision.tier)
 
         # aggregations field is deprecated, it gets converted to request.expressions
         # if the user passes it in
@@ -628,4 +630,5 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
                 )
             ),
             meta=response_meta,
+            routing_hint=encode_routing_hint(routing_decision.tier),
         )

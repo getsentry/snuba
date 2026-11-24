@@ -821,11 +821,11 @@ def test_policy_sets_max_bytes_to_read() -> None:
 
 @pytest.mark.parametrize("tier", [Tier.TIER_1, Tier.TIER_8, Tier.TIER_64, Tier.TIER_512])
 def test_routing_hint_round_trip(tier: Tier) -> None:
-    assert decode_routing_hint(encode_routing_hint(tier)) == tier
+    assert decode_routing_hint(encode_routing_hint(tier), Tier.TIER_1) == tier
 
 
 def test_routing_hint_no_tier_encodes_as_tier_1() -> None:
-    assert decode_routing_hint(encode_routing_hint(Tier.TIER_NO_TIER)) == Tier.TIER_1
+    assert decode_routing_hint(encode_routing_hint(Tier.TIER_NO_TIER), Tier.TIER_8) == Tier.TIER_1
 
 
 def _b64(payload: object) -> str:
@@ -851,11 +851,12 @@ def _b64(payload: object) -> str:
 )
 def test_routing_hint_invalid(hint: str) -> None:
     with pytest.raises(BadSnubaRPCRequestException, match="^invalid routing_hint$"):
-        decode_routing_hint(hint)
+        decode_routing_hint(hint, Tier.TIER_1)
 
 
-def test_routing_hint_empty_is_tier_1() -> None:
-    assert decode_routing_hint("") == Tier.TIER_1
+@pytest.mark.parametrize("default", [Tier.TIER_1, Tier.TIER_8])
+def test_routing_hint_empty_is_default(default: Tier) -> None:
+    assert decode_routing_hint("", default) == default
 
 
 @pytest.mark.parametrize(
