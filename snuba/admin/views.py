@@ -134,8 +134,8 @@ def set_logging_context() -> None:
 def authorize() -> None:
     if request.endpoint != "health":
         user = authorize_request()
-        with sentry_sdk.push_scope() as scope:
-            scope.user = {"email": user.email}
+        with sentry_sdk.new_scope() as scope:
+            scope.set_user({"email": user.email})
             g.user = user
 
 

@@ -335,7 +335,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         failure_type_tag: str,
     ) -> None:
         exception_name = type(error).__name__
-        with sentry_sdk.push_scope() as scope:
+        with sentry_sdk.new_scope() as scope:
             scope.set_tag("routing_strategy", self.class_name())
             scope.set_tag(failure_type_tag, exception_name)
             scope.fingerprint = [fingerprint_key, exception_name]
