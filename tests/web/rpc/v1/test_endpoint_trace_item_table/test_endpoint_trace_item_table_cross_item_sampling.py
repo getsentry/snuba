@@ -104,7 +104,7 @@ class TestTraceItemTableCrossItemSampling(BaseApiTest):
             response = endpoint.execute(message)
 
             # The outer query read the full table, so that's the tier the hint points at
-            assert decode_routing_hint(response.routing_hint) == Tier.TIER_1
+            assert decode_routing_hint(response.routing_hint, Tier.TIER_1) == Tier.TIER_1
 
             # Verify storages were selected (should have at least 2 calls: inner + outer)
             assert len(storage_keys) >= 2, (

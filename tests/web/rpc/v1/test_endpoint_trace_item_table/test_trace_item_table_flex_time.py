@@ -335,7 +335,7 @@ class TestTraceItemTableFlexTime:
                 response = EndpointTraceItemTable().execute(message)
                 assert isinstance(response, TraceItemTableResponse)
                 # flextime shrinks the time window instead of downsampling
-                assert decode_routing_hint(response.routing_hint) == Tier.TIER_1
+                assert decode_routing_hint(response.routing_hint, Tier.TIER_1) == Tier.TIER_1
                 result_size = len(response.column_values[0].results)
                 page_token = response.page_token
                 assert result_size == limit_per_query

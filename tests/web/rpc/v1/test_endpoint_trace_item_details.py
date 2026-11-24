@@ -618,7 +618,7 @@ class TestTraceItemDetails(BaseApiTest):
 
     def test_table_routing_hint_names_tier_read(self, setup_spans_in_db: Any) -> None:
         table_response = self._table_response_routed_to_tier_8(self._spans_meta())
-        assert decode_routing_hint(table_response.routing_hint) == Tier.TIER_8
+        assert decode_routing_hint(table_response.routing_hint, Tier.TIER_1) == Tier.TIER_8
 
     def test_routing_hint_finds_item_only_in_downsampled_tier(self, setup_spans_in_db: Any) -> None:
         meta = self._spans_meta()
