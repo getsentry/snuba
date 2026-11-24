@@ -317,8 +317,32 @@ def test_subscription_task_result_encoder(
     else:
         assert payload["request"] == request.original_body
     assert payload["result"]["data"] == result["data"]
+    assert "routing_hint" not in payload["result"]
     assert payload["timestamp"] == task_result.task.timestamp.isoformat()
     assert payload["entity"] == entity_key.value
+
+
+def test_subscription_task_result_encoder_includes_routing_hint() -> None:
+    subscription = build_rpc_subscription_data_from_proto(EntityKey.EAP_ITEMS, {})
+    timestamp = datetime.now()
+    request = subscription.build_request(get_dataset("events"), timestamp, None, Timer("timer"))
+    result: Result = {"meta": [], "data": [{"sum": 1}], "routing_hint": "some-hint"}
+    task_result = SubscriptionTaskResult(
+        ScheduledSubscriptionTask(
+            timestamp,
+            SubscriptionWithMetadata(
+                EntityKey.EAP_ITEMS,
+                Subscription(SubscriptionIdentifier(PartitionId(1), uuid.uuid1()), subscription),
+                5,
+            ),
+        ),
+        (request, result),
+    )
+
+    message = SubscriptionTaskResultEncoder().encode(task_result)
+
+    payload = json.loads(message.value.decode("utf-8"))["payload"]
+    assert payload["result"] == {"meta": [], "data": [{"sum": 1}], "routing_hint": "some-hint"}
 
 
 METRICS_CASES = [

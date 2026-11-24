@@ -71,6 +71,9 @@ class SubscriptionTaskResultEncoder(Encoder[KafkaPayload, SubscriptionTaskResult
                 "entity": entity.value,
             },
         }
+        if "routing_hint" in result:
+            # ignore until the sentry-kafka-schemas release that declares the key
+            data["payload"]["result"]["routing_hint"] = result["routing_hint"]  # type: ignore[typeddict-unknown-key]
 
         return KafkaPayload(
             subscription_id.encode("utf-8"),
