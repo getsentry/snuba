@@ -2198,9 +2198,10 @@ class TestTimeSeriesApi(BaseApiTest):
             )
         ]
 
-    def test_response_routing_hint_names_routed_tier(self) -> None:
-        _, response, storage_keys = _execute_with_routed_tier(Tier.TIER_8, routing_hint="")
+    def test_empty_routing_hint_keeps_and_reports_routed_tier(self) -> None:
+        endpoint, response, storage_keys = _execute_with_routed_tier(Tier.TIER_8, routing_hint="")
 
+        assert endpoint.routing_decision.tier == Tier.TIER_8
         assert decode_routing_hint(response.routing_hint, Tier.TIER_1) == Tier.TIER_8
         assert storage_keys == [StorageKey.EAP_ITEMS_DOWNSAMPLE_8]
 
@@ -2211,12 +2212,6 @@ class TestTimeSeriesApi(BaseApiTest):
 
         assert endpoint.routing_decision.tier == Tier.TIER_8
         assert decode_routing_hint(response.routing_hint, Tier.TIER_1) == Tier.TIER_8
-        assert storage_keys == [StorageKey.EAP_ITEMS_DOWNSAMPLE_8]
-
-    def test_empty_routing_hint_keeps_routed_tier(self) -> None:
-        endpoint, _, storage_keys = _execute_with_routed_tier(Tier.TIER_8, routing_hint="")
-
-        assert endpoint.routing_decision.tier == Tier.TIER_8
         assert storage_keys == [StorageKey.EAP_ITEMS_DOWNSAMPLE_8]
 
     def test_invalid_routing_hint_is_bad_request(self) -> None:
