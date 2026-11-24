@@ -582,7 +582,6 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
 
     def _query_time_series(self, in_msg: TimeSeriesRequest) -> TimeSeriesResponse:
         routing_decision = self.routing_decision
-        # Without a hint the query keeps the tier the routing strategy picked.
         routing_decision.tier = decode_routing_hint(in_msg.routing_hint, routing_decision.tier)
 
         # aggregations field is deprecated, it gets converted to request.expressions
