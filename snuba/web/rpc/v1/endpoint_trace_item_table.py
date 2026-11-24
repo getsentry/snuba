@@ -38,12 +38,16 @@ from snuba.protos.common import (
     NORMALIZED_COLUMNS_EAP_ITEMS,
     TYPED_ARRAY_MAP_COLUMNS,
     NormalizedColumn,
+    coalesced_attribute_names,
+    first_present_value,
+    key_existence_conditions,
     type_array_typed_columns_select_expressions,
 )
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
+from snuba.query.conditions import combine_or_conditions
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import and_cond, if_cond, literal, literals_array, or_cond
+from snuba.query.dsl import and_cond, arrayElement, if_cond, literal, literals_array, or_cond
 from snuba.query.dsl import column as snuba_column
 from snuba.query.expressions import (
     Column as ColumnExpr,
@@ -123,6 +127,31 @@ from snuba.web.rpc.v1.visitors.trace_item_table_request_visitor import (
 _DEFAULT_ROW_LIMIT = 10_000
 
 
+def _coalesced_reads_of(to_column_name: str) -> dict[Expression, Expression]:
+    """Map the alias-free coalesced reads of ``to_column_name`` to a plain read of it.
+
+    When ``to_column_name`` has aliases in sentry-conventions, attribute reads of it
+    coalesce over all of them (see ``coalesced_attribute_names``): SELECT uses
+    ``attributes_string[...]`` operands, filters use ``arrayElement`` operands, and the
+    existence guard ORs one ``has(mapKeys(...))`` per name.
+    """
+    names = coalesced_attribute_names(to_column_name)
+    if len(names) == 1:
+        return {}
+    col_name = "attributes_string"
+    col = snuba_column(col_name)
+    existences = key_existence_conditions(col_name, names)
+    subscript_reads: list[Expression] = [
+        SubscriptableReference(alias=None, column=col, key=literal(name)) for name in names
+    ]
+    element_reads: list[Expression] = [arrayElement(None, col, literal(name)) for name in names]
+    return {
+        first_present_value(subscript_reads, existences): subscript_reads[0],
+        first_present_value(element_reads, existences): element_reads[0],
+        combine_or_conditions(existences): existences[0],
+    }
+
+
 def _apply_virtual_columns(
     query: Query, virtual_column_contexts: Sequence[VirtualColumnContext]
 ) -> None:
@@ -159,6 +188,23 @@ def _apply_virtual_columns(
         return
 
     mapped_column_to_context = {c.to_column_name: c for c in virtual_column_contexts}
+
+    # A virtual column replaces every read of its name. If the name has aliases, the
+    # read is coalesced, and transform_expressions below would only rewrite the
+    # to_column_name operands, so the alias operands would leak raw stored values
+    # (or NULL when no key is set). Collapse coalesced reads to a single-key read first.
+    coalesced_reads: dict[Expression, Expression] = {}
+    for context in virtual_column_contexts:
+        coalesced_reads.update(_coalesced_reads_of(context.to_column_name))
+
+    def collapse_coalesced_reads(expression: Expression) -> Expression:
+        plain_read = coalesced_reads.get(replace(expression, alias=None))
+        if plain_read is None:
+            return expression
+        return replace(plain_read, alias=expression.alias)
+
+    if coalesced_reads:
+        query.transform_expressions(collapse_coalesced_reads)
 
     def transform_expressions(expression: Expression) -> Expression:
         # An attribute read appears as attributes_string[key] (SELECT / group by),
