@@ -231,6 +231,8 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
         request_class.meta.end_timestamp.CopyFrom(end_time_proto)
 
         request_class.meta.referrer = referrer
+        # A hint stored with the subscription would pin every run to one tier.
+        request_class.ClearField("routing_hint")
         request_class.meta.project_ids[:] = [self.project_id]
         organization_id = self.metadata.get("organization")
         if organization_id is not None:
@@ -256,13 +258,19 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
                 "meta": [],
                 "data": [{request.expressions[0].label: None}],
                 "trace_output": "",
+                "routing_hint": response.routing_hint,
             }
             return QueryResult(result=result, extra={"stats": {}, "sql": "", "experiments": {}})
 
         timeseries = response.result_timeseries[0]
         data = [{timeseries.label: timeseries.data_points[0].data}]
 
-        result = {"meta": [], "data": data, "trace_output": ""}
+        result = {
+            "meta": [],
+            "data": data,
+            "trace_output": "",
+            "routing_hint": response.routing_hint,
+        }
         return QueryResult(result=result, extra={"stats": {}, "sql": "", "experiments": {}})
 
     @classmethod

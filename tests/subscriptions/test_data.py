@@ -1,11 +1,17 @@
 import base64
 from datetime import datetime
+from unittest.mock import patch
 
 import pytest
 from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
     CreateSubscriptionRequest as CreateSubscriptionRequestProto,
 )
-from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
+from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
+    DataPoint,
+    TimeSeries,
+    TimeSeriesRequest,
+    TimeSeriesResponse,
+)
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
@@ -29,6 +35,7 @@ from snuba.subscriptions.data import (
     SubscriptionData,
 )
 from snuba.utils.metrics.timer import Timer
+from snuba.web.rpc.v1.endpoint_time_series import EndpointTimeSeries
 from tests.subscriptions import BaseSubscriptionTest
 
 TESTS_EVENTS = [
@@ -233,7 +240,7 @@ class TestBuildRequest(BaseSubscriptionTest, TestBuildRequestBase):
         self.compare_conditions(subscription, exception, "count", expected_value)
 
 
-def test_rpc_build_request_rebinds_project_and_org() -> None:
+def _rpc_subscription(routing_hint: str = "") -> RPCSubscriptionData:
     stored = TimeSeriesRequest(
         meta=RequestMeta(
             project_ids=[999],
@@ -250,8 +257,9 @@ def test_rpc_build_request_rebinds_project_and_org() -> None:
                 extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
             ),
         ],
+        routing_hint=routing_hint,
     )
-    subscription = RPCSubscriptionData(
+    return RPCSubscriptionData(
         project_id=1,
         time_window_sec=3600,
         resolution_sec=60,
@@ -261,11 +269,45 @@ def test_rpc_build_request_rebinds_project_and_org() -> None:
         entity=get_entity(EntityKey.EAP_ITEMS),
         metadata={"organization": 1},
     )
-    request = subscription.build_request(
+
+
+def _build_rpc_request(subscription: RPCSubscriptionData) -> TimeSeriesRequest:
+    return subscription.build_request(
         None,  # type: ignore[arg-type]
         datetime.utcnow(),
         None,
         Timer("test"),
     )
+
+
+def test_rpc_build_request_rebinds_project_and_org() -> None:
+    request = _build_rpc_request(_rpc_subscription())
     assert list(request.meta.project_ids) == [1]
     assert request.meta.organization_id == 1
+
+
+def test_rpc_build_request_clears_stored_routing_hint() -> None:
+    request = _build_rpc_request(_rpc_subscription(routing_hint="stored-hint"))
+    assert request.routing_hint == ""
+
+
+@pytest.mark.parametrize(
+    "result_timeseries",
+    [
+        pytest.param(
+            [TimeSeries(label="count", data_points=[DataPoint(data=5, data_present=True)])],
+            id="with data",
+        ),
+        pytest.param([], id="without data"),
+    ],
+)
+def test_rpc_run_query_keeps_routing_hint(result_timeseries: list[TimeSeries]) -> None:
+    subscription = _rpc_subscription()
+    response = TimeSeriesResponse(result_timeseries=result_timeseries, routing_hint="some-hint")
+    with patch.object(EndpointTimeSeries, "execute", return_value=response):
+        result = subscription.run_query(
+            None,  # type: ignore[arg-type]
+            _build_rpc_request(subscription),
+            Timer("test"),
+        )
+    assert result.result["routing_hint"] == "some-hint"

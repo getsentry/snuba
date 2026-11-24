@@ -28,6 +28,7 @@ class Result(TypedDict, total=False):
     totals: Row
     profile: dict[str, Any] | None
     trace_output: str
+    routing_hint: str
 
 
 def iterate_rows(result: Result) -> Iterator[Row]:
