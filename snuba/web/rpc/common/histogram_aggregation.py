@@ -39,7 +39,7 @@ from snuba.web.rpc.common.common import (
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
-POINTS_PER_BUCKET = 10
+POINTS_PER_BUCKET = 20
 HISTOGRAM_METRIC_TYPE = "histogram"
 
 _METRIC_TYPE = "sentry.metric_type"

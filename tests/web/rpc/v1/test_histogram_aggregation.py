@@ -282,9 +282,9 @@ class TestHistogramAggregation(BaseApiTest):
             "FUNCTION_MIN": 102.4,
             "FUNCTION_MAX": 712.9,
             # interpolating inside the buckets gives p50 184.4 and p90 250; the points
-            # nearest to those are 183.58 and 242.62, truncated to bfloat16
-            "FUNCTION_P50": 183,
-            "FUNCTION_P90": 242,
+            # nearest to those are 187.27 and 246.31, truncated to bfloat16
+            "FUNCTION_P50": 187,
+            "FUNCTION_P90": 246,
         }
         # rows without buckets, and without histogram_min/max, use their value
         assert result["plain"]["FUNCTION_COUNT"] == 2
@@ -297,9 +297,9 @@ class TestHistogramAggregation(BaseApiTest):
     def test_percentile_stays_in_its_bucket(self, setup_histograms: None) -> None:
         result = _table([_column(Function.FUNCTION_P90)])
 
-        # interpolating inside (0.4, 5] gives 4.80, the last point of the bucket is 4.77,
+        # interpolating inside (0.4, 5] gives 4.80, the last point of the bucket is 4.885,
         # truncated to bfloat16
-        assert result["gap"]["FUNCTION_P90"] == 4.75
+        assert result["gap"]["FUNCTION_P90"] == 4.875
 
     def test_percentiles_across_bucket_layouts_are_ordered(self, setup_histograms: None) -> None:
         functions = [
@@ -326,7 +326,7 @@ class TestHistogramAggregation(BaseApiTest):
         )
 
         assert result["latency"]["FUNCTION_COUNT"] == 100
-        assert result["latency"]["FUNCTION_MIN"] == 262.5
+        assert result["latency"]["FUNCTION_MIN"] == 256.25
 
     def test_request_value_filter_is_rejected(self) -> None:
         # it would apply to the mean of each histogram point
