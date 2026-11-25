@@ -72,6 +72,7 @@ from snuba.web.rpc.common.formula_reliability import (
     FormulaReliabilityCalculator,
     _unix_seconds,
 )
+from snuba.web.rpc.common.histogram_aggregation import reject_value_filter_with_buckets
 from snuba.web.rpc.proto_visitor import (
     AggregationToConditionalAggregationVisitor,
     TimeSeriesRequestWrapper,
@@ -565,6 +566,7 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
 
     def _execute(self, in_msg: TimeSeriesRequest) -> TimeSeriesResponse:
         _enforce_no_duplicate_labels(in_msg)
+        reject_value_filter_with_buckets(in_msg)
         _validate_time_buckets(in_msg)
 
         if in_msg.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
