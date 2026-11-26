@@ -16,8 +16,8 @@ use sentry_protos::snuba::v1::{ArrayValue, TraceItem, TraceItemType};
 
 use crate::config::ProcessorConfig;
 use crate::processors::utils::{
-    enforce_retentions, get_drop_invalid_timestamps_enabled, out_of_valid_interval_secs,
-    SilencedDLQMessage,
+    enforce_eap_retentions, get_drop_invalid_timestamps_enabled, out_of_valid_interval_secs,
+    SilencedDLQMessage, DROPPED_UNSUPPORTED_RETENTION_METRIC,
 };
 use crate::strategies::clickhouse::rowbinary;
 use crate::types::CogsData;
@@ -66,8 +66,8 @@ struct ProcessedItem {
     cogs_data: CogsData,
 }
 
-/// `Ok(None)` means the item was dropped for being out of range; the message
-/// is committed without inserting anything.
+/// `Ok(None)` means the item was dropped (out-of-range timestamp or unsupported
+/// retention); the message is committed without inserting anything.
 fn process_eap_item(
     msg: KafkaPayload,
     metadata: &KafkaMessageMetadata,
@@ -87,10 +87,18 @@ fn process_eap_item(
     let item_type =
         TraceItemType::try_from(trace_item.item_type).unwrap_or(TraceItemType::Unspecified);
 
-    let (retention_days, downsampled_retention_days) = enforce_retentions(
-        Some(trace_item.retention_days as u16),
-        Some(trace_item.downsampled_retention_days as u16),
-    );
+    let Some((retention_days, downsampled_retention_days)) = enforce_eap_retentions(
+        Some(u16::try_from(trace_item.retention_days).unwrap_or(u16::MAX)),
+        Some(u16::try_from(trace_item.downsampled_retention_days).unwrap_or(u16::MAX)),
+    ) else {
+        counter!(
+            DROPPED_UNSUPPORTED_RETENTION_METRIC,
+            1,
+            "processor" => "eap_items",
+            "item_type" => item_type_name(item_type)
+        );
+        return Ok(None);
+    };
 
     let now = Utc::now();
 
@@ -903,7 +911,7 @@ mod tests {
         let item_id = Uuid::new_v4();
         let mut trace_item = generate_trace_item(item_id);
 
-        trace_item.downsampled_retention_days = 365;
+        trace_item.downsampled_retention_days = 366;
 
         let mut payload = Vec::new();
 
@@ -925,7 +933,7 @@ mod tests {
 
         let item: Item = serde_json::from_slice(&batch.rows.encoded_rows).unwrap();
 
-        assert_eq!(item.downsampled_retention_days, 365);
+        assert_eq!(item.downsampled_retention_days, 366);
     }
 
     #[test]
@@ -1449,6 +1457,36 @@ mod tests {
     }
 
     #[test]
+    fn test_unsupported_retention_is_dropped() {
+        init_options();
+        let now = Utc::now().timestamp();
+        assert_eq!(rows_inserted(&encode_with_timestamp(now, 7, 7)), (1, 1, 1));
+        assert_eq!(
+            rows_inserted(&encode_with_timestamp(now, 30, 396)),
+            (1, 1, 1)
+        );
+        // Unset downsampled copies standard.
+        assert_eq!(rows_inserted(&encode_with_timestamp(now, 90, 0)), (1, 1, 1));
+        // Unsupported standard or downsampled value: not ingested.
+        assert_eq!(
+            rows_inserted(&encode_with_timestamp(now, 14, 14)),
+            (0, 0, 0)
+        );
+        assert_eq!(
+            rows_inserted(&encode_with_timestamp(now, 89, 396)),
+            (0, 0, 0)
+        );
+        assert_eq!(
+            rows_inserted(&encode_with_timestamp(now, 1, 396)),
+            (0, 0, 0)
+        );
+        assert_eq!(
+            rows_inserted(&encode_with_timestamp(now, 30, 365)),
+            (0, 0, 0)
+        );
+    }
+
+    #[test]
     fn test_drop_invalid_timestamps_skips_items_past_retention() {
         init_options();
         let now = Utc::now().timestamp();
@@ -1712,7 +1750,7 @@ mod tests {
     fn test_row_binary_downsampled_retention_days_extended() {
         let item_id = Uuid::new_v4();
         let mut trace_item = generate_trace_item(item_id);
-        trace_item.downsampled_retention_days = 365;
+        trace_item.downsampled_retention_days = 366;
 
         let mut payload = Vec::new();
         trace_item.encode(&mut payload).unwrap();
@@ -1727,7 +1765,7 @@ mod tests {
             .expect("The message should be processed");
 
         let row = &batch.rows[0];
-        assert_eq!(row.downsampled_retention_days, 365);
+        assert_eq!(row.downsampled_retention_days, 366);
     }
 
     #[test]
@@ -2061,7 +2099,7 @@ mod tests {
         trace_item.trace_id = trace_id.to_string();
         trace_item.client_sample_rate = 0.5;
         trace_item.server_sample_rate = 0.25;
-        trace_item.downsampled_retention_days = 365;
+        trace_item.downsampled_retention_days = 366;
         trace_item.attributes.insert(
             "str_attr".to_string(),
             AnyValue {

@@ -58,3 +58,17 @@ def clamp_retention_days(value: int | None, kind: RetentionKind = "standard") ->
     if not isinstance(value, int) or value <= 0:
         return bucket["default"]
     return min(value, bucket["max"])
+
+
+# EAP items don't read the retention_days option, which only applies to non-EAP
+# data. These mirror the Rust consumer's EAP constants (rust_snuba/src/processors/utils.rs).
+EAP_DEFAULT_RETENTION_DAYS = 30
+EAP_MAX_RETENTION_DAYS = 396
+
+
+def eap_standard_retention_days(requested: int | None) -> int:
+    """Query-path standard retention for EAP: the requested value capped at
+    ``EAP_MAX_RETENTION_DAYS``, or ``EAP_DEFAULT_RETENTION_DAYS`` if unset."""
+    if not isinstance(requested, int) or requested <= 0:
+        return EAP_DEFAULT_RETENTION_DAYS
+    return min(requested, EAP_MAX_RETENTION_DAYS)
