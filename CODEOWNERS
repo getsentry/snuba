@@ -22,6 +22,7 @@
 /tests/web/rpc @getsentry/events-analytics-platform @getsentry/owners-snuba
 /snuba/snuba_migrations/events_analytics_platform @getsentry/events-analytics-platform @getsentry/owners-snuba
 /rust_snuba/src/processors/eap_spans.rs @getsentry/events-analytics-platform @getsentry/owners-snuba
+/dataflow/eap_items @getsentry/events-analytics-platform @getsentry/owners-snuba
 
 # Legal
 /LICENSE.md  @getsentry/owners-legal
