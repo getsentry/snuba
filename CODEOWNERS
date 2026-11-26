@@ -23,6 +23,12 @@
 /snuba/snuba_migrations/events_analytics_platform @getsentry/events-analytics-platform @getsentry/owners-snuba
 /rust_snuba/src/processors/eap_spans.rs @getsentry/events-analytics-platform @getsentry/owners-snuba
 
+# Dependencies: release approvers can also approve dependency bumps
+/pyproject.toml          @getsentry/owners-snuba @getsentry/release-approvers
+/uv.lock                 @getsentry/owners-snuba @getsentry/release-approvers
+/rust_snuba/Cargo.toml   @getsentry/owners-snuba @getsentry/release-approvers
+/rust_snuba/Cargo.lock   @getsentry/owners-snuba @getsentry/release-approvers
+
 # Legal
 /LICENSE.md  @getsentry/owners-legal
 
