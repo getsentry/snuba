@@ -9,6 +9,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
+env:
+  # BuildKit cache for the application image, one tag per platform. It lives in
+  # GHCR so it doesn't use the repo's 10 GB Actions cache. Only publishing
+  # builds (master and release branches) write it; everything else reads it.
+  APP_BUILD_CACHE: ghcr.io/getsentry/snuba-ci:buildcache-app
+
 jobs:
   # Job names stay build-amd64 / build-arm64 so craft's status contexts
   # do not need to change.
@@ -40,11 +46,11 @@ jobs:
         ghcr: true
         tag_nightly: false
         tag_latest: false
-        # One cache per architecture. With a shared scope, the amd64 and arm64
+        # One cache per architecture. With a shared one, the amd64 and arm64
         # builds overwrite each other's cache index, so one of them misses on
         # every run and rebuilds the Rust extension.
-        cache_from: type=gha,scope=snuba-${{ matrix.platform }}
-        cache_to: type=gha,mode=max,scope=snuba-${{ matrix.platform }}
+        cache_from: type=registry,ref=${{ env.APP_BUILD_CACHE }}-${{ matrix.platform }}
+        cache_to: type=registry,ref=${{ env.APP_BUILD_CACHE }}-${{ matrix.platform }},mode=max,image-manifest=true,oci-mediatypes=true
 
   # Published to Google AR (amd64). gocd deploys and migrations pin
   # us-docker.pkg.dev/sentryio/snuba-mr/image:<sha>.
@@ -73,7 +79,7 @@ jobs:
           google_workload_identity_provider: projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool
           google_service_account: gha-snuba-push@sac-prod-sa.iam.gserviceaccount.com
           # Same amd64 build as build-amd64, which writes this cache.
-          cache_from: type=gha,scope=snuba-amd64
+          cache_from: type=registry,ref=${{ env.APP_BUILD_CACHE }}-amd64
           cache_to: ''
 
   # Debug image — with busybox for troubleshooting
@@ -107,7 +113,7 @@ jobs:
         tag_latest: false
         # application-debug shares every build stage with application, so
         # read that architecture's cache instead of exporting a second copy.
-        cache_from: type=gha,scope=snuba-${{ matrix.platform }}
+        cache_from: type=registry,ref=${{ env.APP_BUILD_CACHE }}-${{ matrix.platform }}
         cache_to: ''
 
   # Publishes the unsuffixed tags that everyone downstream consumes: self-hosted

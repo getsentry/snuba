@@ -214,11 +214,11 @@ jobs:
           provenance: false
           sbom: false
           # The registry cache is written on master only; PRs read it. The
-          # image.yml arm64 build writes the gha cache for the stages that
-          # `testing` shares with `application`, including rust_snuba.
+          # image.yml arm64 build writes buildcache-app-arm64 for the stages
+          # that `testing` shares with `application`, including rust_snuba.
           cache-from: |
             type=registry,ref=ghcr.io/getsentry/snuba-ci:buildcache-arm64
-            type=gha,scope=snuba-arm64
+            type=registry,ref=ghcr.io/getsentry/snuba-ci:buildcache-app-arm64
           cache-to: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' && 'type=registry,ref=ghcr.io/getsentry/snuba-ci:buildcache-arm64,mode=max,image-manifest=true,oci-mediatypes=true' || '' }}
 
       - name: Publish snuba-ci image to artifacts
@@ -590,10 +590,10 @@ jobs:
           target: application
           load: true
           tags: snuba:test
-          # snuba-image writes the registry cache; image.yml writes the gha one.
+          # snuba-image writes buildcache-arm64; image.yml writes buildcache-app-arm64.
           cache-from: |
             type=registry,ref=ghcr.io/getsentry/snuba-ci:buildcache-arm64
-            type=gha,scope=snuba-arm64
+            type=registry,ref=ghcr.io/getsentry/snuba-ci:buildcache-app-arm64
 
       - name: Verify --help works
         run: docker run --rm snuba:test --help
