@@ -425,6 +425,11 @@ jobs:
       matrix:
         instance: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
     env:
+      # devservices starts a nightly snuba that `Start snuba` replaces with this
+      # run's image, so skip its bootstrap and migrations (read by
+      # devservices/config.yml once this is on master).
+      SNUBA_NO_BOOTSTRAP: '1'
+      SNUBA_NO_WORKERS: '1'
       MIGRATIONS_TEST_MIGRATE: 1
       # XXX: `MATRIX_INSTANCE_TOTAL` must be hardcoded to the length of `strategy.matrix.instance`.
       MATRIX_INSTANCE_TOTAL: 16
