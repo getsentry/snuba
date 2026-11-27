@@ -17,10 +17,12 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     ExtrapolationMode,
     Function,
     Reliability,
+    StrArray,
 )
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     AndFilter,
     ComparisonFilter,
+    OrFilter,
     TraceItemFilter,
 )
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue
@@ -206,6 +208,27 @@ def _table(
 class TestIsHistogramAggregation:
     def test_filter_pinning_histogram_type(self) -> None:
         assert is_histogram_aggregation(_column(Function.FUNCTION_SUM).conditional_aggregation)
+
+    def test_filter_selecting_histogram_type(self) -> None:
+        metric_type = IS_HISTOGRAM.comparison_filter.key
+        any_type = TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=metric_type,
+                op=ComparisonFilter.OP_IN,
+                value=AttributeValue(val_str_array=StrArray(values=["counter", "histogram"])),
+            )
+        )
+        is_counter = TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=metric_type,
+                op=ComparisonFilter.OP_EQUALS,
+                value=AttributeValue(val_str="counter"),
+            )
+        )
+        either = TraceItemFilter(or_filter=OrFilter(filters=[is_counter, IS_HISTOGRAM]))
+        for trace_filter in (any_type, either):
+            column = _column(Function.FUNCTION_SUM, trace_filter, histogram=False)
+            assert is_histogram_aggregation(column.conditional_aggregation)
 
     def test_other_aggregations(self) -> None:
         assert not is_histogram_aggregation(

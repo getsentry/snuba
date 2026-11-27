@@ -1,15 +1,18 @@
 """
 Aggregations over pre-aggregated OTLP histogram rows.
 
-An aggregation reads them when its filter pins `sentry.metric_type` to `histogram`, a type
+Experimental: only used while early adopters validate OTLP histograms end to end, behind
+the Sentry and Relay flags (EXP-1484). Revisit or remove this module when that's done.
+
+An aggregation reads them when its filter selects `sentry.metric_type` = `histogram`, a type
 only OTLP histograms have, so every other request produces the same SQL as before.
 
 Relay stores an OTLP histogram data point as one trace metric row that holds the bucket
 bounds, the bucket counts and each bucket's share of the point's sum as parallel arrays,
 plus one `histogram_exemplar` row per exemplar. Each bucket is spread over
-POINTS_PER_BUCKET evenly spaced points inside the row and the aggregates run over those
-points with -ArrayIf combinators, so the generated SQL stays small. A row without buckets
-is one point at `sentry.value`.
+POINTS_PER_BUCKET evenly spaced points inside the row and the percentiles run over those
+points with -ArrayIf combinators, so the generated SQL stays small. Count and sum add up the
+bucket arrays directly. A row without buckets is one point at `sentry.value`.
 """
 
 from collections.abc import Callable, Iterator
@@ -38,7 +41,7 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 POINTS_PER_BUCKET = 20
 HISTOGRAM_METRIC_TYPE = "histogram"
 
-_METRIC_TYPE = "sentry.metric_type"
+_METRIC_TYPE = AttributeKey(name="sentry.metric_type", type=AttributeKey.TYPE_STRING)
 _VALUE = AttributeKey(name="sentry.value", type=AttributeKey.TYPE_DOUBLE)
 _LOWERS = AttributeKey(name="sentry._internal.bucket_lowers", type=AttributeKey.TYPE_ARRAY_DOUBLE)
 _UPPERS = AttributeKey(name="sentry._internal.bucket_uppers", type=AttributeKey.TYPE_ARRAY_DOUBLE)
@@ -68,17 +71,23 @@ _SUPPORTED_FUNCTIONS = {
 }
 
 
-def _pins_histogram_type(trace_filter: TraceItemFilter) -> bool:
+def _is_histogram_type(trace_filter: TraceItemFilter) -> bool:
+    # =, IN, and either side of AND or OR can select histogram rows. Rows without buckets
+    # that such a filter also selects are aggregated as one point at `sentry.value`.
     match trace_filter.WhichOneof("value"):
         case "and_filter":
-            return any(_pins_histogram_type(child) for child in trace_filter.and_filter.filters)
+            return any(_is_histogram_type(child) for child in trace_filter.and_filter.filters)
+        case "or_filter":
+            return any(_is_histogram_type(child) for child in trace_filter.or_filter.filters)
         case "comparison_filter":
             comparison = trace_filter.comparison_filter
-            return (
-                comparison.key.name == _METRIC_TYPE
-                and comparison.op == ComparisonFilter.OP_EQUALS
-                and comparison.value.val_str == HISTOGRAM_METRIC_TYPE
-            )
+            if comparison.key.name != _METRIC_TYPE.name:
+                return False
+            match comparison.op:
+                case ComparisonFilter.OP_EQUALS:
+                    return comparison.value.val_str == HISTOGRAM_METRIC_TYPE
+                case ComparisonFilter.OP_IN:
+                    return HISTOGRAM_METRIC_TYPE in comparison.value.val_str_array.values
     return False
 
 
@@ -88,27 +97,14 @@ def is_histogram_aggregation(
     return (
         isinstance(aggregation, AttributeConditionalAggregation)
         and aggregation.HasField("filter")
-        and _pins_histogram_type(aggregation.filter)
+        and _is_histogram_type(aggregation.filter)
     )
 
 
-def _lambda(params: tuple[str, ...], body: Expression) -> Lambda:
-    return Lambda(None, params, body)
-
-
-def _arg(name: str) -> Argument:
-    return Argument(None, name)
-
-
-def _per_point(
-    attribute_key_to_expression: Callable[[AttributeKey], Expression],
-    buckets: FunctionCall,
-    plain: Expression,
-    alias: str | None,
-) -> FunctionCall:
+def _has_buckets(attribute_key_to_expression: Callable[[AttributeKey], Expression]) -> FunctionCall:
     # a row whose arrays don't line up is treated as a row without buckets
     counts_length = f.length(attribute_key_to_expression(_COUNTS))
-    has_buckets = FunctionCall(
+    return FunctionCall(
         "__histogram_has_buckets",
         "and",
         (
@@ -119,26 +115,77 @@ def _per_point(
             ),
         ),
     )
-    return if_cond(has_buckets, f.arrayFlatten(buckets), f.array(plain), alias=alias)
 
 
-def _spread(values: Expression, weight: Expression) -> FunctionCall:
-    """Splits each bucket's value evenly over the bucket's points."""
-    share = f.divide(f.multiply(_arg("v"), weight), POINTS_PER_BUCKET)
-    return f.arrayMap(_lambda(("v",), f.arrayWithConstant(POINTS_PER_BUCKET, share)), values)
+def _per_point(
+    attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    buckets: FunctionCall,
+    plain: Expression,
+    alias: str,
+) -> FunctionCall:
+    return if_cond(
+        _has_buckets(attribute_key_to_expression),
+        f.arrayFlatten(buckets),
+        f.array(plain),
+        alias=alias,
+    )
+
+
+def _row_total(
+    attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    bucket_values: AttributeKey,
+    plain: Expression,
+) -> FunctionCall:
+    """Adds up a row's bucket values, `plain` for a row without buckets."""
+    return if_cond(
+        _has_buckets(attribute_key_to_expression),
+        f.arraySum(attribute_key_to_expression(bucket_values)),
+        plain,
+    )
+
+
+def _integer_weight(weight: Expression) -> FunctionCall:
+    # quantileBFloat16Weighted only takes integer weights, scaling by 1000 keeps the
+    # fractional ones (a bucket's count split over its points, sampling weights below 1)
+    return f.toUInt64(f.round(f.multiply(weight, 1000)))
+
+
+def _point_weights(
+    attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    weight: Expression,
+    alias: str,
+) -> FunctionCall:
+    """Splits each bucket's count evenly over the bucket's points."""
+    point_weight = _integer_weight(
+        f.divide(f.multiply(Argument(None, "bucket_count"), weight), POINTS_PER_BUCKET)
+    )
+    return _per_point(
+        attribute_key_to_expression,
+        f.arrayMap(
+            Lambda(None, ("bucket_count",), f.arrayWithConstant(POINTS_PER_BUCKET, point_weight)),
+            attribute_key_to_expression(_COUNTS),
+        ),
+        _integer_weight(weight),
+        alias,
+    )
 
 
 def _points(attribute_key_to_expression: Callable[[AttributeKey], Expression]) -> FunctionCall:
-    lower, upper = _arg("l"), _arg("u")
-    offset = f.divide(f.plus(_arg("i"), 0.5), POINTS_PER_BUCKET)
+    bucket_lower = Argument(None, "bucket_lower")
+    bucket_upper = Argument(None, "bucket_upper")
+    offset = f.divide(f.plus(Argument(None, "point_index"), 0.5), POINTS_PER_BUCKET)
     bucket_points = f.arrayMap(
-        _lambda(("i",), f.plus(lower, f.multiply(f.minus(upper, lower), offset))),
+        Lambda(
+            None,
+            ("point_index",),
+            f.plus(bucket_lower, f.multiply(f.minus(bucket_upper, bucket_lower), offset)),
+        ),
         f.range(POINTS_PER_BUCKET),
     )
     return _per_point(
         attribute_key_to_expression,
         f.arrayMap(
-            _lambda(("l", "u"), bucket_points),
+            Lambda(None, ("bucket_lower", "bucket_upper"), bucket_points),
             attribute_key_to_expression(_LOWERS),
             attribute_key_to_expression(_UPPERS),
         ),
@@ -188,32 +235,22 @@ def bucket_aggregation_to_expression(
         )
 
     weight = sampling_weight if sampling_weight is not None else literal(1.0)
-    # the arrays only depend on the extrapolation mode, so aggregations share them
-    mode = ExtrapolationMode.Name(aggregation.extrapolation_mode)
-    points: Expression = _points(attribute_key_to_expression)
-    weights: Expression = _per_point(
-        attribute_key_to_expression,
-        _spread(attribute_key_to_expression(_COUNTS), weight),
+    row_count = f.multiply(_row_total(attribute_key_to_expression, _COUNTS, literal(1)), weight)
+    row_sum = f.multiply(
+        _row_total(attribute_key_to_expression, _SUM_SHARES, attribute_key_to_expression(_VALUE)),
         weight,
-        f"__histogram_weights_{mode}",
-    )
-    sums: Expression = _per_point(
-        attribute_key_to_expression,
-        _spread(attribute_key_to_expression(_SUM_SHARES), weight),
-        f.multiply(attribute_key_to_expression(_VALUE), weight),
-        f"__histogram_sums_{mode}",
     )
 
     alias_dict = {"alias": aggregation.label} if aggregation.label else {}
     match aggregation.aggregate:
         case Function.FUNCTION_COUNT:
-            return f.round(f.sumArrayIfOrNull(weights, condition), **alias_dict)
+            return f.round(f.sumIfOrNull(row_count, condition), **alias_dict)
         case Function.FUNCTION_SUM:
-            return f.sumArrayIfOrNull(sums, condition, **alias_dict)
+            return f.sumIfOrNull(row_sum, condition, **alias_dict)
         case Function.FUNCTION_AVG | Function.FUNCTION_AVERAGE:
             return f.divide(
-                f.sumArrayIfOrNull(sums, condition),
-                f.sumArrayIfOrNull(weights, condition),
+                f.sumIfOrNull(row_sum, condition),
+                f.sumIfOrNull(row_count, condition),
                 **alias_dict,
             )
         case Function.FUNCTION_MIN:
@@ -222,16 +259,21 @@ def bucket_aggregation_to_expression(
         case Function.FUNCTION_MAX:
             row_max = _row_bound(attribute_key_to_expression, _MAX, _UPPERS, f.arrayMax)
             return f.maxIfOrNull(row_max, condition, **alias_dict)
-    # BFloat16 rather than t-digest, which interpolates across empty buckets and depends on
-    # row order, or exact, whose state grows with the distinct points (every row's outer
-    # buckets end at that row's min and max). It truncates values to 8 bits of mantissa,
-    # so results can be up to 0.78% closer to zero. It takes integer weights, scaled so
-    # sampling weights below 1 survive.
-    integer_weights = f.arrayMap(
-        _lambda(("w",), f.toUInt64(f.round(f.multiply(_arg("w"), 1000)))), weights
-    )
+    # BFloat16 keeps percentiles both fast and accurate over the bucket points:
+    # - t-digest merges points across bucket boundaries, so it interpolates into empty
+    #   buckets and can return values no observation had. Its result also depends on row order.
+    # - exact keeps every distinct point, and every row's outer buckets end at that row's own
+    #   min and max, so its memory grows with the number of rows.
+    # - BFloat16 keys its state by the 16-bit value, so its memory is fixed (at most 65536
+    #   keys) however many rows it reads. The cost is precision: it truncates values to 8
+    #   bits of mantissa, so a result can be up to 0.78% closer to zero.
+    # the weights only depend on the extrapolation mode, so percentiles share them
+    mode = ExtrapolationMode.Name(aggregation.extrapolation_mode)
     return cf.quantileBFloat16WeightedArrayIfOrNull(_PERCENTILES[aggregation.aggregate])(
-        points, integer_weights, condition, **alias_dict
+        _points(attribute_key_to_expression),
+        _point_weights(attribute_key_to_expression, weight, f"__histogram_weights_{mode}"),
+        condition,
+        **alias_dict,
     )
 
 
@@ -240,7 +282,8 @@ def _messages(message: ProtobufMessage) -> Iterator[ProtobufMessage]:
     for field, value in message.ListFields():
         if field.message_type is None or field.message_type.GetOptions().map_entry:
             continue
-        for child in value if field.label == field.LABEL_REPEATED else [value]:
+        values = value if field.label == field.LABEL_REPEATED else [value]
+        for child in values:
             yield from _messages(child)
 
 
