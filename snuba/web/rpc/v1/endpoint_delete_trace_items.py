@@ -8,6 +8,7 @@ from sentry_protos.snuba.v1.endpoint_delete_trace_items_pb2 import (
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemFilterWithType, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import ComparisonFilter
+from sentry_sdk import logger as sentry_logger
 
 from snuba.attribution.appid import AppID
 from snuba.datasets.schemas.tables import TableSchema
@@ -158,15 +159,26 @@ class EndpointDeleteTraceItems(RPCEndpoint[DeleteTraceItemsRequest, DeleteTraceI
             # Add item_type to conditions for the delete query
             conditions["item_type"] = [attribute_conditions.item_type]
 
+        labels = {
+            "organization_ids": str(request.meta.organization_id),
+            "project_ids": ",".join(map(str, request.meta.project_ids)),
+        }
+        sentry_logger.info("snuba.delete.received", attributes={**labels, "target": "eap"})
         storage = get_writable_storage(StorageKey.EAP_ITEMS_2)
         schema = storage.get_schema()
         assert isinstance(schema, TableSchema)
-        delete_result = delete_from_storage(
-            storage,
-            conditions,
-            attribution_info,
-            attribute_conditions,
-        )
+        try:
+            delete_result = delete_from_storage(
+                storage,
+                conditions,
+                attribution_info,
+                attribute_conditions,
+            )
+        except Exception as e:
+            sentry_logger.error(
+                "snuba.delete.eap_failed", attributes={**labels, "error": type(e).__name__}
+            )
+            raise
 
         response = DeleteTraceItemsResponse()
         # TODO: fix how we pass this data around, this is too coupled

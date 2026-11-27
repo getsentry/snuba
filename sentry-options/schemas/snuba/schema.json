@@ -557,6 +557,11 @@
       "default": "[]",
       "description": "JSON array of project ids for which error replacements are skipped."
     },
+    "delete_sentry_logs_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "true to send the snuba.delete.* Sentry Logs, one per stage of an issue delete."
+    },
     "replacements_expiry_window_minutes": {
       "type": "integer",
       "default": 5,
