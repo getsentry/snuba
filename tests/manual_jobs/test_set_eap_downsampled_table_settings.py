@@ -57,9 +57,13 @@ def test_get_reset_query(monkeypatch: pytest.MonkeyPatch) -> None:
         "eap_items_1_downsample_8_local",
         "eap_items_1_downsample_64_local",
         "eap_items_1_downsample_512_local",
+        "eap_items_2_local",
+        "eap_items_2_downsample_8_local",
+        "eap_items_2_downsample_64_local",
+        "eap_items_2_downsample_512_local",
     ],
 )
-def test_accepts_supported_downsampled_eap_local_tables(
+def test_accepts_supported_eap_local_tables(
     monkeypatch: pytest.MonkeyPatch, table_name: str
 ) -> None:
     _build_job(monkeypatch, table_name)
@@ -69,15 +73,14 @@ def test_accepts_supported_downsampled_eap_local_tables(
     "table_name",
     [
         "eap_items_1_local",
+        "eap_items_2_dist",
         "eap_items_1_downsample_8_dist",
         "eap_items_1_downsample_16_local",
         "eap_items_1_downsample_8_local; DROP TABLE events",
         "events_local",
     ],
 )
-def test_rejects_non_downsampled_eap_local_table(
-    monkeypatch: pytest.MonkeyPatch, table_name: str
-) -> None:
+def test_rejects_unsupported_tables(monkeypatch: pytest.MonkeyPatch, table_name: str) -> None:
     with pytest.raises(AssertionError, match="downsampled EAP local table"):
         _build_job(monkeypatch, table_name)
 
@@ -159,4 +162,24 @@ def test_reset_execute_uses_eap_local_cluster(monkeypatch: pytest.MonkeyPatch) -
             "ALTER TABLE eap_items_1_downsample_64_local ON CLUSTER 'eap_cluster' "
             "RESET SETTING enable_block_number_column, enable_block_offset_column;"
         )
+    )
+
+
+def test_get_queries_for_unsampled_eap_items_2(monkeypatch: pytest.MonkeyPatch) -> None:
+    job = _build_job(monkeypatch, "eap_items_2_local")
+    assert job._get_query("eap_cluster") == (
+        "ALTER TABLE eap_items_2_local ON CLUSTER 'eap_cluster' MODIFY SETTING "
+        "enable_block_number_column = 1, enable_block_offset_column = 1;"
+    )
+
+    reset_job = ResetEAPDownsampledTableSettings(
+        JobSpec(
+            job_id="reset-eap-settings",
+            job_type="ResetEAPDownsampledTableSettings",
+            params={"table_name": "eap_items_2_local"},
+        )
+    )
+    assert reset_job._get_query("eap_cluster") == (
+        "ALTER TABLE eap_items_2_local ON CLUSTER 'eap_cluster' RESET SETTING "
+        "enable_block_number_column, enable_block_offset_column;"
     )
