@@ -10,15 +10,22 @@ from arroyo.backends.kafka import KafkaPayload
 from arroyo.types import BrokerValue, Message, Partition, Topic
 from sentry_options.testing import override_options
 
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.clusters.cluster import ClickhouseNode
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.lw_deletions.batching import BatchStepCustom
 from snuba.lw_deletions.formatters import EAPItemsFormatter, SearchIssuesFormatter
-from snuba.lw_deletions.strategy import FormatQuery, increment_by
+from snuba.lw_deletions.strategy import (
+    MAX_RETRYABLE_CLICKHOUSE_ERRORS,
+    FormatQuery,
+    LWDeleteQueryException,
+    increment_by,
+)
 from snuba.lw_deletions.types import ConditionsType
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.utils.streams.topics import Topic as SnubaTopic
+from snuba.web import QueryException
 from snuba.web.bulk_delete_query import DeleteQueryMessage
 
 ROWS_CONDITIONS = {
@@ -218,6 +225,71 @@ def _make_single_message(
             datetime(1970, 1, 1),
         )
     )
+
+
+@patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
+@patch("snuba.lw_deletions.strategy._execute_query")
+@pytest.mark.redis_db
+def test_transport_error_is_retried(mock_execute: Mock, mock_num_mutations: Mock) -> None:
+    """
+    A dropped connection surfaces as a ClickhouseError with code -1. The
+    batch is held back with MessageRejected and run again, instead of
+    crashing the consumer or dropping the delete.
+    """
+    exc = QueryException(message="Connection broken")
+    exc.__cause__ = ClickhouseError("Connection broken: IncompleteRead", code=-1)
+    mock_execute.side_effect = [exc, None]
+
+    commit_step = Mock()
+    metrics = Mock()
+    storage = get_writable_storage(StorageKey("search_issues"))
+
+    strategy = BatchStepCustom(
+        max_batch_size=8,
+        max_batch_time=1000,
+        next_step=FormatQuery(commit_step, storage, SearchIssuesFormatter(), metrics),
+        increment_by=increment_by,
+    )
+    strategy.submit(_make_single_message())
+    # the retry waits out the 1s throttle on the ongoing mutations check
+    strategy.join(5.0)
+
+    assert mock_execute.call_count == 2
+    assert commit_step.submit.call_count == 1
+    metrics.increment.assert_any_call("retryable_clickhouse_error")
+
+
+@patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
+@patch("snuba.lw_deletions.strategy._execute_query")
+@pytest.mark.redis_db
+def test_transport_error_crashes_after_max_retries(
+    mock_execute: Mock, mock_num_mutations: Mock
+) -> None:
+    """
+    After MAX_RETRYABLE_CLICKHOUSE_ERRORS retries of the same batch, the
+    consumer crashes so a persistent failure is visible.
+    """
+    exc = QueryException(message="Connection broken")
+    exc.__cause__ = ClickhouseError("Connection broken: IncompleteRead", code=-1)
+    mock_execute.side_effect = exc
+
+    commit_step = Mock()
+    metrics = Mock()
+    storage = get_writable_storage(StorageKey("search_issues"))
+
+    strategy = BatchStepCustom(
+        max_batch_size=8,
+        max_batch_time=1000,
+        next_step=FormatQuery(commit_step, storage, SearchIssuesFormatter(), metrics),
+        increment_by=increment_by,
+    )
+    strategy.submit(_make_single_message())
+    # each retry waits out the 1s throttle on the ongoing mutations check
+    with pytest.raises(LWDeleteQueryException):
+        strategy.join(10.0)
+
+    assert mock_execute.call_count == MAX_RETRYABLE_CLICKHOUSE_ERRORS + 1
+    assert commit_step.submit.call_count == 0
 
 
 @patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)

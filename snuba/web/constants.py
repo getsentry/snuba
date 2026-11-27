@@ -30,6 +30,13 @@ LW_DELETE_NON_RETRYABLE_CLICKHOUSE_ERROR_CODES = {
     ErrorCodes.TOO_SLOW,
 }
 
+LW_DELETE_RETRYABLE_CLICKHOUSE_ERROR_CODES = {
+    # Client-side transport failure, such as a connection dropped while
+    # reading the response. See _translate_clickhouse_errors in
+    # snuba/clickhouse/connect.py.
+    -1,
+}
+
 
 def get_http_status_for_clickhouse_error(cause: ClickhouseError) -> int:
     """

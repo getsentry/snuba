@@ -38,7 +38,10 @@ from snuba.state.sentry_options import get_mapped_option, get_option
 from snuba.utils.metrics import MetricsBackend
 from snuba.web import QueryException
 from snuba.web.bulk_delete_query import construct_or_conditions, construct_query
-from snuba.web.constants import LW_DELETE_NON_RETRYABLE_CLICKHOUSE_ERROR_CODES
+from snuba.web.constants import (
+    LW_DELETE_NON_RETRYABLE_CLICKHOUSE_ERROR_CODES,
+    LW_DELETE_RETRYABLE_CLICKHOUSE_ERROR_CODES,
+)
 from snuba.web.delete_query import (
     TooManyOngoingMutationsError,
     _execute_query,
@@ -48,6 +51,9 @@ from snuba.web.delete_query import (
 TPayload = TypeVar("TPayload")
 
 logger = logging.getLogger(__name__)
+
+# retries for one batch before the consumer crashes
+MAX_RETRYABLE_CLICKHOUSE_ERRORS = 3
 
 
 class LWDeleteQueryException(Exception):
@@ -73,6 +79,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         self.__metrics = metrics
         self.__last_ongoing_mutations_check: float | None = None
         self.__redis_client = get_redis_client(RedisClientKey.CONFIG)
+        self.__retryable_errors = 0
 
     def poll(self) -> None:
         self.__next_step.poll()
@@ -121,6 +128,19 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
             if isinstance(cause, AllocationPolicyViolations):
                 self.__metrics.increment("allocation_policy_violation")
                 raise MessageRejected from None
+            if (
+                isinstance(cause, ClickhouseError)
+                and cause.code in LW_DELETE_RETRYABLE_CLICKHOUSE_ERROR_CODES
+            ):
+                # retry the batch later through backpressure. Deletes are
+                # idempotent, so running one again is safe.
+                self.__retryable_errors += 1
+                self.__metrics.increment("retryable_clickhouse_error")
+                if self.__retryable_errors > MAX_RETRYABLE_CLICKHOUSE_ERRORS:
+                    raise LWDeleteQueryException(err.message) from err
+                raise MessageRejected from None
+
+        self.__retryable_errors = 0
 
         self.__next_step.submit(message)
 
@@ -314,6 +334,8 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
             self.__metrics.increment("execute_delete_query_failed", tags=tags)
             cause = exc.__cause__
             if isinstance(cause, ClickhouseError):
+                if cause.code in LW_DELETE_RETRYABLE_CLICKHOUSE_ERROR_CODES:
+                    raise
                 if cause.code in LW_DELETE_NON_RETRYABLE_CLICKHOUSE_ERROR_CODES:
                     logger.exception("Error running delete query %r", exc)
                 else:
