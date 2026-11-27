@@ -494,18 +494,11 @@ jobs:
       - name: Bootstrap per-worker Snuba instances
         run: python3 sentry/.github/workflows/scripts/bootstrap-snuba.py
 
-      - name: Run snuba CI tests
+      - name: Run sentry tests
         working-directory: sentry
-        run: |
-          export PYTEST_ADDOPTS="$PYTEST_ADDOPTS -k 'not __In' -m snuba_ci -n $XDIST_WORKERS --dist=loadfile -vv"
-          make test-python-ci
-
-      - name: Run full tests
-        if: needs.files-changed.outputs.api_changes == 'true'
-        working-directory: sentry
-        run: |
-          export PYTEST_ADDOPTS="$PYTEST_ADDOPTS -k 'not __In' -m 'snuba and not snuba_ci' -n $XDIST_WORKERS --dist=loadfile -vv"
-          make test-python-ci
+        env:
+          API_CHANGES: ${{ needs.files-changed.outputs.api_changes }}
+        run: ../.github/workflows/scripts/run-sentry-tests.sh
 
   clickhouse-versions:
     needs: [linting, snuba-image, docker-deps]
