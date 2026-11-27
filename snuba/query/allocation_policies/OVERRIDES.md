@@ -23,7 +23,7 @@ All configs live in a single option, a flat `{key: number}` map:
 ```
 
 - **resource** — the storage/strategy the component is attached to, e.g. `errors`, `eap_items`.
-- **ClassName** — the concrete class, e.g. `ConcurrentRateLimitAllocationPolicy`.
+- **ClassName** — the concrete class, e.g. `ConcurrentQueriesPerOrgPolicy`.
 - **config** — the config name, e.g. `is_enforced`, `max_threads`, `concurrent_limit`.
 - **params** — for a parameterized config, its declared params appended as a
   sorted, `|`-delimited `param:value` suffix, e.g.
@@ -36,11 +36,31 @@ declares in `param_types`.
 
 ## Example
 
-```json
-{
-  "errors.ReferrerGuardRailPolicy.is_enforced": 1,
-  "errors.ConcurrentRateLimitAllocationPolicy.concurrent_limit": 22
-}
+Which allocation policies run on a storage, and their settings, are set in the
+`allocation_policies` option. Each storage maps to a list of blocks. A block
+applies when, for every `match` key, the query's tenant id is one of the listed
+values (`match: {}` always applies). Blocks apply in order: `remove` drops policies by name, then
+`policies` adds or replaces them by name.
+
+```yaml
+allocation_policies:
+  errors:
+    - match: {}
+      policies:
+        - name: ConcurrentQueriesPerOrgPolicy
+          enforce: always
+          limit: 25
+          max_threads: 16
+    - match:
+        organization_id: [123]
+      policies:
+        - name: ConcurrentQueriesPerOrgPolicy
+          enforce: always
+          limit: 50
+          max_threads: 16
+    - match:
+        referrer: [api.foo]
+      remove: [ConcurrentQueriesPerOrgPolicy]
 ```
 
 ## Notes

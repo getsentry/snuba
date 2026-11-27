@@ -269,13 +269,6 @@ schema:
   local_table_name: errors_local
   dist_table_name: errors_dist_ro
   not_deleted_mandatory_condition: deleted
-allocation_policies:
-  - name: ReferrerGuardRailPolicy
-    args:
-      required_tenant_types:
-        - referrer
-      default_config_overrides:
-        is_enforced: 0
 query_processors:
   - processor: UniqInSelectAndHavingProcessor
   - processor: TupleUnaliaser
