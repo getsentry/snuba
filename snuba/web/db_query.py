@@ -14,8 +14,7 @@ from typing import Any, cast
 import rapidjson
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
 from sentry_options import OptionValue
-from sentry_sdk import traces
-from sentry_sdk.api import configure_scope
+from sentry_sdk import get_isolation_scope, traces
 
 from snuba import environment, settings
 from snuba.attribution.attribution_info import AttributionInfo
@@ -520,11 +519,10 @@ def _raw_query(
                 )
                 status = QueryStatus.RATE_LIMITED
 
-            with configure_scope() as scope:
-                fingerprint = ["{{default}}", str(cause.code), dataset_name]
-                if error_code not in constants.CLICKHOUSE_SYSTEMATIC_FAILURES:
-                    fingerprint.append(attribution_info.referrer)
-                scope.fingerprint = fingerprint
+            fingerprint = ["{{default}}", str(cause.code), dataset_name]
+            if error_code not in constants.CLICKHOUSE_SYSTEMATIC_FAILURES:
+                fingerprint.append(attribution_info.referrer)
+            get_isolation_scope().fingerprint = fingerprint
         elif isinstance(cause, (TimeoutError, ExecutionTimeoutError)):
             status = QueryStatus.TIMEOUT
 

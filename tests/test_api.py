@@ -13,7 +13,9 @@ import simplejson as json
 from confluent_kafka.admin import AdminClient
 from dateutil.parser import parse as parse_datetime
 from sentry_options.testing import override_options
-from sentry_sdk import Client, Hub
+from sentry_sdk import Client, new_scope
+from sentry_sdk.envelope import Envelope
+from sentry_sdk.transport import Transport
 
 from snuba import settings
 from snuba.clusters.cluster import ClickhouseClientSettings
@@ -1450,7 +1452,15 @@ class TestApi(SimpleAPITest):
 
     def test_exception_captured_by_sentry(self) -> None:
         events: list[Any] = []
-        with Hub(Client(transport=events.append)):
+
+        class CapturingTransport(Transport):
+            def capture_envelope(self, envelope: Envelope) -> None:
+                event = envelope.get_event()
+                if event is not None:
+                    events.append(event)
+
+        with new_scope() as scope:
+            scope.set_client(Client(dsn="http://key@localhost/1", transport=CapturingTransport))
             # This endpoint should return 500 as it internally raises an exception
             response = self.app.get("/tests/error")
 

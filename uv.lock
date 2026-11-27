@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = "==3.13.*"
 resolution-markers = [
     "platform_python_implementation == 'CPython' and sys_platform == 'darwin'",
@@ -1119,14 +1119,14 @@ wheels = [
 
 [[package]]
 name = "sentry-sdk"
-version = "2.74.0"
+version = "3.0.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 dependencies = [
     { name = "certifi" },
     { name = "urllib3" },
 ]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_sdk-2.74.0-py3-none-any.whl", hash = "sha256:40b205af015649df3ec9986e057ce24ce85956bee3fb75efa72c93aa7036bdff" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_sdk-3.0.0-py3-none-any.whl", hash = "sha256:22cfcdb11b494e8efa82a48edd655afdf99179df37f2ed37f18846b938455c36" },
 ]
 
 [[package]]
@@ -1225,7 +1225,6 @@ dependencies = [
     { name = "sql-metadata" },
     { name = "sqlparse" },
     { name = "structlog" },
-    { name = "structlog-sentry" },
     { name = "urllib3" },
     { name = "werkzeug" },
 ]
@@ -1294,14 +1293,13 @@ requires-dist = [
     { name = "sentry-protos", specifier = ">=0.130.0" },
     { name = "sentry-redis-tools", specifier = ">=0.5.1" },
     { name = "sentry-relay", specifier = ">=0.9.25" },
-    { name = "sentry-sdk", specifier = ">=2.74.0" },
+    { name = "sentry-sdk", specifier = ">=3.0.0" },
     { name = "sentry-usage-accountant", specifier = ">=0.0.11" },
     { name = "simplejson", specifier = ">=3.17.6" },
     { name = "snuba-sdk", specifier = ">=3.0.39" },
     { name = "sql-metadata", specifier = ">=3.0.1" },
     { name = "sqlparse", specifier = ">=0.6.0" },
     { name = "structlog", specifier = ">=22.3.0" },
-    { name = "structlog-sentry", specifier = ">=2.0.0" },
     { name = "urllib3", specifier = ">=2.8.0" },
     { name = "werkzeug", specifier = ">=3.1.9" },
 ]
@@ -1451,18 +1449,6 @@ version = "22.3.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 wheels = [
     { url = "https://pypi.devinfra.sentry.io/wheels/structlog-22.3.0-py3-none-any.whl", hash = "sha256:b403f344f902b220648fa9f286a23c0cc5439a5844d271fec40562dbadbc70ad" },
-]
-
-[[package]]
-name = "structlog-sentry"
-version = "2.0.0"
-source = { registry = "https://pypi.devinfra.sentry.io/simple" }
-dependencies = [
-    { name = "sentry-sdk" },
-    { name = "structlog" },
-]
-wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/structlog_sentry-2.0.0-py3-none-any.whl", hash = "sha256:67e9d56a73b9a09b3122f0beb5da3706423d890ae440961c8f8e9b0b7bd1e1fa" },
 ]
 
 [[package]]

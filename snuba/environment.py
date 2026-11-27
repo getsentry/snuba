@@ -18,10 +18,10 @@ from sentry_sdk.integrations.threading import ThreadingIntegration
 from sentry_sdk.types import Event, Hint
 from structlog.processors import JSONRenderer
 from structlog.types import EventDict
-from structlog_sentry import SentryProcessor
 
 from snuba import settings
 from snuba.utils.metrics.util import create_metrics
+from snuba.utils.sentry_structlog import SentryProcessor
 
 
 def add_severity_attribute(
@@ -83,8 +83,7 @@ def setup_logging(level: str | None = None) -> None:
             structlog.processors.TimeStamper(fmt="iso", utc=True),
             # Mirror the LoggingIntegration policy on the structlog path: only
             # ERROR and above become Sentry issues, WARNING and below stay as
-            # logs/breadcrumbs. (This is structlog-sentry's default, set
-            # explicitly so the policy is obvious and robust to upstream changes.)
+            # logs/breadcrumbs.
             SentryProcessor(event_level=logging.ERROR),
             drop_level,
             JSONRenderer(),
@@ -183,6 +182,9 @@ def parse_otel_resource_attributes(raw: str | None) -> dict[str, str]:
     return attributes
 
 
+_PII_DENYLIST_TERMS = ["forwarded", "-ip", "remote-", "via", "-user"]
+
+
 def setup_sentry() -> None:
     sentry_sdk.init(
         dsn=settings.SENTRY_DSN,
@@ -194,19 +196,34 @@ def setup_sentry() -> None:
             # Only forward ERROR and above to Sentry as issues. Warnings are
             # operational noise far more often than they're actionable (e.g.
             # consumer rebalance/shutdown timeouts) and are still captured as
-            # logs/breadcrumbs.
-            LoggingIntegration(event_level=logging.ERROR),
+            # logs/breadcrumbs. `level=None` keeps Sentry logs off, which SDK 3.x
+            # would otherwise turn on with this integration.
+            LoggingIntegration(level=None, event_level=logging.ERROR),
             RedisIntegration(),
-            ThreadingIntegration(propagate_hub=True),
+            ThreadingIntegration(propagate_scope=True),
         ],
         # the value for release is also computed in rust-snuba, please keep the
         # logic in sync
         release=os.getenv("SNUBA_RELEASE"),
         traces_sample_rate=settings.SENTRY_TRACE_SAMPLE_RATE,
-        profiles_sample_rate=settings.SNUBA_PROFILES_SAMPLE_RATE,
-        # Stream spans as they finish. Disables the legacy tracing API
-        # (start_span/start_transaction/update_current_span/scope.span).
-        trace_lifecycle="stream",
+        # SDK 3.x attaches stack traces to messages by default, which would
+        # regroup issues.
+        attach_stacktrace=False,
+        # SDK 3.x collects more by default than 2.x without `send_default_pii`.
+        # Keep request bodies, which 2.x also sent, and opt out of the rest.
+        data_collection={
+            "user_info": False,
+            "http_bodies": ["incoming_request"],
+            "graphql": {"document": False, "variables": False},
+            "gen_ai": {"inputs": False, "outputs": False},
+            "mcp": {"inputs": False, "outputs": False},
+            "database_query_data": False,
+            "queues": False,
+            "http_headers": {"request": {"mode": "denylist", "terms": _PII_DENYLIST_TERMS}},
+            "cookies": {"mode": "denylist", "terms": _PII_DENYLIST_TERMS},
+            "url_query_params": {"mode": "denylist", "terms": _PII_DENYLIST_TERMS},
+            "stack_frame_variables": {"mode": "denylist"},
+        },
     )
 
     # Attach the pod's Kubernetes/GCP resource attributes (k8s.pod.name,
